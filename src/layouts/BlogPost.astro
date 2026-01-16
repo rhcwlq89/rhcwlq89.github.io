@@ -21,7 +21,7 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
         margin: 0;
       }
       .hero-image {
-        max-width: 720px;
+        max-width: 900px;
         aspect-ratio: 2 / 1;
         overflow: hidden;
         margin: auto;
@@ -36,7 +36,7 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
         object-fit: cover;
       }
       .prose {
-        width: 720px;
+        width: 900px;
         max-width: calc(100% - 2em);
         margin: auto;
         padding: 1em;
@@ -68,7 +68,7 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
         <div class="hero-image">
           {
             heroImage && (
-              <Image width={720} height={360} src={heroImage} alt="" />
+              <Image width={900} height={450} src={heroImage} alt="" />
             )
           }
         </div>

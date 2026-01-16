@@ -18,7 +18,7 @@ const posts = (await getCollection("blog")).sort(
     <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
     <style>
       main {
-        width: 720px;
+        width: 900px;
       }
       ul {
         display: flex;
@@ -69,7 +69,7 @@ const posts = (await getCollection("blog")).sort(
       ul a:hover img {
         box-shadow: var(--box-shadow);
       }
-      @media (max-width: 720px) {
+      @media (max-width: 900px) {
         ul {
           gap: 0.5em;
         }
@@ -97,8 +97,8 @@ const posts = (await getCollection("blog")).sort(
                 <a href={`/blog/${post.id}/`}>
                   {post.data.heroImage && (
                     <Image
-                      width={720}
-                      height={360}
+                      width={900}
+                      height={450}
                       src={post.data.heroImage}
                       alt=""
                     />

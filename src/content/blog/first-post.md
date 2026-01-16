@@ -6,7 +6,7 @@ tags: ["Spring Boot", "REST API", "Backend", "Interview"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---
 
-# Spring Boot Pre-interview Task Guide
+### 서론
 대부분 과제는 크게 3가지 정도로 나뉘는 것 같다.
 
 1. REST API 구현
@@ -158,7 +158,11 @@ public enum ProductCategoryType {
 5. 공통 응답 클래스를 활용하는지 체크
 
 ```kotlin
-data class CommonResponse<T>(val code: String = "200", val message: String = "success", val data: T)
+data class CommonResponse<T>(
+    val code: String = "200", 
+    val message: String = "success",
+    val data: T
+)
 ```
 
 ```java
@@ -223,7 +227,8 @@ open class CommonException(val statusCode: HttpStatusCode) : RuntimeException() 
     var errorCode: ErrorCode = ErrorCode.ERR000
 }
 
-open class BadRequestException(errorCode: ErrorCode) : CommonException(HttpStatus.BAD_REQUEST) {
+open class BadRequestException(errorCode: ErrorCode) 
+    : CommonException(HttpStatus.BAD_REQUEST) {
     init {
         this.errorCode = errorCode
     }
