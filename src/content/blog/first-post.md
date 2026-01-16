@@ -6,6 +6,7 @@ tags: ["Spring Boot", "REST API", "Backend", "Interview"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---
 
+# Spring Boot Pre-interview Task Guide
 대부분 과제는 크게 3가지 정도로 나뉘는 것 같다.
 
 1. REST API 구현
@@ -195,14 +196,13 @@ Business Logic ( Service 또는 Application Layer )
 @Service
 @Transactional
 public class ProductService {
-  ...
+  
 
   @Transactional(readonly = true)
   public FindProductDetailResponse findProductDetail(Long productId) {
-    ...
+  
   }
   
-  ...
 }
 ```
 
@@ -281,7 +281,6 @@ class GlobalExceptionHandler {
 fun findProductDetail(productId: Long): FindProductDetailResponse {
     val product = productRepository.findById(productId) 
                         ?: throw NotFoundProductException()
-    ...
 }
 ```
 
@@ -289,12 +288,12 @@ fun findProductDetail(productId: Long): FindProductDetailResponse {
 
 ---
 
-DB/Query ( Repository 또는 Infrastructure Layer)
+### DB/Query ( Repository 또는 Infrastructure Layer)
 1. Nullable 처리 (Java — Optional / Kotlin — Nullable)
 2. JPA Query Method를 활용하거나, 활용이 어렵다면 Querydsl로 처리
 3. Querydsl 사용시 @Transactional 체크
 
-Domain (Entity 또는 Domain Layer)
+### Domain (Entity 또는 Domain Layer)
 1. 단순 Setter 대신 비즈니스 로직에 맞게 method 만들기
 2. enum 활용 또는 연관 Entity 분리
 3. 기본생성자는 protected로 설정
