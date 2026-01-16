@@ -60,7 +60,7 @@ h6 {
 	line-height: 1.2;
 }
 h1 {
-	font-size: 3.052em;
+	font-size: 2.7em;
 }
 h2 {
 	font-size: 1.6em;
@@ -85,6 +85,7 @@ a:hover {
 	color: var(--accent);
 }
 p {
+    font-size: 1.0em;
 	margin-bottom: 1em;
 }
 .prose p {
