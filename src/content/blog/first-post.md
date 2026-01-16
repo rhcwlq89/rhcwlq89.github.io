@@ -38,3 +38,9 @@ tags: ["Spring Boot", "REST API", "Backend", "Interview"]
  * GET    /auth/me               : 내정보 조회
  */
 ```
+
+### 3. @RequestBody, @ModelAttribute, @RequestParam, Pageable 이 정확하게 사용되어있는지 체크
+
+@RequestMapping의 value들은 ApiPaths같은 형태로 처리
+API : 웹페이지와 API 의 경로분리
+V1 : API의 버전정보
