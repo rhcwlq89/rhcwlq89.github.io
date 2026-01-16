@@ -45,3 +45,256 @@ heroImage: "../../assets/PreinterviewTaskGuide.png"
 @RequestMapping의 value들은 ApiPaths같은 형태로 처리
 API : 웹페이지와 API 의 경로분리
 V1 : API의 버전정보
+
+```kotlin
+@RestController
+@RequestMapping(API + V1 + PRODUCT)
+class ProductController(val productService: ProductService) {
+
+    @GetMapping("/{productId}")
+    fun findProductDetail(
+        @PathVariable productId: Long
+    ): CommonResponse<FindProductDetailResponse> {
+        return CommonResponse(
+            data = productService.findProductDetail(productId)
+        )
+    }
+
+    @GetMapping
+    fun findProducts(
+        @Valid @ModelAttribute findProductRequest: FindProductRequest,
+        @PageableDefault(page = 0, size = 20) pageable: Pageable,
+    ): CommonResponse<PaginationResponse<FindProductResponse>> {
+        return CommonResponse(
+            data = productService.findProducts(findProductRequest, pageable)
+        )
+    }
+
+    @PostMapping
+    fun registerProduct(
+        @Valid @RequestBody registerProductRequest: RegisterProductRequest
+    ): CommonResponse<Long> {
+        return CommonResponse(
+            data = productService.registerProduct(registerProductRequest)
+        )
+    }
+
+    @PutMapping("/{productId}")
+    fun modifyProduct(
+        @PathVariable productId: Long,
+        @Valid @RequestBody modifyProductRequest: ModifyProductRequest,
+    ): CommonResponse<Boolean> {
+        return CommonResponse(
+            data = productService.modifyProduct(productId, modifyProductRequest)
+        )
+    }
+
+    @DeleteMapping
+    fun deleteProducts(
+        @Valid @Size(min = 1) @RequestParam productIds: Set<Long>,
+    ): CommonResponse<Boolean> {
+        return CommonResponse(
+            data = productService.deleteProducts(productIds)
+        )
+    }
+
+}
+
+object ApiPaths {
+    const val API = "/api"
+    const val V1 = "/v1"
+    const val PRODUCTS = "/products"
+}
+```
+
+4. DTO 는 Java에서는 record, Kotlin에서는 data class(Nullable 처리 필수) 를 사용하고 @Valid로 검증
+
+```kotlin
+data class RegisterProductRequest(
+    @field:NotBlank
+    @field:Size(max = 10)
+    val name: String?,
+    @field:Size(min = 1)
+    @field:Valid
+    val details: List<ProductDetailDto>?,
+)
+
+data class ProductDetailDto(
+    @field:NotNull
+    val type: ProductCategoryType?,
+    @field:NotNull
+    val name: String?
+)
+
+enum class ProductCategoryType {
+    FOOD, HOTEL
+}
+```
+
+```java
+public record RegisterProductRequest(
+    @NotBlank
+    @Size(max = 10)
+    String name,
+    @Size(min = 1)
+    @Valid
+    List<ProductDetailDto> details
+){}
+
+public record ProductDetailDto(
+    @NotNull
+    ProductCategoryType type,
+    @NotNull
+    String name
+){}
+
+public enum ProductCategoryType {
+    FOOD,
+    HOTEL
+}
+```
+
+5. 공통 응답 클래스를 활용하는지 체크
+
+```kotlin
+data class CommonResponse<T>(val code: String = "200", val message: String = "success", val data: T)
+```
+
+```java
+public record CommonResponse<T>(
+        String code,
+        String message,
+        T data
+) {
+
+    public static final String CODE_SUCCESS = "200";
+    public static final String MSG_SUCCESS = "success";
+
+    public static <T> CommonResponse<T> success() {
+        return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, null);
+    }
+
+    public static <T> CommonResponse<T> success(T data) {
+        return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, data);
+    }
+
+    public static <T> CommonResponse<T> error(String code, String message) {
+        return new CommonResponse<>(code, message, null);
+    }
+
+    public static <T> CommonResponse<T> error(String code, String message, T data) {
+        return new CommonResponse<>(code, message, data);
+    }
+}
+```
+
+Business Logic ( Service 또는 Application Layer )
+1. 트랜잭션 처리 확인 ( readonly 옵션 )
+
+```java
+@Service
+@Transactional
+public class ProductService {
+  ...
+
+  @Transactional(readonly = true)
+  public FindProductDetailResponse findProductDetail(Long productId) {
+    ...
+  }
+  
+  ...
+}
+```
+
+로깅레벨로 트랜잭션을 확인 가능하다
+
+```yaml
+logging:
+  level:
+    org.springframework.orm.jpa: TRACE
+    org.hibernate.sql: DEBUG
+    com.querydsl.sql: DEBUG
+    org.springframework.transaction: DEBUG
+```
+
+2. 예상되는 예외사항들을 Custom Exception으로 처리
+```kotlin
+open class CommonException(val statusCode: HttpStatusCode) : RuntimeException() {
+    var errorCode: ErrorCode = ErrorCode.ERR000
+}
+
+open class BadRequestException(errorCode: ErrorCode) : CommonException(HttpStatus.BAD_REQUEST) {
+    init {
+        this.errorCode = errorCode
+    }
+}
+
+class InvalidRequestException() : BadRequestException(errorCode = ErrorCode.ERR001)
+
+enum class ErrorCode (
+  val code: String,
+  val message: String,
+) {
+  ERR000("ERR000", "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."),
+  ERR001("ERR001", "잘못된 요청입니다.")
+}
+```
+
+RestControllerAdvice에서 활용
+
+```kotlin
+@RestControllerAdvice
+class GlobalExceptionHandler {
+
+    @ExceptionHandler(CommonException::class)
+    fun handleCommonException(e: CommonException): CommonResponse {
+        val code = e.errorCode
+        return CommonResponse(
+            code = code.code,
+            message = code.message
+        )
+        
+    }
+
+    @ExceptionHandler(InvalidRequestException::class)
+    fun handleValidationException(e: InvalidRequestException): CommonResponse{
+        val details = e.bindingResult.fieldErrors.map {
+            mapOf(
+                "field" to it.field,
+                "message" to (it.defaultMessage ?: "Invalid value")
+            )
+        }
+
+        return CommonResponse(
+            code = e.errorCode,
+            message = code.message,
+            details = details
+        )
+    }
+}
+```
+
+3. Optional 객체 처리 + Domain Model을 직접 변환하지 않도록 처리
+
+```kotlin
+@Transactional(readonly = true)
+fun findProductDetail(productId: Long): FindProductDetailResponse {
+    val product = productRepository.findById(productId) 
+                        ?: throw NotFoundProductException()
+    ...
+}
+```
+
+4. Data를 처리할 때 Stream을 최대한 활용
+
+---
+
+DB/Query ( Repository 또는 Infrastructure Layer)
+1. Nullable 처리 (Java — Optional / Kotlin — Nullable)
+2. JPA Query Method를 활용하거나, 활용이 어렵다면 Querydsl로 처리
+3. Querydsl 사용시 @Transactional 체크
+
+Domain (Entity 또는 Domain Layer)
+1. 단순 Setter 대신 비즈니스 로직에 맞게 method 만들기
+2. enum 활용 또는 연관 Entity 분리
+3. 기본생성자는 protected로 설정
