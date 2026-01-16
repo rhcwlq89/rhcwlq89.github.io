@@ -18,7 +18,7 @@ const posts = (await getCollection("blog")).sort(
     <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
     <style>
       main {
-        width: 960px;
+        width: 720px;
       }
       ul {
         display: flex;
@@ -74,7 +74,7 @@ const posts = (await getCollection("blog")).sort(
           gap: 0.5em;
         }
         ul li {
-          width: 720px;
+          width: 100%;
           text-align: center;
         }
         ul li:first-child {
@@ -98,7 +98,6 @@ const posts = (await getCollection("blog")).sort(
                   {post.data.heroImage && (
                     <Image
                       width={720}
-                      max-width={720}
                       height={360}
                       src={post.data.heroImage}
                       alt=""
