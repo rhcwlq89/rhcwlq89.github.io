@@ -1,80 +1,28 @@
 ---
-import BaseHead from '../components/BaseHead.astro';
-import Footer from '../components/Footer.astro';
-import Header from '../components/Header.astro';
-import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import BaseHead from "../components/BaseHead.astro";
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
 ---
 
 <!doctype html>
 <html lang="en">
-	<head>
-		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
-	</head>
-	<body>
-		<Header />
-		<main>
-          <!-- Hero -->
-          <section>
-            <h1>이호종의 기술 기록</h1>
-            <p>
-              Backend Engineer · Kotlin · Spring
-            </p>
-            <p>
-              실무에서 겪은 문제와 해결 과정을 정리합니다.
-              단순 사용법보다는 왜 그렇게 설계했는지에 집중합니다.
-            </p>
-          </section>
-
-          <!-- Recent Posts -->
-          <section>
-            <h2>최근 글</h2>
-            <ul>
-              <li>
-                <a href="/blog/rest-api-design/">
-                  <strong>REST API 설계 시 자주 헷갈리는 포인트 정리</strong>
-                </a>
-                <p>URL, HTTP Method, 공통 응답 구조에 대한 실무 기준 정리</p>
-              </li>
-              <li>
-                <a href="/blog/global-exception-handler/">
-                  <strong>Spring 전역 예외 처리 설계 리뷰</strong>
-                </a>
-                <p>@RestControllerAdvice를 어떻게 쓰는 게 좋은가</p>
-              </li>
-              <li>
-                <a href="/blog/java21-record-dto/">
-                  <strong>Java 21에서 DTO를 어떻게 정의하는 게 좋을까</strong>
-                </a>
-                <p>record, validation, 응답 객체 설계</p>
-              </li>
-            </ul>
-          </section>
-
-          <!-- Categories -->
-          <section>
-            <h2>주제별 글</h2>
-            <ul>
-              <li><a href="/tags/spring">Spring</a></li>
-              <li><a href="/tags/java">Java</a></li>
-              <li><a href="/tags/kotlin">Kotlin</a></li>
-              <li><a href="/tags/api">API 설계</a></li>
-              <li><a href="/tags/backend">Backend</a></li>
-            </ul>
-          </section>
-
-          <!-- About -->
-          <section>
-            <h2>About</h2>
-            <p>
-              7년차 백엔드 개발자로 Kotlin과 Spring Boot 기반의 서버 개발을 해왔습니다.
-              설계 품질, 유지보수성, 운영 안정성에 관심이 많습니다.
-            </p>
-            <p>
-              <a href="/about">자세히 보기 →</a>
-            </p>
-          </section>
-        </main>
-
-		<Footer />
-	</body>
+  <head>
+    <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+  </head>
+  <body>
+    <Header />
+    <main>
+      <!-- Hero -->
+      <section>
+        <h1>이호종의 기술 기록</h1>
+        <p>Backend Engineer · Kotlin · Spring</p>
+        <p>
+          실무에서 겪은 문제와 해결 과정을 정리합니다. 단순 사용법보다는 왜
+          그렇게 설계했는지에 집중합니다.
+        </p>
+      </section>
+    </main>
+    <Footer />
+  </body>
 </html>
