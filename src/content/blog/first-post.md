@@ -3,6 +3,7 @@ title: "Spring Boot Pre-interview Task Guide"
 description: "Pre-interview 과제에서 자주 나오는 유형과 체크 포인트 정리"
 pubDate: 2026-01-16
 tags: ["Spring Boot", "REST API", "Backend", "Interview"]
+heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---
 
 대부분 과제는 크게 3가지 정도로 나뉘는 것 같다.
