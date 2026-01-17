@@ -89,7 +89,7 @@ p {
 	margin-bottom: 1em;
 }
 .prose p {
-	margin-bottom: 2em;
+	margin-bottom: 1em;
 }
 textarea {
 	width: 100%;
@@ -107,12 +107,13 @@ img {
 	border-radius: 8px;
 }
 code {
-    font-size: 14px;
 	padding: 2px 5px;
 	background-color: rgb(var(--gray-light));
 	border-radius: 2px;
 }
 pre {
+    /* 코드블록 폰트사이즈 조절 */
+    font-size: 0.85rem;
 	padding: 1.5em;
 	border-radius: 8px;
 }
@@ -125,6 +126,19 @@ blockquote {
 	margin: 0;
 	font-size: 1.333em;
 }
+details {
+  margin: 1rem 0;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+details[open] summary {
+  color: #4f46e5;
+}
+
 hr {
 	border: none;
 	border-top: 1px solid rgb(var(--gray-light));

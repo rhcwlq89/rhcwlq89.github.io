@@ -6,46 +6,153 @@ tags: ["Spring Boot", "REST API", "Backend", "Interview"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---
 
-### 서론
-대부분 과제는 크게 3가지 정도로 나뉘는 것 같다.
+## 서론
 
-1. REST API 구현
-2. 코드 리뷰
-3. 특정 도메인 비즈니스 로직 구현
+대부분 과제는 크게 3가지 정도로 나뉘는 것 같다.
+- REST API 구현 
+- 코드 리뷰 
+- 특정 도메인 비즈니스 로직 구현
 
 1번, 2번 유형은 유의할 점들은 동일하고 3번의 경우만 조금 다르지만, 대체로 인증부 구현, 동시성 이슈 처리, API 연동 정도를 크게 벗어나진 않을 것 같다.
 
 ---
 
-## REST API (Controller 또는 Presentation Layer)
 
-### 1. CRUD 와 HttpMethod가 잘 매핑되어 있는지 체크
+### REST API (Controller 또는 Presentation Layer)
 
-### 2. URI가 자원의 위치를 명확하게 표현하는지 체크
+1. CRUD 와 HttpMethod가 잘 매핑되어 있는지 체크
+2. URI가 자원의 위치를 명확하게 표현하는지 체크
+3. @RequestBody, @ModelAttribute, @RequestParam, Pageable 이 정확하게 사용되어있는지 체크
+4. @RequestMapping의 value들은 ApiPaths같은 형태로 처리
 
-```text
-/* 상품 도메인
- * GET    /products/{productId}  : 상품 단건 조회
- * GET    /products              : 상품 목록 조회
- * POST   /products              : 상품 생성
- * PUT    /products/{productId}  : 상품 수정
- * DELETE /products/{productId}  : 상품 삭제
- */
+    <details>
+    <summary>ApiPaths(kotlin)</summary>
+    
+    ```kotlin
+    object ApiPaths {
+      const val API = "/api"
+      const val V1 = "/v1"
+      const val PRODUCTS = "/products"
+    }
+    ```
+    </details>
+    
+    <details>
+    <summary>ApiPaths(java)</summary>
+     
+    ```java
+    public class ApiPaths {
+       public static final String API = "/api";
+       public static final String V1 = "/v1";
+       public static final String PRODUCTS = "/products";
+    }
+    ```
+    </details>
+   
+5. 공통 응답 클래스를 활용하는지 체크
+    <details>
+    <summary>공통 클래스(kotlin)</summary>
+    
+    ```kotlin
+    data class CommonResponse<T>(
+        val code: String = "200", 
+        val message: String = "success",
+        val data: T
+    )
+    ```
+    
+    </details>
 
-/* 회원 도메인
- * POST   /auth/signup           : 회원가입
- * POST   /auth/login            : 로그인
- * POST   /auth/logout           : 로그아웃
- * POST   /auth/refresh          : 토큰 재발급(JWT일 경우)
- * GET    /auth/me               : 내정보 조회
- */
-```
+    <details>
+    <summary>공통 클래스(java)</summary>
+    
+    ```java
+    public record CommonResponse<T>(
+            String code,
+            String message,
+            T data
+    ) {
+    
+        public static final String CODE_SUCCESS = "200";
+        public static final String MSG_SUCCESS = "success";
+    
+        public static <T> CommonResponse<T> success() {
+            return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, null);
+        }
+    
+        public static <T> CommonResponse<T> success(T data) {
+            return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, data);
+        }
+    
+        public static <T> CommonResponse<T> error(String code, String message) {
+            return new CommonResponse<>(code, message, null);
+        }
+    
+        public static <T> CommonResponse<T> error(String code, String message, T data) {
+            return new CommonResponse<>(code, message, data);
+        }
+    }
+    ```
+    
+    </details>
 
-### 3. @RequestBody, @ModelAttribute, @RequestParam, Pageable 이 정확하게 사용되어있는지 체크
+6. DTO(Data Transfer Object) 클래스는 Validation 처리
+    <details>
+    <summary>DTO 클래스(kotlin)</summary>
+    
+    ```kotlin
+    data class RegisterProductRequest(
+        @field:NotBlank
+        @field:Size(max = 10)
+        val name: String?,
+        @field:Size(min = 1)
+        @field:Valid
+        val details: List<ProductDetailDto>?,
+    )
+    
+    data class ProductDetailDto(
+        @field:NotNull
+        val type: ProductCategoryType?,
+        @field:NotNull
+        val name: String?
+    )
+    
+    enum class ProductCategoryType {
+        FOOD, HOTEL
+    }
+    ```
 
-@RequestMapping의 value들은 ApiPaths같은 형태로 처리
-API : 웹페이지와 API 의 경로분리
-V1 : API의 버전정보
+    </details>
+
+    <details>
+    <summary>DTO 클래스(java)</summary>
+
+    ```java
+    public record RegisterProductRequest(
+        @NotBlank
+        @Size(max = 10)
+        String name,
+        @Size(min = 1)
+        @Valid
+        List<ProductDetailDto> details
+    ){}
+    
+    public record ProductDetailDto(
+        @NotNull
+        ProductCategoryType type,
+        @NotNull
+        String name
+    ){}
+    
+    public enum ProductCategoryType {
+        FOOD,HOTEL
+    }
+    ```
+
+    </details>
+
+<details>
+<summary>Controller 클래스(kotlin)</summary>
 
 ```kotlin
 @RestController
@@ -100,100 +207,46 @@ class ProductController(val productService: ProductService) {
     }
 
 }
-
-object ApiPaths {
-    const val API = "/api"
-    const val V1 = "/v1"
-    const val PRODUCTS = "/products"
-}
 ```
+</details>
 
-4. DTO 는 Java에서는 record, Kotlin에서는 data class(Nullable 처리 필수) 를 사용하고 @Valid로 검증
-
-```kotlin
-data class RegisterProductRequest(
-    @field:NotBlank
-    @field:Size(max = 10)
-    val name: String?,
-    @field:Size(min = 1)
-    @field:Valid
-    val details: List<ProductDetailDto>?,
-)
-
-data class ProductDetailDto(
-    @field:NotNull
-    val type: ProductCategoryType?,
-    @field:NotNull
-    val name: String?
-)
-
-enum class ProductCategoryType {
-    FOOD, HOTEL
-}
-```
+<details>
+<summary>Controller 클래스(java)</summary>
 
 ```java
-public record RegisterProductRequest(
-    @NotBlank
-    @Size(max = 10)
-    String name,
-    @Size(min = 1)
-    @Valid
-    List<ProductDetailDto> details
-){}
+@RestController
+@RequestMapping(ApiPaths.API + ApiPaths.V1 + ApiPaths.PRODUCTS)
+public class ProductController {
+    private final ProductService productService;
 
-public record ProductDetailDto(
-    @NotNull
-    ProductCategoryType type,
-    @NotNull
-    String name
-){}
+    public ProductController(ProductService productService) {
+        this.productService = productService;
+    }
 
-public enum ProductCategoryType {
-    FOOD,
-    HOTEL
+    @GetMapping("/{productId}")
+    public CommonResponse<FindProductDetailResponse> findProductDetail(
+            @PathVariable Long productId) {
+        return new CommonResponse<>(
+                CommonResponse.CODE_SUCCESS,
+                CommonResponse.MSG_SUCCESS,
+                productService.findProductDetail(productId)
+        );
+    }
+        
+    // ... Other endpoints follow the same pattern
 }
 ```
+</details>
 
-5. 공통 응답 클래스를 활용하는지 체크
 
-```kotlin
-data class CommonResponse<T>(
-    val code: String = "200", 
-    val message: String = "success",
-    val data: T
-)
-```
 
-```java
-public record CommonResponse<T>(
-        String code,
-        String message,
-        T data
-) {
 
-    public static final String CODE_SUCCESS = "200";
-    public static final String MSG_SUCCESS = "success";
 
-    public static <T> CommonResponse<T> success() {
-        return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, null);
-    }
 
-    public static <T> CommonResponse<T> success(T data) {
-        return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, data);
-    }
 
-    public static <T> CommonResponse<T> error(String code, String message) {
-        return new CommonResponse<>(code, message, null);
-    }
+---
 
-    public static <T> CommonResponse<T> error(String code, String message, T data) {
-        return new CommonResponse<>(code, message, data);
-    }
-}
-```
-
-Business Logic ( Service 또는 Application Layer )
+### Business Logic ( Service 또는 Application Layer )
 1. 트랜잭션 처리 확인 ( readonly 옵션 )
 
 ```java
