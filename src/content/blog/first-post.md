@@ -603,7 +603,8 @@ heroImage: "../../assets/PreinterviewTaskGuide.png"
 ### Domain (Entity 또는 Domain Layer)
 
 1. 단순 Setter 대신 비즈니스 로직에 맞게 method 만들기
-2. enum 활용 또는 연관 Entity 분리
+2. 하위 Entity가 필요하다면 연관 Entity 분리   
+   고정된 값이 필요하다면 Enum 활용
 3. 기본생성자는 protected로 설정   
    JPA 스펙을 만족하면서   
    외부에서 무분별한 객체 생성을 방지하기 위함   
