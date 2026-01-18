@@ -89,7 +89,7 @@ p {
 	margin-bottom: 1em;
 }
 .prose p {
-	margin-bottom: 1em;
+	margin-bottom: 0.3em;
 }
 textarea {
 	width: 100%;
@@ -99,7 +99,15 @@ input {
 	font-size: 16px;
 }
 table {
-	width: 100%;
+   margin: 1.5rem auto;
+   border-collapse: collapse;
+}
+th, td {
+  padding: 8px 12px;
+}
+
+th {
+  text-align: center;
 }
 img {
 	max-width: 100%;
@@ -107,6 +115,8 @@ img {
 	border-radius: 8px;
 }
 code {
+    /* 코드블록 폰트사이즈 조절 */
+    font-size: 0.85rem;
 	padding: 2px 5px;
 	background-color: rgb(var(--gray-light));
 	border-radius: 2px;
