@@ -10,7 +10,7 @@ tags:
     "Container",
     "Infrastructure",
   ]
-heroImage: "../../assets/blog-placeholder-2.jpg"
+heroImage: "../../assets/DockerComposeGuide.png"
 ---
 
 ## 서론

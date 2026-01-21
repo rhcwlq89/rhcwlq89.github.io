@@ -3,7 +3,7 @@ title: "Spring Boot Pre-interview Task Guide 2"
 description: "Pre-interview 과제에서 자주 나오는 유형과 체크 포인트 정리"
 pubDate: 2026-01-19
 tags: ["Spring Boot", "REST API", "Backend", "Interview"]
-heroImage: "../../assets/PreinterviewTaskGuide.png"
+heroImage: "../../assets/PreinterviewTaskGuide2.png"
 ---
 
 ## 서론
