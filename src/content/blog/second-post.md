@@ -199,3 +199,14 @@ heroImage: "../../assets/PreinterviewTaskGuide.png"
             password:
    ```
     </details>
+   
+
+    <details>
+    <summary>build.gradle</summary>
+   
+    ```groovy
+    dependencies {
+        testRuntimeOnly 'com.h2database:h2'
+    }
+    ```
+    </details>
