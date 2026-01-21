@@ -202,6 +202,20 @@ heroImage: "../../assets/PreinterviewTaskGuide.png"
    </details>
 
 6. Controller 클래스는 가급적 비즈니스 로직을 포함하지 않도록 처리
+   - 추가적으로 페이지네이션에서 최대 페이지 수를 설정해두면 좋다.(application.yml)
+   
+   <details>
+   <summary>application.yml</summary>
+
+   ```yaml
+   spring:
+    data:
+      web:
+        pageable:
+          max-page-size: 100
+   ```
+   
+   </details>
    
    <details>
    <summary>Controller 클래스(kotlin)</summary>
