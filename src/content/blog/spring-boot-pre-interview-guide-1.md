@@ -509,12 +509,29 @@ public class NotFoundException extends CommonException {
 
 `@RestControllerAdvice`에서 Custom Exception을 처리한다.
 
+#### Exception.class 핸들러의 역할
+
+`@ExceptionHandler(Exception.class)`는 **Fallback 핸들러**로서 다음과 같은 역할을 한다:
+
+1. **예상치 못한 예외 처리**: `CommonException`이나 `MethodArgumentNotValidException`으로 처리되지 않은 모든 예외를 잡아낸다.
+
+2. **보안**: 내부 에러 메시지나 스택트레이스가 클라이언트에 노출되지 않도록 일반적인 메시지만 반환한다. NPE, DB 연결 오류 등의 상세 정보가 외부에 노출되면 보안 취약점이 될 수 있다.
+
+3. **로깅**: 클라이언트에는 일반적인 메시지를 반환하되, 서버 로그에는 상세 정보를 기록하여 디버깅에 활용한다.
+
+4. **일관된 응답 형식**: 어떤 예외가 발생하더라도 공통 응답 형식(`CommonResponse`)을 유지한다.
+
+> **주의**: `Exception.class` 핸들러가 없으면 Spring 기본 에러 페이지(Whitelabel Error Page)나 스택트레이스가 노출될 수 있다.
+> 과제 평가 시 이런 화면이 노출되면 감점 요인이 될 수 있으므로 반드시 처리해야 한다.
+
 <details>
 <summary>GlobalExceptionHandler (Kotlin)</summary>
 
 ```kotlin
 @RestControllerAdvice
 class GlobalExceptionHandler {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @ExceptionHandler(CommonException::class)
     fun handleCommonException(e: CommonException): ResponseEntity<CommonResponse<Unit>> {
@@ -539,6 +556,10 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception::class)
     fun handleException(e: Exception): ResponseEntity<CommonResponse<Unit>> {
+        // 서버 로그에는 상세 정보 기록 (디버깅용)
+        log.error("Unexpected error occurred", e)
+
+        // 클라이언트에는 일반적인 메시지만 반환 (보안)
         val response = CommonResponse.error<Unit>(
             ErrorCode.ERR000.code,
             ErrorCode.ERR000.message
@@ -554,6 +575,7 @@ class GlobalExceptionHandler {
 <summary>GlobalExceptionHandler (Java)</summary>
 
 ```java
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -586,6 +608,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<CommonResponse<Void>> handleException(Exception e) {
+        // 서버 로그에는 상세 정보 기록 (디버깅용)
+        log.error("Unexpected error occurred", e);
+
+        // 클라이언트에는 일반적인 메시지만 반환 (보안)
         CommonResponse<Void> response = CommonResponse.error(
             ErrorCode.ERR000.getCode(),
             ErrorCode.ERR000.getMessage()
