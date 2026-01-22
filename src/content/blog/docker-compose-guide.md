@@ -44,7 +44,7 @@ volumes:
   # 볼륨 정의
 ```
 
-> **참고**: Docker Compose V2부터 `version` 필드는 선택사항이 되었다.
+> **참고**: Docker Compose V2부터 `version` 필드는 선택사항이 되었다.   
 > 최신 Docker Desktop을 사용한다면 생략해도 무방하다.
 
 ---
