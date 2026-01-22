@@ -146,11 +146,16 @@ public record CommonResponse<T>(
 - `@Valid`, `@NotBlank`, `@Size`, `@NotNull` 등 활용
 - 중첩된 DTO도 `@Valid` 처리
 - ExceptionHandler에서 Validation 예외 처리
+- **Request DTO는 Controller에서만 사용하고, Service에는 Command 객체로 변환하여 전달**
+
+> **Tip**: Request DTO를 직접 Service로 전달하면 Presentation Layer와 Business Layer 간의 결합도가 높아진다.
+> Command 객체를 사용하면 레이어 간 책임이 명확히 분리되고, Service 테스트 시 웹 관련 의존성 없이 테스트할 수 있다.
 
 <details>
-<summary>DTO 클래스 (Kotlin)</summary>
+<summary>Request DTO & Command (Kotlin)</summary>
 
 ```kotlin
+// Request DTO - Controller에서 Validation 용도로 사용
 data class RegisterProductRequest(
     @field:NotBlank
     @field:Size(max = 100)
@@ -159,7 +164,12 @@ data class RegisterProductRequest(
     @field:Size(min = 1)
     @field:Valid
     val details: List<ProductDetailDto>?
-)
+) {
+    fun toCommand() = RegisterProductCommand(
+        name = name!!,
+        details = details!!.map { it.toCommand() }
+    )
+}
 
 data class ProductDetailDto(
     @field:NotNull
@@ -167,6 +177,41 @@ data class ProductDetailDto(
 
     @field:NotBlank
     val name: String?
+) {
+    fun toCommand() = ProductDetailCommand(
+        type = type!!,
+        name = name!!
+    )
+}
+
+data class ModifyProductRequest(
+    @field:NotBlank
+    @field:Size(max = 100)
+    val name: String?,
+
+    @field:NotNull
+    val category: ProductCategoryType?
+) {
+    fun toCommand() = ModifyProductCommand(
+        name = name!!,
+        category = category!!
+    )
+}
+
+// Command - Service Layer에서 사용하는 순수한 데이터 객체
+data class RegisterProductCommand(
+    val name: String,
+    val details: List<ProductDetailCommand>
+)
+
+data class ProductDetailCommand(
+    val type: ProductCategoryType,
+    val name: String
+)
+
+data class ModifyProductCommand(
+    val name: String,
+    val category: ProductCategoryType
 )
 
 enum class ProductCategoryType {
@@ -177,9 +222,10 @@ enum class ProductCategoryType {
 </details>
 
 <details>
-<summary>DTO 클래스 (Java)</summary>
+<summary>Request DTO & Command (Java)</summary>
 
 ```java
+// Request DTO - Controller에서 Validation 용도로 사용
 public record RegisterProductRequest(
     @NotBlank
     @Size(max = 100)
@@ -188,7 +234,16 @@ public record RegisterProductRequest(
     @Size(min = 1)
     @Valid
     List<ProductDetailDto> details
-) {}
+) {
+    public RegisterProductCommand toCommand() {
+        return new RegisterProductCommand(
+            name,
+            details.stream()
+                .map(ProductDetailDto::toCommand)
+                .toList()
+        );
+    }
+}
 
 public record ProductDetailDto(
     @NotNull
@@ -196,6 +251,39 @@ public record ProductDetailDto(
 
     @NotBlank
     String name
+) {
+    public ProductDetailCommand toCommand() {
+        return new ProductDetailCommand(type, name);
+    }
+}
+
+public record ModifyProductRequest(
+    @NotBlank
+    @Size(max = 100)
+    String name,
+
+    @NotNull
+    ProductCategoryType category
+) {
+    public ModifyProductCommand toCommand() {
+        return new ModifyProductCommand(name, category);
+    }
+}
+
+// Command - Service Layer에서 사용하는 순수한 데이터 객체
+public record RegisterProductCommand(
+    String name,
+    List<ProductDetailCommand> details
+) {}
+
+public record ProductDetailCommand(
+    ProductCategoryType type,
+    String name
+) {}
+
+public record ModifyProductCommand(
+    String name,
+    ProductCategoryType category
 ) {}
 
 public enum ProductCategoryType {
@@ -207,7 +295,7 @@ public enum ProductCategoryType {
 
 ### 6. Controller 작성
 
-Controller는 비즈니스 로직을 포함하지 않도록 한다.
+Controller는 비즈니스 로직을 포함하지 않도록 한다. **Request DTO는 Controller에서 Command로 변환 후 Service에 전달한다.**
 
 <details>
 <summary>페이지네이션 설정 (application.yml)</summary>
@@ -243,7 +331,7 @@ class ProductController(
         @Valid @ModelAttribute request: FindProductRequest,
         @PageableDefault(page = 0, size = 20) pageable: Pageable
     ): CommonResponse<Page<FindProductResponse>> {
-        return CommonResponse.success(productService.findProducts(request, pageable))
+        return CommonResponse.success(productService.findProducts(request.toCommand(), pageable))
     }
 
     @PostMapping
@@ -251,7 +339,7 @@ class ProductController(
     fun registerProduct(
         @Valid @RequestBody request: RegisterProductRequest
     ): CommonResponse<Long> {
-        return CommonResponse.success(productService.registerProduct(request))
+        return CommonResponse.success(productService.registerProduct(request.toCommand()))
     }
 
     @PutMapping("/{productId}")
@@ -259,7 +347,7 @@ class ProductController(
         @PathVariable productId: Long,
         @Valid @RequestBody request: ModifyProductRequest
     ): CommonResponse<Long> {
-        return CommonResponse.success(productService.modifyProduct(productId, request))
+        return CommonResponse.success(productService.modifyProduct(productId, request.toCommand()))
     }
 
     @DeleteMapping
@@ -295,21 +383,21 @@ public class ProductController {
     public CommonResponse<Page<FindProductResponse>> findProducts(
             @Valid @ModelAttribute FindProductRequest request,
             @PageableDefault(page = 0, size = 20) Pageable pageable) {
-        return CommonResponse.success(productService.findProducts(request, pageable));
+        return CommonResponse.success(productService.findProducts(request.toCommand(), pageable));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CommonResponse<Long> registerProduct(
             @Valid @RequestBody RegisterProductRequest request) {
-        return CommonResponse.success(productService.registerProduct(request));
+        return CommonResponse.success(productService.registerProduct(request.toCommand()));
     }
 
     @PutMapping("/{productId}")
     public CommonResponse<Long> modifyProduct(
             @PathVariable Long productId,
             @Valid @RequestBody ModifyProductRequest request) {
-        return CommonResponse.success(productService.modifyProduct(productId, request));
+        return CommonResponse.success(productService.modifyProduct(productId, request.toCommand()));
     }
 
     @DeleteMapping
@@ -560,6 +648,7 @@ public class ProductService {
 
 - Domain Model을 직접 반환하지 않고 응답 전용 DTO로 변환
 - 반복 로직은 Stream을 활용하되 가독성 유지
+- **Request DTO가 아닌 Command 객체를 파라미터로 받는다**
 
 <details>
 <summary>Service (Kotlin)</summary>
@@ -571,13 +660,13 @@ class ProductService(
     private val productRepository: ProductRepository
 ) {
     @Transactional
-    fun modifyProduct(productId: Long, request: ModifyProductRequest): Long {
+    fun modifyProduct(productId: Long, command: ModifyProductCommand): Long {
         val product = productRepository.findById(productId)
             ?: throw NotFoundException()
 
         product.update(
-            name = request.name,
-            category = request.category
+            name = command.name,
+            category = command.category
         )
 
         return product.id!!
@@ -610,11 +699,11 @@ public class ProductService {
     private final ProductRepository productRepository;
 
     @Transactional
-    public Long modifyProduct(Long productId, ModifyProductRequest request) {
+    public Long modifyProduct(Long productId, ModifyProductCommand command) {
         Product product = productRepository.findById(productId)
             .orElseThrow(NotFoundException::new);
 
-        product.update(request.name(), request.category());
+        product.update(command.name(), command.category());
 
         return product.getId();
     }
@@ -951,8 +1040,8 @@ public class Product extends BaseEntity {
 
 | 레이어 | 체크 포인트 |
 |--------|------------|
-| **Controller** | HTTP Method 매핑, URI 설계, Validation, 공통 응답 |
-| **Service** | 트랜잭션 처리, 예외 처리, DTO 변환 |
+| **Controller** | HTTP Method 매핑, URI 설계, Validation, 공통 응답, Request → Command 변환 |
+| **Service** | 트랜잭션 처리, 예외 처리, DTO 변환, Command 객체 사용 |
 | **Repository** | Nullable 처리, 페이징, Querydsl 활용 |
 | **Domain** | 비즈니스 메서드, BaseEntity, protected 생성자 |
 
@@ -961,6 +1050,7 @@ public class Product extends BaseEntity {
 - [ ] CRUD와 HTTP Method가 올바르게 매핑되어 있는가?
 - [ ] URI가 자원을 명확하게 표현하는가?
 - [ ] DTO에 Validation이 적용되어 있는가?
+- [ ] Request DTO를 Command로 변환하여 Service에 전달하는가?
 - [ ] 조회 트랜잭션에 `readOnly = true`가 설정되어 있는가?
 - [ ] 예외 처리가 GlobalExceptionHandler에서 일관되게 처리되는가?
 - [ ] Entity에 setter 대신 비즈니스 메서드가 있는가?
