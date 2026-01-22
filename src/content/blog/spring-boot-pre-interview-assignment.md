@@ -140,17 +140,17 @@ heroImage: "../../assets/PreinterviewTaskGuide.png"
 GET /api/v1/products?keyword=노트북&categoryId=1&minPrice=100000&maxPrice=2000000&status=ON_SALE&page=0&size=20&sort=createdAt,desc
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| keyword | String | 상품명 검색 (부분 일치) |
-| categoryId | Long | 카테고리 필터 |
-| minPrice | Integer | 최소 가격 |
-| maxPrice | Integer | 최대 가격 |
-| status | String | 상품 상태 |
-| sellerId | Long | 판매자 필터 |
-| page | Integer | 페이지 번호 (0부터) |
-| size | Integer | 페이지 크기 (기본 20, 최대 100) |
-| sort | String | 정렬 (createdAt, price, salesCount) |
+| Parameter | Type       | Description |
+|-----------|------------|-------------|
+| keyword | String     | 상품명 검색 (부분 일치) |
+| categoryId | Long       | 카테고리 필터 |
+| minPrice | BigDecimal | 최소 가격 |
+| maxPrice | BigDecimal    | 최대 가격 |
+| status | String     | 상품 상태 |
+| sellerId | Long       | 판매자 필터 |
+| page | Integer    | 페이지 번호 (0부터) |
+| size | Integer    | 페이지 크기 (기본 20, 최대 100) |
+| sort | String     | 정렬 (createdAt, price, salesCount) |
 
 ### 3. 주문 생성
 
