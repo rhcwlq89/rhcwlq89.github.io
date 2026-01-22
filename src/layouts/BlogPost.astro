@@ -6,15 +6,23 @@ import Footer from "../components/Footer.astro";
 import FormattedDate from "../components/FormattedDate.astro";
 import Header from "../components/Header.astro";
 import Comments from "../components/Comments.astro";
+import { SITE_LANG } from "../consts";
 
 type Props = CollectionEntry<"blog">["data"];
 
 const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
 ---
 
-<html lang="en">
+<html lang={SITE_LANG}>
   <head>
-    <BaseHead title={title} description={description} />
+    <BaseHead
+      title={title}
+      description={description}
+      image={heroImage}
+      type="article"
+      publishedTime={pubDate}
+      modifiedTime={updatedDate}
+    />
     <style>
       main {
         width: calc(100% - 2em);
@@ -69,7 +77,7 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
         <div class="hero-image">
           {
             heroImage && (
-              <Image width={900} height={450} src={heroImage} alt="" />
+              <Image width={900} height={450} src={heroImage} alt={title} />
             )
           }
         </div>

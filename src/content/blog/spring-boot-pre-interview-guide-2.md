@@ -1,18 +1,33 @@
 ---
-title: "Spring Boot Pre-interview Task Guide 2"
-description: "Pre-interview 과제에서 자주 나오는 유형과 체크 포인트 정리"
+title: "스프링 사전과제 가이드 2편: Database & Testing"
+description: "데이터베이스 설정과 테스트 전략 가이드"
 pubDate: 2026-01-19
-tags: ["Spring Boot", "REST API", "Backend", "Interview"]
-heroImage: "../../assets/PreinterviewTaskGuide2.png"
+tags: ["Spring Boot", "JPA", "Testing", "Backend", "사전과제"]
+heroImage: "../../assets/PreinterviewTaskGuide.png"
+---
+
+## 시리즈 네비게이션
+
+| 이전 | 현재 | 다음 |
+|:---:|:---:|:---:|
+| [1편: Core Layer](/blog/spring-boot-pre-interview-guide-1) | **2편: DB & Testing** | [3편: Documentation & AOP](/blog/spring-boot-pre-interview-guide-3) |
+
+> 📚 **전체 로드맵**: [스프링 사전과제 가이드 로드맵](/blog/spring-boot-pre-interview-guide-1) 참고
+
 ---
 
 ## 서론
 
-[1편](/blog/spring-boot-pre-interview-guide-1)에 이어서 Spring Boot 기반의 Pre-interview 과제에서 체크 포인트를 정리합니다.
+1편에서 다룬 계층 구조를 기반으로, 이번 편에서는 데이터베이스 설정과 테스트 전략을 다룬다.
 
-2편에서는 **Database Configuration**과 **Test 환경**을 중심으로 설명합니다.
+**2편에서 다루는 내용:**
+- 데이터베이스 설정 (H2, MySQL, 프로파일 분리)
+- Repository 테스트
+- Service 테스트
+- Controller 테스트
 
 ### 목차
+
 - [Database Config](#database-config)
 - [Test](#test)
 - [정리](#정리)
@@ -58,6 +73,39 @@ spring:
 > - `update`: 변경된 스키마만 반영
 > - `validate`: 엔티티와 테이블 매핑 검증만 수행
 > - `none`: 아무 작업도 하지 않음
+
+<details>
+<summary>⚠️ ddl-auto 운영 환경 주의사항</summary>
+
+**절대 사용하면 안 되는 조합**
+- 운영 환경 + `create` = 기존 데이터 전체 삭제
+- 운영 환경 + `create-drop` = 애플리케이션 종료 시 테이블 삭제
+- 운영 환경 + `update` = 예상치 못한 스키마 변경 (컬럼 삭제는 안 되지만, 추가/변경은 됨)
+
+**환경별 권장 설정**
+
+| 환경 | 권장 설정 | 이유 |
+|------|----------|------|
+| 로컬 개발 | `create` 또는 `update` | 빠른 개발 사이클 |
+| 테스트 | `create-drop` | 매 테스트마다 깨끗한 상태 |
+| 스테이징 | `validate` | 스키마 불일치 조기 발견 |
+| 운영 | `none` 또는 `validate` | 스키마 변경은 반드시 마이그레이션 도구로 |
+
+**실무 팁**
+
+운영 환경에서는 **Flyway** 또는 **Liquibase** 같은 DB 마이그레이션 도구를 사용하여 스키마를 관리한다. ddl-auto에 의존하면 예상치 못한 데이터 손실이 발생할 수 있다.
+
+```yaml
+# 운영 환경 설정 예시
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate  # 또는 none
+  flyway:
+    enabled: true
+```
+
+</details>
 
 ### 2. H2 설정
 
@@ -148,6 +196,50 @@ public class MemoryProductRepository implements ProductRepository {
 > - `ConcurrentHashMap`: 일반적인 key-value 저장 (권장)
 > - `ConcurrentSkipListMap`: 정렬이 필요한 경우
 > - `CopyOnWriteArrayList`: 읽기가 많고 쓰기가 적은 경우
+
+<details>
+<summary>💡 Memory Repository 구현 시 주의사항</summary>
+
+**ID 생성 전략**
+
+JPA 환경에서는 `@GeneratedValue`가 자동으로 ID를 생성하지만, Memory 저장소에서는 직접 구현해야 한다.
+
+```java
+// ❌ 잘못된 예 - 동시성 문제
+private long sequence = 0;
+product.setId(++sequence);  // Race condition 발생 가능
+
+// ✅ 올바른 예 - AtomicLong 사용
+private final AtomicLong sequence = new AtomicLong(0);
+product.setId(sequence.incrementAndGet());
+```
+
+**객체 복사 주의**
+
+저장된 객체의 참조를 그대로 반환하면 외부에서 수정 시 저장소 데이터도 변경된다.
+
+```java
+// ❌ 위험한 코드
+return store.get(id);  // 원본 반환
+
+// ✅ 안전한 코드 (방어적 복사)
+return store.get(id).copy();  // 또는 new Product(...)로 복사
+```
+
+**페이징 처리**
+
+```java
+public Page<Product> findAll(Pageable pageable) {
+    List<Product> all = new ArrayList<>(store.values());
+    int start = (int) pageable.getOffset();
+    int end = Math.min(start + pageable.getPageSize(), all.size());
+
+    List<Product> content = all.subList(start, end);
+    return new PageImpl<>(content, pageable, all.size());
+}
+```
+
+</details>
 
 ### 4. Docker 기반 RDB 설정
 
@@ -302,6 +394,73 @@ tasks.named('test') {
 | `@WebMvcTest` | Controller 테스트 | MVC 관련 빈만 로드 |
 | `@SpringBootTest` | 통합 테스트 | 전체 컨텍스트 로드 |
 | `@Transactional` | 테스트 롤백 | 테스트 종료 후 자동 롤백 |
+
+<details>
+<summary>💬 @DataJpaTest vs @SpringBootTest 선택 기준</summary>
+
+**@DataJpaTest**
+- JPA 관련 빈만 로드하여 **빠름**
+- `@Transactional`이 기본 적용되어 자동 롤백
+- Service, Controller 등은 로드되지 않음
+- 순수 Repository 로직 테스트에 적합
+
+**@SpringBootTest**
+- 전체 ApplicationContext 로드하여 **느림**
+- 실제 환경과 유사한 통합 테스트
+- 모든 빈이 주입되어 E2E 테스트 가능
+
+**선택 가이드**
+
+| 테스트 대상 | 권장 어노테이션 |
+|------------|----------------|
+| Repository 단위 테스트 | `@DataJpaTest` |
+| Service + Repository 통합 | `@SpringBootTest` |
+| Controller + Service + Repository | `@SpringBootTest` + `MockMvc` |
+| Controller 단위 테스트 | `@WebMvcTest` |
+
+**실무 팁**
+
+테스트 속도가 중요하다면 **Slice Test** (`@DataJpaTest`, `@WebMvcTest`)를 적극 활용하고, 주요 시나리오만 `@SpringBootTest`로 통합 테스트한다.
+
+</details>
+
+<details>
+<summary>💬 Mock vs 실제 객체, 언제 무엇을 써야 하나?</summary>
+
+**Mock 객체 사용이 적합한 경우**
+- 외부 API 호출 (결제, 알림 등)
+- 테스트하기 어려운 의존성 (시간, 랜덤 등)
+- 단위 테스트에서 특정 레이어만 테스트할 때
+- 에러 상황 시뮬레이션
+
+**실제 객체 사용이 적합한 경우**
+- DB와의 실제 상호작용 검증
+- 쿼리 성능 테스트
+- 트랜잭션 동작 검증
+- 연관관계 매핑 검증
+
+**주의: 과도한 Mock 사용의 문제**
+
+```java
+// ❌ 과도한 Mock - 테스트 의미가 없음
+given(repository.save(any())).willReturn(product);
+given(repository.findById(1L)).willReturn(Optional.of(product));
+
+Product saved = service.create(request);  // save() 호출
+Product found = service.find(1L);         // findById() 호출
+
+// 실제로는 같은 객체가 아닐 수 있는데, Mock이라 항상 성공
+assertThat(found.getId()).isEqualTo(saved.getId());
+```
+
+**실무 팁**
+
+- Repository 테스트: 실제 DB (H2 또는 Testcontainers)
+- Service 테스트: Mock Repository + 실제 로직
+- Controller 테스트: Mock Service + 실제 Controller
+- 통합 테스트: 모두 실제 객체
+
+</details>
 
 ### 3. 테스트 예제
 
@@ -484,6 +643,181 @@ class ProductServiceTest : BehaviorSpec({
 
 </details>
 
+<details>
+<summary>Controller 테스트 (Kotlin + MockMvc)</summary>
+
+```kotlin
+@WebMvcTest(ProductController::class)
+class ProductControllerTest {
+
+    @Autowired
+    private lateinit var mockMvc: MockMvc
+
+    @MockkBean
+    private lateinit var productService: ProductService
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
+
+    @Test
+    @DisplayName("상품 생성 API 테스트")
+    fun createProduct() {
+        // given
+        val request = RegisterProductRequest(name = "테스트 상품", price = 10000)
+        val response = FindProductDetailResponse(id = 1L, name = "테스트 상품", price = 10000)
+
+        every { productService.registerProduct(any()) } returns 1L
+
+        // when & then
+        mockMvc.perform(
+            post("/api/v1/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.code").value("SUC200"))
+            .andExpect(jsonPath("$.data").value(1))
+    }
+
+    @Test
+    @DisplayName("상품 조회 API 테스트")
+    fun findProductDetail() {
+        // given
+        val response = FindProductDetailResponse(
+            id = 1L,
+            name = "테스트 상품",
+            price = 10000,
+            category = ProductCategoryType.FOOD,
+            enabled = true,
+            createdAt = LocalDateTime.now()
+        )
+
+        every { productService.findProductDetail(1L) } returns response
+
+        // when & then
+        mockMvc.perform(get("/api/v1/products/1"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.code").value("SUC200"))
+            .andExpect(jsonPath("$.data.id").value(1))
+            .andExpect(jsonPath("$.data.name").value("테스트 상품"))
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 상품 조회 시 404 응답")
+    fun findProductDetail_notFound() {
+        // given
+        every { productService.findProductDetail(999L) } throws NotFoundException()
+
+        // when & then
+        mockMvc.perform(get("/api/v1/products/999"))
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.code").value("ERR002"))
+    }
+
+    @Test
+    @DisplayName("Validation 실패 시 400 응답")
+    fun createProduct_validationFail() {
+        // given
+        val invalidRequest = mapOf("name" to "", "price" to -1000)  // 빈 이름, 음수 가격
+
+        // when & then
+        mockMvc.perform(
+            post("/api/v1/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidRequest))
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("ERR001"))
+    }
+}
+```
+
+</details>
+
+<details>
+<summary>Controller 테스트 (Kotlin + Kotest + MockMvc)</summary>
+
+Kotest 스타일로 작성하면 더 표현력 있는 테스트가 가능하다.
+
+```kotlin
+@WebMvcTest(ProductController::class)
+class ProductControllerKotestTest(
+    private val mockMvc: MockMvc,
+    @MockkBean private val productService: ProductService
+) : DescribeSpec({
+
+    val objectMapper = ObjectMapper().registerModule(JavaTimeModule())
+
+    describe("POST /api/v1/products") {
+        context("유효한 요청이 주어지면") {
+            it("201 Created와 생성된 상품 ID를 반환한다") {
+                val request = RegisterProductRequest(name = "테스트 상품", price = 10000)
+                every { productService.registerProduct(any()) } returns 1L
+
+                mockMvc.perform(
+                    post("/api/v1/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                )
+                    .andExpect(status().isCreated)
+                    .andExpect(jsonPath("$.data").value(1))
+            }
+        }
+
+        context("상품명이 비어있으면") {
+            it("400 Bad Request를 반환한다") {
+                val invalidRequest = mapOf("name" to "", "price" to 10000)
+
+                mockMvc.perform(
+                    post("/api/v1/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest))
+                )
+                    .andExpect(status().isBadRequest)
+            }
+        }
+    }
+
+    describe("GET /api/v1/products/{productId}") {
+        context("존재하는 상품 ID로 조회하면") {
+            it("200 OK와 상품 정보를 반환한다") {
+                val response = FindProductDetailResponse(
+                    id = 1L,
+                    name = "테스트 상품",
+                    price = 10000,
+                    category = ProductCategoryType.FOOD,
+                    enabled = true,
+                    createdAt = LocalDateTime.now()
+                )
+                every { productService.findProductDetail(1L) } returns response
+
+                mockMvc.perform(get("/api/v1/products/1"))
+                    .andExpect(status().isOk)
+                    .andExpect(jsonPath("$.data.name").value("테스트 상품"))
+            }
+        }
+
+        context("존재하지 않는 상품 ID로 조회하면") {
+            it("404 Not Found를 반환한다") {
+                every { productService.findProductDetail(999L) } throws NotFoundException()
+
+                mockMvc.perform(get("/api/v1/products/999"))
+                    .andExpect(status().isNotFound)
+            }
+        }
+    }
+})
+```
+
+</details>
+
+> **Tip**: Kotlin에서 MockMvc 테스트 시 `@MockkBean`을 사용하려면 `spring-mockk` 의존성이 필요하다.
+>
+> ```kotlin
+> // build.gradle.kts
+> testImplementation("com.ninja-squad:springmockk:4.0.2")
+> ```
+
 ### 5. Spring Security 테스트
 
 인증이 필요한 API 테스트 시 다음 방법을 사용한다.
@@ -558,6 +892,39 @@ class UserControllerTest {
 실제 DB와 동일한 환경에서 테스트가 필요한 경우 Testcontainers를 사용한다.
 
 <details>
+<summary>💬 H2 vs Testcontainers 선택 기준</summary>
+
+**H2 인메모리 DB**
+
+| 장점 | 단점 |
+|-----|-----|
+| 빠른 실행 속도 | 실제 DB와 문법/기능 차이 |
+| 별도 설정 불필요 | MySQL/PostgreSQL 전용 기능 테스트 불가 |
+| CI/CD에서 추가 설정 없음 | 호환 모드도 100% 호환은 아님 |
+
+**Testcontainers**
+
+| 장점 | 단점 |
+|-----|-----|
+| 실제 DB와 동일한 환경 | Docker 필요 |
+| DB 전용 기능 테스트 가능 | 컨테이너 시작 시간 소요 |
+| 운영 환경과 동일한 쿼리 검증 | CI/CD에서 Docker 설정 필요 |
+
+**선택 가이드**
+
+- **H2 사용**: 대부분의 CRUD, 과제, 빠른 피드백이 필요한 경우
+- **Testcontainers 사용**:
+  - 네이티브 쿼리나 DB 전용 함수 사용 시
+  - JSON 컬럼, Full-text search 등 특정 기능 테스트
+  - 운영 환경과 동일한 쿼리 플랜 검증이 필요한 경우
+
+**과제에서의 권장**
+
+대부분의 과제에서는 **H2로 충분**하다. 특별히 MySQL/PostgreSQL 전용 기능을 사용하는 경우에만 Testcontainers를 고려한다.
+
+</details>
+
+<details>
 <summary>Testcontainers 설정</summary>
 
 ```groovy
@@ -607,6 +974,53 @@ class IntegrationTest {
 - [ ] 테스트에서 롤백이 정상 동작하는가?
 - [ ] Mock 객체 사용이 적절한가?
 - [ ] Security 설정이 테스트를 방해하지 않는가?
+
+<details>
+<summary>💡 테스트 커버리지, 얼마나 해야 할까?</summary>
+
+**커버리지 목표치 논쟁**
+
+- **100% 추구파**: 모든 코드가 테스트되어야 안전하다
+- **실용주의파**: 중요한 비즈니스 로직만 테스트하면 충분하다
+
+**실무에서의 현실**
+
+| 항목 | 일반적인 목표 | 비고 |
+|-----|-------------|-----|
+| 전체 커버리지 | 60~80% | 팀/프로젝트마다 다름 |
+| 비즈니스 로직 (Service) | 80~90% | 핵심 로직은 반드시 테스트 |
+| Repository | 필요시 | 복잡한 쿼리만 테스트 |
+| Controller | 주요 시나리오 | Happy path + 주요 예외 |
+| Config/Util | 선택적 | 복잡한 로직이 있는 경우만 |
+
+**과제에서의 권장**
+
+시간이 제한된 과제에서 **모든 코드를 테스트할 필요는 없다**. 다음 우선순위로 작성:
+
+1. **필수**: Service 레이어의 핵심 비즈니스 로직
+2. **권장**: 복잡한 Querydsl 쿼리, 예외 상황 처리
+3. **선택**: Controller 테스트, 단순 CRUD
+
+**테스트가 없는 것보다 낫지만**, 의미 없는 테스트(getter/setter 테스트 등)는 오히려 마이너스다.
+
+```java
+// ❌ 의미 없는 테스트
+@Test
+void getterTest() {
+    Product p = new Product("test", 1000);
+    assertThat(p.getName()).isEqualTo("test");
+}
+
+// ✅ 의미 있는 테스트
+@Test
+void 재고가_부족하면_예외가_발생한다() {
+    Product product = new Product("test", 1000, 5);
+    assertThrows(InsufficientStockException.class,
+        () -> product.decreaseStock(10));
+}
+```
+
+</details>
 
 ---
 
