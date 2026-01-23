@@ -237,6 +237,9 @@ marketplace/
 
 #### Option B: 멀티 모듈 (도전)
 
+두 가지 구조 중 선택 가능:
+
+**B-1. 정석 (DIP 적용)**
 ```
 marketplace/
 ├── marketplace-api/           # Controller, Security, 실행
@@ -245,10 +248,20 @@ marketplace/
 └── marketplace-common/        # 공통 예외, 유틸리티
 ```
 
-> **멀티 모듈 선택 시 추가 요구사항**:
-> - 의존성 방향: api → domain ← infra, common은 모든 모듈에서 사용 가능
-> - domain 모듈은 infra를 의존하지 않음 (Repository는 인터페이스만 정의)
-> - infra 모듈에서 Repository 인터페이스 구현
+**B-2. 간소화 (실용적)**
+```
+marketplace/
+├── marketplace-api/           # Controller, Service, Security, 실행
+├── marketplace-domain/        # Entity만
+├── marketplace-infra/         # JpaRepository, QueryDSL
+└── marketplace-common/        # 공통 예외, 유틸리티
+```
+
+> **멀티 모듈 선택 시 요구사항**:
+> - 선택한 구조(B-1 또는 B-2)를 일관되게 적용
+> - B-1 선택 시: domain → infra 의존 금지, Repository 인터페이스/구현 분리
+> - B-2 선택 시: Service는 api 모듈에 위치, JpaRepository 직접 사용
+> - README에 선택한 구조와 이유 명시
 
 ### 필수 구현
 
@@ -512,6 +525,13 @@ public void handleOrderCreated(OrderCreatedEvent event) {
 <details>
 <summary>💡 멀티 모듈 구조 힌트</summary>
 
+멀티 모듈에는 두 가지 접근 방식이 있다:
+
+| 옵션 | Service 위치 | Repository 처리 | 특징 |
+|------|-------------|----------------|------|
+| **Option A (정석)** | domain | 인터페이스/구현 분리 | DIP 엄격 적용 |
+| **Option B (간소화)** | api | JpaRepository 직접 사용 | 실용적, 코드량 적음 |
+
 **settings.gradle**
 ```groovy
 rootProject.name = 'marketplace'
@@ -537,6 +557,8 @@ dependencies {
     implementation project(':marketplace-common')
     implementation project(':marketplace-domain')
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    // QueryDSL (선택)
+    implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'com.mysql:mysql-connector-j'
 }
@@ -551,7 +573,7 @@ dependencies {
 }
 ```
 
-**Repository 인터페이스/구현 분리**
+**Option A: Repository 인터페이스/구현 분리 (DIP)**
 ```java
 // marketplace-domain/.../ProductRepository.java (인터페이스)
 public interface ProductRepository {
@@ -569,12 +591,33 @@ public class ProductRepositoryImpl implements ProductRepository {
     public Product save(Product product) {
         return jpaRepository.save(product);
     }
-
-    @Override
-    public Optional<Product> findById(Long id) {
-        return jpaRepository.findById(id);
-    }
 }
+```
+
+**Option B: QueryDSL Custom Repository 패턴 (간소화)**
+```kotlin
+// marketplace-infra/.../ProductJpaRepository.kt
+interface ProductJpaRepository : JpaRepository<Product, Long>, ProductJpaRepositoryCustom {
+    fun findBySellerId(sellerId: Long, pageable: Pageable): Page<Product>
+}
+
+// marketplace-infra/.../ProductJpaRepositoryCustom.kt
+interface ProductJpaRepositoryCustom {
+    fun search(keyword: String?, categoryId: Long?, pageable: Pageable): Page<Product>
+}
+
+// marketplace-infra/.../ProductJpaRepositoryImpl.kt (QueryDSL)
+class ProductJpaRepositoryImpl(
+    private val queryFactory: JPAQueryFactory
+) : ProductJpaRepositoryCustom {
+    override fun search(...) = queryFactory.selectFrom(product).where(...).fetch()
+}
+
+// marketplace-api/.../ProductService.kt (Service는 api 모듈에 위치)
+@Service
+class ProductService(
+    private val productJpaRepository: ProductJpaRepository  // 직접 주입
+) { ... }
 ```
 
 **Component 스캔 설정**

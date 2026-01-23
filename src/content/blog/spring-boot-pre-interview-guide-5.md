@@ -50,13 +50,18 @@ testImplementation 'org.springframework.security:spring-security-test'
 
 ### 2. SecurityFilterChain 설정
 
-Spring Security 6.x 기준 설정이다.
+Spring Security 6.x 기준 설정이다. `@EnableMethodSecurity`를 함께 사용하면 `@PreAuthorize` 등 메서드 수준 보안을 활성화할 수 있다.
 
 ```java
 @Configuration
-@EnableWebSecurity
-@RequiredArgsConstructor
+@EnableMethodSecurity  // @PreAuthorize, @PostAuthorize 활성화
 public class SecurityConfig {
+
+    private final JwtTokenProvider jwtTokenProvider;
+
+    public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -66,13 +71,15 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))  // 세션 미사용
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()  // 인증 API는 허용
-                .requestMatchers("/api/v1/public/**").permitAll()  // 공개 API
+                .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()  // 공개 조회 API
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Swagger
                 .requestMatchers("/h2-console/**").permitAll()  // H2 Console (개발용)
                 .anyRequest().authenticated()  // 나머지는 인증 필요
             )
             .headers(headers ->
                 headers.frameOptions(frame -> frame.disable()))  // H2 Console iframe 허용
+            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
+                UsernamePasswordAuthenticationFilter.class)
             .build();
     }
 
@@ -88,32 +95,47 @@ public class SecurityConfig {
 
 ```kotlin
 @Configuration
-@EnableWebSecurity
-class SecurityConfig {
-
-    @Bean
-    fun filterChain(http: HttpSecurity): SecurityFilterChain {
-        return http
-            .csrf { it.disable() }
-            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .authorizeHttpRequests { auth ->
-                auth
-                    .requestMatchers("/api/v1/auth/**").permitAll()
-                    .requestMatchers("/api/v1/public/**").permitAll()
-                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                    .requestMatchers("/h2-console/**").permitAll()
-                    .anyRequest().authenticated()
-            }
-            .headers { it.frameOptions { frame -> frame.disable() } }
-            .build()
-    }
+@EnableMethodSecurity
+class SecurityConfig(private val jwtTokenProvider: JwtTokenProvider) {
 
     @Bean
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
+
+    @Bean
+    fun filterChain(http: HttpSecurity): SecurityFilterChain {
+        http.csrf { it.disable() }
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .authorizeHttpRequests { authz ->
+                authz
+                    .requestMatchers("/api/v1/auth/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+                    .requestMatchers(
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/v3/api-docs/**"
+                    ).permitAll()
+                    .requestMatchers("/h2-console/**").permitAll()
+                    .anyRequest().authenticated()
+            }
+
+        http.addFilterBefore(
+            JwtAuthenticationFilter(jwtTokenProvider),
+            UsernamePasswordAuthenticationFilter::class.java
+        )
+
+        // H2 Console iframe 허용
+        http.headers { it.frameOptions { fo -> fo.disable() } }
+
+        return http.build()
+    }
 }
 ```
 
 </details>
+
+> **@EnableWebSecurity vs @EnableMethodSecurity**
+> - `@EnableWebSecurity`: Spring Boot 3.x에서는 자동 설정되므로 생략 가능
+> - `@EnableMethodSecurity`: `@PreAuthorize`, `@PostAuthorize` 사용을 위해 명시적으로 선언 필요
 
 ### 3. 인증 흐름 이해
 
@@ -234,6 +256,13 @@ public class JwtTokenProvider {
     }
 
     /**
+     * 토큰에서 역할 추출
+     */
+    public String getRole(String token) {
+        return getClaims(token).get("role", String.class);
+    }
+
+    /**
      * 토큰 유효성 검증
      */
     public boolean validateToken(String token) {
@@ -298,6 +327,8 @@ class JwtTokenProvider(
 
     fun getUserId(token: String): Long = getClaims(token).subject.toLong()
 
+    fun getRole(token: String): String = getClaims(token).get("role", String::class.java)
+
     fun validateToken(token: String): Boolean {
         return runCatching { getClaims(token) }.isSuccess
     }
@@ -316,13 +347,121 @@ class JwtTokenProvider(
 
 ### 4. JwtAuthenticationFilter 구현
 
+JWT 필터 구현 방식은 두 가지가 있다.
+
+#### 방식 1: userId를 Principal로 직접 사용 (권장)
+
+DB 조회 없이 토큰에서 바로 사용자 정보를 추출하는 방식이다. 더 심플하고 성능상 이점이 있다.
+
+```java
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final JwtTokenProvider jwtTokenProvider;
+
+    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        String header = request.getHeader("Authorization");
+
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7);
+
+            if (jwtTokenProvider.validateToken(token)) {
+                Long userId = jwtTokenProvider.getUserId(token);
+                String role = jwtTokenProvider.getRole(token);
+
+                // Principal로 userId(Long)를 직접 설정
+                UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                        userId,
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                    );
+
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
+        }
+
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+<details>
+<summary>Kotlin 버전</summary>
+
+```kotlin
+class JwtAuthenticationFilter(
+    private val jwtTokenProvider: JwtTokenProvider
+) : OncePerRequestFilter() {
+
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain
+    ) {
+        val header = request.getHeader("Authorization")
+
+        if (header != null && header.startsWith("Bearer ")) {
+            val token = header.substring(7)
+
+            if (jwtTokenProvider.validateToken(token)) {
+                val userId = jwtTokenProvider.getUserId(token)
+                val role = jwtTokenProvider.getRole(token)
+
+                val auth = UsernamePasswordAuthenticationToken(
+                    userId,
+                    null,
+                    listOf(SimpleGrantedAuthority("ROLE_$role"))
+                )
+                auth.details = WebAuthenticationDetailsSource().buildDetails(request)
+                SecurityContextHolder.getContext().authentication = auth
+            }
+        }
+
+        filterChain.doFilter(request, response)
+    }
+}
+```
+
+</details>
+
+이 방식을 사용하면 Controller에서 `@AuthenticationPrincipal Long userId`로 바로 사용자 ID를 받을 수 있다.
+
+```java
+@GetMapping("/me")
+public MemberResponse getMyProfile(@AuthenticationPrincipal Long userId) {
+    return memberService.getMember(userId);
+}
+
+@PostMapping
+@PreAuthorize("hasRole('SELLER')")
+public ProductResponse createProduct(
+    @AuthenticationPrincipal Long sellerId,
+    @Valid @RequestBody CreateProductRequest request
+) {
+    return productService.createProduct(sellerId, request);
+}
+```
+
+#### 방식 2: UserDetails 사용 (전통적인 방식)
+
+UserDetailsService를 통해 DB에서 사용자 정보를 조회하는 방식이다. 사용자의 최신 상태(권한 변경, 계정 잠금 등)를 확인해야 할 때 유용하다.
+
+<details>
+<summary>UserDetails 방식 코드</summary>
+
 ```java
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    private static final String AUTHORIZATION_HEADER = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserDetailsService userDetailsService;
@@ -349,49 +488,48 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
-        if (bearerToken != null && bearerToken.startsWith(BEARER_PREFIX)) {
-            return bearerToken.substring(BEARER_PREFIX.length());
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
         }
         return null;
     }
 }
 ```
 
-### 5. SecurityConfig에 JWT 필터 추가
+이 방식은 `@AuthenticationPrincipal UserDetails userDetails`로 받아서 사용한다.
 
 ```java
-@Configuration
-@EnableWebSecurity
-@RequiredArgsConstructor
-public class SecurityConfig {
-
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            // JWT 필터를 UsernamePasswordAuthenticationFilter 앞에 추가
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+@GetMapping("/me")
+public MemberResponse getMyProfile(@AuthenticationPrincipal UserDetails userDetails) {
+    Long userId = Long.parseLong(userDetails.getUsername());
+    return memberService.getMember(userId);
 }
 ```
 
-### 6. UserDetailsService 구현
+</details>
+
+<details>
+<summary>💬 어떤 방식을 선택해야 할까?</summary>
+
+| 구분 | userId 직접 사용 | UserDetails 사용 |
+|------|-----------------|-----------------|
+| **DB 조회** | 없음 | 매 요청마다 조회 |
+| **성능** | 더 좋음 | 상대적으로 느림 |
+| **최신 상태 반영** | 토큰 발급 시점 정보 | 실시간 반영 |
+| **구현 복잡도** | 단순 | UserDetailsService 필요 |
+| **활용** | 대부분의 과제/실무 | 계정 잠금 등 실시간 검증 필요 시 |
+
+**권장**: 대부분의 경우 **방식 1 (userId 직접 사용)**이 적합하다. 단, 권한이 자주 변경되거나 계정 상태를 실시간으로 확인해야 하는 경우에는 방식 2를 고려한다.
+
+</details>
+
+### 5. UserDetailsService 구현 (선택사항)
+
+> **Note**: 앞서 설명한 **방식 1 (userId 직접 사용)**을 선택했다면 UserDetailsService는 필요하지 않다. 방식 2 (UserDetails 사용)를 선택한 경우에만 구현한다.
+
+<details>
+<summary>UserDetailsService 구현 (방식 2 사용 시)</summary>
 
 ```java
 @Service
@@ -414,7 +552,9 @@ public class CustomUserDetailsService implements UserDetailsService {
 }
 ```
 
-### 7. 인증 API 구현
+</details>
+
+### 6. 인증 API 구현
 
 ```java
 @RestController
@@ -605,10 +745,13 @@ public record SignupRequest(
 
 ### 1. 역할 기반 접근 제어 (RBAC)
 
+과제 요구사항에 따라 적절한 역할을 정의한다.
+
 ```java
-public enum MemberRole {
-    USER,
-    ADMIN
+public enum Role {
+    USER,     // 일반 사용자
+    SELLER,   // 판매자 (마켓플레이스 등)
+    ADMIN     // 관리자
 }
 ```
 
@@ -624,38 +767,137 @@ public class Member {
 
 ### 2. 메서드 수준 보안
 
-```java
-@Configuration
-@EnableMethodSecurity
-public class MethodSecurityConfig {
-    // @PreAuthorize, @PostAuthorize 활성화
-}
-```
+> **Note**: `@EnableMethodSecurity`는 앞서 SecurityConfig에서 이미 설정했다. 별도의 Config 클래스가 필요하지 않다.
+
+`@PreAuthorize`를 사용하면 메서드 수준에서 세밀한 권한 제어가 가능하다.
 
 ```java
 @RestController
-@RequestMapping("/api/v1/admin")
+@RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
-public class AdminController {
+public class ProductController {
 
-    private final AdminService adminService;
+    private final ProductService productService;
 
-    @GetMapping("/members")
-    @PreAuthorize("hasRole('ADMIN')")  // ADMIN 권한만 접근 가능
-    public List<MemberResponse> getAllMembers() {
-        return adminService.getAllMembers();
+    // 누구나 조회 가능 (SecurityConfig에서 permitAll 설정)
+    @GetMapping("/{productId}")
+    public ProductResponse getProduct(@PathVariable Long productId) {
+        return productService.getProduct(productId);
     }
 
-    @DeleteMapping("/members/{memberId}")
+    // SELLER 권한만 상품 등록 가능
+    @PostMapping
+    @PreAuthorize("hasRole('SELLER')")
+    public ProductResponse createProduct(
+        @AuthenticationPrincipal Long sellerId,
+        @Valid @RequestBody CreateProductRequest request
+    ) {
+        return productService.createProduct(sellerId, request);
+    }
+
+    // SELLER 권한만 상품 수정 가능
+    @PatchMapping("/{productId}")
+    @PreAuthorize("hasRole('SELLER')")
+    public ProductResponse updateProduct(
+        @AuthenticationPrincipal Long sellerId,
+        @PathVariable Long productId,
+        @RequestBody UpdateProductRequest request
+    ) {
+        return productService.updateProduct(sellerId, productId, request);
+    }
+
+    // ADMIN 권한만 접근 가능
+    @GetMapping("/admin/all")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteMember(@PathVariable Long memberId) {
-        adminService.deleteMember(memberId);
-        return ResponseEntity.noContent().build();
+    public List<ProductResponse> getAllProductsForAdmin() {
+        return productService.getAllProductsForAdmin();
     }
 }
 ```
 
+<details>
+<summary>Kotlin 버전</summary>
+
+```kotlin
+@RestController
+@RequestMapping("/api/v1/products")
+class ProductController(private val productService: ProductService) {
+
+    @GetMapping("/{productId}")
+    fun getProduct(@PathVariable productId: Long): ProductResponse {
+        return productService.getProduct(productId)
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('SELLER')")
+    fun createProduct(
+        @AuthenticationPrincipal sellerId: Long,
+        @Valid @RequestBody request: CreateProductRequest
+    ): ProductResponse {
+        return productService.createProduct(sellerId, request)
+    }
+
+    @PatchMapping("/{productId}")
+    @PreAuthorize("hasRole('SELLER')")
+    fun updateProduct(
+        @AuthenticationPrincipal sellerId: Long,
+        @PathVariable productId: Long,
+        @RequestBody request: UpdateProductRequest
+    ): ProductResponse {
+        return productService.updateProduct(sellerId, productId, request)
+    }
+}
+```
+
+</details>
+
 ### 3. 리소스 소유자 검증
+
+다른 사용자의 리소스에 접근하지 못하도록 소유자 검증이 필요하다.
+
+#### 방식 1: Service에서 직접 검증 (권장)
+
+가장 직관적이고 간단한 방법이다. Service 메서드에서 소유자 검증 후 예외를 던진다.
+
+```java
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class ProductService {
+
+    private final ProductRepository productRepository;
+
+    @Transactional
+    public ProductResponse updateProduct(Long sellerId, Long productId, UpdateProductRequest request) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        // 소유자 검증
+        if (!product.getSellerId().equals(sellerId)) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
+        }
+
+        product.update(request.getName(), request.getPrice());
+        return ProductResponse.from(product);
+    }
+
+    @Transactional
+    public void deleteProduct(Long sellerId, Long productId) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        if (!product.getSellerId().equals(sellerId)) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
+        }
+
+        productRepository.delete(product);
+    }
+}
+```
+
+#### 방식 2: @PreAuthorize + 커스텀 서비스
+
+SpEL을 활용하여 선언적으로 권한을 검증하는 방법이다.
 
 ```java
 @RestController
@@ -680,19 +922,32 @@ public class OrderAuthorizationService {
 
     private final OrderRepository orderRepository;
 
-    public boolean isOwner(Long orderId, UserDetails userDetails) {
-        Order order = orderRepository.findById(orderId).orElse(null);
-        if (order == null) {
-            return false;
-        }
-
-        Long userId = Long.parseLong(userDetails.getUsername());
-        return order.getMember().getId().equals(userId);
+    // principal이 Long (userId)인 경우
+    public boolean isOwner(Long orderId, Long userId) {
+        return orderRepository.findById(orderId)
+            .map(order -> order.getBuyerId().equals(userId))
+            .orElse(false);
     }
 }
 ```
 
+<details>
+<summary>💬 어떤 방식을 선택해야 할까?</summary>
+
+| 구분 | Service 검증 | @PreAuthorize |
+|------|-------------|---------------|
+| **가독성** | 로직이 명시적 | 어노테이션으로 간결 |
+| **테스트** | 단위 테스트 용이 | SpEL 테스트 복잡 |
+| **유연성** | 비즈니스 로직과 결합 가능 | 검증 로직 분리 |
+| **디버깅** | 직관적 | SpEL 디버깅 어려움 |
+
+**권장**: 과제에서는 **방식 1 (Service 검증)**이 더 직관적이고 테스트하기 쉽다.
+
+</details>
+
 ### 4. 현재 사용자 정보 접근
+
+앞서 JwtAuthenticationFilter에서 `principal`로 `userId (Long)`를 직접 설정했기 때문에, Controller에서 `@AuthenticationPrincipal Long`으로 바로 받을 수 있다.
 
 ```java
 @RestController
@@ -703,14 +958,49 @@ public class MemberController {
     private final MemberService memberService;
 
     @GetMapping("/me")
-    public MemberResponse getCurrentMember(@AuthenticationPrincipal UserDetails userDetails) {
-        Long userId = Long.parseLong(userDetails.getUsername());
+    public MemberResponse getCurrentMember(@AuthenticationPrincipal Long userId) {
         return memberService.getMember(userId);
+    }
+
+    @PatchMapping("/me")
+    public MemberResponse updateProfile(
+        @AuthenticationPrincipal Long userId,
+        @Valid @RequestBody UpdateMemberRequest request
+    ) {
+        return memberService.updateMember(userId, request);
     }
 }
 ```
 
-또는 커스텀 어노테이션으로 더 깔끔하게:
+<details>
+<summary>Kotlin 버전</summary>
+
+```kotlin
+@RestController
+@RequestMapping("/api/v1/members")
+class MemberController(private val memberService: MemberService) {
+
+    @GetMapping("/me")
+    fun getCurrentMember(@AuthenticationPrincipal userId: Long): MemberResponse {
+        return memberService.getMember(userId)
+    }
+
+    @PatchMapping("/me")
+    fun updateProfile(
+        @AuthenticationPrincipal userId: Long,
+        @Valid @RequestBody request: UpdateMemberRequest
+    ): MemberResponse {
+        return memberService.updateMember(userId, request)
+    }
+}
+```
+
+</details>
+
+<details>
+<summary>커스텀 어노테이션 방식 (선택사항)</summary>
+
+`@AuthenticationPrincipal` 대신 더 명시적인 어노테이션을 사용하고 싶다면:
 
 ```java
 @Target(ElementType.PARAMETER)
@@ -737,8 +1027,8 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
             return null;
         }
 
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        return Long.parseLong(userDetails.getUsername());
+        // principal이 Long인 경우
+        return (Long) authentication.getPrincipal();
     }
 }
 ```
@@ -749,6 +1039,10 @@ public MemberResponse getCurrentMember(@CurrentUser Long userId) {
     return memberService.getMember(userId);
 }
 ```
+
+> 단, `@AuthenticationPrincipal Long userId`가 충분히 명확하고 간단하므로, 과제에서는 커스텀 어노테이션 없이 사용해도 무방하다.
+
+</details>
 
 <details>
 <summary>💬 권한 체크 위치: Filter vs AOP vs Service</summary>
@@ -843,18 +1137,23 @@ public class PublicController {
 | 항목 | 확인 |
 |------|------|
 | SecurityFilterChain이 올바르게 설정되어 있는가? | ⬜ |
+| `@EnableMethodSecurity`가 선언되어 있는가? | ⬜ |
 | JWT 생성/검증 로직이 구현되어 있는가? | ⬜ |
+| JwtAuthenticationFilter에서 userId를 principal로 설정하는가? | ⬜ |
 | 비밀번호가 BCrypt로 암호화되어 저장되는가? | ⬜ |
 | 인증이 필요한 API와 공개 API가 구분되어 있는가? | ⬜ |
-| 권한에 따른 접근 제어가 적용되어 있는가? | ⬜ |
+| `@PreAuthorize`로 역할 기반 권한 제어가 적용되어 있는가? | ⬜ |
+| `@AuthenticationPrincipal Long userId`로 현재 사용자를 받는가? | ⬜ |
+| 리소스 소유자 검증이 구현되어 있는가? | ⬜ |
 | JWT Secret이 설정 파일로 분리되어 있는가? | ⬜ |
 
 ### 핵심 포인트
 
-1. **Spring Security**: SecurityFilterChain으로 보안 설정, Stateless 세션 정책
-2. **JWT**: Access Token + Refresh Token 구조, 토큰 검증 필터 구현
+1. **Spring Security**: SecurityFilterChain + `@EnableMethodSecurity`로 보안 설정, Stateless 세션 정책
+2. **JWT**: Access Token + Refresh Token 구조, userId를 principal로 직접 설정
 3. **비밀번호**: BCrypt 암호화, 평문 저장/전송 금지
-4. **권한 관리**: URL 기반 + 메서드 수준 보안 조합
+4. **권한 관리**: URL 기반(SecurityFilterChain) + 메서드 수준(`@PreAuthorize`) 보안 조합
+5. **현재 사용자**: `@AuthenticationPrincipal Long userId`로 간편하게 접근
 
 <details>
 <summary>⚠️ 과제에서 흔한 실수</summary>
