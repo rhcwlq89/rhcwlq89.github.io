@@ -663,3 +663,6 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 ---
 
 **Good Luck!**
+
+👉 [이전: 7편 - Advanced Patterns](/blog/spring-boot-pre-interview-guide-7)
+👉 [처음으로: 1편 - Core Application Layer](/blog/spring-boot-pre-interview-guide-1)

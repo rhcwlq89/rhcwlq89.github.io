@@ -84,18 +84,40 @@ interface OrderRepository : JpaRepository<Order, Long> {
 
 #### @EntityGraph
 
+`@EntityGraph`는 JPQL 없이 Fetch Join과 동일한 효과를 낼 수 있다.
+
 ```java
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
+    // 1단계 연관관계: Order → OrderItems
     @EntityGraph(attributePaths = {"orderItems"})
     @Query("SELECT o FROM Order o")
     List<Order> findAllWithOrderItemsGraph();
 
-    // 메서드 이름 쿼리에도 적용 가능
+    // 2단계 연관관계: Order → OrderItems → Product
     @EntityGraph(attributePaths = {"orderItems", "orderItems.product"})
     List<Order> findByStatus(OrderStatus status);
+
+    // 3단계 연관관계: Order → OrderItems → Product → Category
+    @EntityGraph(attributePaths = {
+        "orderItems",
+        "orderItems.product",
+        "orderItems.product.category"
+    })
+    Optional<Order> findWithFullDetailsById(Long id);
 }
 ```
+
+**@EntityGraph vs Fetch Join 비교**
+
+| 항목 | @EntityGraph | Fetch Join |
+|------|-------------|------------|
+| 문법 | 어노테이션 | JPQL 작성 |
+| 유연성 | 고정된 그래프 | 조건에 따라 다른 쿼리 |
+| 가독성 | 좋음 | JPQL이 길어질 수 있음 |
+| 동적 적용 | 어려움 | 가능 |
+
+> **팁**: 단순한 연관관계는 `@EntityGraph`, 복잡한 조건이 필요하면 Fetch Join을 사용한다.
 
 #### @BatchSize
 
@@ -180,6 +202,16 @@ public class Order {
 
 ### 1. Spring Data의 Pageable
 
+**Page 응답 방식 비교**
+
+| 방식 | 장점 | 단점 |
+|------|------|------|
+| `Page<T>` 직접 반환 | 간단, Spring 표준 | 불필요한 필드 많음 (`sort`, `pageable` 등) |
+| `CommonResponse<Page<T>>` | 일관된 응답 형식 | Page 내부에 중첩 정보 |
+| 커스텀 PageResponse | 필요한 필드만 | 추가 DTO 작성 필요 |
+
+**권장**: 과제에서는 `Page<T>` 직접 반환 또는 `CommonResponse<Page<T>>`로 감싸는 것이 간단하고 충분하다.
+
 ```java
 @Service
 @RequiredArgsConstructor
@@ -202,14 +234,48 @@ public class ProductController {
 
     private final ProductService productService;
 
+    // 방식 1: Page 직접 반환
     @GetMapping
     public Page<ProductResponse> getProducts(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
         return productService.getProducts(pageable);
     }
+
+    // 방식 2: CommonResponse로 감싸기
+    @GetMapping("/v2")
+    public CommonResponse<Page<ProductResponse>> getProductsV2(Pageable pageable) {
+        return CommonResponse.success(productService.getProducts(pageable));
+    }
 }
 ```
+
+<details>
+<summary>💡 커스텀 PageResponse 예시 (선택)</summary>
+
+```java
+public record PageResponse<T>(
+    List<T> content,
+    int page,
+    int size,
+    long totalElements,
+    int totalPages,
+    boolean hasNext
+) {
+    public static <T> PageResponse<T> from(Page<T> page) {
+        return new PageResponse<>(
+            page.getContent(),
+            page.getNumber(),
+            page.getSize(),
+            page.getTotalElements(),
+            page.getTotalPages(),
+            page.hasNext()
+        );
+    }
+}
+```
+
+</details>
 
 <details>
 <summary>Kotlin 버전</summary>
@@ -275,6 +341,37 @@ Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pagea
 **대안**:
 - 전체 개수가 필요 없으면 `Slice` 사용
 - 대략적인 개수만 필요하면 캐싱된 통계 테이블 활용
+
+**캐싱된 통계 테이블 활용 예시**
+
+대용량 데이터에서 매번 COUNT 쿼리를 실행하면 성능 문제가 발생한다. 이 경우 별도 통계 테이블을 두고 캐싱한다.
+
+```java
+// 1. 통계 Entity 정의
+@Entity
+public class ProductStats {
+    @Id
+    private Long categoryId;
+    private Long productCount;
+    private LocalDateTime updatedAt;
+}
+
+// 2. 상품 등록/삭제 시 통계 갱신 (이벤트 활용)
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+public void updateStats(ProductCreatedEvent event) {
+    statsRepository.incrementCount(event.getCategoryId());
+}
+
+// 3. 캐시와 함께 사용
+@Cacheable("productCounts")
+public Long getProductCount(Long categoryId) {
+    return statsRepository.findById(categoryId)
+        .map(ProductStats::getProductCount)
+        .orElse(0L);
+}
+```
+
+> **과제에서는**: 이 수준의 최적화는 필요하지 않다. `Page`의 기본 COUNT 쿼리로 충분하다.
 
 </details>
 
@@ -790,3 +887,10 @@ public class Product {
    - 메서드별로 고유한 캐시명 또는 키 전략 필요
 
 </details>
+
+---
+
+다음 편에서는 **Spring Security**, **JWT 인증**, **비밀번호 관리**에 대해 다룹니다.
+
+👉 [이전: 3편 - Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
+👉 [다음: 5편 - Security & Authentication](/blog/spring-boot-pre-interview-guide-5)

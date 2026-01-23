@@ -25,6 +25,7 @@ heroImage: "../../assets/PreinterviewTaskGuide.png"
 - 로깅 전략 (SLF4J, MDC)
 - AOP 활용 (공통 관심사 분리)
 
+
 ### 목차
 
 - [API 문서화 (SpringDoc/Swagger)](#api-문서화-springdocswagger)
@@ -58,6 +59,15 @@ heroImage: "../../assets/PreinterviewTaskGuide.png"
 **실무에서의 현실**
 
 대부분의 프로젝트에서 Swagger 문서화는 **초기에만 열심히** 하고, 이후에는 코드와 동기화가 안 되는 경우가 많다.
+
+**문서 관리가 안 될 때 해결 방법**
+
+| 방법 | 설명 | 효과 |
+|------|------|------|
+| **Spring REST Docs 전환** | 테스트 기반 문서화 → 테스트 실패 시 문서도 실패 | 코드-문서 동기화 강제 |
+| **최소 문서화 원칙** | `@Tag`, `@Operation(summary)` 정도만 유지 | 유지보수 부담 감소 |
+| **자동 생성 활용** | SpringDoc이 자동 생성하는 부분에 의존 | 추가 작업 최소화 |
+| **CI에서 검증** | OpenAPI spec 변경 시 리뷰 필수 | 의도치 않은 변경 방지 |
 
 **과제에서의 권장**
 
@@ -117,14 +127,23 @@ dependencies {
 ```yaml
 springdoc:
   api-docs:
-    path: /api-docs
+    path: /api-docs                          # OpenAPI JSON 스펙 경로 (/api-docs로 접근)
   swagger-ui:
-    path: /swagger-ui.html
-    tags-sorter: alpha
-    operations-sorter: alpha
-  default-consumes-media-type: application/json
-  default-produces-media-type: application/json
+    path: /swagger-ui.html                   # Swagger UI 접근 경로
+    tags-sorter: alpha                       # Tag(Controller) 알파벳 순 정렬
+    operations-sorter: alpha                 # API 메서드 알파벳 순 정렬 (method: HTTP 메서드 순)
+  default-consumes-media-type: application/json   # 요청 기본 Content-Type
+  default-produces-media-type: application/json   # 응답 기본 Content-Type
+  # packages-to-scan: com.example.api.controller  # 특정 패키지만 스캔 (선택)
+  # paths-to-match: /api/**                       # 특정 경로만 문서화 (선택)
 ```
+
+| 설정 | 설명 | 기본값 |
+|------|------|--------|
+| `api-docs.path` | OpenAPI JSON 스펙 경로 | `/v3/api-docs` |
+| `swagger-ui.path` | Swagger UI 경로 | `/swagger-ui.html` |
+| `tags-sorter` | Controller 정렬 (`alpha`, 선언순) | 선언순 |
+| `operations-sorter` | API 정렬 (`alpha`, `method`) | 선언순 |
 
 </details>
 
@@ -327,6 +346,27 @@ public class ProductController {
 <details>
 <summary>Request DTO (Kotlin)</summary>
 
+> **💡 가격 필드는 BigDecimal 사용을 권장**
+>
+> 금융/가격 데이터는 `Int`/`Long` 대신 `BigDecimal`을 사용하는 것이 실무 표준이다.
+>
+> | 타입 | 장점 | 단점 | 권장 상황 |
+> |------|------|------|----------|
+> | `Int`/`Long` | 단순, 성능 우수 | 소수점 불가, 오버플로우 위험 | 단순 개수, ID |
+> | `BigDecimal` | 정밀도 보장, 소수점 처리 | 연산 복잡 | 금액, 가격, 비율 |
+>
+> ```kotlin
+> // Int 사용 시 (간단한 과제용)
+> @field:Positive
+> @Schema(description = "가격", example = "10000")
+> val price: Int?
+>
+> // BigDecimal 사용 시 (실무 권장)
+> @field:DecimalMin(value = "0", inclusive = false)
+> @Schema(description = "가격", example = "10000.00")
+> val price: BigDecimal?
+> ```
+
 ```kotlin
 @Schema(description = "상품 등록 요청")
 data class RegisterProductRequest(
@@ -336,9 +376,9 @@ data class RegisterProductRequest(
     val name: String?,
 
     @field:NotNull
-    @field:Positive
-    @Schema(description = "가격", example = "10000", minimum = "1")
-    val price: Int?,
+    @field:DecimalMin(value = "0", inclusive = false)
+    @Schema(description = "가격", example = "10000.00", minimum = "0.01")
+    val price: BigDecimal?,
 
     @field:NotNull
     @Schema(description = "카테고리", example = "FOOD")
@@ -711,7 +751,7 @@ class ProductControllerDocsTest {
 </details>
 
 <details>
-<summary>테스트 코드 (Kotlin)</summary>
+<summary>테스트 코드 (Kotlin - JUnit 스타일)</summary>
 
 ```kotlin
 @WebMvcTest(ProductController::class)
@@ -800,6 +840,112 @@ class ProductControllerDocsTest {
                     )
                 )
             )
+    }
+}
+```
+
+</details>
+
+<details>
+<summary>테스트 코드 (Kotlin - Kotest DescribeSpec 스타일)</summary>
+
+> **Kotest란?** Kotlin 전용 테스트 프레임워크로, BDD 스타일의 `DescribeSpec`을 제공한다. 테스트 구조가 명확하고 가독성이 좋다.
+
+```kotlin
+// build.gradle.kts에 의존성 추가
+// testImplementation("io.kotest:kotest-runner-junit5:5.8.0")
+// testImplementation("io.kotest.extensions:kotest-extensions-spring:1.1.3")
+
+@WebMvcTest(ProductController::class)
+@AutoConfigureRestDocs
+class ProductControllerDocsTest : DescribeSpec() {
+
+    @Autowired
+    private lateinit var mockMvc: MockMvc
+
+    @MockkBean
+    private lateinit var productService: ProductService
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
+
+    init {
+        describe("상품 API") {
+            context("상품 상세 조회 시") {
+                it("상품 정보를 반환한다") {
+                    // given
+                    val response = FindProductDetailResponse(
+                        id = 1L,
+                        name = "맛있는 사과",
+                        price = 10000,
+                        category = ProductCategoryType.FOOD,
+                        enabled = true,
+                        createdAt = LocalDateTime.now()
+                    )
+                    every { productService.findProductDetail(1L) } returns response
+
+                    // when & then
+                    mockMvc.perform(
+                        get("/api/v1/products/{productId}", 1L)
+                            .accept(MediaType.APPLICATION_JSON)
+                    )
+                        .andExpect(status().isOk)
+                        .andDo(
+                            document(
+                                "product-detail",
+                                pathParameters(
+                                    parameterWithName("productId").description("상품 ID")
+                                ),
+                                responseFields(
+                                    fieldWithPath("code").description("응답 코드"),
+                                    fieldWithPath("message").description("응답 메시지"),
+                                    fieldWithPath("data.id").description("상품 ID"),
+                                    fieldWithPath("data.name").description("상품명"),
+                                    fieldWithPath("data.price").description("가격"),
+                                    fieldWithPath("data.category").description("카테고리"),
+                                    fieldWithPath("data.enabled").description("활성화 여부"),
+                                    fieldWithPath("data.createdAt").description("생성일시")
+                                )
+                            )
+                        )
+                }
+            }
+
+            context("상품 등록 시") {
+                it("생성된 상품 ID를 반환한다") {
+                    // given
+                    val request = RegisterProductRequest(
+                        name = "맛있는 사과",
+                        price = 10000,
+                        category = ProductCategoryType.FOOD
+                    )
+                    every { productService.registerProduct(any()) } returns 1L
+
+                    // when & then
+                    mockMvc.perform(
+                        post("/api/v1/products")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request))
+                    )
+                        .andExpect(status().isCreated)
+                        .andDo(
+                            document(
+                                "product-create",
+                                requestFields(
+                                    fieldWithPath("name").description("상품명"),
+                                    fieldWithPath("price").description("가격"),
+                                    fieldWithPath("category").description("카테고리 (FOOD, HOTEL)")
+                                ),
+                                responseFields(
+                                    fieldWithPath("code").description("응답 코드"),
+                                    fieldWithPath("message").description("응답 메시지"),
+                                    fieldWithPath("data").description("생성된 상품 ID")
+                                )
+                            )
+                        )
+                }
+            }
+        }
     }
 }
 ```
@@ -1234,6 +1380,50 @@ object MaskingUtils {
     }
 }
 ```
+
+</details>
+
+<details>
+<summary>마스킹 유틸리티 사용 예제</summary>
+
+```kotlin
+@Service
+@RequiredArgsConstructor
+class MemberService(
+    private val memberRepository: MemberRepository
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    fun findMemberDetail(memberId: Long): MemberDetailResponse {
+        val member = memberRepository.findById(memberId)
+            .orElseThrow { NotFoundException("회원을 찾을 수 없습니다") }
+
+        // 로그에는 마스킹된 정보만 출력
+        log.info(
+            "회원 조회 완료: memberId={}, email={}, phone={}",
+            member.id,
+            MaskingUtils.maskEmail(member.email),    // ho***@example.com
+            MaskingUtils.maskPhone(member.phone)     // 010****1234
+        )
+
+        return MemberDetailResponse.from(member)
+    }
+
+    fun processPayment(memberId: Long, cardNumber: String, amount: Int) {
+        // 결제 처리 전 로그
+        log.info(
+            "결제 요청: memberId={}, card={}, amount={}",
+            memberId,
+            MaskingUtils.maskCardNumber(cardNumber),  // ************1234
+            amount
+        )
+
+        // 결제 처리 로직...
+    }
+}
+```
+
+**실무 팁**: 마스킹은 **로그 출력 시점**에만 적용하고, 실제 비즈니스 로직에서는 원본 데이터를 사용해야 한다. 마스킹된 데이터로 비교나 처리를 하면 안 된다.
 
 </details>
 
@@ -1731,7 +1921,7 @@ src/main/kotlin/com/example/app/
 
 ---
 
-다음 편에서는 **인증/인가(Spring Security, JWT)**에 대해 다룰 예정입니다.
+다음 편에서는 **N+1 문제 해결**, **페이지네이션**, **캐싱 전략**에 대해 다룹니다.
 
-👉 [Spring Boot Pre-interview Task Guide 1](/blog/spring-boot-pre-interview-guide-1)
-👉 [Spring Boot Pre-interview Task Guide 2](/blog/spring-boot-pre-interview-guide-2)
+👉 [이전: 2편 - Database & Testing](/blog/spring-boot-pre-interview-guide-2)
+👉 [다음: 4편 - Performance & Optimization](/blog/spring-boot-pre-interview-guide-4)

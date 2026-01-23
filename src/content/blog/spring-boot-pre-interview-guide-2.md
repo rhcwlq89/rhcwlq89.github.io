@@ -105,6 +105,26 @@ spring:
     enabled: true
 ```
 
+**Flyway vs Liquibase 비교**
+
+| 항목 | Flyway | Liquibase |
+|------|--------|-----------|
+| **마이그레이션 방식** | SQL 파일 기반 | XML/YAML/JSON/SQL 지원 |
+| **파일 명명** | `V1__init.sql`, `V2__add_column.sql` | `changelog.xml` |
+| **롤백** | 유료 버전에서 지원 | 무료 버전에서 지원 |
+| **러닝커브** | 낮음 (SQL만 알면 됨) | 중간 (추상화 레이어 존재) |
+| **Spring Boot 통합** | `spring-boot-starter-flyway` | `spring-boot-starter-liquibase` |
+
+```
+# Flyway 마이그레이션 파일 구조
+src/main/resources/db/migration/
+├── V1__create_member_table.sql
+├── V2__create_product_table.sql
+└── V3__add_category_column.sql
+```
+
+**과제에서의 권장**: 간단한 과제에서는 `ddl-auto: create-drop`(로컬) + `validate`(Docker)로 충분하다. 마이그레이션 도구는 실무에서 더 중요하다.
+
 </details>
 
 ### 2. H2 설정
@@ -226,6 +246,16 @@ return store.get(id);  // 원본 반환
 return store.get(id).copy();  // 또는 new Product(...)로 복사
 ```
 
+**방어적 복사가 필요한 경우**
+
+| 상황 | 방어적 복사 필요 | 이유 |
+|------|:---:|------|
+| Memory Repository (테스트용) | ✅ | 외부 수정이 저장소에 영향 |
+| JPA Repository | ❌ | 영속성 컨텍스트가 변경 감지 관리 |
+| DTO 반환 | - | 이미 새 객체 생성됨 |
+
+**핵심**: Memory Repository는 테스트 목적이므로 JPA의 동작을 흉내내야 한다. 실제 JPA에서는 조회한 엔티티를 수정하면 트랜잭션 커밋 시 DB에 반영되지만, Memory Repository는 그런 메커니즘이 없으므로 방어적 복사로 의도치 않은 변경을 방지하는 것이 안전하다.
+
 **페이징 처리**
 
 ```java
@@ -310,6 +340,25 @@ volumes:
 
 </details>
 
+**Docker Compose 실행 명령**
+
+```bash
+# 컨테이너 시작 (백그라운드)
+docker compose up -d
+
+# 로그 확인
+docker compose logs -f
+
+# 컨테이너 중지
+docker compose down
+
+# 컨테이너 + 볼륨(데이터) 삭제
+docker compose down -v
+
+# 특정 서비스만 재시작
+docker compose restart mysql-db
+```
+
 ### 5. Querydsl 설정
 
 복잡한 동적 쿼리가 필요한 경우 Querydsl을 사용한다.
@@ -331,6 +380,14 @@ class QuerydslConfig(
 
 </details>
 
+> **`proxyBeanMethods = false`란?**
+>
+> Spring의 `@Configuration` 클래스는 기본적으로 CGLIB 프록시를 통해 `@Bean` 메서드 간 호출 시 **싱글톤을 보장**한다. 하지만 `@Bean` 메서드가 서로 호출하지 않는 경우 프록시가 불필요하며, `proxyBeanMethods = false`로 설정하면:
+> - **프록시 생성 비용 절감** (애플리케이션 시작 시간 단축)
+> - **메모리 사용량 감소**
+>
+> 주로 단순히 빈을 등록만 하는 설정 클래스에서 사용한다. Spring Boot 자체 auto-configuration도 대부분 이 옵션을 사용한다.
+
 <details>
 <summary>build.gradle.kts (Querydsl 의존성)</summary>
 
@@ -351,6 +408,15 @@ dependencies {
 
 테스트 환경에서는 H2를 사용하는 것이 일반적이다.
 Profile 분리 또는 별도 yaml 파일을 사용할 수 있다.
+
+> **Profile 분리 vs 별도 yaml 파일**
+>
+> | 방식 | 파일명 예시 | 활성화 방법 | 특징 |
+> |------|-------------|-------------|------|
+> | Profile 분리 | `application-test.yml` | `@ActiveProfiles("test")` | Spring Boot 표준, 환경별 설정 분리에 적합 |
+> | 별도 yaml | `application-test.yml` 또는 `test-application.yml` | `@TestPropertySource` | 테스트 전용 설정 명시적 분리 |
+>
+> **실무 권장**: `application-{profile}.yml` 형태의 Profile 분리가 가장 보편적이다. `@ActiveProfiles("test")`로 간단히 활성화할 수 있고, Spring Boot의 설정 로딩 규칙을 그대로 따르기 때문이다.
 
 <details>
 <summary>application-test.yml</summary>
@@ -453,11 +519,50 @@ Product found = service.find(1L);         // findById() 호출
 assertThat(found.getId()).isEqualTo(saved.getId());
 ```
 
+**과도한 Mock 사용을 줄이는 방법**
+
+| 방법 | 설명 | 적용 시점 |
+|------|------|----------|
+| **Fake 객체 사용** | Memory Repository로 실제 동작 흉내 | Repository 의존성이 많은 Service 테스트 |
+| **@DataJpaTest 활용** | 실제 DB로 Repository 테스트 | 쿼리 검증이 필요한 경우 |
+| **Testcontainers** | 실제 DB 컨테이너로 통합 테스트 | 운영 환경과 동일한 검증 필요 시 |
+| **경계만 Mock** | 외부 API, 시간 등 제어 불가능한 것만 Mock | 대부분의 테스트 |
+
+```java
+// ✅ Fake Repository 활용 예시
+class ProductServiceTest {
+    private ProductService service;
+    private FakeProductRepository repository;  // Memory 구현체
+
+    @BeforeEach
+    void setUp() {
+        repository = new FakeProductRepository();
+        service = new ProductService(repository);
+    }
+
+    @Test
+    void 상품_저장_후_조회() {
+        // Given
+        CreateProductRequest request = new CreateProductRequest("상품", 1000);
+
+        // When
+        Long savedId = service.create(request);
+        Product found = service.findById(savedId);
+
+        // Then - 실제 저장/조회 동작 검증
+        assertThat(found.getName()).isEqualTo("상품");
+    }
+}
+```
+
 **실무 팁**
 
-- Repository 테스트: 실제 DB (H2 또는 Testcontainers)
-- Service 테스트: Mock Repository + 실제 로직
-- Controller 테스트: Mock Service + 실제 Controller
+| 테스트 대상 | 권장 방식 |
+|------------|----------|
+| Repository | 실제 DB (`@DataJpaTest` 또는 Testcontainers) |
+| Service | Fake Repository 또는 `@SpringBootTest` |
+| Controller | Mock Service (`@WebMvcTest`) |
+| 외부 API 연동 | Mock (WireMock, Mockito) |
 - 통합 테스트: 모두 실제 객체
 
 </details>
@@ -639,97 +744,6 @@ class ProductServiceTest : BehaviorSpec({
         }
     }
 })
-```
-
-</details>
-
-<details>
-<summary>Controller 테스트 (Kotlin + MockMvc)</summary>
-
-```kotlin
-@WebMvcTest(ProductController::class)
-class ProductControllerTest {
-
-    @Autowired
-    private lateinit var mockMvc: MockMvc
-
-    @MockkBean
-    private lateinit var productService: ProductService
-
-    @Autowired
-    private lateinit var objectMapper: ObjectMapper
-
-    @Test
-    @DisplayName("상품 생성 API 테스트")
-    fun createProduct() {
-        // given
-        val request = RegisterProductRequest(name = "테스트 상품", price = 10000)
-        val response = FindProductDetailResponse(id = 1L, name = "테스트 상품", price = 10000)
-
-        every { productService.registerProduct(any()) } returns 1L
-
-        // when & then
-        mockMvc.perform(
-            post("/api/v1/products")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-        )
-            .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.code").value("SUC200"))
-            .andExpect(jsonPath("$.data").value(1))
-    }
-
-    @Test
-    @DisplayName("상품 조회 API 테스트")
-    fun findProductDetail() {
-        // given
-        val response = FindProductDetailResponse(
-            id = 1L,
-            name = "테스트 상품",
-            price = 10000,
-            category = ProductCategoryType.FOOD,
-            enabled = true,
-            createdAt = LocalDateTime.now()
-        )
-
-        every { productService.findProductDetail(1L) } returns response
-
-        // when & then
-        mockMvc.perform(get("/api/v1/products/1"))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.code").value("SUC200"))
-            .andExpect(jsonPath("$.data.id").value(1))
-            .andExpect(jsonPath("$.data.name").value("테스트 상품"))
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 상품 조회 시 404 응답")
-    fun findProductDetail_notFound() {
-        // given
-        every { productService.findProductDetail(999L) } throws NotFoundException()
-
-        // when & then
-        mockMvc.perform(get("/api/v1/products/999"))
-            .andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.code").value("ERR002"))
-    }
-
-    @Test
-    @DisplayName("Validation 실패 시 400 응답")
-    fun createProduct_validationFail() {
-        // given
-        val invalidRequest = mapOf("name" to "", "price" to -1000)  // 빈 이름, 음수 가격
-
-        // when & then
-        mockMvc.perform(
-            post("/api/v1/products")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(invalidRequest))
-        )
-            .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.code").value("ERR001"))
-    }
-}
 ```
 
 </details>
@@ -1026,5 +1040,5 @@ void 재고가_부족하면_예외가_발생한다() {
 
 다음 편에서는 **API 문서화(Swagger)**, **로깅 전략**, **AOP 활용**에 대해 다룹니다.
 
-👉 [Spring Boot Pre-interview Task Guide 1](/blog/spring-boot-pre-interview-guide-1)
-👉 [Spring Boot Pre-interview Task Guide 3](/blog/spring-boot-pre-interview-guide-3)
+👉 [이전: 1편 - Core Application Layer](/blog/spring-boot-pre-interview-guide-1)
+👉 [다음: 3편 - Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)

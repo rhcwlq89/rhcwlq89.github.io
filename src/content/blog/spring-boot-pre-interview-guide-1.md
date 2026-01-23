@@ -505,13 +505,40 @@ public class ProductController {
 
 **동작 원리**
 1. **Dirty Checking 비활성화**: 엔티티 변경 감지를 하지 않아 스냅샷 저장 비용 절약
-2. **Flush 모드 변경**: `FlushMode.MANUAL`로 설정되어 자동 flush 방지
+2. **Flush 모드 변경**: `FlushMode.MANUAL`로 설정되어 자동 flush 방지 
 3. **DB 힌트 전달**: 일부 DB(MySQL의 경우 Read Replica 라우팅 등)에서 읽기 전용 힌트로 활용
 
 **주의사항**
 - `readOnly = true`여도 **트랜잭션은 시작됨** (No Transaction이 아님)
 - 엔티티를 수정하면 **예외 없이 무시됨** (조용히 실패할 수 있어 주의)
 - OSIV가 켜져 있으면 지연 로딩은 여전히 동작함
+
+**FlushMode 종류**
+
+| 모드 | 설명 | 사용 시점 |
+|------|------|----------|
+| `AUTO` | 쿼리 실행 전, 커밋 전 자동 flush (기본값) | 일반 트랜잭션 |
+| `COMMIT` | 커밋 시에만 flush | 대량 읽기 작업 |
+| `MANUAL` | 명시적 `flush()` 호출 시에만 | `readOnly = true` 시 자동 설정 |
+| `ALWAYS` | 모든 쿼리 전에 flush | 거의 사용하지 않음 |
+
+**OSIV (Open Session In View)**
+
+OSIV는 영속성 컨텍스트의 생존 범위를 HTTP 요청 전체로 확장하는 설정이다.
+
+```yaml
+# Spring Boot 기본값: true
+spring:
+  jpa:
+    open-in-view: true  # OSIV 활성화 (기본값)
+```
+
+| OSIV 상태 | 영속성 컨텍스트 범위 | 장점 | 단점 |
+|----------|-------------------|------|------|
+| `true` (기본) | 요청 시작 ~ 응답 완료 | Controller에서 지연로딩 가능 | DB 커넥션 오래 점유 |
+| `false` | 트랜잭션 범위 내 | 커넥션 빠른 반환 | Controller에서 `LazyInitializationException` 발생 가능 |
+
+**권장**: 실무에서는 `open-in-view: false`로 설정하고, 필요한 데이터는 Service 계층에서 미리 로딩하는 것이 좋다.
 
 **실무 팁**
 
@@ -532,7 +559,7 @@ public class ProductService {
 </details>
 
 <details>
-<summary>트랜잭션 로깅 설정 (application.yml)</summary>
+<summary>트랜잭션 로깅레벨 설정 (application.yml)</summary>
 
 ```yaml
 logging:
@@ -540,7 +567,7 @@ logging:
     org.springframework.orm.jpa: DEBUG
     org.springframework.transaction: DEBUG
     org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
+    org.hibernate.orm.jdbc.bind: DEBUG
 ```
 
 </details>
@@ -645,7 +672,7 @@ Controller에서 `@Valid`로 검증 실패 시 발생한다. 어떤 필드가 �
 위 핸들러들에서 처리되지 않은 **모든 예외**를 잡아내는 최후의 방어선이다.
 
 - **보안**: NPE, DB 연결 오류 등 내부 정보가 담긴 메시지나 스택트레이스를 클라이언트에 노출하지 않는다
-- **로깅**: 디버깅을 위해 서버 로그에는 전체 스택트레이스를 기록한다
+- **로깅**: 디버깅을 위해 서버 로그에는 전체 스택트레이스를 기록한다 (이후 로깅에 대해서 추가로 다룰 예정)
 - **일관성**: 예상치 못한 에러도 `CommonResponse` 형식으로 응답한다
 
 > **주의**: 이 핸들러가 없으면 Spring 기본 에러 페이지(Whitelabel Error Page)나 스택트레이스가 그대로 노출된다.
@@ -1120,6 +1147,50 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 | `@NoArgsConstructor` | ✅ 안전 | `access = PROTECTED`와 함께 사용 권장 |
 | `@Builder` | ✅ 안전 | 단, `@AllArgsConstructor`와 함께 사용 시 주의 |
 
+**@Builder + @AllArgsConstructor 조합 주의**
+
+```java
+// ❌ 문제가 될 수 있는 패턴
+@Entity
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class Product {
+    @Id @GeneratedValue
+    private Long id;
+    private String name;
+    private int price;
+}
+
+// Builder를 사용하면 AllArgsConstructor가 호출됨
+// 필드 순서가 변경되면 값이 잘못 들어갈 수 있음
+Product product = Product.builder()
+    .name("상품")
+    .price(1000)
+    .build();
+```
+
+```java
+// ✅ 권장 패턴 - 생성자에 직접 @Builder 적용
+@Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Product {
+    @Id @GeneratedValue
+    private Long id;
+    private String name;
+    private int price;
+
+    @Builder
+    private Product(String name, int price) {
+        this.name = name;
+        this.price = price;
+    }
+}
+```
+
+생성자에 `@Builder`를 적용하면 필요한 필드만 명시적으로 받을 수 있고, 필드 순서 변경에도 안전하다.
+
 **실무 권장 패턴**
 
 ```java
@@ -1327,4 +1398,4 @@ public class Product extends BaseEntity {
 
 다음 편에서는 **Database Configuration**과 **Test 환경**에 대해 다룹니다.
 
-👉 [Spring Boot Pre-interview Task Guide 2](/blog/spring-boot-pre-interview-guide-2)
+👉 [다음: 2편 - Database & Testing](/blog/spring-boot-pre-interview-guide-2)

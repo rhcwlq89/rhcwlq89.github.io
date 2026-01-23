@@ -739,6 +739,27 @@ public record SignupRequest(
 
 </details>
 
+
+> **Argon2 암호화란?**
+>
+> BCrypt보다 최신의 비밀번호 해싱 알고리즘으로, **2015년 Password Hashing Competition 우승작**이다.
+>
+> | 알고리즘 | 특징 | 권장 상황 |
+> |---------|------|----------|
+> | **BCrypt** | 검증된 알고리즘, 널리 사용 | 일반적인 웹 애플리케이션 |
+> | **Argon2** | 메모리 사용량 조절 가능, GPU 공격에 강함 | 높은 보안이 필요한 경우 |
+>
+> Spring Security에서 Argon2 사용:
+> ```java
+> @Bean
+> public PasswordEncoder passwordEncoder() {
+>     return new Argon2PasswordEncoder(16, 32, 1, 65536, 3);
+>     // saltLength, hashLength, parallelism, memory, iterations
+> }
+> ```
+>
+> **과제에서**: BCrypt가 표준이므로 BCrypt 사용을 권장한다. Argon2는 "알고 있다"는 수준이면 충분.
+
 ---
 
 ## API 권한 관리
@@ -1212,3 +1233,99 @@ public TokenResponse refresh(String refreshToken) {
 **과제에서**: 구현하면 가산점, 구현하지 않아도 감점은 아님
 
 </details>
+
+<details>
+<summary>💼 실무에서의 JWT 관리 팁</summary>
+
+**1. Access Token 만료 시간 설정**
+
+| 환경 | Access Token | Refresh Token |
+|------|--------------|---------------|
+| 일반 웹 서비스 | 15분 ~ 1시간 | 7일 ~ 30일 |
+| 금융/보안 민감 서비스 | 5분 ~ 15분 | 1일 ~ 7일 |
+| 모바일 앱 | 1시간 ~ 24시간 | 30일 ~ 90일 |
+
+**2. Token 저장 위치**
+
+| 저장 위치 | 장점 | 단점 |
+|----------|------|------|
+| **LocalStorage** | 구현 간단 | XSS 취약 |
+| **HttpOnly Cookie** | XSS 방지 | CSRF 대응 필요 |
+| **메모리 (변수)** | 가장 안전 | 새로고침 시 유실 |
+
+> **실무 권장**: Access Token은 메모리에, Refresh Token은 HttpOnly Cookie에 저장
+
+**3. 토큰 무효화 전략**
+
+JWT는 Stateless하므로 발급 후 서버에서 무효화가 어렵다. 실무에서는 다음 방법을 사용한다:
+
+```java
+// 방법 1: 블랙리스트 (Redis 활용)
+@Service
+@RequiredArgsConstructor
+public class TokenBlacklistService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public void addToBlacklist(String token, long expirationMs) {
+        redisTemplate.opsForValue().set(
+            "blacklist:" + token,
+            "true",
+            expirationMs,
+            TimeUnit.MILLISECONDS
+        );
+    }
+
+    public boolean isBlacklisted(String token) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + token));
+    }
+}
+
+// 방법 2: Token Version (DB에 버전 관리)
+@Entity
+public class Member {
+    // ...
+    private int tokenVersion = 0;  // 로그아웃 시 증가
+
+    public void invalidateTokens() {
+        this.tokenVersion++;
+    }
+}
+```
+
+**4. 다중 디바이스 로그인 관리**
+
+```java
+// 사용자별 활성 세션 관리
+@Service
+public class SessionService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public void registerSession(Long userId, String deviceId, String refreshToken) {
+        String key = "sessions:" + userId;
+        redisTemplate.opsForHash().put(key, deviceId, refreshToken);
+    }
+
+    // 특정 디바이스 로그아웃
+    public void logoutDevice(Long userId, String deviceId) {
+        redisTemplate.opsForHash().delete("sessions:" + userId, deviceId);
+    }
+
+    // 모든 디바이스 로그아웃
+    public void logoutAllDevices(Long userId) {
+        redisTemplate.delete("sessions:" + userId);
+    }
+}
+```
+
+**과제에서**: 기본 JWT 인증만 구현해도 충분. 위 내용은 면접 대비 개념 정리용.
+
+</details>
+
+---
+
+다음 편에서는 **Docker**, **Docker Compose**, **GitHub Actions CI/CD**에 대해 다룹니다.
+
+👉 [이전: 4편 - Performance & Optimization](/blog/spring-boot-pre-interview-guide-4)
+👉 [다음: 6편 - DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)

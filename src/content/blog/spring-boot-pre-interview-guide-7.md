@@ -1712,3 +1712,10 @@ marketplace-infra → marketplace-domain (O)
    - Component 스캔 범위 설정 누락
 
 </details>
+
+---
+
+시리즈를 마쳤습니다! **종합 과제**에서 1~7편의 내용을 모두 활용해보세요.
+
+👉 [이전: 6편 - DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)
+👉 [다음: 종합 과제](/blog/spring-boot-pre-interview-assignment)

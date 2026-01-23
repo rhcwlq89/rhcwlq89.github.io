@@ -979,3 +979,97 @@ docker-compose down
 **과제에서**: 배포 전략까지 구현할 필요는 없지만, README에 언급하면 가산점
 
 </details>
+
+
+<details>
+<summary>📊 Prometheus + Grafana 모니터링 설정</summary>
+
+**1. Spring Boot Actuator + Micrometer 설정**
+
+```yaml
+# application.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+```
+
+```groovy
+// build.gradle
+implementation 'org.springframework.boot:spring-boot-starter-actuator'
+implementation 'io.micrometer:micrometer-registry-prometheus'
+```
+
+**2. Docker Compose에 Prometheus/Grafana 추가**
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  grafana-data:
+```
+
+**3. Prometheus 설정 파일**
+
+```yaml
+# monitoring/prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'spring-boot-app'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['app:8080']
+```
+
+**4. Grafana 대시보드 설정**
+
+1. `http://localhost:3000` 접속 (admin/admin)
+2. Data Sources > Add data source > Prometheus
+3. URL: `http://prometheus:9090`
+4. Import Dashboard > ID: `4701` (JVM Micrometer) 또는 `11378` (Spring Boot Statistics)
+
+**과제에서**: 모니터링 설정까지 구현하면 가산점. 최소한 `/actuator/health` 엔드포인트는 노출하는 것을 권장.
+
+</details>
+
+---
+
+다음 편에서는 **이벤트 기반 아키텍처**, **비동기 처리**, **멀티 모듈 프로젝트**에 대해 다룹니다.
+
+👉 [이전: 5편 - Security & Authentication](/blog/spring-boot-pre-interview-guide-5)
+👉 [다음: 7편 - Advanced Patterns](/blog/spring-boot-pre-interview-guide-7)
