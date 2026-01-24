@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 6편: DevOps & Deployment"
 description: "배포 환경 구성과 CI/CD - Docker, GitHub Actions, Actuator"
-pubDate: 2026-02-01
+pubDate: 2026-01-19
 tags: ["Spring Boot", "Docker", "GitHub Actions", "DevOps", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---

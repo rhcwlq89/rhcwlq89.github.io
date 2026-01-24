@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 5편: Security & Authentication"
 description: "인증/인가와 보안 설정 - Spring Security, JWT, 권한 관리"
-pubDate: 2026-01-28
+pubDate: 2026-01-17
 tags: ["Spring Boot", "Spring Security", "JWT", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---

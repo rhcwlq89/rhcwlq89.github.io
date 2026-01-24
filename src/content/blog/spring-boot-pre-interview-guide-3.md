@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 3편: Documentation & AOP"
 description: "API 문서화, 로깅, AOP 등 횡단 관심사 가이드"
-pubDate: 2026-01-22
+pubDate: 2026-01-13
 tags: ["Spring Boot", "Swagger", "Logging", "AOP", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---

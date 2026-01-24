@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 2편: Database & Testing"
 description: "데이터베이스 설정과 테스트 전략 가이드"
-pubDate: 2026-01-19
+pubDate: 2026-01-11
 tags: ["Spring Boot", "JPA", "Testing", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---
