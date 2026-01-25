@@ -6,20 +6,37 @@ tags: ["Spring Boot", "Prometheus", "Grafana", "Monitoring", "Backend", "실무�
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---
 
-> **스프링부트 실무 가이드 시리즈**
->
-> | 편 | 제목 | 링크 |
-> |---|------|------|
-> | 1편 | 동시성 제어와 재고 관리 | [바로가기](/blog/springboot-practical-guide-1) |
-> | 2편 | 캐싱 전략 | [바로가기](/blog/springboot-practical-guide-2) |
-> | 3편 | 이벤트 드리븐 아키텍처 | [바로가기](/blog/springboot-practical-guide-3) |
-> | 4편 | Resilience 패턴 | [바로가기](/blog/springboot-practical-guide-4) |
-> | 5편 | 데이터베이스 최적화 | [바로가기](/blog/springboot-practical-guide-5) |
-> | **6편** | **모니터링** | 현재 글 |
+## 시리즈 네비게이션
+
+| 이전 | 현재 | 다음 |
+|:---:|:---:|:---:|
+| [5편: DB 최적화](/blog/springboot-practical-guide-5) | **6편: 모니터링** | - |
 
 ---
 
-시스템이 아무리 잘 설계되어도 운영 중 문제가 발생합니다. 중요한 건 **얼마나 빨리 문제를 파악하고 해결하느냐**입니다. 이번 마지막 편에서는 옵저버빌리티의 핵심 개념과 실무 모니터링 구축 방법을 다룹니다.
+## 서론
+
+시스템이 아무리 잘 설계되어도 운영 중 문제가 발생한다. 중요한 건 **얼마나 빨리 문제를 파악하고 해결하느냐**다. 이번 마지막 편에서는 옵저버빌리티의 핵심 개념과 실무 모니터링 구축 방법을 다룬다.
+
+**6편에서 다루는 내용:**
+- 옵저버빌리티의 3가지 축 (Metrics, Logs, Traces)
+- Prometheus와 Micrometer를 활용한 메트릭 수집
+- 커스텀 비즈니스 메트릭 구현
+- 헬스체크와 Kubernetes Probe
+- Grafana 대시보드와 알림 설정
+
+### 목차
+
+- [옵저버빌리티(Observability)란?](#1-옵저버빌리티observability란)
+- [Prometheus & Micrometer](#2-prometheus--micrometer)
+- [메트릭 유형](#3-메트릭-유형)
+- [커스텀 비즈니스 메트릭](#4-커스텀-비즈니스-메트릭)
+- [태그(Label)를 활용한 차원 분석](#5-태그label를-활용한-차원-분석)
+- [헬스체크 (Health Check)](#6-헬스체크-health-check)
+- [Grafana 대시보드](#7-grafana-대시보드)
+- [알림 설정](#8-알림-설정)
+- [FAQ](#10-면접-대비-qa)
+- [정리](#정리)
 
 ---
 

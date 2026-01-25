@@ -14,21 +14,30 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 
 ---
 
-## TL;DR (핵심 요약)
+## 서론
 
-```
-Circuit Breaker = 장애 전파 방지 (CLOSED → OPEN → HALF-OPEN)
-Rate Limiter = 초당 요청 수 제한 (DDoS/남용 방지)
-Bulkhead = 리소스 격리 (한 서비스 장애가 다른 서비스에 영향 X)
-Retry = 일시적 장애 대응 (멱등한 작업만!)
-```
+분산 시스템에서 장애는 피할 수 없다. 중요한 것은 장애가 발생했을 때 **전체 시스템이 마비되지 않도록** 하는 것이다. 이번 편에서는 Resilience4j를 활용한 장애 대응 패턴들을 다룬다.
 
-| 패턴 | 목적 | 사용 시점 |
-|------|------|----------|
-| **Circuit Breaker** | 장애 서비스 호출 차단 | 외부 API, 의존 서비스 호출 |
-| **Rate Limiter** | 과도한 요청 차단 | API 엔드포인트 보호 |
-| **Bulkhead** | 리소스 격리 | 중요 서비스 보호 |
-| **Retry** | 일시적 장애 복구 | 네트워크 오류, 타임아웃 |
+**4편에서 다루는 내용:**
+- Circuit Breaker로 장애 전파 방지
+- Rate Limiter로 과도한 요청 차단
+- Bulkhead로 리소스 격리
+- Retry로 일시적 장애 대응
+- 패턴 조합과 Fallback 전략
+
+### 목차
+
+- [왜 Resilience 패턴이 필요한가?](#1-왜-resilience-패턴이-필요한가)
+- [Circuit Breaker 패턴](#2-circuit-breaker-패턴)
+- [Rate Limiter (처리율 제한)](#3-rate-limiter-처리율-제한)
+- [Bulkhead 패턴 (격벽)](#4-bulkhead-패턴-격벽)
+- [Retry 패턴](#5-retry-패턴)
+- [패턴 조합](#6-패턴-조합)
+- [Fallback 전략](#7-fallback-전략)
+- [모니터링](#8-모니터링)
+- [설정 튜닝 가이드](#9-설정-튜닝-가이드)
+- [FAQ](#10-faq-면접-대비)
+- [정리](#정리)
 
 ---
 
@@ -987,31 +996,37 @@ marketplace-api/
 
 ---
 
-## 요약
+## 정리
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│  ✅ Circuit Breaker = 장애 전파 방지                        │
-│     - CLOSED → OPEN → HALF-OPEN 상태 전이                  │
-│     - 장애 서비스 호출 차단으로 리소스 보호                  │
-│                                                             │
-│  ✅ Rate Limiter = 과도한 요청 차단                         │
-│     - 토큰 버킷 알고리즘                                    │
-│     - 초당/분당 요청 수 제한                                │
-│     - DDoS, API 남용 방지                                   │
-│                                                             │
-│  ✅ Bulkhead = 리소스 격리                                  │
-│     - 동시 실행 수 제한                                     │
-│     - 한 서비스 장애가 다른 서비스에 영향 X                  │
-│                                                             │
-│  ✅ Retry = 일시적 장애 복구                                │
-│     - 네트워크 오류 등 일시적 장애 대응                     │
-│     - 멱등한 작업에만 적용!                                 │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+### 패턴별 비교
+
+| 패턴 | 목적 | 사용 시점 |
+|------|------|----------|
+| **Circuit Breaker** | 장애 서비스 호출 차단 | 외부 API, 의존 서비스 호출 |
+| **Rate Limiter** | 과도한 요청 차단 | API 엔드포인트 보호 |
+| **Bulkhead** | 리소스 격리 | 중요 서비스 보호 |
+| **Retry** | 일시적 장애 복구 | 네트워크 오류, 타임아웃 |
+
+### Circuit Breaker 상태
+
+| 상태 | 설명 |
+|------|------|
+| **CLOSED** | 정상 상태. 모든 요청 통과 |
+| **OPEN** | 차단 상태. 모든 요청 즉시 실패 |
+| **HALF-OPEN** | 테스트 상태. 일부 요청만 통과시켜 복구 확인 |
+
+### Quick Checklist
+
+- [ ] 외부 API 호출에 Circuit Breaker가 적용되어 있는가?
+- [ ] 공개 API에 Rate Limiter가 설정되어 있는가?
+- [ ] 중요 서비스에 Bulkhead로 리소스 격리가 되어 있는가?
+- [ ] Retry는 멱등한 작업에만 적용되어 있는가?
+- [ ] Fallback 전략이 적절히 설정되어 있는가?
+- [ ] Circuit Breaker의 상태를 모니터링할 수 있는가?
+- [ ] BusinessException은 Circuit Breaker에서 제외되어 있는가?
 
 ---
 
-> **다음 편**: [스프링부트 실무 가이드 5편: 데이터베이스 최적화](/blog/springboot-practical-guide-5)
+다음 편에서는 **데이터베이스 최적화 (인덱스, 페이지네이션)**에 대해 다룹니다.
+
+👉 [다음: 5편 - 데이터베이스 최적화](/blog/springboot-practical-guide-5)
