@@ -1,7 +1,7 @@
 ---
 title: "스프링부트 실무 가이드 4편: Resilience 패턴"
 description: "Circuit Breaker, Rate Limiter, Bulkhead로 장애에 강한 시스템 구축하기"
-pubDate: 2026-01-25
+pubDate: 2026-01-25T13:00:00
 tags: ["Spring Boot", "Resilience4j", "Circuit Breaker", "Backend", "실무가이드"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---

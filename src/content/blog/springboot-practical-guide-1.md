@@ -1,7 +1,7 @@
 ---
 title: "스프링부트 실무 가이드 1편: 동시성 제어와 재고 관리"
 description: "원자적 UPDATE와 멱등성 키로 동시성 문제를 해결하는 실무 가이드"
-pubDate: 2026-01-25
+pubDate: 2026-01-25T10:00:00
 tags: ["Spring Boot", "Concurrency", "Backend", "실무가이드", "동시성"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---

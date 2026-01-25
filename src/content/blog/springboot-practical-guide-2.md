@@ -1,7 +1,7 @@
 ---
 title: "스프링부트 실무 가이드 2편: 캐싱 전략"
 description: "Cache-Aside 패턴부터 캐시 문제 해결까지 실무 캐싱 가이드"
-pubDate: 2026-01-25
+pubDate: 2026-01-25T11:00:00
 tags: ["Spring Boot", "Cache", "Redis", "Backend", "실무가이드"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---

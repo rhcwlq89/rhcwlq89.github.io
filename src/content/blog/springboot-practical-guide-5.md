@@ -1,7 +1,7 @@
 ---
 title: "스프링부트 실무 가이드 5편: 데이터베이스 최적화"
 description: "인덱스 설계, 커서 기반 페이지네이션, Read Replica로 대용량 데이터 처리하기"
-pubDate: 2026-01-25
+pubDate: 2026-01-25T14:00:00
 tags: ["Spring Boot", "Database", "Index", "Pagination", "Backend", "실무가이드"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---

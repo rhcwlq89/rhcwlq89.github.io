@@ -1,7 +1,7 @@
 ---
 title: "스프링부트 실무 가이드 6편: 모니터링과 옵저버빌리티"
 description: "Prometheus, Grafana, 커스텀 메트릭으로 시스템 상태를 실시간 파악하기"
-pubDate: 2026-01-25
+pubDate: 2026-01-25T15:00:00
 tags: ["Spring Boot", "Prometheus", "Grafana", "Monitoring", "Backend", "실무가이드"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---

@@ -1,7 +1,7 @@
 ---
 title: "스프링부트 실무 가이드 3편: 이벤트 드리븐 아키텍처"
 description: "Kafka와 Outbox 패턴으로 신뢰성 있는 이벤트 시스템 구축하기"
-pubDate: 2026-01-25
+pubDate: 2026-01-25T12:00:00
 tags: ["Spring Boot", "Kafka", "Event-Driven", "Backend", "실무가이드"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---
