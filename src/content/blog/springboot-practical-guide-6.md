@@ -41,6 +41,8 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 - 예상치 못한 문제도 파악 가능
 ```
 
+모니터링은 "무엇을 볼지" 미리 정해야 합니다. 반면 옵저버빌리티는 시스템의 모든 상태를 수집해두고, 문제가 발생했을 때 "왜"를 추적할 수 있게 합니다.
+
 ### 1.2 옵저버빌리티의 3가지 축
 
 ```
@@ -63,6 +65,11 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 | **Metrics** | 수치화된 시계열 데이터 | Prometheus, Datadog |
 | **Logs** | 이벤트 기록 | ELK Stack, Loki |
 | **Traces** | 요청 흐름 추적 | Jaeger, Zipkin |
+
+세 가지를 조합하면 장애 원인을 빠르게 파악할 수 있습니다:
+- **Metrics**: "에러율이 5% 초과했다" (문제 발생 감지)
+- **Logs**: "PaymentService에서 timeout 에러 발생" (상세 내용)
+- **Traces**: "외부 PG사 API 호출에서 5초 지연" (병목 지점)
 
 ### 1.3 실제 장애 대응 비교
 
@@ -87,7 +94,7 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 
 ## 2. Prometheus & Micrometer
 
-### 2.1 아키텍처
+### 2.1 Prometheus 아키텍처
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -113,6 +120,11 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 - PromQL: 강력한 쿼리 언어
 ```
 
+**Pull 방식의 장점:**
+- 애플리케이션은 메트릭을 노출만 하면 됨
+- Prometheus가 중앙에서 스크래핑 대상 관리
+- 애플리케이션의 독립성 유지
+
 ### 2.2 Micrometer의 역할
 
 ```
@@ -136,9 +148,12 @@ Micrometer = 메트릭의 SLF4J (추상화 계층)
 │   │  Registry  │    │  Registry  │    │  Registry  │  │
 │   └────────────┘    └────────────┘    └────────────┘  │
 └─────────────────────────────────────────────────────────┘
-
-장점: 벤더 중립적 코드 작성, 모니터링 시스템 변경 시 코드 수정 불필요
 ```
+
+Micrometer를 사용하면:
+- **벤더 중립적** 코드 작성 가능
+- 모니터링 시스템 변경 시 코드 수정 불필요
+- Spring Boot Actuator와 자동 통합
 
 ### 2.3 프로젝트 설정
 
@@ -166,6 +181,26 @@ management:
         enabled: true
 ```
 
+### 2.4 메트릭 엔드포인트 확인
+
+```bash
+# Prometheus 메트릭 조회
+curl http://localhost:8080/actuator/prometheus
+
+# 출력 예시
+# HELP jvm_memory_used_bytes Used JVM memory
+# TYPE jvm_memory_used_bytes gauge
+jvm_memory_used_bytes{area="heap",id="Eden Space"} 5.0331648E7
+jvm_memory_used_bytes{area="heap",id="Survivor Space"} 6291456.0
+
+# HELP http_server_requests_seconds HTTP request duration
+# TYPE http_server_requests_seconds summary
+http_server_requests_seconds_count{method="GET",uri="/api/products"} 150
+http_server_requests_seconds_sum{method="GET",uri="/api/products"} 12.5
+```
+
+Spring Boot Actuator가 자동으로 JVM, HTTP, 커넥션 풀 등의 기본 메트릭을 제공합니다.
+
 ---
 
 ## 3. 메트릭 유형
@@ -176,14 +211,18 @@ management:
 ┌─────────────────────────────────────────────────────────┐
 │  1. Counter (카운터)                                     │
 │     - 증가만 가능 (감소 불가)                            │
+│     - 재시작 시 0으로 리셋                               │
 │     - 예: 총 요청 수, 총 에러 수                         │
+│                                                         │
 │     0 → 1 → 2 → 3 → 4 → 5 → ...                        │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
 │  2. Gauge (게이지)                                      │
-│     - 증가/감소 모두 가능, 현재 상태를 나타냄            │
+│     - 증가/감소 모두 가능                                │
+│     - 현재 상태를 나타냄                                 │
 │     - 예: 현재 메모리 사용량, 활성 스레드 수             │
+│                                                         │
 │     50 → 70 → 45 → 80 → 30 → ...                       │
 └─────────────────────────────────────────────────────────┘
 
@@ -191,6 +230,7 @@ management:
 │  3. Timer (타이머)                                      │
 │     - 이벤트 지속 시간 + 발생 횟수                       │
 │     - 예: API 응답 시간, 쿼리 실행 시간                  │
+│                                                         │
 │     count: 100, sum: 5.2s, max: 0.5s                   │
 └─────────────────────────────────────────────────────────┘
 
@@ -198,6 +238,7 @@ management:
 │  4. Histogram (히스토그램)                               │
 │     - 값의 분포를 버킷으로 측정                          │
 │     - 예: 응답 시간 분포 (0-100ms: 50%, 100-500ms: 40%) │
+│                                                         │
 │     bucket_0.1: 50, bucket_0.5: 90, bucket_1.0: 98     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -211,6 +252,20 @@ management:
 | 소요 시간 | Timer | API 응답 시간 |
 | 값 분포 | Histogram | 응답 시간 백분위 |
 
+### 3.3 Counter vs Gauge 선택 기준
+
+```
+Counter를 써야 할 때:
+- "지금까지 총 몇 건?" → 주문 수, 에러 수
+- 절대 감소하지 않는 값
+- rate() 함수로 "초당 증가율" 계산 가능
+
+Gauge를 써야 할 때:
+- "지금 현재 몇 개?" → 활성 연결 수, 큐 크기
+- 증가/감소가 모두 가능한 값
+- 순간 상태가 중요한 값
+```
+
 ---
 
 ## 4. 커스텀 비즈니스 메트릭
@@ -218,6 +273,7 @@ management:
 ### 4.1 OrderMetrics 구현
 
 ```kotlin
+// MetricsConfig.kt
 @Component
 class OrderMetrics(private val meterRegistry: MeterRegistry) {
 
@@ -248,6 +304,7 @@ class OrderMetrics(private val meterRegistry: MeterRegistry) {
         meterRegistry.gauge("marketplace.orders.active", activeOrders)
     }
 
+    // 사용 메서드
     fun incrementOrderCreated() {
         orderCreatedCounter.increment()
         activeOrders.incrementAndGet()
@@ -258,21 +315,58 @@ class OrderMetrics(private val meterRegistry: MeterRegistry) {
         activeOrders.decrementAndGet()
     }
 
+    fun incrementOrderFailed() {
+        orderFailedCounter.increment()
+    }
+
+    // Timer로 소요 시간 측정
     fun <T> timeOrderCreation(block: () -> T): T {
         return orderCreationTimer.recordCallable(block)!!
     }
 }
 ```
 
-### 4.2 서비스에서 활용
+### 4.2 ProductMetrics 구현
 
 ```kotlin
-@Service
-class OrderService(private val orderMetrics: OrderMetrics) {
+@Component
+class ProductMetrics(private val meterRegistry: MeterRegistry) {
 
+    private val productCreatedCounter = Counter.builder("marketplace.products.created")
+        .description("Total number of products created")
+        .register(meterRegistry)
+
+    private val productViewCounter = Counter.builder("marketplace.products.views")
+        .description("Total number of product views")
+        .register(meterRegistry)
+
+    private val stockDecreasedCounter = Counter.builder("marketplace.products.stock.decreased")
+        .description("Total number of stock decrease operations")
+        .register(meterRegistry)
+
+    private val insufficientStockCounter = Counter.builder("marketplace.products.stock.insufficient")
+        .description("Total number of insufficient stock errors")
+        .register(meterRegistry)
+
+    fun incrementProductCreated() = productCreatedCounter.increment()
+    fun incrementProductView() = productViewCounter.increment()
+    fun incrementStockDecreased() = stockDecreasedCounter.increment()
+    fun incrementInsufficientStock() = insufficientStockCounter.increment()
+}
+```
+
+### 4.3 서비스에서 활용
+
+```kotlin
+// OrderService.kt에서 사용
+@Service
+class OrderService(
+    private val orderMetrics: OrderMetrics
+) {
     fun createOrder(request: CreateOrderRequest): OrderResponse {
         return orderMetrics.timeOrderCreation {
             try {
+                // 주문 생성 로직
                 val order = processOrder(request)
                 orderMetrics.incrementOrderCreated()
                 order
@@ -285,7 +379,7 @@ class OrderService(private val orderMetrics: OrderMetrics) {
 }
 ```
 
-### 4.3 Prometheus에서 보이는 메트릭
+### 4.4 Prometheus에서 보이는 메트릭
 
 ```
 # 주문 카운터
@@ -300,6 +394,10 @@ marketplace_orders_active 138
 marketplace_orders_creation_time_seconds_count 150
 marketplace_orders_creation_time_seconds_sum 45.2
 marketplace_orders_creation_time_seconds_max 1.2
+
+# 상품 메트릭
+marketplace_products_views_total 5000
+marketplace_products_stock_insufficient_total 23
 ```
 
 ---
@@ -320,9 +418,12 @@ marketplace_orders_created_total{status="failed",payment="card"} 10
 → 결제 수단별, 상태별 분석 가능
 ```
 
+태그를 사용하면 하나의 메트릭으로 다양한 차원의 분석이 가능합니다.
+
 ### 5.2 태그 추가 방법
 
 ```kotlin
+// 태그가 있는 Counter
 private fun orderCounter(status: String, paymentType: String): Counter {
     return Counter.builder("marketplace.orders")
         .tag("status", status)
@@ -330,13 +431,31 @@ private fun orderCounter(status: String, paymentType: String): Counter {
         .register(meterRegistry)
 }
 
+// 사용
 fun recordOrder(paymentType: String, success: Boolean) {
     val status = if (success) "success" else "failed"
     orderCounter(status, paymentType).increment()
 }
 ```
 
-### 5.3 PromQL로 분석
+### 5.3 태그 사용 시 주의사항
+
+```
+❌ 잘못된 사용:
+Counter.builder("orders")
+    .tag("user_id", userId)     // 사용자별로 메트릭 폭발!
+    .tag("order_id", orderId)   // 주문별로 메트릭 폭발!
+
+✓ 올바른 사용:
+Counter.builder("orders")
+    .tag("status", "success")      // 제한된 값
+    .tag("payment_type", "card")   // 제한된 값
+    .tag("region", "seoul")        // 제한된 값
+```
+
+태그의 조합 수(Cardinality)가 너무 많으면 메모리 사용량이 급증합니다.
+
+### 5.4 PromQL로 분석
 
 ```promql
 # 전체 주문 수
@@ -380,9 +499,10 @@ GET /actuator/health
 - 모니터링: 장애 감지 및 알림
 ```
 
-### 6.2 커스텀 HealthIndicator
+### 6.2 커스텀 HealthIndicator - Redis
 
 ```kotlin
+// HealthIndicators.kt
 @Component
 @Profile("docker", "prod")
 class RedisHealthIndicator(
@@ -392,7 +512,7 @@ class RedisHealthIndicator(
     override fun health(): Health {
         return try {
             val connection = redisConnectionFactory.connection
-            val pong = connection.ping()
+            val pong = connection.ping()  // PING → PONG
             connection.close()
 
             if (pong != null) {
@@ -415,9 +535,34 @@ class RedisHealthIndicator(
 }
 ```
 
-### 6.3 Kubernetes Probe 설정
+### 6.3 커스텀 HealthIndicator - Kafka
+
+```kotlin
+@Component
+@Profile("docker", "prod")
+class KafkaHealthIndicator(
+    private val kafkaTemplate: KafkaTemplate<String, Any>
+) : HealthIndicator {
+
+    override fun health(): Health {
+        return try {
+            kafkaTemplate.producerFactory  // Producer 초기화 확인
+            Health.up()
+                .withDetail("status", "Kafka producer is initialized")
+                .build()
+        } catch (e: Exception) {
+            Health.down(e)
+                .withDetail("status", "Kafka is unavailable")
+                .build()
+        }
+    }
+}
+```
+
+### 6.4 Kubernetes Probe 설정
 
 ```yaml
+# deployment.yaml
 spec:
   containers:
     - name: marketplace-api
@@ -438,36 +583,74 @@ spec:
         failureThreshold: 3    # 3번 실패하면 트래픽 제외
 ```
 
-### 6.4 Liveness vs Readiness
+### 6.5 Liveness vs Readiness
 
 | Probe | 목적 | 실패 시 |
 |-------|------|--------|
 | **Liveness** | 컨테이너 생존 확인 | 재시작 |
-| **Readiness** | 트래픽 수신 준비 확인 | 서비스 제외 |
+| **Readiness** | 트래픽 수신 준비 확인 | 서비스 제외 (재시작 안 함) |
 
 ```
 예시 시나리오:
-1. Pod 시작
-   Liveness: 체크 안 함 (initialDelaySeconds 대기)
-   Readiness: FAIL → 트래픽 안 받음
-
-2. 앱 초기화 완료
-   Liveness: UP
-   Readiness: UP → 트래픽 받기 시작
-
-3. DB 연결 끊김
-   Liveness: UP (앱 자체는 살아있음)
-   Readiness: DOWN → 트래픽 중단
-
-4. 앱 데드락
-   Liveness: FAIL → 컨테이너 재시작
+┌────────────────────────────────────────────────────────┐
+│ 1. Pod 시작                                            │
+│    Liveness: 체크 안 함 (initialDelaySeconds 대기)     │
+│    Readiness: FAIL → 트래픽 안 받음                    │
+│                                                        │
+│ 2. 앱 초기화 완료                                      │
+│    Liveness: UP                                        │
+│    Readiness: UP → 트래픽 받기 시작                    │
+│                                                        │
+│ 3. DB 연결 끊김                                        │
+│    Liveness: UP (앱 자체는 살아있음)                   │
+│    Readiness: DOWN → 트래픽 중단                       │
+│                                                        │
+│ 4. 앱 데드락                                           │
+│    Liveness: FAIL → 컨테이너 재시작                    │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 7. 유용한 PromQL 쿼리
+## 7. Grafana 대시보드
 
-### 7.1 RED Method (요청 기반 서비스)
+### 7.1 Grafana의 역할
+
+```
+Prometheus (데이터 저장) → Grafana (시각화)
+
+┌─────────────────────────────────────────────────────────┐
+│                     Grafana Dashboard                    │
+│                                                         │
+│  ┌─────────────────┐  ┌─────────────────┐              │
+│  │   주문 수/분     │  │   응답 시간      │              │
+│  │   ▄▄▄█▄▄▄▄█    │  │   ___/\___/\_   │              │
+│  └─────────────────┘  └─────────────────┘              │
+│                                                         │
+│  ┌─────────────────┐  ┌─────────────────┐              │
+│  │   에러율         │  │   활성 사용자    │              │
+│  │      2.3%       │  │      1,234      │              │
+│  └─────────────────┘  └─────────────────┘              │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 7.2 데이터소스 설정
+
+```yaml
+# grafana/provisioning/datasources/datasources.yml
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    access: proxy
+    isDefault: true
+```
+
+### 7.3 유용한 PromQL 쿼리
+
+**RED Method (요청 기반 서비스):**
 
 ```promql
 # Rate: 초당 요청 수
@@ -486,7 +669,7 @@ histogram_quantile(0.95,
   rate(http_server_requests_seconds_bucket[5m]))
 ```
 
-### 7.2 USE Method (리소스)
+**USE Method (리소스):**
 
 ```promql
 # Utilization: JVM 메모리 사용률
@@ -500,7 +683,7 @@ hikaricp_connections_pending
 hikaricp_connections_timeout_total
 ```
 
-### 7.3 비즈니스 메트릭
+**비즈니스 메트릭:**
 
 ```promql
 # 분당 주문 수
@@ -513,7 +696,9 @@ sum(marketplace_orders_created_total{status="success"})
 
 ---
 
-## 8. 알림 설정 예시
+## 8. 알림 설정
+
+### 8.1 알림 규칙 예시
 
 ```yaml
 # Prometheus alerting rules
@@ -553,9 +738,122 @@ groups:
           summary: "Service {{ $labels.instance }} is down"
 ```
 
+### 8.2 알림 설정 팁
+
+- **for 절**: 일시적 스파이크 무시 (5분간 지속 시에만 알림)
+- **severity 레이블**: 알림 우선순위 분류
+- **annotations**: Slack/PagerDuty 메시지에 포함될 내용
+
 ---
 
-## 9. 핵심 정리
+## 9. 프로젝트 파일 구조
+
+```
+marketplace/
+├── marketplace-api/
+│   ├── build.gradle.kts              # actuator, micrometer-prometheus
+│   └── src/main/
+│       ├── kotlin/.../config/
+│       │   ├── MetricsConfig.kt      # OrderMetrics, ProductMetrics
+│       │   └── HealthIndicators.kt   # Redis, Kafka 헬스체크
+│       └── resources/
+│           └── application-prod.yml  # Prometheus 엔드포인트 설정
+│
+├── k8s/monitoring/
+│   └── prometheus.yaml               # Prometheus 배포 설정
+│
+├── grafana/
+│   └── provisioning/
+│       └── datasources/
+│           └── datasources.yml       # Prometheus 데이터소스
+│
+└── docker-compose.yml                # Prometheus, Grafana 서비스
+```
+
+---
+
+## 10. 면접 대비 Q&A
+
+### Q1. 옵저버빌리티의 3가지 축은?
+
+| 축 | 목적 | 예시 |
+|---|------|------|
+| **Metrics** | 수치로 상태 파악 | CPU 80%, 에러율 2% |
+| **Logs** | 이벤트 상세 기록 | 에러 스택트레이스 |
+| **Traces** | 요청 흐름 추적 | A서비스 → B서비스 → DB |
+
+### Q2. Counter와 Gauge의 차이는?
+
+```
+Counter: 증가만 가능, 누적 값
+- 총 요청 수, 총 에러 수
+- 재시작 시 0으로 리셋
+- rate() 함수로 초당 증가율 계산
+
+Gauge: 증가/감소 가능, 현재 상태
+- 메모리 사용량, 활성 연결 수
+- 순간 값을 나타냄
+```
+
+### Q3. Prometheus의 Pull 방식 장점은?
+
+```
+Push 방식:
+앱 → 모니터링 서버 전송
+- 앱이 모니터링 서버 주소를 알아야 함
+- 서버 장애 시 데이터 유실
+
+Pull 방식 (Prometheus):
+Prometheus → 앱에서 가져감
+- 앱은 메트릭 노출만
+- 중앙에서 스크래핑 대상 관리
+- 앱 독립성 유지
+```
+
+### Q4. Liveness와 Readiness Probe의 차이는?
+
+| Probe | 목적 | 실패 시 |
+|-------|------|--------|
+| **Liveness** | 컨테이너 생존 확인 | 재시작 |
+| **Readiness** | 트래픽 수신 준비 확인 | 서비스 제외 |
+
+Liveness는 "죽었니?"를 확인하고, Readiness는 "준비됐니?"를 확인합니다.
+
+### Q5. rate()와 increase()의 차이는?
+
+```promql
+# rate(): 초당 평균 증가율
+rate(http_requests_total[5m])  → 10.5 (초당 10.5개)
+
+# increase(): 기간 내 총 증가량
+increase(http_requests_total[5m])  → 3150 (5분간 3150개)
+
+관계: increase() ≈ rate() × 시간(초)
+```
+
+- **rate()**: 대시보드에서 초당 처리량 표시
+- **increase()**: 특정 기간 동안 총 발생 건수 확인
+
+### Q6. 어떤 메트릭을 모니터링해야 하나요?
+
+**RED Method (요청 기반 서비스):**
+- **R**ate: 초당 요청 수
+- **E**rrors: 에러율
+- **D**uration: 응답 시간
+
+**USE Method (리소스):**
+- **U**tilization: 사용률 (CPU 80%)
+- **S**aturation: 포화도 (큐 대기)
+- **E**rrors: 에러 수
+
+```
+서비스(API, 마이크로서비스) → RED Method
+리소스(CPU, 메모리, DB) → USE Method
+```
+
+---
+
+## 11. 핵심 정리
 
 | 개념 | 설명 | 도구 |
 |------|------|------|
@@ -575,11 +873,13 @@ groups:
 
 | 편 | 주제 | 핵심 기술 |
 |---|------|----------|
-| 1편 | 동시성 제어 | Atomic UPDATE, 멱등성 키 |
+| 1편 | 동시성 제어 | Atomic UPDATE, 분산 락, 멱등성 키 |
 | 2편 | 캐싱 전략 | Redis, Caffeine, Cache-Aside |
-| 3편 | 이벤트 드리븐 | Kafka, Outbox 패턴 |
-| 4편 | Resilience 패턴 | Circuit Breaker, Rate Limiter |
+| 3편 | 이벤트 드리븐 | Kafka, Outbox 패턴, 중복 처리 |
+| 4편 | Resilience 패턴 | Circuit Breaker, Rate Limiter, Bulkhead |
 | 5편 | DB 최적화 | 인덱스, 커서 페이지네이션, Read Replica |
 | 6편 | 모니터링 | Prometheus, Grafana, 커스텀 메트릭 |
 
-이 시리즈에서 다룬 내용들은 실제 대규모 서비스에서 공통적으로 사용되는 패턴들입니다. 코드를 직접 작성하고 테스트해보면서 각 기술이 어떤 문제를 해결하는지 체감해보시길 권합니다.
+이 시리즈에서 다룬 내용들은 실제 대규모 서비스에서 공통적으로 사용되는 패턴들입니다. 각 기술이 **어떤 문제를 해결하는지** 이해하고, 직접 코드를 작성해보면서 체감해보시길 권합니다.
+
+핵심은 **왜 필요한지**를 이해하는 것입니다. 분산 락이 왜 필요한지, Circuit Breaker가 어떤 상황에서 유용한지, 커서 페이지네이션이 오프셋보다 나은 이유가 무엇인지를 설명할 수 있다면 면접에서도 좋은 결과가 있을 것입니다.

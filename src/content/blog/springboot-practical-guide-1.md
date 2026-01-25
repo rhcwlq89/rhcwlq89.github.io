@@ -6,11 +6,16 @@ tags: ["Spring Boot", "Concurrency", "Backend", "실무가이드", "동시성"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---
 
-## 시리즈 네비게이션
-
-| 이전 | 현재 | 다음 |
-|:---:|:---:|:---:|
-| - | **1편: 동시성 제어** | [2편: 캐싱 전략](/blog/springboot-practical-guide-2) |
+> **스프링부트 실무 가이드 시리즈**
+>
+> | 편 | 제목 | 링크 |
+> |---|------|------|
+> | **1편** | **동시성 제어와 재고 관리** | 현재 글 |
+> | 2편 | 캐싱 전략 | [바로가기](/blog/springboot-practical-guide-2) |
+> | 3편 | 이벤트 드리븐 아키텍처 | [바로가기](/blog/springboot-practical-guide-3) |
+> | 4편 | Resilience 패턴 | [바로가기](/blog/springboot-practical-guide-4) |
+> | 5편 | 데이터베이스 최적화 | [바로가기](/blog/springboot-practical-guide-5) |
+> | 6편 | 모니터링 | [바로가기](/blog/springboot-practical-guide-6) |
 
 ---
 
@@ -28,17 +33,6 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 | **중복 주문 (따닥)** | **멱등성 키** | 클라이언트 UUID + Redis 캐시 (권장) |
 
 > **분산 락이 필요한 경우**: 캐시 스탬피드, 배치 중복 실행, 외부 API 제약, 장시간 리소스 선점
-
----
-
-## 목차
-
-1. [문제 정의: 왜 동시성 제어가 필요한가?](#1-문제-정의-왜-동시성-제어가-필요한가)
-2. [해결책 1: 원자적 재고 업데이트](#2-해결책-1-원자적-재고-업데이트)
-3. [해결책 2: 멱등성 키](#3-해결책-2-멱등성-키)
-4. [분산 락이 필요한 경우](#4-분산-락이-필요한-경우)
-5. [분산 락 심화](#5-분산-락-심화)
-6. [FAQ](#faq-자주-묻는-질문)
 
 ---
 
@@ -173,7 +167,7 @@ T4                                        updateCount = 0 ❌
 
 **결과**: 정확히 1개만 판매됨!
 
-#### 왜 동작하는가? (DB Row Lock)
+### 2.5 왜 동작하는가? (DB Row Lock)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -336,6 +330,16 @@ fun dailySettlement() {
 }
 ```
 
+### 4.4 외부 API 직렬화 제약
+
+```kotlin
+// PG사가 동일 사용자 동시 결제 요청 시 오류 발생
+@DistributedLock(key = "'payment:' + #userId")
+fun processPayment(userId: Long, amount: Long) {
+    paymentGateway.charge(userId, amount)  // 외부 API
+}
+```
+
 ---
 
 ## 5. 분산 락 심화
@@ -360,6 +364,21 @@ if redis.call('hexists', KEYS[1], ARGV[2]) == 1 then
 end
 
 return redis.call('pttl', KEYS[1])  -- 남은 TTL 반환 (락 획득 실패)
+```
+
+#### Watch Dog 자동 연장
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Redisson Watch Dog (백그라운드 스레드)                    │
+│                                                         │
+│  leaseTime이 명시되지 않으면 자동 활성화 (기본 30초)         │
+│  락 보유 중 leaseTime/3 (10초) 마다 TTL 갱신              │
+│                                                         │
+│  [비즈니스 로직 10초 경과] → TTL 30초로 갱신                │
+│  [비즈니스 로직 20초 경과] → TTL 30초로 갱신                │
+│  [비즈니스 로직 완료] → 락 해제                            │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ### 5.2 락 전략 선택 가이드
@@ -411,7 +430,66 @@ return redis.call('pttl', KEYS[1])  -- 남은 TTL 반환 (락 획득 실패)
 
 ---
 
-## FAQ (자주 묻는 질문)
+## 6. 실습 및 테스트
+
+### 6.1 k6 동시성 테스트
+
+```javascript
+// k6/concurrency-test.js
+import http from 'k6/http';
+import { check } from 'k6';
+
+export let options = {
+    vus: 10,
+    duration: '5s',
+};
+
+export function setup() {
+    let loginRes = http.post('http://localhost:8080/api/v1/auth/login',
+        JSON.stringify({
+            email: 'buyer@example.com',
+            password: 'buyer123!'
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+    );
+    return { token: JSON.parse(loginRes.body).data.accessToken };
+}
+
+export default function(data) {
+    let orderRes = http.post('http://localhost:8080/api/v1/orders',
+        JSON.stringify({
+            orderItems: [{ productId: 2, quantity: 1 }],
+            shippingAddress: {
+                zipCode: '12345', address: 'Test', addressDetail: 'Apt',
+                receiverName: 'Test', receiverPhone: '010-1234-5678'
+            }
+        }),
+        { headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.token}`
+        }}
+    );
+
+    check(orderRes, {
+        'status is 200 or 409': (r) => r.status === 200 || r.status === 409
+    });
+}
+```
+
+실행: `k6 run k6/concurrency-test.js`
+
+### 6.2 Redis 락 확인
+
+```bash
+docker exec -it marketplace-redis redis-cli
+> KEYS order:*
+> HGETALL "order:create:1"
+> TTL "order:create:1"
+```
+
+---
+
+## 7. FAQ (자주 묻는 질문)
 
 ### Q1. 분산 락 없이 재고 보호가 정말 되나요?
 

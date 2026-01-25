@@ -6,26 +6,66 @@ tags: ["Spring Boot", "Database", "Index", "Pagination", "Backend", "실무가�
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---
 
-> **스프링부트 실무 가이드 시리즈**
->
-> | 편 | 제목 | 링크 |
-> |---|------|------|
-> | 1편 | 동시성 제어와 재고 관리 | [바로가기](/blog/springboot-practical-guide-1) |
-> | 2편 | 캐싱 전략 | [바로가기](/blog/springboot-practical-guide-2) |
-> | 3편 | 이벤트 드리븐 아키텍처 | [바로가기](/blog/springboot-practical-guide-3) |
-> | 4편 | Resilience 패턴 | [바로가기](/blog/springboot-practical-guide-4) |
-> | **5편** | **데이터베이스 최적화** | 현재 글 |
-> | 6편 | 모니터링 | [바로가기](/blog/springboot-practical-guide-6) |
+## 시리즈 네비게이션
+
+| 이전 | 현재 | 다음 |
+|:---:|:---:|:---:|
+| [4편: Resilience 패턴](/blog/springboot-practical-guide-4) | **5편: DB 최적화** | [6편: 모니터링](/blog/springboot-practical-guide-6) |
 
 ---
 
-대부분의 웹 애플리케이션에서 성능 병목의 87%는 데이터베이스에서 발생합니다. 이번 글에서는 인덱스, 페이지네이션, Read Replica를 활용한 DB 최적화 전략을 다룹니다.
+## TL;DR (핵심 요약)
+
+```
+인덱스 = 조회 성능 향상 (B-Tree, O(log n))
+커서 페이지네이션 = 대용량 목록 처리 (OFFSET 대신)
+Read Replica = 읽기/쓰기 분리 (부하 분산)
+N+1 문제 = Fetch Join, Batch Size로 해결
+```
+
+| 기법 | 목적 | 적용 시점 |
+|------|------|----------|
+| **인덱스** | 조회 성능 향상 | 자주 검색하는 컬럼 |
+| **복합 인덱스** | 다중 조건 최적화 | WHERE 조건이 여러 개일 때 |
+| **커서 페이지네이션** | 대용량 목록 처리 | 무한 스크롤, 대량 데이터 |
+| **Read Replica** | 읽기 부하 분산 | 읽기:쓰기 비율이 높을 때 |
+| **Fetch Join** | N+1 문제 해결 | 연관 엔티티 함께 조회 시 |
 
 ---
 
-## 1. 인덱스의 원리
+## 1. 왜 데이터베이스 최적화가 중요한가?
 
-### 1.1 인덱스란?
+### 1.1 대부분의 성능 문제는 DB에서 발생
+
+```
+일반적인 웹 요청 처리 시간 분포:
+
+┌─────────────────────────────────────────────────────────────┐
+│  Network     │ App Logic │      Database Query              │
+│    10ms      │   20ms    │         200ms                    │
+│    (4%)      │   (8%)    │         (87%)                    │
+└─────────────────────────────────────────────────────────────┘
+
+→ 대부분의 지연이 DB 쿼리에서 발생
+→ DB 최적화가 전체 성능에 큰 영향
+```
+
+### 1.2 데이터 증가에 따른 성능 저하
+
+```
+데이터 100건:      SELECT * WHERE status = 'ON_SALE'  →  1ms
+데이터 10,000건:   SELECT * WHERE status = 'ON_SALE'  →  50ms
+데이터 1,000,000건: SELECT * WHERE status = 'ON_SALE'  →  5,000ms ❌
+
+인덱스 추가 후:
+데이터 1,000,000건: SELECT * WHERE status = 'ON_SALE'  →  5ms ✅
+```
+
+---
+
+## 2. 인덱스 (Index)
+
+### 2.1 인덱스란?
 
 인덱스는 책의 색인과 같습니다.
 
@@ -39,18 +79,7 @@ DB에서 status = 'ON_SALE' 찾을 때:
 └── 인덱스 있으면: B-Tree 탐색 → 바로 찾음
 ```
 
-**데이터 증가에 따른 성능 변화:**
-
-```
-데이터 100건:      SELECT * WHERE status = 'ON_SALE'  →  1ms
-데이터 10,000건:   SELECT * WHERE status = 'ON_SALE'  →  50ms
-데이터 1,000,000건: SELECT * WHERE status = 'ON_SALE'  →  5,000ms ❌
-
-인덱스 추가 후:
-데이터 1,000,000건: SELECT * WHERE status = 'ON_SALE'  →  5ms ✅
-```
-
-### 1.2 인덱스 구조 (B-Tree)
+### 2.2 인덱스 구조 (B-Tree)
 
 ```
 인덱스: idx_products_status
@@ -74,11 +103,7 @@ DB에서 status = 'ON_SALE' 찾을 때:
 → O(log n) 복잡도
 ```
 
----
-
-## 2. 인덱스 설계
-
-### 2.1 마켓플레이스 인덱스 예시
+### 2.3 프로젝트의 인덱스 설계
 
 ```sql
 -- V2__add_indexes.sql
@@ -104,7 +129,7 @@ CREATE INDEX idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX idx_order_items_seller_id ON order_items(seller_id);
 ```
 
-### 2.2 복합 인덱스 컬럼 순서
+### 2.4 복합 인덱스 (Composite Index)
 
 **인덱스 컬럼 순서가 중요합니다!**
 
@@ -137,7 +162,7 @@ WHERE created_at > '2024-01-01';
     인덱스: (created_at, status) ❌
 ```
 
-### 2.3 인덱스의 단점
+### 2.5 인덱스의 단점
 
 ```
 ┌─────────────────────────────────┬───────────────────────────┐
@@ -149,13 +174,17 @@ WHERE created_at > '2024-01-01';
 │                                 │  저장 공간 추가 필요       │
 └─────────────────────────────────┴───────────────────────────┘
 
+이유:
+데이터 변경 시 인덱스도 함께 업데이트해야 함
+인덱스가 많을수록 쓰기 작업 부담 증가
+
 권장:
 - 자주 조회하는 컬럼에만 인덱스
 - 쓰기가 많은 테이블은 인덱스 최소화
 - 사용하지 않는 인덱스는 삭제
 ```
 
-### 2.4 실행 계획 (EXPLAIN)
+### 2.6 실행 계획 (EXPLAIN)
 
 ```sql
 -- 쿼리 실행 계획 확인
@@ -206,9 +235,10 @@ Page 1000 (OFFSET 19980):
 └────────────────────────────────────────────┘
 
 → OFFSET이 커질수록 성능이 선형적으로 저하
+→ 대용량 데이터에서 심각한 문제
 ```
 
-### 3.2 커서 기반 페이지네이션
+### 3.2 커서 기반 페이지네이션 (Keyset Pagination)
 
 ```sql
 -- 첫 페이지
@@ -244,6 +274,7 @@ Page 1000:
 ### 3.3 커서 응답 구현
 
 ```kotlin
+// CursorPageResponse.kt
 data class CursorPageResponse<T>(
     val content: List<T>,       // 실제 데이터
     val nextCursor: String?,    // 다음 페이지 커서 (Base64 인코딩)
@@ -275,6 +306,25 @@ data class CursorPageResponse<T>(
                 size = resultContent.size
             )
         }
+
+        // 커서 인코딩: "2024-01-15T10:30:00:12345" → Base64
+        fun encodeCursor(timestamp: LocalDateTime, id: Long): String {
+            val cursorString = "${timestamp}:$id"
+            return Base64.getEncoder().encodeToString(cursorString.toByteArray())
+        }
+
+        // 커서 디코딩: Base64 → (timestamp, id)
+        fun decodeCursor(cursor: String): Pair<LocalDateTime, Long>? {
+            return try {
+                val decoded = String(Base64.getDecoder().decode(cursor))
+                val parts = decoded.split(":")
+                val timestamp = LocalDateTime.parse(parts[0])
+                val id = parts[1].toLong()
+                timestamp to id
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 }
 ```
@@ -282,6 +332,7 @@ data class CursorPageResponse<T>(
 ### 3.4 커서 쿼리 구현 (QueryDSL)
 
 ```kotlin
+// ProductJpaRepositoryImpl.kt
 override fun searchWithCursor(
     keyword: String?,
     categoryId: Long?,
@@ -290,7 +341,7 @@ override fun searchWithCursor(
     cursorId: Long?,
     limit: Int
 ): List<Product> {
-    return queryFactory
+    val query = queryFactory
         .selectFrom(product)
         .where(
             keywordContains(keyword),
@@ -300,7 +351,8 @@ override fun searchWithCursor(
         )
         .orderBy(product.createdAt.desc(), product.id.desc())
         .limit(limit.toLong() + 1)  // limit + 1
-        .fetch()
+
+    return query.fetch()
 }
 
 // 커서 조건: (created_at, id) < (cursor_time, cursor_id)
@@ -312,7 +364,38 @@ private fun cursorCondition(cursor: LocalDateTime?, cursorId: Long?): BooleanExp
 }
 ```
 
-### 3.5 Offset vs Cursor 비교
+### 3.5 API 응답 예시
+
+```json
+// GET /api/v1/products/cursor?limit=5
+
+// 첫 페이지
+{
+  "content": [
+    {"id": 100, "name": "상품100", "createdAt": "2024-01-15T10:30:00"},
+    {"id": 99, "name": "상품99", "createdAt": "2024-01-15T10:25:00"},
+    {"id": 98, "name": "상품98", "createdAt": "2024-01-15T10:20:00"},
+    {"id": 97, "name": "상품97", "createdAt": "2024-01-15T10:15:00"},
+    {"id": 96, "name": "상품96", "createdAt": "2024-01-15T10:10:00"}
+  ],
+  "nextCursor": "MjAyNC0wMS0xNVQxMDoxMDowMDo5Ng==",
+  "hasNext": true,
+  "size": 5
+}
+
+// 다음 페이지: GET /api/v1/products/cursor?limit=5&cursor=MjAyNC0wMS0xNVQxMDoxMDowMDo5Ng==
+{
+  "content": [
+    {"id": 95, "name": "상품95", "createdAt": "2024-01-15T10:05:00"},
+    ...
+  ],
+  "nextCursor": "...",
+  "hasNext": true,
+  "size": 5
+}
+```
+
+### 3.6 Offset vs Cursor 비교
 
 | 항목 | Offset | Cursor |
 |------|--------|--------|
@@ -329,7 +412,9 @@ private fun cursorCondition(cursor: LocalDateTime?, cursorId: Long?): BooleanExp
 ### 4.1 읽기/쓰기 분리가 필요한 이유
 
 ```
-일반적인 웹 서비스 트래픽 패턴: 읽기 : 쓰기 = 9 : 1
+일반적인 웹 서비스 트래픽 패턴:
+
+읽기 : 쓰기 = 9 : 1 (또는 더 극단적)
 
 ┌─────────────────────────────────────────────────────────┐
 │                      단일 DB                            │
@@ -344,6 +429,9 @@ private fun cursorCondition(cursor: LocalDateTime?, cursorId: Long?): BooleanExp
 │   [쓰기 10%] ──────────┘                               │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
+
+→ 읽기 요청이 쓰기 성능에 영향
+→ 단일 DB가 모든 부하 처리
 ```
 
 ### 4.2 Read Replica 아키텍처
@@ -380,37 +468,53 @@ private fun cursorCondition(cursor: LocalDateTime?, cursorId: Long?): BooleanExp
 ### 4.3 Routing DataSource 구현
 
 ```kotlin
+// DataSourceConfig.kt
 @Configuration
 @Profile("prod")
+@ConditionalOnProperty(name = ["spring.datasource.replica.enabled"], havingValue = "true")
 class DataSourceConfig {
 
+    // Primary DataSource (쓰기용)
     @Bean
     @ConfigurationProperties(prefix = "spring.datasource.primary")
-    fun primaryDataSource(): DataSource = DataSourceBuilder.create().build()
+    fun primaryDataSource(): DataSource {
+        return DataSourceBuilder.create().build()
+    }
 
+    // Replica DataSource (읽기용)
     @Bean
     @ConfigurationProperties(prefix = "spring.datasource.replica")
-    fun replicaDataSource(): DataSource = DataSourceBuilder.create().build()
+    fun replicaDataSource(): DataSource {
+        return DataSourceBuilder.create().build()
+    }
 
+    // Routing DataSource (자동 라우팅)
     @Bean
     fun routingDataSource(
-        @Qualifier("primaryDataSource") primary: DataSource,
-        @Qualifier("replicaDataSource") replica: DataSource
+        @Qualifier("primaryDataSource") primaryDataSource: DataSource,
+        @Qualifier("replicaDataSource") replicaDataSource: DataSource
     ): DataSource {
         val routingDataSource = ReplicationRoutingDataSource()
 
         val dataSourceMap = mapOf<Any, Any>(
-            DataSourceType.PRIMARY to primary,
-            DataSourceType.REPLICA to replica
+            DataSourceType.PRIMARY to primaryDataSource,
+            DataSourceType.REPLICA to replicaDataSource
         )
 
         routingDataSource.setTargetDataSources(dataSourceMap)
-        routingDataSource.setDefaultTargetDataSource(primary)
+        routingDataSource.setDefaultTargetDataSource(primaryDataSource)
 
         return routingDataSource
     }
+
+    @Primary
+    @Bean
+    fun dataSource(@Qualifier("routingDataSource") routingDataSource: DataSource): DataSource {
+        return LazyConnectionDataSourceProxy(routingDataSource)
+    }
 }
 
+// 라우팅 결정 로직
 class ReplicationRoutingDataSource : AbstractRoutingDataSource() {
     override fun determineCurrentLookupKey(): Any {
         // readOnly 트랜잭션이면 Replica, 아니면 Primary
@@ -423,7 +527,7 @@ class ReplicationRoutingDataSource : AbstractRoutingDataSource() {
 }
 ```
 
-### 4.4 서비스에서 활용
+### 4.4 @Transactional(readOnly = true)의 역할
 
 ```kotlin
 @Service
@@ -444,19 +548,30 @@ class ProductService {
     fun createProduct(request: CreateProductRequest): ProductResponse {
         return productRepository.save(Product(...))
     }
+
+    @Transactional  // 쓰기 → Primary로 라우팅
+    fun updateProduct(id: Long, request: UpdateProductRequest): ProductResponse {
+        val product = productRepository.findById(id)
+        product.update(request)
+        return productRepository.save(product)
+    }
 }
 ```
 
-### 4.5 Replication Lag 문제와 해결
+### 4.5 Replication Lag (복제 지연) 문제
 
 ```
 문제 상황:
-T=0ms:  Primary에 주문 저장 (INSERT)
-T=5ms:  "주문 완료" 응답 → 사용자에게 반환
-T=10ms: 사용자가 "내 주문 조회" 클릭
-T=15ms: Replica에서 조회 → 아직 복제 안 됨! ❌
-
-사용자: "방금 주문했는데 안 보여요!"
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│  T=0ms:  Primary에 주문 저장 (INSERT)                   │
+│  T=5ms:  "주문 완료" 응답 → 사용자에게 반환               │
+│  T=10ms: 사용자가 "내 주문 조회" 클릭                    │
+│  T=15ms: Replica에서 조회 → 아직 복제 안 됨! ❌          │
+│                                                         │
+│  사용자: "방금 주문했는데 안 보여요!"                     │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
 **해결 방법:**
@@ -470,11 +585,17 @@ fun createOrderAndGet(request: CreateOrderRequest): OrderResponse {
     return OrderResponse.from(order)
 }
 
-// 2. 명시적 Primary 읽기
+// 2. Session Affinity (세션 고정)
+// 쓰기 후 일정 시간 동안 같은 사용자는 Primary에서 읽기
+
+// 3. 명시적 Primary 읽기
 @Transactional(readOnly = false)  // Primary 강제
 fun getRecentOrder(userId: Long): OrderResponse {
     return orderRepository.findTopByUserIdOrderByCreatedAtDesc(userId)
 }
+
+// 4. 최종 일관성(Eventual Consistency) 허용
+// UI에서 "잠시 후 반영됩니다" 안내
 ```
 
 ---
@@ -496,6 +617,15 @@ orders.forEach { order ->
 // 총 쿼리: 1 + N번 (orders가 100개면 101번!)
 ```
 
+```sql
+-- 실제 발생하는 쿼리
+SELECT * FROM orders WHERE buyer_id = 1;
+SELECT * FROM order_items WHERE order_id = 1;
+SELECT * FROM order_items WHERE order_id = 2;
+SELECT * FROM order_items WHERE order_id = 3;
+... (100번 더!)
+```
+
 ### 5.2 해결: Fetch Join
 
 ```kotlin
@@ -515,9 +645,24 @@ fun findByBuyerIdWithItems(buyerId: Long): List<Order> {
 // 총 쿼리: 1번!
 ```
 
-### 5.3 Batch Size 설정
+```sql
+-- 단일 쿼리로 해결
+SELECT o.*, oi.* FROM orders o
+JOIN order_items oi ON o.id = oi.order_id
+WHERE o.buyer_id = 1;
+```
+
+### 5.3 @EntityGraph
+
+```kotlin
+@EntityGraph(attributePaths = ["orderItems", "orderItems.product"])
+fun findByBuyerId(buyerId: Long): List<Order>
+```
+
+### 5.4 Batch Size 설정
 
 ```yaml
+# application.yml
 spring:
   jpa:
     properties:
@@ -530,6 +675,7 @@ Before (N+1):
 SELECT * FROM orders WHERE buyer_id = 1;
 SELECT * FROM order_items WHERE order_id = 1;
 SELECT * FROM order_items WHERE order_id = 2;
+SELECT * FROM order_items WHERE order_id = 3;
 ... (100번)
 
 After (Batch):
@@ -538,22 +684,138 @@ SELECT * FROM order_items WHERE order_id IN (1,2,3,...,100);
 ... (2번!)
 ```
 
----
+### 5.5 N+1 해결 전략 비교
 
-## 6. 핵심 정리
-
-| 기법 | 목적 | 적용 시점 |
-|------|------|----------|
-| **인덱스** | 조회 성능 향상 | 자주 검색하는 컬럼 |
-| **복합 인덱스** | 다중 조건 최적화 | WHERE 조건이 여러 개일 때 |
-| **커서 페이지네이션** | 대용량 목록 처리 | 무한 스크롤, 대량 데이터 |
-| **Read Replica** | 읽기 부하 분산 | 읽기:쓰기 비율이 높을 때 |
-| **Fetch Join** | N+1 문제 해결 | 연관 엔티티 함께 조회 시 |
+| 전략 | 장점 | 단점 | 사용 시점 |
+|------|------|------|----------|
+| **Fetch Join** | 1번 쿼리로 해결 | 페이징 불가 | 컬렉션 1개 |
+| **@EntityGraph** | 선언적, 간편 | 동적 조회 어려움 | 정적 조회 |
+| **Batch Size** | 전역 설정 | 완전한 해결 아님 | 기본 설정 |
 
 ---
 
-## 다음 편 예고
+## 6. FAQ (면접 대비)
 
-다음 편에서는 **모니터링과 옵저버빌리티**를 다룹니다. Prometheus, Grafana, 커스텀 메트릭을 통해 시스템 상태를 실시간으로 파악하는 방법을 알아봅니다.
+### Q1. 인덱스는 많을수록 좋은가요?
 
-> 다음 편: [스프링부트 실무 가이드 6편: 모니터링](/blog/springboot-practical-guide-6)
+**아니요.** 인덱스가 많으면:
+- INSERT, UPDATE, DELETE 시 인덱스도 업데이트 필요 → 쓰기 성능 저하
+- 인덱스 저장 공간 필요
+- 옵티마이저가 잘못된 인덱스 선택 가능성
+
+**권장:**
+- 자주 조회하는 컬럼에만 생성
+- 사용하지 않는 인덱스는 삭제
+- 복합 인덱스로 여러 조건 커버
+
+### Q2. 복합 인덱스의 컬럼 순서는 어떻게 결정하나요?
+
+```
+1. 등호(=) 조건 컬럼을 앞에
+2. 범위 조건 컬럼을 뒤에
+3. 카디널리티가 높은 컬럼을 앞에
+
+예: WHERE status = 'ON_SALE' AND price > 10000 AND category_id = 5
+권장 순서: (status, category_id, price)
+```
+
+### Q3. Offset 페이지네이션의 문제점은?
+
+- OFFSET이 커질수록 선형적 성능 저하 (19980개 읽고 버림)
+- 데이터 변경 시 중복/누락 발생 가능
+- 해결책: 커서 기반 페이지네이션
+
+### Q4. Read Replica의 복제 지연(Replication Lag)은 어떻게 처리하나요?
+
+```
+1. 쓰기 직후 조회는 Primary에서 (같은 트랜잭션)
+2. 세션 고정 (일정 시간 Primary 유지)
+3. 중요한 조회는 명시적으로 Primary 지정
+4. 최종 일관성(Eventual Consistency) 허용
+```
+
+### Q5. N+1 문제란 무엇이고 어떻게 해결하나요?
+
+연관 엔티티를 조회할 때 N번의 추가 쿼리가 발생하는 문제
+
+**해결책:**
+- Fetch Join: `JOIN FETCH`
+- @EntityGraph
+- Batch Size 설정
+
+---
+
+## 7. 프로젝트 파일 구조
+
+```
+marketplace/
+├── marketplace-api/
+│   └── src/main/
+│       ├── kotlin/.../
+│       │   ├── common/
+│       │   │   └── CursorPageResponse.kt     # 커서 응답
+│       │   ├── config/
+│       │   │   └── DataSourceConfig.kt       # Read Replica 라우팅
+│       │   └── product/
+│       │       └── ProductController.kt      # 커서 API
+│       │
+│       └── resources/
+│           └── db/migration/
+│               └── V2__add_indexes.sql       # 인덱스 DDL
+│
+└── marketplace-infra/
+    └── src/main/kotlin/.../
+        └── ProductJpaRepositoryImpl.kt       # 커서 쿼리 구현
+```
+
+---
+
+## 8. 실습
+
+```bash
+# 1. 쿼리 실행 계획 확인
+# H2 Console (http://localhost:8080/h2-console)
+EXPLAIN SELECT * FROM products WHERE status = 'ON_SALE';
+
+# 2. 커서 페이지네이션 테스트
+# 첫 페이지
+curl "http://localhost:8080/api/v1/products/cursor?limit=5"
+
+# 다음 페이지 (nextCursor 값 사용)
+curl "http://localhost:8080/api/v1/products/cursor?limit=5&cursor=<NEXT_CURSOR>"
+
+# 3. 인덱스 목록 확인 (MySQL)
+SHOW INDEX FROM products;
+```
+
+---
+
+## 요약
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  ✅ 인덱스 = 조회 성능 향상                                 │
+│     - B-Tree 구조, O(log n) 탐색                           │
+│     - 복합 인덱스: 등호 조건 → 범위 조건 순서               │
+│     - 쓰기 성능 트레이드오프 고려                           │
+│                                                             │
+│  ✅ 커서 페이지네이션 = 대용량 목록 처리                    │
+│     - OFFSET 대신 WHERE 조건으로 페이징                    │
+│     - 어떤 페이지든 일정한 성능                            │
+│                                                             │
+│  ✅ Read Replica = 읽기/쓰기 분리                          │
+│     - 읽기 부하 분산                                       │
+│     - Replication Lag 주의                                 │
+│                                                             │
+│  ✅ N+1 문제 해결                                          │
+│     - Fetch Join                                           │
+│     - @EntityGraph                                         │
+│     - Batch Size 설정                                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+> **다음 편**: [스프링부트 실무 가이드 6편: 모니터링](/blog/springboot-practical-guide-6)
