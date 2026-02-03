@@ -1058,22 +1058,300 @@ class NotificationService {
 
 **CompletableFuture에서 MDC 전파:**
 
-```kotlin
-// CompletableFuture 사용 시에도 동일한 방식
-fun processAsync(): CompletableFuture<Result> {
-    val contextMap = MDC.getCopyOfContextMap()
+CompletableFuture는 `@Async`와 달리 TaskDecorator가 자동 적용되지 않는다. 두 가지 방식이 있다.
 
-    return CompletableFuture.supplyAsync({
+**방식 1: 매번 수동 처리 (Service 코드)**
+
+```kotlin
+// OrderService.kt - 사용하는 곳에서 직접 처리
+@Service
+class OrderService(
+    private val asyncExecutor: Executor  // Configuration에서 주입
+) {
+    fun processAsync(): CompletableFuture<Result> {
+        // 현재 스레드의 MDC 복사
+        val contextMap = MDC.getCopyOfContextMap()
+
+        return CompletableFuture.supplyAsync({
+            try {
+                contextMap?.let { MDC.setContextMap(it) }
+                doProcess()
+            } finally {
+                MDC.clear()
+            }
+        }, asyncExecutor)
+    }
+}
+```
+
+단점: 매번 boilerplate 코드 작성 필요
+
+**방식 2: MDC 전파 Executor를 Configuration에 등록 (권장)**
+
+```kotlin
+// AsyncConfig.kt - Configuration에 등록
+@Configuration
+class AsyncConfig {
+
+    /**
+     * MDC를 자동 전파하는 Executor
+     * CompletableFuture.supplyAsync(..., mdcExecutor) 로 사용
+     */
+    @Bean
+    fun mdcExecutor(): Executor {
+        val executor = ThreadPoolTaskExecutor()
+        executor.corePoolSize = 10
+        executor.maxPoolSize = 50
+        executor.setThreadNamePrefix("mdc-async-")
+        executor.setTaskDecorator(MdcTaskDecorator())  // MDC 전파
+        executor.initialize()
+        return executor
+    }
+}
+
+// MdcTaskDecorator.kt (위에서 정의한 것과 동일)
+class MdcTaskDecorator : TaskDecorator {
+    override fun decorate(runnable: Runnable): Runnable {
+        val contextMap = MDC.getCopyOfContextMap()
+        return Runnable {
+            try {
+                contextMap?.let { MDC.setContextMap(it) }
+                runnable.run()
+            } finally {
+                MDC.clear()
+            }
+        }
+    }
+}
+```
+
+```kotlin
+// OrderService.kt - 깔끔하게 사용
+@Service
+class OrderService(
+    @Qualifier("mdcExecutor") private val mdcExecutor: Executor
+) {
+    fun processAsync(): CompletableFuture<Result> {
+        // MDC 전파가 자동으로 됨!
+        return CompletableFuture.supplyAsync({
+            doProcess()  // 별도 처리 불필요
+        }, mdcExecutor)
+    }
+}
+```
+
+**정리:**
+
+| 방식 | 위치 | 장점 | 단점 |
+|------|------|------|------|
+| 수동 처리 | Service 코드 | 명시적 | boilerplate 많음 |
+| **mdcExecutor Bean** | Configuration | 깔끔, 재사용 | Bean 주입 필요 |
+
+### 6.6 EDA 환경에서 traceId 전파 (Kafka/RabbitMQ)
+
+앞서 다룬 `@Async`는 **같은 JVM 내**에서 스레드만 다른 경우다. 하지만 **EDA(Event-Driven Architecture)** 환경에서는 메시지가 네트워크를 통해 다른 서비스로 전달되므로 MDC 전파 방식이 다르다.
+
+**@Async vs Kafka/RabbitMQ 차이:**
+
+```
+@Async (같은 JVM):
+┌─────────────────────────────────────────────────────────┐
+│  Order Service (JVM)                                    │
+│                                                         │
+│  Thread-1 ──TaskDecorator──▶ Thread-2                  │
+│  MDC 복사로 해결                                        │
+└─────────────────────────────────────────────────────────┘
+
+Kafka/RabbitMQ (다른 JVM):
+┌─────────────────────────────────────────────────────────┐
+│  Order Service        Kafka         Payment Service    │
+│  (JVM 1)              Broker        (JVM 2)            │
+│                                                         │
+│  MDC: {traceId}  ─────X─────▶  MDC: {} (없음!)        │
+│                                                         │
+│  MDC는 ThreadLocal이라 네트워크 전송 불가              │
+│  → 메시지 헤더에 traceId를 담아서 전달해야 함          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Kafka Producer - traceId를 헤더에 포함:**
+
+```kotlin
+@Component
+class OrderEventProducer(
+    private val kafkaTemplate: KafkaTemplate<String, OrderEvent>
+) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
+    fun sendOrderCreatedEvent(order: Order) {
+        val event = OrderCreatedEvent(order.id, order.userId, order.amount)
+
+        // MDC에서 traceId 추출하여 헤더에 추가
+        val traceId = MDC.get("traceId") ?: UUID.randomUUID().toString()
+
+        val record = ProducerRecord<String, OrderEvent>(
+            "order-events",      // topic
+            null,                // partition
+            order.id.toString(), // key
+            event                // value
+        ).apply {
+            headers().add("traceId", traceId.toByteArray())
+            headers().add("spanId", UUID.randomUUID().toString().take(8).toByteArray())
+        }
+
+        kafkaTemplate.send(record)
+        logger.info("이벤트 발행: orderId={}, traceId={}", order.id, traceId)
+    }
+}
+```
+
+**Kafka Consumer - 헤더에서 traceId 추출하여 MDC 설정:**
+
+```kotlin
+@Component
+class PaymentEventConsumer {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
+    @KafkaListener(topics = ["order-events"], groupId = "payment-service")
+    fun handleOrderCreated(
+        event: OrderCreatedEvent,
+        @Header("traceId", required = false) traceIdBytes: ByteArray?
+    ) {
+        // 헤더에서 traceId 추출하여 MDC 설정
+        val traceId = traceIdBytes?.let { String(it) } ?: UUID.randomUUID().toString()
+
         try {
-            contextMap?.let { MDC.setContextMap(it) }
-            // 비동기 작업
-            doProcess()
+            MDC.put("traceId", traceId)
+            MDC.put("eventType", "OrderCreated")
+
+            logger.info("이벤트 수신: orderId={}", event.orderId)  // traceId 포함됨
+
+            // 결제 처리 로직
+            processPayment(event)
+
+            logger.info("결제 처리 완료: orderId={}", event.orderId)
+
         } finally {
             MDC.clear()
         }
-    }, asyncExecutor)
+    }
 }
 ```
+
+**공통 로직을 Interceptor로 분리:**
+
+```kotlin
+// Producer Interceptor - 발행 시 자동으로 traceId 추가
+@Component
+class TracingProducerInterceptor : ProducerInterceptor<String, Any> {
+
+    override fun onSend(record: ProducerRecord<String, Any>): ProducerRecord<String, Any> {
+        val traceId = MDC.get("traceId") ?: UUID.randomUUID().toString()
+        record.headers().add("traceId", traceId.toByteArray())
+        return record
+    }
+
+    override fun onAcknowledgement(metadata: RecordMetadata?, exception: Exception?) {}
+    override fun close() {}
+    override fun configure(configs: MutableMap<String, *>?) {}
+}
+
+// Consumer Interceptor - 소비 시 자동으로 MDC 설정
+@Component
+class TracingConsumerInterceptor : ConsumerInterceptor<String, Any> {
+
+    override fun onConsume(records: ConsumerRecords<String, Any>): ConsumerRecords<String, Any> {
+        // 각 레코드 처리 전에 MDC 설정은 @KafkaListener에서 처리
+        return records
+    }
+
+    override fun onCommit(offsets: MutableMap<TopicPartition, OffsetAndMetadata>?) {}
+    override fun close() {}
+    override fun configure(configs: MutableMap<String, *>?) {}
+}
+```
+
+**KafkaConfig에 Interceptor 등록:**
+
+```kotlin
+@Configuration
+class KafkaConfig {
+
+    @Bean
+    fun producerFactory(): ProducerFactory<String, Any> {
+        val config = mapOf(
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG to "localhost:9092",
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to JsonSerializer::class.java,
+            ProducerConfig.INTERCEPTOR_CLASSES_CONFIG to listOf(
+                TracingProducerInterceptor::class.java.name
+            )
+        )
+        return DefaultKafkaProducerFactory(config)
+    }
+}
+```
+
+**로그 출력 예시 (서비스 간 traceId 연결):**
+
+```
+# Order Service (Producer)
+[traceId=abc123] 주문 생성: orderId=100
+[traceId=abc123] 이벤트 발행: orderId=100
+
+# Payment Service (Consumer) - 동일한 traceId!
+[traceId=abc123] 이벤트 수신: orderId=100
+[traceId=abc123] 결제 처리 완료: orderId=100
+
+# 중앙 로그 시스템에서 traceId=abc123으로 검색하면
+# 두 서비스의 로그가 모두 조회됨
+```
+
+**RabbitMQ에서도 동일한 방식:**
+
+```kotlin
+// RabbitMQ Producer
+@Component
+class OrderEventPublisher(
+    private val rabbitTemplate: RabbitTemplate
+) {
+    fun publish(event: OrderCreatedEvent) {
+        val traceId = MDC.get("traceId") ?: UUID.randomUUID().toString()
+
+        rabbitTemplate.convertAndSend("order-exchange", "order.created", event) { message ->
+            message.messageProperties.setHeader("traceId", traceId)
+            message
+        }
+    }
+}
+
+// RabbitMQ Consumer
+@Component
+class PaymentEventListener {
+
+    @RabbitListener(queues = ["payment-queue"])
+    fun handle(event: OrderCreatedEvent, @Header("traceId") traceId: String?) {
+        try {
+            MDC.put("traceId", traceId ?: UUID.randomUUID().toString())
+            // 처리 로직
+        } finally {
+            MDC.clear()
+        }
+    }
+}
+```
+
+**정리: MDC 전파 방식 비교**
+
+| 상황 | 전파 방식 | 구현 |
+|------|----------|------|
+| **@Async** (같은 JVM) | TaskDecorator | MDC.getCopyOfContextMap() |
+| **CompletableFuture** | 수동 복사 | MDC.setContextMap() |
+| **Kafka** | 메시지 헤더 | ProducerRecord.headers() |
+| **RabbitMQ** | 메시지 헤더 | MessageProperties.setHeader() |
+| **HTTP 호출** (다른 서비스) | HTTP 헤더 | X-Trace-Id 헤더 |
+
+> **실무 팁:** 분산 추적이 복잡해지면 **OpenTelemetry**, **Spring Cloud Sleuth** 같은 라이브러리 사용을 고려한다. 자동으로 traceId를 전파하고 Jaeger, Zipkin 같은 도구와 연동된다.
 
 ---
 
