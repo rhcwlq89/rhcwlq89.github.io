@@ -62,6 +62,17 @@ const jsonLd = type === 'article' ? {
 };
 ---
 
+<!-- 다크모드 FOUC 방지 (페이지 로드 전 테마 적용) -->
+<script is:inline>
+  (function() {
+    const stored = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (stored === 'dark' || (!stored && prefersDark)) {
+      document.documentElement.classList.add('dark');
+    }
+  })();
+</script>
+
 <!-- Global Metadata -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
