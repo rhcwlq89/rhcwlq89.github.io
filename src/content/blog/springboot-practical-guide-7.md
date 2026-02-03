@@ -1,7 +1,7 @@
 ---
 title: "스프링부트 실무 가이드 7편: 로깅 전략과 실무"
 description: "SLF4J, Logback, Log4j2 비교부터 구조화된 로그, MDC, 중앙 집중식 로그 관리까지"
-pubDate: 2026-02-03T10:00:00
+pubDate: 2026-02-02T09:00:00+09:00
 tags: ["Spring Boot", "Logging", "Logback", "ELK", "Loki", "Backend", "실무가이드"]
 heroImage: "../../assets/PracticalGuideSeries.png"
 ---

@@ -1,7 +1,7 @@
 ---
 title: "AWS EC2 가이드"
 description: "EC2 인스턴스의 기본 개념부터 실무 운영까지 완벽 가이드"
-pubDate: 2026-02-02
+pubDate: 2026-02-02T10:00:00+09:00
 tags:
   [
     "AWS",

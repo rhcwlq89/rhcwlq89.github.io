@@ -1,7 +1,7 @@
 ---
 title: "Docker Compose 작성 가이드"
 description: "Docker Compose를 활용한 멀티 컨테이너 환경 구성 가이드"
-pubDate: 2026-01-07
+pubDate: 2026-01-07T10:00:00+09:00
 tags:
   [
     "Docker",

@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 7편: Advanced Patterns"
 description: "고급 패턴과 아키텍처 - 이벤트, 비동기, 파일 처리, 멀티 모듈"
-pubDate: 2026-01-21
+pubDate: 2026-01-21T10:00:00+09:00
 tags: ["Spring Boot", "Event", "Async", "Architecture", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---

@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 4편: Performance & Optimization"
 description: "성능 최적화와 쿼리 튜닝 - N+1 문제, 페이지네이션, 캐싱 전략"
-pubDate: 2026-01-15
+pubDate: 2026-01-15T10:00:00+09:00
 tags: ["Spring Boot", "JPA", "Performance", "Cache", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---

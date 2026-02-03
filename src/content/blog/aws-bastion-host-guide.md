@@ -1,7 +1,7 @@
 ---
 title: "AWS Bastion Host 구축 가이드"
 description: "Bastion Host를 통한 Private EC2 SSH 접속 구성 완벽 가이드"
-pubDate: 2026-02-03
+pubDate: 2026-02-03T10:00:00+09:00
 tags:
   [
     "AWS",

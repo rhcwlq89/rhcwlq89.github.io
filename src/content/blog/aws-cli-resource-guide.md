@@ -1,7 +1,7 @@
 ---
 title: "AWS CLI 설정부터 리소스 조회까지 완벽 가이드"
 description: "AWS CLI 인증 방법(CloudShell, IAM Identity Center, 액세스 키)과 주요 서비스별 리소스 조회 명령어 총정리"
-pubDate: 2026-02-03
+pubDate: 2026-02-03T11:00:00+09:00
 tags:
   [
     "AWS",

@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 1편: Core Application Layer"
 description: "REST API, Service, Repository, Domain 계층의 핵심 구현 가이드"
-pubDate: 2026-01-09
+pubDate: 2026-01-09T10:00:00+09:00
 tags: ["Spring Boot", "REST API", "Backend", "사전과제", "JPA"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
 ---
