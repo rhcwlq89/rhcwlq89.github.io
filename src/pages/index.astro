@@ -5,17 +5,17 @@ import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
 import FormattedDate from "../components/FormattedDate.astro";
 import { Image } from "astro:assets";
-import { SITE_DESCRIPTION, SITE_TITLE, SITE_LANG } from "../consts";
+import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
 
-const posts = (await getCollection("blog")).sort(
-  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()
-);
+const posts = (await getCollection("blog"))
+  .filter((post) => !post.id.startsWith("en/"))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 ---
 
 <!doctype html>
-<html lang={SITE_LANG}>
+<html lang="ko">
   <head>
-    <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+    <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} lang="ko" />
     <style>
       main {
         width: 900px;
@@ -87,7 +87,62 @@ const posts = (await getCollection("blog")).sort(
     </style>
   </head>
   <body>
-    <Header />
+    <div id="lang-banner" style="display:none;">
+      <p>
+        🌐 An English version of this site is available.
+        <a href="/en/" id="lang-banner-link">Switch to English</a>
+        <button type="button" id="lang-banner-close" aria-label="Close">&times;</button>
+      </p>
+    </div>
+    <script is:inline>
+      (function() {
+        var dominated = localStorage.getItem('langBannerDismissed');
+        var preferred = localStorage.getItem('preferredLang');
+        if (dominated || preferred === 'ko') return;
+        if (preferred === 'en' || (navigator.language && navigator.language.startsWith('en'))) {
+          document.getElementById('lang-banner').style.display = 'block';
+        }
+        document.getElementById('lang-banner-link').addEventListener('click', function() {
+          localStorage.setItem('preferredLang', 'en');
+        });
+        document.getElementById('lang-banner-close').addEventListener('click', function() {
+          localStorage.setItem('langBannerDismissed', '1');
+          document.getElementById('lang-banner').style.display = 'none';
+        });
+      })();
+    </script>
+    <style>
+      #lang-banner {
+        background: var(--accent);
+        color: #fff;
+        text-align: center;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+      }
+      #lang-banner p {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      #lang-banner a {
+        color: #fff;
+        font-weight: 700;
+        text-decoration: underline;
+      }
+      #lang-banner-close {
+        background: none;
+        border: none;
+        color: #fff;
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0 0.25rem;
+        line-height: 1;
+      }
+    </style>
+    <Header lang="ko" />
     <main>
       <section>
         <ul>
@@ -114,6 +169,6 @@ const posts = (await getCollection("blog")).sort(
         </ul>
       </section>
     </main>
-    <Footer />
+    <Footer lang="ko" />
   </body>
 </html>

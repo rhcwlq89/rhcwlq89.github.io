@@ -2,19 +2,20 @@
 import BaseHead from "../components/BaseHead.astro";
 import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
-import { SITE_LANG, SITE_TITLE } from "../consts";
+import { SITE_TITLE } from "../consts";
 ---
 
 <!doctype html>
-<html lang={SITE_LANG}>
+<html lang="ko">
   <head>
     <BaseHead
       title={`About | ${SITE_TITLE}`}
       description="블로그 운영자 소개와 블로그 운영 목적을 안내합니다."
+      lang="ko"
     />
   </head>
   <body>
-    <Header />
+    <Header lang="ko" />
     <main>
       <article>
         <h1>About</h1>
@@ -65,6 +66,6 @@ import { SITE_LANG, SITE_TITLE } from "../consts";
         </p>
       </article>
     </main>
-    <Footer />
+    <Footer lang="ko" />
   </body>
 </html>

@@ -2,21 +2,22 @@
 import BaseHead from "../components/BaseHead.astro";
 import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
-import { SITE_LANG, SITE_TITLE } from "../consts";
+import { SITE_TITLE } from "../consts";
 
 const effectiveDate = "2026-02-08";
 ---
 
 <!doctype html>
-<html lang={SITE_LANG}>
+<html lang="ko">
   <head>
     <BaseHead
       title={`Privacy Policy | ${SITE_TITLE}`}
       description="개인정보 처리방침 페이지입니다."
+      lang="ko"
     />
   </head>
   <body>
-    <Header />
+    <Header lang="ko" />
     <main>
       <article>
         <h1>Privacy Policy</h1>
@@ -59,6 +60,6 @@ const effectiveDate = "2026-02-08";
         </p>
       </article>
     </main>
-    <Footer />
+    <Footer lang="ko" />
   </body>
 </html>

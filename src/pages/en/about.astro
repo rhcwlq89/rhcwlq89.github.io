@@ -1,0 +1,76 @@
+---
+import BaseHead from "../../components/BaseHead.astro";
+import Footer from "../../components/Footer.astro";
+import Header from "../../components/Header.astro";
+import { SITE_TITLE } from "../../consts";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`About | ${SITE_TITLE}`}
+      description="About the blog author and the purpose of this blog."
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+        <h1>About</h1>
+
+        <h2>About the Author</h2>
+        <p>
+          Hello! I'm a backend developer with hands-on experience building
+          services based on Spring Boot and AWS. I run this blog to
+          systematically organize the insights gained from solving technical
+          challenges in real-world projects.
+        </p>
+
+        <h2>Blog Mission</h2>
+        <p>
+          This blog aims to provide practical, hands-on technical content.
+          Rather than simple theory summaries, it delivers project-ready
+          architectures, code examples, and lessons learned from trial and
+          error.
+        </p>
+
+        <h2>Main Topics</h2>
+        <ul>
+          <li>
+            <strong>Spring Boot</strong> — Project setup, logging strategies,
+            exception handling, production patterns, and series guides
+          </li>
+          <li>
+            <strong>AWS</strong> — EC2, RDS, CLI, database selection guides, and
+            cloud infrastructure best practices
+          </li>
+          <li>
+            <strong>Databases</strong> — Design, optimization, and solutions to
+            common production issues
+          </li>
+          <li>
+            <strong>Interview Preparation</strong> — Core concepts for technical
+            interview preparation
+          </li>
+        </ul>
+
+        <h2>Value for Readers</h2>
+        <p>
+          Every article is written with the question "Can I apply this right
+          now?" in mind. We provide the practical context that official docs
+          alone cannot convey — configuration pitfalls, reasoning behind design
+          choices, and actionable takeaways.
+        </p>
+
+        <h2>Contact</h2>
+        <p>
+          For feedback or inquiries about the blog content, please visit the
+          <a href="/en/contact">Contact page</a>.
+        </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>

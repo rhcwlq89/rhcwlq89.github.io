@@ -1,0 +1,46 @@
+---
+import type { Lang } from '../i18n/languages';
+import { getAlternateLangPath } from '../i18n/utils';
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = 'ko' } = Astro.props;
+const alternate = getAlternateLangPath(Astro.url);
+---
+
+<a href={alternate.path} class="lang-switcher" data-lang={alternate.lang}>
+  {lang === 'ko' ? 'EN' : 'KO'}
+</a>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const switcher = document.querySelector('.lang-switcher');
+    switcher?.addEventListener('click', () => {
+      const targetLang = switcher.getAttribute('data-lang');
+      localStorage.setItem('preferredLang', targetLang || 'ko');
+    });
+  });
+</script>
+
+<style>
+  .lang-switcher {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3em 0.6em;
+    border: 1px solid rgb(var(--gray));
+    border-radius: 6px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-decoration: none;
+    color: rgb(var(--gray-dark));
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .lang-switcher:hover {
+    background-color: rgba(var(--gray), 0.2);
+    border-color: rgb(var(--gray-dark));
+  }
+</style>

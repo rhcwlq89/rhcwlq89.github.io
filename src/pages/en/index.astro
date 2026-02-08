@@ -1,24 +1,26 @@
 ---
-import { Image } from "astro:assets";
-import { getCollection } from "astro:content";
 import BaseHead from "../../components/BaseHead.astro";
+import { getCollection } from "astro:content";
 import Footer from "../../components/Footer.astro";
-import FormattedDate from "../../components/FormattedDate.astro";
 import Header from "../../components/Header.astro";
-import { SITE_DESCRIPTION, SITE_TITLE } from "../../consts";
+import FormattedDate from "../../components/FormattedDate.astro";
+import { Image } from "astro:assets";
+import { SITE_TITLE } from "../../consts";
+import { useTranslations } from "../../i18n/utils";
 
+const t = useTranslations('en');
 const posts = (await getCollection("blog"))
-  .filter((post) => !post.id.startsWith("en/"))
+  .filter((post) => post.id.startsWith("en/"))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 ---
 
 <!doctype html>
-<html lang="ko">
+<html lang="en">
   <head>
-    <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} lang="ko" />
+    <BaseHead title={SITE_TITLE} description={t('site.description')} lang="en" />
     <style>
       main {
-        width: 800px;
+        width: 900px;
       }
       ul {
         display: flex;
@@ -69,7 +71,7 @@ const posts = (await getCollection("blog"))
       ul a:hover img {
         box-shadow: var(--box-shadow);
       }
-      @media (max-width: 720px) {
+      @media (max-width: 900px) {
         ul {
           gap: 0.5em;
         }
@@ -87,25 +89,25 @@ const posts = (await getCollection("blog"))
     </style>
   </head>
   <body>
-    <Header lang="ko" />
+    <Header lang="en" />
     <main>
       <section>
         <ul>
           {
             posts.map((post) => (
               <li>
-                <a href={`/blog/${post.id}/`}>
+                <a href={`/en/blog/${post.id.replace(/^en\//, '')}/`}>
                   {post.data.heroImage && (
                     <Image
-                      width={720}
-                      height={360}
+                      width={900}
+                      height={450}
                       src={post.data.heroImage}
                       alt={post.data.title}
                     />
                   )}
                   <h4 class="title">{post.data.title}</h4>
                   <p class="date">
-                    <FormattedDate date={post.data.pubDate} />
+                    <FormattedDate date={post.data.pubDate} lang="en" />
                   </p>
                 </a>
               </li>
@@ -114,6 +116,6 @@ const posts = (await getCollection("blog"))
         </ul>
       </section>
     </main>
-    <Footer lang="ko" />
+    <Footer lang="en" />
   </body>
 </html>

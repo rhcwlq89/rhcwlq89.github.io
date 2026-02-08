@@ -1,0 +1,54 @@
+---
+import BaseHead from "../../components/BaseHead.astro";
+import Footer from "../../components/Footer.astro";
+import Header from "../../components/Header.astro";
+import { SITE_TITLE } from "../../consts";
+
+const effectiveDate = "2026-02-08";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Terms | ${SITE_TITLE}`}
+      description="Terms of use for this website."
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+        <h1>Terms of Use</h1>
+        <p>Effective date: {effectiveDate}</p>
+
+        <h2>1. Purpose</h2>
+        <p>
+          This site is intended to provide technical information. The published
+          content is based on practical experience and learning resources.
+        </p>
+
+        <h2>2. Copyright</h2>
+        <p>
+          Unless otherwise noted, all articles and images on this blog are
+          copyrighted by the operator. Please cite the source when quoting.
+        </p>
+
+        <h2>3. Limitation of Liability</h2>
+        <p>
+          The information provided is for reference purposes only. The end user
+          bears ultimate responsibility for any outcomes resulting from its
+          application.
+        </p>
+
+        <h2>4. Changes to Terms</h2>
+        <p>
+          The operator may modify these terms as needed. Changes will be
+          announced on this page.
+        </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>

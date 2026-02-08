@@ -2,19 +2,20 @@
 import BaseHead from "../components/BaseHead.astro";
 import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
-import { CONTACT_EMAIL, SITE_LANG, SITE_TITLE } from "../consts";
+import { CONTACT_EMAIL, SITE_TITLE } from "../consts";
 ---
 
 <!doctype html>
-<html lang={SITE_LANG}>
+<html lang="ko">
   <head>
     <BaseHead
       title={`Contact | ${SITE_TITLE}`}
       description="블로그 운영자 문의 페이지입니다."
+      lang="ko"
     />
   </head>
   <body>
-    <Header />
+    <Header lang="ko" />
     <main>
       <article>
         <h1>Contact</h1>
@@ -29,6 +30,6 @@ import { CONTACT_EMAIL, SITE_LANG, SITE_TITLE } from "../consts";
         </p>
       </article>
     </main>
-    <Footer />
+    <Footer lang="ko" />
   </body>
 </html>

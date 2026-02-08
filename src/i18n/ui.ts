@@ -1,0 +1,28 @@
+export const ui = {
+  ko: {
+    'site.title': 'TechBlog',
+    'site.description': 'Spring Boot, Backend 개발, 기술 면접 준비에 관한 실무 중심의 기술 블로그입니다.',
+    'nav.blog': 'Blog',
+    'nav.about': 'About',
+    'nav.contact': 'Contact',
+    'footer.about': 'About',
+    'footer.contact': 'Contact',
+    'footer.privacy': 'Privacy Policy',
+    'footer.terms': 'Terms',
+    'blog.lastUpdated': 'Last updated on',
+    'theme.toggle': '테마 전환',
+  },
+  en: {
+    'site.title': 'TechBlog',
+    'site.description': 'A practical tech blog about Spring Boot, backend development, and technical interview preparation.',
+    'nav.blog': 'Blog',
+    'nav.about': 'About',
+    'nav.contact': 'Contact',
+    'footer.about': 'About',
+    'footer.contact': 'Contact',
+    'footer.privacy': 'Privacy Policy',
+    'footer.terms': 'Terms',
+    'blog.lastUpdated': 'Last updated on',
+    'theme.toggle': 'Toggle theme',
+  },
+} as const;

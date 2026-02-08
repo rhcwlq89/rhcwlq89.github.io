@@ -1,19 +1,30 @@
 ---
 import { SITE_TITLE } from "../consts";
 import HeaderLink from "./HeaderLink.astro";
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import type { Lang } from "../i18n/languages";
+import { getLocalizedPath, useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = 'ko' } = Astro.props;
+const t = useTranslations(lang);
+const prefix = lang === 'ko' ? '' : '/en';
 ---
 
 <header>
   <nav>
-    <h2><a href="/">{SITE_TITLE}</a></h2>
+    <h2><a href={`${prefix}/`}>{SITE_TITLE}</a></h2>
     <div class="nav-right">
       <div class="internal-links">
-        <!-- <HeaderLink href="/">Home</HeaderLink> -->
-        <HeaderLink href="/blog">Blog</HeaderLink>
-        <HeaderLink href="/about">About</HeaderLink>
-        <HeaderLink href="/contact">Contact</HeaderLink>
+        <HeaderLink href={`${prefix}/blog`} lang={lang}>{t('nav.blog')}</HeaderLink>
+        <HeaderLink href={`${prefix}/about`} lang={lang}>{t('nav.about')}</HeaderLink>
+        <HeaderLink href={`${prefix}/contact`} lang={lang}>{t('nav.contact')}</HeaderLink>
       </div>
-      <button id="theme-toggle" aria-label="테마 전환" title="테마 전환">
+      <LanguageSwitcher lang={lang} />
+      <button id="theme-toggle" aria-label={t('theme.toggle')} title={t('theme.toggle')}>
         <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"></circle>
           <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -37,14 +48,14 @@ import HeaderLink from "./HeaderLink.astro";
   function initTheme() {
     const themeToggle = document.getElementById('theme-toggle');
 
-    // 저장된 테마 또는 시스템 설정 확인
+    // Check stored theme or system preference
     function getTheme() {
       const stored = localStorage.getItem('theme');
       if (stored) return stored;
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
 
-    // 테마 적용
+    // Apply theme
     function applyTheme(theme: string) {
       if (theme === 'dark') {
         document.documentElement.classList.add('dark');
@@ -53,10 +64,10 @@ import HeaderLink from "./HeaderLink.astro";
       }
     }
 
-    // 초기 테마 적용
+    // Apply initial theme
     applyTheme(getTheme());
 
-    // 토글 버튼 클릭
+    // Toggle button click
     themeToggle?.addEventListener('click', () => {
       const isDark = document.documentElement.classList.contains('dark');
       const newTheme = isDark ? 'light' : 'dark';
@@ -64,7 +75,7 @@ import HeaderLink from "./HeaderLink.astro";
       applyTheme(newTheme);
     });
 
-    // 시스템 설정 변경 감지
+    // Detect system preference change
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
       if (!localStorage.getItem('theme')) {
         applyTheme(e.matches ? 'dark' : 'light');
@@ -72,10 +83,10 @@ import HeaderLink from "./HeaderLink.astro";
     });
   }
 
-  // 페이지 로드 시 실행
+  // Run on page load
   initTheme();
 
-  // View Transitions 사용 시 재실행
+  // Re-run on View Transitions
   document.addEventListener('astro:after-swap', initTheme);
 </script>
 

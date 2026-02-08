@@ -1,0 +1,66 @@
+---
+import BaseHead from "../../components/BaseHead.astro";
+import Footer from "../../components/Footer.astro";
+import Header from "../../components/Header.astro";
+import { SITE_TITLE } from "../../consts";
+
+const effectiveDate = "2026-02-08";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Privacy Policy | ${SITE_TITLE}`}
+      description="Privacy policy for this website."
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+        <h1>Privacy Policy</h1>
+        <p>Effective date: {effectiveDate}</p>
+
+        <h2>1. Information We Collect</h2>
+        <p>
+          This blog may collect cookies and traffic data (e.g., referral paths,
+          page views, browser information) for service improvement and
+          statistical analysis.
+        </p>
+
+        <h2>2. Advertising and Third-Party Services</h2>
+        <p>
+          This site uses Google AdSense. Google and other third-party vendors
+          may use cookies to serve interest-based ads. For more details, see the
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>.
+        </p>
+        <p>
+          You can manage personalized ads through
+          <a href="https://adssettings.google.com" target="_blank" rel="noopener noreferrer">Google Ad Settings</a>
+          or restrict cookies via your browser settings.
+        </p>
+
+        <h2>3. Purpose of Use</h2>
+        <p>
+          Collected information is used for site operation, content improvement,
+          traffic analysis, ad serving, and performance measurement.
+        </p>
+
+        <h2>4. Data Retention and Sharing</h2>
+        <p>
+          The operator does not sell personal data and does not share it with
+          third parties except as required by law.
+        </p>
+
+        <h2>5. Contact</h2>
+        <p>
+          For privacy-related inquiries, please visit the
+          <a href="/en/contact">Contact</a> page.
+        </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>

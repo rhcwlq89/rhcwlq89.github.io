@@ -1,13 +1,23 @@
 ---
+import type { Lang } from "../i18n/languages";
+import { useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = 'ko' } = Astro.props;
+const t = useTranslations(lang);
+const prefix = lang === 'ko' ? '' : '/en';
 const today = new Date();
 ---
 
 <footer>
   <div class="footer-links">
-    <a href="/about">About</a>
-    <a href="/contact">Contact</a>
-    <a href="/privacy">Privacy Policy</a>
-    <a href="/terms">Terms</a>
+    <a href={`${prefix}/about`}>{t('footer.about')}</a>
+    <a href={`${prefix}/contact`}>{t('footer.contact')}</a>
+    <a href={`${prefix}/privacy`}>{t('footer.privacy')}</a>
+    <a href={`${prefix}/terms`}>{t('footer.terms')}</a>
   </div>
   <div class="copyright">&copy; {today.getFullYear()} | rhcwlq89.</div>
 </footer>
