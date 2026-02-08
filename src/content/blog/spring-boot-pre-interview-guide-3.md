@@ -1,6 +1,6 @@
 ---
 title: "스프링 사전과제 가이드 3편: Documentation & AOP"
-description: "API 문서화, 로깅, AOP 등 횡단 관심사 가이드"
+description: "Swagger/SpringDoc 기반 API 문서화, SLF4J 로깅 설정, AOP를 활용한 횡단 관심사 분리를 다루는 Spring Boot 사전과제 가이드"
 pubDate: 2026-01-13T10:00:00+09:00
 tags: ["Spring Boot", "Swagger", "Logging", "AOP", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"

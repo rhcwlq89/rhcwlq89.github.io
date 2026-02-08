@@ -3,7 +3,13 @@ const today = new Date();
 ---
 
 <footer>
-  &copy; {today.getFullYear()} | rhcwlq89.
+  <div class="footer-links">
+    <a href="/about">About</a>
+    <a href="/contact">Contact</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/terms">Terms</a>
+  </div>
+  <div class="copyright">&copy; {today.getFullYear()} | rhcwlq89.</div>
 </footer>
 <style>
   footer {
@@ -14,17 +20,22 @@ const today = new Date();
     color: rgb(var(--gray));
     text-align: center;
   }
-  .social-links {
+  .footer-links {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 1em;
-    margin-top: 1em;
+    gap: 0.9em;
+    margin-bottom: 0.9em;
   }
-  .social-links a {
+  .footer-links a {
     text-decoration: none;
     color: rgb(var(--gray));
   }
-  .social-links a:hover {
+  .footer-links a:hover {
     color: rgb(var(--gray-dark));
+    text-decoration: underline;
+  }
+  .copyright {
+    font-size: 0.95em;
   }
 </style>

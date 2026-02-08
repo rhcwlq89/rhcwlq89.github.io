@@ -1,6 +1,6 @@
 ---
 title: "스프링 사전과제 가이드 2편: Database & Testing"
-description: "데이터베이스 설정과 테스트 전략 가이드"
+description: "H2/MySQL 설정, JPA 엔티티 매핑, 테스트 전략(단위·통합·슬라이스)을 실무 예제와 함께 정리한 Spring Boot 사전과제 가이드"
 pubDate: 2026-01-11T10:00:00+09:00
 tags: ["Spring Boot", "JPA", "Testing", "Backend", "사전과제"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"

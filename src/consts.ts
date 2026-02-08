@@ -7,3 +7,4 @@ export const SITE_URL = 'https://rhcwlq89.github.io';
 export const SITE_LOCALE = 'ko_KR';
 export const SITE_LANG = 'ko';
 export const AUTHOR_NAME = 'rhcwlq89';
+export const CONTACT_EMAIL = 'ccaja21@gmail.com';

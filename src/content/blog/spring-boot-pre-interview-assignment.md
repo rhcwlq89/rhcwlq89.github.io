@@ -1,6 +1,6 @@
 ---
 title: "스프링 사전과제 가이드: 종합 과제"
-description: "실무형 Spring Boot 백엔드 개발 과제 - 온라인 마켓플레이스 API 구현"
+description: "Spring Boot 기반 온라인 마켓플레이스 REST API 종합 과제 — 상품·주문·회원 도메인 설계부터 테스트·배포까지 실무형 구현 가이드"
 pubDate: 2026-01-23T10:00:00+09:00
 tags: ["Spring Boot", "사전과제", "Backend", "REST API", "Assignment"]
 heroImage: "../../assets/PreinterviewTaskGuide.png"
