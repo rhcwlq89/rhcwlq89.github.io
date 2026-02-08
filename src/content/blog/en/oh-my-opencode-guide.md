@@ -4,6 +4,7 @@ description: "A practical guide to installing Oh My OpenCode plugin for OpenCode
 pubDate: 2026-02-08T20:00:00+09:00
 lang: en
 tags: ["OpenCode", "Oh My OpenCode", "AI", "Coding Agent", "Terminal", "DevOps"]
+heroImage: "../../assets/OhMyOpenCodeSetupGuide.png"
 ---
 
 ## Introduction

@@ -3,6 +3,7 @@ title: "Oh My OpenCode 설정 가이드: 터미널 AI 코딩 에이전트 완전
 description: "OpenCode에 Oh My OpenCode 플러그인을 설치하고 멀티 에이전트, LSP/AST 도구, MCP 통합까지 설정하는 실무 가이드"
 pubDate: 2026-02-08T20:00:00+09:00
 tags: ["OpenCode", "Oh My OpenCode", "AI", "Coding Agent", "Terminal", "DevOps"]
+heroImage: "../../assets/OhMyOpenCodeSetupGuide.png"
 ---
 
 ## 서론
