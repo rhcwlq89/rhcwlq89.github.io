@@ -52,6 +52,8 @@ opencode --version
 
 ## 2. Oh My OpenCode 설치
 
+> 아래 2.1 ~ 2.2는 **택 1**이다. 하나만 수행하면 된다.
+
 ### 2.1 대화형 설치 (권장)
 
 가장 간편한 방법은 대화형 설치 CLI를 실행하는 것이다:
@@ -64,6 +66,8 @@ bunx oh-my-opencode install
 npx oh-my-opencode install
 ```
 
+> **bunx / npx란?** 패키지를 설치하지 않고 바로 실행할 수 있는 CLI 도구다. `bunx`는 [Bun](https://bun.sh) 런타임에 포함된 패키지 러너이고, `npx`는 Node.js에 포함된 패키지 러너다. 둘 다 npm 레지스트리에서 패키지를 다운로드하여 실행하므로 현재 디렉토리와 무관하게 어디서든 동일하게 동작한다. `bunx`가 실행 속도가 더 빠르기 때문에 권장된다.
+
 ### 2.2 에이전트를 통한 설치
 
 OpenCode나 Claude Code 등 AI 에이전트에 다음 프롬프트를 입력하면 자동 설치를 수행한다:
@@ -73,12 +77,20 @@ Install and configure oh-my-opencode by following the instructions here:
 https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/refs/heads/master/docs/guide/installation.md
 ```
 
-### 2.3 설치 시 구독 플래그
+#### 구독 플래그 (선택)
 
-설치 시 보유한 AI 서비스 구독에 따라 플래그를 지정한다:
+2.1의 설치 명령에 보유한 AI 서비스 구독에 따라 플래그를 추가할 수 있다:
 
 ```bash
+# bunx 사용
 bunx oh-my-opencode install --no-tui \
+  --claude=yes \
+  --openai=yes \
+  --gemini=yes \
+  --copilot=no
+
+# npx 사용
+npx oh-my-opencode install --no-tui \
   --claude=yes \
   --openai=yes \
   --gemini=yes \
@@ -87,7 +99,7 @@ bunx oh-my-opencode install --no-tui \
 
 | 플래그 | 설명 | 값 |
 |--------|------|-----|
-| `--claude` | Anthropic Claude 구독 | `yes`, `no`, `max20` (Max 20x 모드) |
+| `--claude` | Anthropic Claude 구독 | `yes` (Pro / Max 5x), `no`, `max20` (Max 20x) |
 | `--openai` | OpenAI/ChatGPT Plus | `yes`, `no` |
 | `--gemini` | Google Gemini | `yes`, `no` |
 | `--copilot` | GitHub Copilot | `yes`, `no` |
@@ -109,7 +121,7 @@ bunx oh-my-opencode install --no-tui \
 
 > **중요**: Claude 구독이 없으면 핵심 에이전트인 Sisyphus가 제대로 작동하지 않을 수 있다.
 
-### 2.4 설치 확인
+### 2.3 설치 확인
 
 ```bash
 # 플러그인 등록 확인
@@ -128,16 +140,45 @@ cat ~/.config/opencode/opencode.json
 
 ## 3. 인증 설정
 
-### 3.1 Anthropic (Claude)
+### 3.1 인증 흐름
+
+모든 프로바이더는 동일한 명령어로 인증한다:
 
 ```bash
 opencode auth login
-# Anthropic → Claude Pro/Max → OAuth 인증 완료
 ```
 
-### 3.2 Google Gemini (Antigravity OAuth)
+실행하면 프로바이더 선택 화면이 나타난다:
 
-Gemini를 사용하려면 `opencode-antigravity-auth` 플러그인을 추가해야 한다:
+```
+◆  Select provider
+
+│  ● OpenCode Zen (recommended)
+│  ○ Anthropic
+│  ○ GitHub Copilot
+│  ○ OpenAI
+│  ○ Google
+│  ...
+```
+
+각 프로바이더의 의미는 다음과 같다:
+
+| 프로바이더 | 설명 | 필요한 구독 |
+|-----------|------|------------|
+| **OpenCode Zen** | OpenCode 팀이 운영하는 종량제 모델 게이트웨이. 별도 AI 구독 없이 사용 가능 | 없음 (종량제) |
+| **Anthropic** | Claude 모델 직접 사용 (⚠️ 현재 제한, 9.1 참고) | Anthropic API 키 (별도 발급) |
+| **GitHub Copilot** | GitHub Copilot을 통한 모델 접근 | Copilot Pro / Pro+ / Business / Enterprise |
+| **OpenAI** | GPT 모델 직접 사용 | ChatGPT Plus / Pro |
+| **Google** | Gemini 모델 사용 (별도 플러그인 필요) | Gemini Advanced |
+
+> **주의**: Claude Pro/Max 구독은 **Claude Code(Anthropic 공식 도구) 전용**이며, OpenCode에서는 사용할 수 없다 (9.1 참고). OpenCode에서 Claude를 쓰려면 별도 Anthropic API 키가 필요하다. Claude 구독만 보유한 경우 OpenCode Zen이나 GitHub Copilot 등 다른 프로바이더를 선택하는 것을 권장한다.
+
+화살표 키(↑/↓)로 원하는 프로바이더를 선택하고 `Enter`를 누르면 브라우저가 열리며 OAuth 인증이 진행된다. 인증할 프로바이더마다 `opencode auth login`을 반복 실행하면 된다.
+
+### 3.2 프로바이더별 참고 사항
+
+**Google Gemini**
+- Gemini를 사용하려면 먼저 `opencode-antigravity-auth` 플러그인을 추가해야 한다:
 
 ```json
 {
@@ -145,21 +186,11 @@ Gemini를 사용하려면 `opencode-antigravity-auth` 플러그인을 추가해�
 }
 ```
 
-```bash
-opencode auth login
-# Google → OAuth with Google (Antigravity)
-```
+- `Google`을 선택 → OAuth with Google (Antigravity)로 인증
+- 최대 10개 Google 계정을 등록할 수 있으며, Rate Limit 발생 시 자동으로 계정을 전환한다.
 
-> 최대 10개 Google 계정을 등록할 수 있으며, Rate Limit 발생 시 자동으로 계정을 전환한다.
-
-### 3.3 GitHub Copilot
-
-2026년 1월부터 GitHub가 OpenCode와 공식 제휴하여, Copilot 구독자(Pro, Pro+, Business, Enterprise)는 추가 라이선스 없이 인증할 수 있다:
-
-```bash
-opencode auth login
-# GitHub → OAuth 인증
-```
+**GitHub Copilot**
+- 2026년 1월부터 GitHub가 OpenCode와 공식 제휴하여, Copilot 구독자(Pro, Pro+, Business, Enterprise)는 추가 라이선스 없이 인증할 수 있다.
 
 ### 3.4 프로바이더 우선순위
 
@@ -180,8 +211,10 @@ Oh My OpenCode의 핵심은 **역할별 전문 에이전트 시스템**이다. �
 
 ### 4.1 주요 에이전트
 
-| 에이전트 | 모델 | 역할 |
-|----------|------|------|
+아래는 모든 AI 서비스를 구독했을 때의 **기본 모델 배정**이다. 모든 서비스를 구독할 필요는 없으며, 설치 시 지정한 구독 플래그(2.1 참고)에 따라 사용 가능한 모델로 자동 조정된다. 모델을 직접 변경하고 싶다면 5.2를 참고한다.
+
+| 에이전트 | 기본 모델 | 역할 |
+|----------|-----------|------|
 | **Sisyphus** | Claude Opus 4.5 High | 팀 리더 — 작업 조율, 병렬 에이전트 관리 |
 | **Hephaestus** | GPT 5.2 Codex Medium | 자율적 딥 워커 — 목표 지향 실행 |
 | **Oracle** | GPT 5.2 Medium | 설계 컨설팅, 디버깅, 아키텍처 |
@@ -237,9 +270,22 @@ Oh My OpenCode의 핵심은 **역할별 전문 에이전트 시스템**이다. �
 
 > 두 파일 모두 JSONC 형식을 지원한다 (주석, 후행 쉼표 허용).
 
+```bash
+# 전역 설정 파일 열기 (없으면 생성)
+mkdir -p ~/.config/opencode
+vim ~/.config/opencode/oh-my-opencode.json
+
+# 프로젝트 로컬 설정 파일 열기 (없으면 생성)
+mkdir -p .opencode
+vim .opencode/oh-my-opencode.json
+
+# 현재 설정 내용 확인
+cat ~/.config/opencode/oh-my-opencode.json
+```
+
 ### 5.2 에이전트 모델 변경
 
-기본 모델이 아닌 다른 모델을 사용하고 싶을 때:
+기본 모델이 아닌 다른 모델을 사용하고 싶을 때, 설정 파일에 다음 내용을 추가한다:
 
 ```jsonc
 {
@@ -260,7 +306,79 @@ Oh My OpenCode의 핵심은 **역할별 전문 에이전트 시스템**이다. �
 }
 ```
 
-### 5.3 백그라운드 작업 동시성 제한
+### 5.3 에이전트 페르소나 (프롬프트 커스터마이징)
+
+에이전트의 행동 방식을 프롬프트로 제어할 수 있다. 두 가지 방식이 있다:
+
+- **`prompt`** — 기본 시스템 프롬프트를 **완전히 교체**한다. 에이전트의 기본 역할 정의까지 덮어쓰므로 주의가 필요하다.
+- **`prompt_append`** — 기본 프롬프트를 **유지하면서 추가 지시만 덧붙인다**. 대부분의 경우 이쪽을 권장한다.
+
+```jsonc
+{
+  "agents": {
+    "sisyphus": {
+      // 기본 프롬프트 유지 + 추가 지시
+      "prompt_append": "항상 한국어로 응답하고, 코드 주석은 영어로 작성해줘."
+    },
+    "hephaestus": {
+      "prompt_append": "구현 완료 후 반드시 유닛 테스트를 함께 작성해줘."
+    },
+    "explore": {
+      "prompt_append": "탐색 결과를 마크다운 표 형식으로 정리해줘."
+    }
+  }
+}
+```
+
+`temperature` 값으로 응답의 창의성 수준도 조절할 수 있다:
+
+| temperature | 특성 | 추천 용도 |
+|-------------|------|-----------|
+| **0.0 ~ 0.3** | 보수적, 일관성 높음 | 코드 생성, 리팩토링 |
+| **0.4 ~ 0.7** | 균형 잡힌 창의성 | 일반 작업, 설계 |
+| **0.8 ~ 1.0** | 창의적, 다양한 응답 | 브레인스토밍, 문서 작성 |
+
+```jsonc
+{
+  "agents": {
+    "oracle": {
+      "temperature": 0.3,
+      "prompt_append": "코드 리뷰 시 보안 취약점을 최우선으로 점검해줘."
+    }
+  }
+}
+```
+
+> **팁**: `prompt`로 완전히 교체하면 에이전트 고유의 역할 정의(Todo 강제 모드, 병렬 탐색 등)가 사라질 수 있다. 특별한 이유가 없다면 `prompt_append`를 사용하자.
+
+#### 멀티 에이전트 회의 활용법
+
+Oh My OpenCode의 에이전트 시스템은 단순한 작업 분배를 넘어, **여러 에이전트가 서로 다른 관점으로 토론하는 회의 구조**로 활용할 수 있다. `prompt_append`로 각 에이전트에 뚜렷한 전문가 관점을 부여하면 된다.
+
+**예시: 코드 리뷰 회의 구성**
+
+```jsonc
+{
+  "agents": {
+    "oracle": {
+      "temperature": 0.3,
+      "prompt_append": "보안 전문가 관점에서 리뷰해줘. 취약점, 인젝션, 인증 문제를 최우선으로 점검하고, 반드시 반대 의견을 먼저 제시해줘."
+    },
+    "hephaestus": {
+      "prompt_append": "성능 전문가 관점에서 구현해줘. 시간 복잡도, 메모리 사용량, 불필요한 연산을 항상 체크해줘."
+    },
+    "frontend": {
+      "prompt_append": "UX 전문가 관점에서 작업해줘. 사용자 경험, 접근성(a11y), 반응형 디자인을 최우선으로 고려해줘."
+    }
+  }
+}
+```
+
+이렇게 설정하면 Sisyphus가 작업을 분배할 때 각 에이전트가 자신의 전문 관점에서 피드백하게 된다. 결과적으로 한 명의 개발자가 보안/성능/UX 전문가로 구성된 **가상 리뷰 팀**의 피드백을 받는 효과를 얻을 수 있다.
+
+> [CrewAI](https://github.com/crewAIInc/crewAI)나 [AutoGen](https://github.com/microsoft/autogen) 같은 전문 멀티 에이전트 프레임워크도 비슷한 토론 구조를 제공한다. 더 복잡한 에이전트 간 토론이나 투표 기반 의사결정이 필요하다면 이러한 도구도 참고하자.
+
+### 5.4 백그라운드 작업 동시성 제한
 
 프로바이더별로 동시 실행 가능한 백그라운드 에이전트 수를 제한할 수 있다:
 
@@ -276,7 +394,7 @@ Oh My OpenCode의 핵심은 **역할별 전문 에이전트 시스템**이다. �
 }
 ```
 
-### 5.4 카테고리 기반 작업 위임
+### 5.5 카테고리 기반 작업 위임
 
 작업 유형별로 어떤 에이전트에게 위임할지 정의한다:
 
@@ -295,7 +413,7 @@ Oh My OpenCode의 핵심은 **역할별 전문 에이전트 시스템**이다. �
 }
 ```
 
-### 5.5 특정 기능 비활성화
+### 5.6 특정 기능 비활성화
 
 불필요한 훅이나 에이전트를 끌 수 있다:
 
@@ -313,9 +431,13 @@ Oh My OpenCode의 핵심은 **역할별 전문 에이전트 시스템**이다. �
 
 ### 6.1 Ultrawork 모드
 
-프롬프트에 `ultrawork` 또는 `ulw`를 포함하면 모든 고급 기능이 자동으로 활성화된다:
+프롬프트에 `ultrawork` 또는 `ulw`를 포함하면 모든 고급 기능이 자동으로 활성화된다. OpenCode를 실행한 뒤 입력창에 다음과 같이 입력한다:
 
-```
+```bash
+# 먼저 프로젝트 디렉토리에서 OpenCode 실행
+opencode
+
+# OpenCode 입력창에서 ulw 키워드와 함께 요청
 ulw 이 프로젝트의 인증 시스템을 리팩토링해줘
 ```
 
@@ -377,6 +499,20 @@ Oh My OpenCode의 룰 시스템을 통해 AI가 프로젝트의 원칙과 관례
 
 ### 7.1 룰 파일 구조
 
+```bash
+# 룰 디렉토리 생성
+mkdir -p .opencode/rules/auth .opencode/rules/api
+
+# 전역 규칙 파일 생성
+vim .opencode/rules/general.md
+
+# 디렉토리별 규칙 파일 생성
+vim .opencode/rules/auth/rules.md
+vim .opencode/rules/api/rules.md
+```
+
+생성된 구조는 다음과 같다:
+
 ```
 .opencode/
 ├── oh-my-opencode.json      # 프로젝트 설정
@@ -421,13 +557,56 @@ Claude Code와 호환되는 25개 이상의 훅을 제공한다:
 
 ### 9.1 Anthropic OAuth 제한
 
-2026년 1월 현재, Anthropic은 ToS 위반을 이유로 제3자 OAuth 접근을 제한했다. Oh My OpenCode 자체는 공식 OAuth 구현을 포함하지 않지만, 관련 제한 사항을 인지하고 사용해야 한다.
+2026년 1월 9일, Anthropic은 서드파티 도구에서 Claude OAuth 토큰을 사용하는 것을 차단했다.
+
+**배경**: 많은 개발자들이 Claude Max 구독으로 발급받은 OAuth 토큰을 OpenCode 등 서드파티 도구에서 사용했다. 정가 API 대비 저렴하게 Claude를 대량 사용할 수 있었기 때문이다.
+
+**차단 이후 에러 메시지:**
+
+```
+This credential is only authorized for use with Claude Code
+and cannot be used for other API requests.
+```
+
+**Anthropic의 입장:**
+
+- 서드파티 도구가 Claude Code를 위장(스푸핑)하여 접근하는 것은 **ToS(이용약관) 위반**
+- 텔레메트리 없는 비정상 트래픽이 디버깅과 레이트 리밋 관리를 어렵게 만듦
+- 공식 통합 방법은 API 키 사용뿐이라는 입장
+
+**계정 밴 위험은?**
+
+초기(2026년 1월)에는 일부 계정이 일시 정지된 사례가 있었으나, Anthropic이 해당 밴을 모두 해제했다고 밝혔다. 현재는 계정 밴이 아닌 **토큰 거부** 방식으로 처리되어, 시도해도 인증이 실패할 뿐 계정이 정지되지는 않는다.
+
+**현재 대응 방법:**
+
+- OpenCode Zen, GitHub Copilot, OpenAI 등 **다른 프로바이더를 사용**하는 것이 가장 안전하다
+- Anthropic API 키를 직접 발급받아 사용하는 방법도 있다
+- Oh My OpenCode 자체는 공식 OAuth 구현을 포함하지 않지만, 이 제한 사항을 인지하고 사용해야 한다
 
 ### 9.2 사칭 사이트 주의
 
 `ohmyopencode.com`은 공식 프로젝트와 무관한 사칭 사이트다. 공식 다운로드는 반드시 GitHub 릴리스 페이지에서 해야 한다.
 
-### 9.3 버전 호환성
+### 9.3 EACCES 권한 오류 (`~/.local/share`)
+
+`opencode --version` 실행 시 다음과 같은 에러가 발생할 수 있다:
+
+```
+EACCES: permission denied, mkdir '/Users/username/.local/share'
+```
+
+이는 `~/.local` 디렉토리의 소유자가 `root`로 되어 있어 일반 사용자 권한으로 하위 디렉토리를 생성할 수 없기 때문이다. 과거에 `sudo`로 다른 도구를 설치하면서 root 소유로 생성된 경우가 많다.
+
+**해결 방법:**
+
+```bash
+sudo chown -R $(whoami):staff ~/.local
+```
+
+실행 후 `opencode --version`이 정상적으로 출력되는지 확인한다.
+
+### 9.4 버전 호환성
 
 OpenCode **1.0.132 이전 버전**에서는 구성 파일 손상 문제가 있었다 (PR#5040 이후 수정). 반드시 1.0.150 이상으로 업데이트한 후 사용하자.
 

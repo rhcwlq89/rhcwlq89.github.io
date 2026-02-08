@@ -78,6 +78,15 @@ h6 {
 	color: rgb(var(--black));
 	line-height: 1.2;
 }
+.prose h2 {
+	margin-top: 2.5rem;
+}
+.prose h3 {
+	margin-top: 2rem;
+}
+.prose h4 {
+	margin-top: 1.5rem;
+}
 h1 {
 	font-size: 2.5em;
 }
@@ -111,6 +120,13 @@ p {
 	margin-bottom: 1em;
 }
 .prose p {
+	margin-bottom: 0.8em;
+}
+.prose ul,
+.prose ol {
+	margin: 0.8em 0;
+}
+.prose li {
 	margin-bottom: 0.3em;
 }
 textarea {
@@ -151,14 +167,41 @@ pre {
 	padding: 1.5em;
 	border-radius: 8px;
 	overflow-x: auto;
+	position: relative;
+	margin: 1.2em 0;
 }
 pre > code {
 	all: unset;
 }
+.copy-button {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	color: rgba(255, 255, 255, 0.7);
+	cursor: pointer;
+	padding: 4px 8px;
+	font-size: 0.75rem;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+}
+pre:hover .copy-button {
+	opacity: 1;
+}
+.copy-button:hover {
+	background: rgba(255, 255, 255, 0.2);
+	color: #fff;
+}
+.copy-button.copied {
+	color: #4ade80;
+	border-color: #4ade80;
+}
 blockquote {
 	border-left: 4px solid var(--accent);
 	padding: 0.5em 0 0.5em 1em;
-	margin: 1em 0;
+	margin: 1.2em 0;
 	font-size: 0.9em;
 	color: rgb(var(--gray));
 	background-color: rgba(var(--gray-light), 0.3);
@@ -184,6 +227,7 @@ details[open] summary {
 hr {
 	border: none;
 	border-top: 1px solid rgb(var(--gray-light));
+	margin: 2.5em 0;
 }
 @media (max-width: 900px) {
 	body {

@@ -4,7 +4,7 @@ description: "A practical guide to installing Oh My OpenCode plugin for OpenCode
 pubDate: 2026-02-08T20:00:00+09:00
 lang: en
 tags: ["OpenCode", "Oh My OpenCode", "AI", "Coding Agent", "Terminal", "DevOps"]
-heroImage: "../../assets/OhMyOpenCodeSetupGuide.png"
+heroImage: "../../../assets/OhMyOpenCodeSetupGuide.png"
 ---
 
 ## Introduction
@@ -53,6 +53,8 @@ opencode --version
 
 ## 2. Installing Oh My OpenCode
 
+> Sections 2.1 and 2.2 are **alternative methods** — choose one.
+
 ### 2.1 Interactive Installation (Recommended)
 
 The simplest method is running the interactive installation CLI:
@@ -65,6 +67,8 @@ bunx oh-my-opencode install
 npx oh-my-opencode install
 ```
 
+> **What are bunx / npx?** They are CLI tools that let you run packages without installing them globally. `bunx` is the package runner included with [Bun](https://bun.sh), and `npx` is the package runner included with Node.js. Both download packages from the npm registry and execute them, so they work the same regardless of your current directory. `bunx` is recommended as it offers faster execution.
+
 ### 2.2 Agent-Assisted Installation
 
 Enter the following prompt into OpenCode, Claude Code, or any AI agent for automatic installation:
@@ -74,12 +78,20 @@ Install and configure oh-my-opencode by following the instructions here:
 https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/refs/heads/master/docs/guide/installation.md
 ```
 
-### 2.3 Subscription Flags
+#### Subscription Flags (Optional)
 
-Specify flags based on your AI service subscriptions during installation:
+You can append flags to the 2.1 install command based on your AI service subscriptions:
 
 ```bash
+# Using bunx
 bunx oh-my-opencode install --no-tui \
+  --claude=yes \
+  --openai=yes \
+  --gemini=yes \
+  --copilot=no
+
+# Using npx
+npx oh-my-opencode install --no-tui \
   --claude=yes \
   --openai=yes \
   --gemini=yes \
@@ -88,7 +100,7 @@ bunx oh-my-opencode install --no-tui \
 
 | Flag | Description | Values |
 |------|-------------|--------|
-| `--claude` | Anthropic Claude subscription | `yes`, `no`, `max20` (Max 20x mode) |
+| `--claude` | Anthropic Claude subscription | `yes` (Pro / Max 5x), `no`, `max20` (Max 20x) |
 | `--openai` | OpenAI/ChatGPT Plus | `yes`, `no` |
 | `--gemini` | Google Gemini | `yes`, `no` |
 | `--copilot` | GitHub Copilot | `yes`, `no` |
@@ -110,7 +122,7 @@ bunx oh-my-opencode install --no-tui \
 
 > **Important**: Without a Claude subscription, the core agent Sisyphus may not function properly.
 
-### 2.4 Verify Installation
+### 2.3 Verify Installation
 
 ```bash
 # Check plugin registration
@@ -129,16 +141,45 @@ If the `plugin` array in `opencode.json` contains `"oh-my-opencode"`, the instal
 
 ## 3. Authentication Setup
 
-### 3.1 Anthropic (Claude)
+### 3.1 Authentication Flow
+
+All providers are authenticated using the same command:
 
 ```bash
 opencode auth login
-# Anthropic → Claude Pro/Max → Complete OAuth flow
 ```
 
-### 3.2 Google Gemini (Antigravity OAuth)
+A provider selection screen will appear:
 
-To use Gemini, you need to add the `opencode-antigravity-auth` plugin:
+```
+◆  Select provider
+
+│  ● OpenCode Zen (recommended)
+│  ○ Anthropic
+│  ○ GitHub Copilot
+│  ○ OpenAI
+│  ○ Google
+│  ...
+```
+
+Here's what each provider means:
+
+| Provider | Description | Required Subscription |
+|----------|-------------|----------------------|
+| **OpenCode Zen** | Pay-as-you-go model gateway operated by the OpenCode team. No separate AI subscription needed | None (pay-as-you-go) |
+| **Anthropic** | Direct access to Claude models (⚠️ currently restricted, see 9.1) | Anthropic API key (separate) |
+| **GitHub Copilot** | Model access through GitHub Copilot | Copilot Pro / Pro+ / Business / Enterprise |
+| **OpenAI** | Direct access to GPT models | ChatGPT Plus / Pro |
+| **Google** | Gemini model access (requires additional plugin) | Gemini Advanced |
+
+> **Note**: Claude Pro/Max subscriptions are **exclusive to Claude Code (Anthropic's official tool)** and cannot be used with OpenCode (see 9.1). To use Claude in OpenCode, you need a separate Anthropic API key. If you only have a Claude subscription, it's recommended to choose another provider such as OpenCode Zen or GitHub Copilot.
+
+Use the arrow keys (↑/↓) to select your desired provider and press `Enter`. A browser window will open to complete the OAuth flow. Repeat `opencode auth login` for each provider you want to authenticate.
+
+### 3.2 Provider-Specific Notes
+
+**Google Gemini**
+- To use Gemini, first add the `opencode-antigravity-auth` plugin:
 
 ```json
 {
@@ -146,21 +187,11 @@ To use Gemini, you need to add the `opencode-antigravity-auth` plugin:
 }
 ```
 
-```bash
-opencode auth login
-# Google → OAuth with Google (Antigravity)
-```
+- Select `Google` → authenticate via OAuth with Google (Antigravity)
+- You can register up to 10 Google accounts, and when rate limits hit, accounts are automatically rotated.
 
-> You can register up to 10 Google accounts, and when rate limits hit, accounts are automatically rotated.
-
-### 3.3 GitHub Copilot
-
-Since January 2026, GitHub officially partnered with OpenCode, allowing Copilot subscribers (Pro, Pro+, Business, Enterprise) to authenticate without an additional license:
-
-```bash
-opencode auth login
-# GitHub → OAuth authentication
-```
+**GitHub Copilot**
+- Since January 2026, GitHub officially partnered with OpenCode, allowing Copilot subscribers (Pro, Pro+, Business, Enterprise) to authenticate without an additional license.
 
 ### 3.4 Provider Priority
 
@@ -181,8 +212,10 @@ The core of Oh My OpenCode is its **role-based specialized agent system**. Each 
 
 ### 4.1 Main Agents
 
-| Agent | Model | Role |
-|-------|-------|------|
+The table below shows the **default model assignments** when all AI services are subscribed. You don't need to subscribe to all of them — models are automatically adjusted based on the subscription flags you specified during installation (see 2.1). To manually change models, see section 5.2.
+
+| Agent | Default Model | Role |
+|-------|---------------|------|
 | **Sisyphus** | Claude Opus 4.5 High | Team leader — task coordination, parallel agent management |
 | **Hephaestus** | GPT 5.2 Codex Medium | Autonomous deep worker — goal-oriented execution |
 | **Oracle** | GPT 5.2 Medium | Design consultation, debugging, architecture |
@@ -238,9 +271,22 @@ An autonomous agent that explores and implements on its own when given a goal:
 
 > Both files support JSONC format (comments and trailing commas allowed).
 
+```bash
+# Open global config file (creates if not exists)
+mkdir -p ~/.config/opencode
+vim ~/.config/opencode/oh-my-opencode.json
+
+# Open project-local config file (creates if not exists)
+mkdir -p .opencode
+vim .opencode/oh-my-opencode.json
+
+# Check current config contents
+cat ~/.config/opencode/oh-my-opencode.json
+```
+
 ### 5.2 Changing Agent Models
 
-When you want to use a model different from the default:
+When you want to use a model different from the default, add the following to your config file:
 
 ```jsonc
 {
@@ -261,7 +307,79 @@ When you want to use a model different from the default:
 }
 ```
 
-### 5.3 Background Task Concurrency Limits
+### 5.3 Agent Persona (Prompt Customization)
+
+You can control how each agent behaves through prompt customization. There are two approaches:
+
+- **`prompt`** — **Completely replaces** the default system prompt. Use with caution as it overwrites the agent's built-in role definition.
+- **`prompt_append`** — **Adds instructions while keeping** the default prompt intact. Recommended for most cases.
+
+```jsonc
+{
+  "agents": {
+    "sisyphus": {
+      // Keep default prompt + add extra instructions
+      "prompt_append": "Always respond in English and write code comments in English."
+    },
+    "hephaestus": {
+      "prompt_append": "Always write unit tests after completing the implementation."
+    },
+    "explore": {
+      "prompt_append": "Organize exploration results in markdown table format."
+    }
+  }
+}
+```
+
+You can also adjust the creativity level of responses using the `temperature` value:
+
+| temperature | Behavior | Recommended Use |
+|-------------|----------|-----------------|
+| **0.0 ~ 0.3** | Conservative, highly consistent | Code generation, refactoring |
+| **0.4 ~ 0.7** | Balanced creativity | General tasks, design |
+| **0.8 ~ 1.0** | Creative, diverse responses | Brainstorming, documentation |
+
+```jsonc
+{
+  "agents": {
+    "oracle": {
+      "temperature": 0.3,
+      "prompt_append": "Prioritize checking for security vulnerabilities during code review."
+    }
+  }
+}
+```
+
+> **Tip**: Completely replacing with `prompt` may remove the agent's built-in role behaviors (Todo enforcement mode, parallel exploration, etc.). Unless you have a specific reason, use `prompt_append` instead.
+
+#### Multi-Agent Meeting Strategy
+
+Oh My OpenCode's agent system goes beyond simple task distribution — it can be configured as a **meeting structure where multiple agents debate from different perspectives**. Use `prompt_append` to give each agent a distinct expert viewpoint.
+
+**Example: Code Review Meeting Setup**
+
+```jsonc
+{
+  "agents": {
+    "oracle": {
+      "temperature": 0.3,
+      "prompt_append": "Review from a security expert perspective. Prioritize vulnerabilities, injection risks, and auth issues. Always present counterarguments first."
+    },
+    "hephaestus": {
+      "prompt_append": "Implement from a performance expert perspective. Always check time complexity, memory usage, and unnecessary computations."
+    },
+    "frontend": {
+      "prompt_append": "Work from a UX expert perspective. Prioritize user experience, accessibility (a11y), and responsive design."
+    }
+  }
+}
+```
+
+With this setup, when Sisyphus distributes tasks, each agent provides feedback from its specialized perspective. The result is like having a **virtual review team** of security, performance, and UX experts — all from a single developer's workstation.
+
+> Multi-agent frameworks like [CrewAI](https://github.com/crewAIInc/crewAI) and [AutoGen](https://github.com/microsoft/autogen) offer similar debate structures. If you need more complex agent-to-agent discussions or vote-based decision-making, check out these tools as well.
+
+### 5.4 Background Task Concurrency Limits
 
 You can limit the number of concurrent background agents per provider:
 
@@ -277,7 +395,7 @@ You can limit the number of concurrent background agents per provider:
 }
 ```
 
-### 5.4 Category-Based Task Delegation
+### 5.5 Category-Based Task Delegation
 
 Define which agent handles which type of task:
 
@@ -296,7 +414,7 @@ Define which agent handles which type of task:
 }
 ```
 
-### 5.5 Disabling Specific Features
+### 5.6 Disabling Specific Features
 
 Turn off unnecessary hooks or agents:
 
@@ -314,9 +432,13 @@ Turn off unnecessary hooks or agents:
 
 ### 6.1 Ultrawork Mode
 
-Include `ultrawork` or `ulw` in your prompt to automatically activate all advanced features:
+Include `ultrawork` or `ulw` in your prompt to automatically activate all advanced features. Launch OpenCode in your project directory and type:
 
-```
+```bash
+# First, launch OpenCode in your project directory
+opencode
+
+# In the OpenCode input, type your request with the ulw keyword
 ulw refactor the authentication system for this project
 ```
 
@@ -378,6 +500,20 @@ Oh My OpenCode's rules system allows the AI to automatically learn your project'
 
 ### 7.1 Rules File Structure
 
+```bash
+# Create rules directories
+mkdir -p .opencode/rules/auth .opencode/rules/api
+
+# Create global rules file
+vim .opencode/rules/general.md
+
+# Create directory-specific rules files
+vim .opencode/rules/auth/rules.md
+vim .opencode/rules/api/rules.md
+```
+
+The resulting structure looks like this:
+
 ```
 .opencode/
 ├── oh-my-opencode.json      # Project config
@@ -422,13 +558,56 @@ Provides 25+ hooks compatible with Claude Code:
 
 ### 9.1 Anthropic OAuth Restriction
 
-As of January 2026, Anthropic restricted third-party OAuth access citing Terms of Service violations. Oh My OpenCode itself does not include a custom OAuth implementation, but you should be aware of these restrictions when using it.
+On January 9, 2026, Anthropic blocked third-party tools from using Claude OAuth tokens.
+
+**Background**: Many developers were using OAuth tokens from their Claude Max subscriptions in third-party tools like OpenCode. This allowed heavy Claude usage at a flat subscription rate, much cheaper than API pricing.
+
+**Error message after the block:**
+
+```
+This credential is only authorized for use with Claude Code
+and cannot be used for other API requests.
+```
+
+**Anthropic's position:**
+
+- Third-party tools spoofing Claude Code to gain access is a **Terms of Service violation**
+- Traffic without telemetry creates abnormal patterns that complicate debugging and rate limit management
+- The only officially supported integration method is via API keys
+
+**Risk of account ban?**
+
+In the early days (January 2026), some accounts were temporarily suspended, but Anthropic has confirmed that all such bans have been lifted. Currently, the system uses **token rejection** rather than account bans — attempting to authenticate will simply fail without any risk to your account.
+
+**Current workarounds:**
+
+- Using **alternative providers** such as OpenCode Zen, GitHub Copilot, or OpenAI is the safest approach
+- You can also use a directly issued Anthropic API key
+- Oh My OpenCode itself does not include a custom OAuth implementation, but you should be aware of these restrictions when using it
 
 ### 9.2 Beware of Impersonation Sites
 
 `ohmyopencode.com` is an impersonation site unaffiliated with the official project. Always download from the official GitHub releases page.
 
-### 9.3 Version Compatibility
+### 9.3 EACCES Permission Error (`~/.local/share`)
+
+When running `opencode --version`, you may encounter the following error:
+
+```
+EACCES: permission denied, mkdir '/Users/username/.local/share'
+```
+
+This happens because the `~/.local` directory is owned by `root`, preventing your user account from creating subdirectories. This commonly occurs when other tools were previously installed using `sudo`.
+
+**Solution:**
+
+```bash
+sudo chown -R $(whoami):staff ~/.local
+```
+
+After running this command, verify that `opencode --version` outputs correctly.
+
+### 9.4 Version Compatibility
 
 OpenCode **versions before 1.0.132** had configuration file corruption issues (fixed after PR#5040). Make sure to update to 1.0.150 or higher before using.
 
