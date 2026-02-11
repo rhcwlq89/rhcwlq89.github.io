@@ -1,0 +1,107 @@
+---
+import BaseHead from "../../components/BaseHead.astro";
+import Footer from "../../components/Footer.astro";
+import Header from "../../components/Header.astro";
+import { SITE_TITLE, CONTACT_EMAIL } from "../../consts";
+
+const effectiveDate = "2026-02-11";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Novi Notes | ${SITE_TITLE}`}
+      description="Novi Notes - All-in-one note app for professionals on macOS. Support page and privacy policy."
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+        <h1>Novi Notes</h1>
+        <p>All-in-one note app for professionals on macOS</p>
+
+        <hr />
+
+        <h2>About the App</h2>
+        <p>
+          Novi Notes is a native macOS note app designed for professionals.
+          Manage daily notes, documents, manuals, post-its, and calendars all in one place.
+        </p>
+
+        <h3>Key Features</h3>
+        <ul>
+          <li>Daily Notes &mdash; TODO checklists, work logs, auto carry-over of incomplete tasks</li>
+          <li>Block Editor &mdash; 15 block types (text, headings, lists, code, tables, images, audio, Mermaid diagrams, and more)</li>
+          <li>Documents & Manuals &mdash; folder organization, version history, PDF/Markdown export</li>
+          <li>Post-its &mdash; 20 colors, flexible layouts</li>
+          <li>Calendar &mdash; macOS EventKit integration, event CRUD</li>
+          <li>Wiki Links & Backlinks &mdash; connect documents together</li>
+          <li>Split View &mdash; side-by-side editing</li>
+          <li>Menu Bar &mdash; quick access to TODOs and memos</li>
+          <li>Voice Recording &mdash; Apple Speech & Whisper speech-to-text</li>
+          <li>Backup/Restore, iCloud Sync</li>
+          <li>AI Integration via MCP (optional)</li>
+        </ul>
+
+        <hr />
+
+        <h2>Support</h2>
+        <p>
+          If you encounter any issues or have feature requests, please contact us:
+        </p>
+        <ul>
+          <li>Email: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></li>
+          <li><a href="/en/contact">Contact Page</a></li>
+        </ul>
+
+        <hr />
+
+        <h2>Privacy Policy</h2>
+        <p>Effective date: {effectiveDate}</p>
+
+        <h3>1. Information We Collect</h3>
+        <p>
+          Novi Notes <strong>does not collect any personal information</strong>.
+          All data (notes, documents, settings) is stored locally on your Mac
+          and is never transmitted to external servers.
+        </p>
+
+        <h3>2. iCloud Sync</h3>
+        <p>
+          If you enable iCloud sync, your data is stored in your iCloud account
+          via Apple's CloudKit. This is managed under Apple's
+          <a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+          The developer has no access to this data.
+        </p>
+
+        <h3>3. MCP Integration (Optional)</h3>
+        <p>
+          When the MCP (Model Context Protocol) feature is enabled, data is
+          exchanged with Claude Desktop or Claude Code through the local file system.
+          All data is processed locally on your Mac and is never transmitted externally.
+        </p>
+
+        <h3>4. Permissions</h3>
+        <ul>
+          <li><strong>Microphone</strong>: Used for voice recording in audio blocks.</li>
+          <li><strong>Speech Recognition</strong>: Used for speech-to-text conversion of recordings.</li>
+          <li><strong>Calendar</strong>: Used to read and write macOS calendar events.</li>
+        </ul>
+        <p>All permissions are only used when granted by the user and solely for app functionality.</p>
+
+        <h3>5. Analytics and Advertising</h3>
+        <p>Novi Notes does not use any analytics tools, advertising, or trackers.</p>
+
+        <h3>6. Contact</h3>
+        <p>
+          For privacy-related inquiries, please contact us at
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>
