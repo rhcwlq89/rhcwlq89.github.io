@@ -57,6 +57,12 @@ All commands are run from the root of the project, from a terminal:
 
 Check out [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
 
+## Pages
+
+- [Blog](https://rhcwlq89.github.io/)
+- [Born:K-Zodiac Terms](https://rhcwlq89.github.io/born/terms/) | [Privacy Policy](https://rhcwlq89.github.io/born/privacy/)
+- [Novi Notes](https://rhcwlq89.github.io/novi/)
+
 ## Credit
 
 This theme is based off of the lovely [Bear Blog](https://github.com/HermanMartinus/bearblog/).
