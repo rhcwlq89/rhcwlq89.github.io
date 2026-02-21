@@ -1,0 +1,48 @@
+---
+import BaseHead from "../../../components/BaseHead.astro";
+import Header from "../../../components/Header.astro";
+import Footer from "../../../components/Footer.astro";
+
+const appName = "Born:K-Zodiac";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Support | ${appName}`}
+      description={`${appName} Customer Support`}
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+      <h1>{appName} Support</h1>
+
+      <h2>Contact Us</h2>
+      <p>
+        If you experience any issues or have questions about the app, please reach out via email.
+      </p>
+      <p>
+        Email: <a href="mailto:ccaja21@naver.com">ccaja21@naver.com</a>
+      </p>
+
+      <h2>FAQ</h2>
+      <ul>
+        <li><strong>Content not showing after purchase</strong> — Please close the app completely and reopen it. If the issue persists, contact us via email.</li>
+        <li><strong>I want to restore my purchases</strong> — Go to Settings and tap "Restore Purchases".</li>
+        <li><strong>I want to delete my data</strong> — Deleting the app will remove all data stored on your device.</li>
+      </ul>
+
+      <h2>Legal</h2>
+      <ul>
+        <li><a href="/en/born/privacy/">Privacy Policy</a></li>
+        <li><a href="/en/born/terms/">Terms of Service</a></li>
+      </ul>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>
