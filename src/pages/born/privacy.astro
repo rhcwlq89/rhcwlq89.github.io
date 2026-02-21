@@ -1,5 +1,7 @@
 ---
 import BaseHead from "../../components/BaseHead.astro";
+import Header from "../../components/Header.astro";
+import Footer from "../../components/Footer.astro";
 
 const effectiveDate = "2026-02-17";
 const appName = "Born:K-Zodiac";
@@ -13,17 +15,11 @@ const appName = "Born:K-Zodiac";
       description={`${appName} 개인정보 처리방침`}
       lang="ko"
     />
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 720px; margin: 0 auto; padding: 24px 16px; color: rgb(var(--gray-dark)); background-color: var(--bg-color); line-height: 1.7; }
-      h1 { font-size: 24px; margin-bottom: 4px; color: rgb(var(--black)); }
-      h2 { font-size: 18px; margin-top: 28px; color: rgb(var(--black)); }
-      p { margin: 8px 0; }
-      a { color: var(--accent); }
-      .subtitle { color: rgb(var(--gray)); font-size: 14px; }
-    </style>
   </head>
   <body>
-    <article>
+    <Header lang="ko" />
+    <main>
+      <article>
       <h1>{appName} Privacy Policy</h1>
       <p class="subtitle">시행일: {effectiveDate}</p>
 
@@ -74,6 +70,8 @@ const appName = "Born:K-Zodiac";
       <p>
         개인정보 관련 문의: <a href="mailto:ccaja21@naver.com">ccaja21@naver.com</a>
       </p>
-    </article>
+      </article>
+    </main>
+    <Footer lang="ko" />
   </body>
 </html>

@@ -1,0 +1,69 @@
+---
+import BaseHead from "../../../components/BaseHead.astro";
+import Header from "../../../components/Header.astro";
+import Footer from "../../../components/Footer.astro";
+
+const effectiveDate = "2026-02-17";
+const appName = "Born:K-Zodiac";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Terms of Use | ${appName}`}
+      description={`${appName} Terms of Use`}
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+      <h1>{appName} Terms of Use</h1>
+      <p class="subtitle">Effective date: {effectiveDate}</p>
+
+      <h2>1. Service Overview</h2>
+      <p>
+        {appName} is an entertainment app that provides Saju (Four Pillars of Destiny) analysis, monthly horoscopes, and compatibility results based on the user's date of birth.
+        The results provided by this service are for entertainment purposes only and do not replace professional advice or consultation.
+      </p>
+
+      <h2>2. Terms of Use</h2>
+      <p>
+        Users may use this app for personal, non-commercial purposes only.
+        Users must not enter or misuse another person's information without their consent.
+      </p>
+
+      <h2>3. Paid Services</h2>
+      <p>
+        Some features (compatibility, monthly horoscopes) are available through in-app purchases.
+        Payments are processed in accordance with Apple App Store policies, and refunds follow Apple's refund policy.
+      </p>
+
+      <h2>4. Disclaimer</h2>
+      <p>
+        The Saju analysis and fortune results provided by this service are entertainment content based on traditional East Asian philosophy.
+        They should not be used as a basis for important life decisions.
+      </p>
+
+      <h2>5. Intellectual Property</h2>
+      <p>
+        All intellectual property rights, including the app's design, content, and code, belong to the operator.
+        Unauthorized reproduction or distribution is prohibited.
+      </p>
+
+      <h2>6. Changes to Terms</h2>
+      <p>
+        The operator may modify these terms as needed. Any changes will be posted on this page.
+      </p>
+
+      <h2>7. Contact</h2>
+      <p>
+        For inquiries regarding these terms: <a href="mailto:ccaja21@naver.com">ccaja21@naver.com</a>
+      </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>

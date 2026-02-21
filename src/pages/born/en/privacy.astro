@@ -1,0 +1,76 @@
+---
+import BaseHead from "../../../components/BaseHead.astro";
+import Header from "../../../components/Header.astro";
+import Footer from "../../../components/Footer.astro";
+
+const effectiveDate = "2026-02-17";
+const appName = "Born:K-Zodiac";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Privacy Policy | ${appName}`}
+      description={`${appName} Privacy Policy`}
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+      <h1>{appName} Privacy Policy</h1>
+      <p class="subtitle">Effective date: {effectiveDate}</p>
+
+      <h2>1. Information We Collect</h2>
+      <p>
+        {appName} collects the following information to provide its services:
+      </p>
+      <ul>
+        <li>Date of birth, time of birth (optional), country of birth (optional)</li>
+        <li>Gender</li>
+      </ul>
+      <p>
+        This information is used solely for generating Saju analysis and fortune results, and is stored locally on your device.
+      </p>
+
+      <h2>2. Data Storage and Transmission</h2>
+      <p>
+        Your date of birth information is transmitted to our server to generate analysis results.
+        The server does not retain any personally identifiable information after generating the results.
+        Viewing history is stored only locally on your device.
+      </p>
+
+      <h2>3. Advertising</h2>
+      <p>
+        This app may display ads through Google AdMob.
+        AdMob may collect device identifiers and usage data for ad personalization.
+        For more details, see the
+        <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>.
+      </p>
+
+      <h2>4. In-App Purchases</h2>
+      <p>
+        Payment information is processed directly by the Apple App Store. This app does not access your payment information.
+      </p>
+
+      <h2>5. Third-Party Disclosure</h2>
+      <p>
+        The operator does not share collected information with third parties except as required by law.
+      </p>
+
+      <h2>6. Data Deletion</h2>
+      <p>
+        Deleting the app will remove all data stored on your device.
+      </p>
+
+      <h2>7. Contact</h2>
+      <p>
+        For privacy-related inquiries: <a href="mailto:ccaja21@naver.com">ccaja21@naver.com</a>
+      </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>
