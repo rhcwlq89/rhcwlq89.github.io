@@ -19,6 +19,11 @@ const today = new Date();
     <a href={`${prefix}/privacy`}>{t('footer.privacy')}</a>
     <a href={`${prefix}/terms`}>{t('footer.terms')}</a>
   </div>
+  <div class="footer-app-links">
+    <span class="app-label">Born:K-Zodiac</span>
+    <a href="/born/privacy">{t('footer.privacy')}</a>
+    <a href="/born/terms">{t('footer.terms')}</a>
+  </div>
   <div class="copyright">&copy; {today.getFullYear()} | rhcwlq89.</div>
 </footer>
 <style>
@@ -42,6 +47,26 @@ const today = new Date();
     color: rgb(var(--gray));
   }
   .footer-links a:hover {
+    color: rgb(var(--gray-dark));
+    text-decoration: underline;
+  }
+  .footer-app-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.9em;
+    margin-bottom: 0.9em;
+  }
+  .footer-app-links .app-label {
+    font-weight: 600;
+    font-size: 0.9em;
+  }
+  .footer-app-links a {
+    text-decoration: none;
+    color: rgb(var(--gray));
+  }
+  .footer-app-links a:hover {
     color: rgb(var(--gray-dark));
     text-decoration: underline;
   }
