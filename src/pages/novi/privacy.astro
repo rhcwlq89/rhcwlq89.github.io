@@ -1,0 +1,68 @@
+---
+import BaseHead from "../../components/BaseHead.astro";
+import Footer from "../../components/Footer.astro";
+import Header from "../../components/Header.astro";
+import { CONTACT_EMAIL } from "../../consts";
+
+const effectiveDate = "2026-02-11";
+const appName = "Novi Notes";
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <BaseHead
+      title={`Privacy Policy | ${appName}`}
+      description={`${appName} 개인정보 처리방침`}
+      lang="ko"
+    />
+  </head>
+  <body>
+    <Header lang="ko" />
+    <main>
+      <article>
+        <h1>{appName} 개인정보 처리방침</h1>
+        <p class="subtitle">시행일: {effectiveDate}</p>
+
+        <h2>1. 수집하는 정보</h2>
+        <p>
+          {appName}는 <strong>어떠한 개인정보도 수집하지 않습니다</strong>.
+          모든 데이터(노트, 문서, 설정)는 사용자의 Mac에 로컬로 저장되며,
+          외부 서버로 전송되지 않습니다.
+        </p>
+
+        <h2>2. iCloud 동기화</h2>
+        <p>
+          iCloud 동기화를 활성화한 경우, 데이터는 Apple의 CloudKit을 통해 사용자의
+          iCloud 계정에 저장됩니다. 이는 Apple의
+          <a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener noreferrer">개인정보 처리방침</a>에
+          따라 관리됩니다. 개발자는 이 데이터에 접근할 수 없습니다.
+        </p>
+
+        <h2>3. MCP 연동 (선택 기능)</h2>
+        <p>
+          MCP(Model Context Protocol) 기능을 활성화하면 로컬 파일 시스템을 통해
+          Claude Desktop 또는 Claude Code와 데이터를 교환합니다.
+          이 과정에서 데이터는 사용자의 Mac 내부에서만 처리되며 외부로 전송되지 않습니다.
+        </p>
+
+        <h2>4. 권한 사용</h2>
+        <ul>
+          <li><strong>마이크</strong>: 오디오 블록 음성 녹음 기능에 사용됩니다.</li>
+          <li><strong>음성 인식</strong>: 녹음된 오디오의 텍스트 변환에 사용됩니다.</li>
+          <li><strong>캘린더</strong>: macOS 캘린더 일정 읽기/쓰기에 사용됩니다.</li>
+        </ul>
+        <p>모든 권한은 사용자가 허용한 경우에만 사용되며, 앱 기능 외 목적으로 사용하지 않습니다.</p>
+
+        <h2>5. 분석 및 광고</h2>
+        <p>{appName}는 분석 도구, 광고, 추적기를 사용하지 않습니다.</p>
+
+        <h2>6. 문의</h2>
+        <p>
+          개인정보 관련 문의는 <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>으로 연락해 주세요.
+        </p>
+      </article>
+    </main>
+    <Footer lang="ko" />
+  </body>
+</html>

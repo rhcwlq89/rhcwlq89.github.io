@@ -1,0 +1,69 @@
+---
+import BaseHead from "../../../components/BaseHead.astro";
+import Footer from "../../../components/Footer.astro";
+import Header from "../../../components/Header.astro";
+import { CONTACT_EMAIL } from "../../../consts";
+
+const effectiveDate = "2026-02-11";
+const appName = "Novi Notes";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Privacy Policy | ${appName}`}
+      description={`${appName} Privacy Policy`}
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+        <h1>{appName} Privacy Policy</h1>
+        <p class="subtitle">Effective date: {effectiveDate}</p>
+
+        <h2>1. Information We Collect</h2>
+        <p>
+          {appName} <strong>does not collect any personal information</strong>.
+          All data (notes, documents, settings) is stored locally on your Mac
+          and is never transmitted to external servers.
+        </p>
+
+        <h2>2. iCloud Sync</h2>
+        <p>
+          If you enable iCloud sync, your data is stored in your iCloud account
+          via Apple's CloudKit. This is managed under Apple's
+          <a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+          The developer has no access to this data.
+        </p>
+
+        <h2>3. MCP Integration (Optional)</h2>
+        <p>
+          When the MCP (Model Context Protocol) feature is enabled, data is
+          exchanged with Claude Desktop or Claude Code through the local file system.
+          All data is processed locally on your Mac and is never transmitted externally.
+        </p>
+
+        <h2>4. Permissions</h2>
+        <ul>
+          <li><strong>Microphone</strong>: Used for voice recording in audio blocks.</li>
+          <li><strong>Speech Recognition</strong>: Used for speech-to-text conversion of recordings.</li>
+          <li><strong>Calendar</strong>: Used to read and write macOS calendar events.</li>
+        </ul>
+        <p>All permissions are only used when granted by the user and solely for app functionality.</p>
+
+        <h2>5. Analytics and Advertising</h2>
+        <p>{appName} does not use any analytics tools, advertising, or trackers.</p>
+
+        <h2>6. Contact</h2>
+        <p>
+          For privacy-related inquiries, please contact us at
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>
