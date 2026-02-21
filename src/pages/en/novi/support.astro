@@ -1,0 +1,49 @@
+---
+import BaseHead from "../../../components/BaseHead.astro";
+import Header from "../../../components/Header.astro";
+import Footer from "../../../components/Footer.astro";
+import { CONTACT_EMAIL } from "../../../consts";
+
+const appName = "Novi Notes";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Support | ${appName}`}
+      description={`${appName} Customer Support`}
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+      <h1>{appName} Support</h1>
+
+      <h2>Contact Us</h2>
+      <p>
+        If you experience any issues or have questions about the app, please reach out via email.
+      </p>
+      <p>
+        Email: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      </p>
+
+      <h2>FAQ</h2>
+      <ul>
+        <li><strong>My data is gone</strong> — You can restore from a previous backup using the Backup/Restore feature. If iCloud sync is enabled, check sync status on your other devices.</li>
+        <li><strong>iCloud sync is not working</strong> — Make sure iCloud Drive is enabled in System Settings. If the issue persists, contact us via email.</li>
+        <li><strong>Voice recognition is not working</strong> — Check that Microphone and Speech Recognition permissions are granted in System Settings &gt; Privacy &amp; Security.</li>
+      </ul>
+
+      <h2>Legal</h2>
+      <ul>
+        <li><a href="/en/novi/privacy">Privacy Policy</a></li>
+        <li><a href="/en/novi/terms">Terms of Service</a></li>
+      </ul>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>

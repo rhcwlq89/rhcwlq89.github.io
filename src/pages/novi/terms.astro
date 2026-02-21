@@ -1,0 +1,70 @@
+---
+import BaseHead from "../../components/BaseHead.astro";
+import Header from "../../components/Header.astro";
+import Footer from "../../components/Footer.astro";
+import { CONTACT_EMAIL } from "../../consts";
+
+const effectiveDate = "2026-02-11";
+const appName = "Novi Notes";
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <BaseHead
+      title={`Terms of Use | ${appName}`}
+      description={`${appName} 이용약관`}
+      lang="ko"
+    />
+  </head>
+  <body>
+    <Header lang="ko" />
+    <main>
+      <article>
+      <h1>{appName} 이용약관</h1>
+      <p class="subtitle">시행일: {effectiveDate}</p>
+
+      <h2>1. 서비스 개요</h2>
+      <p>
+        {appName}는 macOS용 올인원 노트앱으로, 데일리 노트, 일반문서, 매뉴얼, 포스트잇, 캘린더 기능을 제공합니다.
+      </p>
+
+      <h2>2. 이용 조건</h2>
+      <p>
+        사용자는 본 앱을 개인적, 비상업적 목적으로만 이용할 수 있습니다.
+        앱의 기능을 악용하거나 비정상적인 방법으로 사용해서는 안 됩니다.
+      </p>
+
+      <h2>3. 데이터 관리</h2>
+      <p>
+        모든 데이터는 사용자의 Mac에 로컬로 저장됩니다.
+        iCloud 동기화를 활성화한 경우 Apple의 CloudKit을 통해 사용자의 iCloud 계정에 저장됩니다.
+        데이터의 백업 및 관리는 사용자의 책임입니다.
+      </p>
+
+      <h2>4. 면책 사항</h2>
+      <p>
+        운영자는 앱 사용 중 발생하는 데이터 손실에 대해 책임지지 않습니다.
+        중요한 데이터는 정기적으로 백업하시기 바랍니다.
+      </p>
+
+      <h2>5. 지적재산권</h2>
+      <p>
+        앱의 디자인, 콘텐츠, 코드 등 모든 지적재산권은 운영자에게 있습니다.
+        무단 복제, 배포를 금합니다.
+      </p>
+
+      <h2>6. 약관 변경</h2>
+      <p>
+        운영자는 필요 시 약관을 변경할 수 있으며, 변경 사항은 본 페이지에서 고지합니다.
+      </p>
+
+      <h2>7. 문의</h2>
+      <p>
+        이용약관 관련 문의: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      </p>
+      </article>
+    </main>
+    <Footer lang="ko" />
+  </body>
+</html>

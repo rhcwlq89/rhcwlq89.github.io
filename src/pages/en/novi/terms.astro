@@ -1,0 +1,70 @@
+---
+import BaseHead from "../../../components/BaseHead.astro";
+import Header from "../../../components/Header.astro";
+import Footer from "../../../components/Footer.astro";
+import { CONTACT_EMAIL } from "../../../consts";
+
+const effectiveDate = "2026-02-11";
+const appName = "Novi Notes";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Terms of Use | ${appName}`}
+      description={`${appName} Terms of Use`}
+      lang="en"
+    />
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <article>
+      <h1>{appName} Terms of Use</h1>
+      <p class="subtitle">Effective date: {effectiveDate}</p>
+
+      <h2>1. Service Overview</h2>
+      <p>
+        {appName} is an all-in-one note app for macOS that provides daily notes, documents, manuals, post-its, and calendar features.
+      </p>
+
+      <h2>2. Terms of Use</h2>
+      <p>
+        Users may use this app for personal, non-commercial purposes only.
+        Users must not misuse or exploit app features in an unauthorized manner.
+      </p>
+
+      <h2>3. Data Management</h2>
+      <p>
+        All data is stored locally on your Mac.
+        If iCloud sync is enabled, data is stored in your iCloud account via Apple's CloudKit.
+        Users are responsible for backing up and managing their own data.
+      </p>
+
+      <h2>4. Disclaimer</h2>
+      <p>
+        The operator is not responsible for any data loss that occurs during app usage.
+        Please back up important data regularly.
+      </p>
+
+      <h2>5. Intellectual Property</h2>
+      <p>
+        All intellectual property rights, including the app's design, content, and code, belong to the operator.
+        Unauthorized reproduction or distribution is prohibited.
+      </p>
+
+      <h2>6. Changes to Terms</h2>
+      <p>
+        The operator may modify these terms as needed. Any changes will be posted on this page.
+      </p>
+
+      <h2>7. Contact</h2>
+      <p>
+        For inquiries regarding these terms: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      </p>
+      </article>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>
