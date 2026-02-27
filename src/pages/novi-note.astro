@@ -8,7 +8,7 @@ import { SITE_TITLE } from "../consts";
   <head>
     <BaseHead
       title="Novi Note — 로컬 우선 AI 노트앱 (MCP 지원)"
-      description="macOS용 로컬 우선 노트앱. MCP를 통해 ChatGPT, Gemini, Claude와 바로 연동. 플러그인 없이, API 키 없이, 구독 없이."
+      description="macOS용 로컬 우선 노트앱. MCP를 통해 Claude와 바로 연동. 플러그인 없이, API 키 없이, 구독 없이. 일회성 구매."
       lang="ko"
     />
     <style>
@@ -505,7 +505,7 @@ import { SITE_TITLE } from "../consts";
 
         <p class="hero-sub">
           MCP를 통해 AI와 바로 연동되는 로컬 우선 노트앱.
-          ChatGPT, Gemini, Claude와 함께 &mdash; 플러그인 없이, API 키 없이, 구독 없이.
+          Claude Desktop과 Claude Code 지원 &mdash; 플러그인 없이, API 키 없이, 구독 없이.
         </p>
 
         <div class="hero-buttons">
@@ -538,17 +538,17 @@ import { SITE_TITLE } from "../consts";
           <div class="problem-card">
             <span class="icon">💰</span>
             <h3>매달 구독료 결제</h3>
-            <p>Notion, Bear는 노트 하나 쓰려고 구독료를 냅니다. 생산성 도구에 매달 돈을 낼 필요가 있을까요?</p>
+            <p>대부분의 노트앱은 구독을 요구합니다. 생산성 도구에 매달 돈을 낼 필요가 있을까요?</p>
           </div>
           <div class="problem-card">
             <span class="icon">🔧</span>
             <h3>AI 연동은 직접 설정</h3>
-            <p>Obsidian은 플러그인과 API 키가 필요합니다. Notion은 AI에 추가 요금을 받습니다. 노트에 AI를 붙이는 게 이렇게 복잡해야 하나요?</p>
+            <p>플러그인을 설치하고, API 키를 발급받고, 추가 요금을 내야 합니다. 노트에 AI를 붙이는 게 이렇게 복잡해야 하나요?</p>
           </div>
           <div class="problem-card">
             <span class="icon">⚖️</span>
             <h3>구조 아니면 단순함</h3>
-            <p>Notion은 무겁고, Bear는 가볍지만 단조롭고, Obsidian은 설정이 필요합니다. 강력하면서 단순한 노트앱은 왜 없을까요?</p>
+            <p>기능이 많으면 무겁고, 가벼우면 단조롭고, 유연하면 설정이 복잡합니다. 강력하면서 단순한 노트앱은 왜 없을까요?</p>
           </div>
         </div>
       </div>
@@ -564,7 +564,7 @@ import { SITE_TITLE } from "../consts";
           <div class="feature-card">
             <div class="icon">🤖</div>
             <h3>AI 네이티브</h3>
-            <p>ChatGPT, Gemini, Claude가 MCP를 통해 노트를 읽고 씁니다. 설정 필요 없음.</p>
+            <p>Claude가 MCP를 통해 노트를 읽고 씁니다. 설정 필요 없음. 더 많은 AI 앱 지원 예정.</p>
           </div>
           <div class="feature-card">
             <div class="icon">🔒</div>
@@ -601,13 +601,13 @@ import { SITE_TITLE } from "../consts";
           <div class="step">
             <div class="step-connector"></div>
             <div class="step-number">2</div>
-            <h3>AI 앱 실행</h3>
-            <p>ChatGPT, Gemini, 또는 Claude 데스크탑 앱.</p>
+            <h3>Claude 앱 실행</h3>
+            <p>Claude Desktop 또는 Claude Code를 실행하세요.</p>
           </div>
           <div class="step">
             <div class="step-number">3</div>
             <h3>그냥 물어보세요</h3>
-            <p>&ldquo;회의 노트 요약해줘&rdquo; &mdash; AI가 노트를 읽고 답합니다.</p>
+            <p>&ldquo;회의 노트 요약해줘&rdquo; &mdash; Claude가 노트를 읽고 답합니다.</p>
           </div>
         </div>
 
@@ -621,7 +621,7 @@ import { SITE_TITLE } from "../consts";
     <section class="comparison">
       <div class="container fade-in">
         <h2 class="section-title">Novi Note 비교</h2>
-        <p class="section-subtitle">주요 노트앱과 비교해 보세요.</p>
+        <p class="section-subtitle">다른 유형의 노트앱과 비교해 보세요.</p>
 
         <div class="comparison-wrapper">
           <table class="comparison-table">
@@ -629,23 +629,23 @@ import { SITE_TITLE } from "../consts";
               <tr>
                 <th></th>
                 <th class="highlight-col">Novi Note</th>
-                <th>Notion</th>
-                <th>Obsidian</th>
-                <th>Bear</th>
+                <th>구독형 노트앱</th>
+                <th>플러그인 기반 노트앱</th>
+                <th>경량 노트앱</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>가격</td>
                 <td class="highlight-col">일회성 구매</td>
-                <td>월 $10</td>
-                <td>연 $50 (동기화)</td>
-                <td>연 $30</td>
+                <td>월 구독</td>
+                <td>무료 + 유료 동기화</td>
+                <td>연간 구독</td>
               </tr>
               <tr>
                 <td>AI 연동</td>
                 <td class="highlight-col">MCP 내장</td>
-                <td>월 $10 추가</td>
+                <td>추가 요금</td>
                 <td>플러그인 + API 키</td>
                 <td>없음</td>
               </tr>
@@ -653,8 +653,8 @@ import { SITE_TITLE } from "../consts";
                 <td>데이터 저장</td>
                 <td class="highlight-col">로컬 (내 Mac)</td>
                 <td>클라우드 전용</td>
-                <td>로컬 (Markdown)</td>
-                <td>iCloud</td>
+                <td>로컬 파일</td>
+                <td>클라우드 동기화</td>
               </tr>
               <tr>
                 <td>오프라인 사용</td>
@@ -666,7 +666,7 @@ import { SITE_TITLE } from "../consts";
               <tr>
                 <td>데이터 이동성</td>
                 <td class="highlight-col">PDF, Markdown 내보내기</td>
-                <td>CSV, Markdown</td>
+                <td>제한적 내보내기</td>
                 <td>네이티브 Markdown</td>
                 <td>Markdown, PDF</td>
               </tr>
