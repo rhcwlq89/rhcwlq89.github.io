@@ -1,0 +1,733 @@
+---
+import BaseHead from "../components/BaseHead.astro";
+import { SITE_TITLE } from "../consts";
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <BaseHead
+      title="Novi Note — Local-First Note App with AI via MCP"
+      description="A local-first Mac note app with zero-config AI integration via MCP. Works with ChatGPT, Gemini, and Claude. One-time purchase, no subscription."
+      lang="en"
+    />
+    <style>
+      /* ===== Reset & Base ===== */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg-primary: #0a0a0a;
+        --bg-secondary: #111111;
+        --bg-card: #1a1a1a;
+        --bg-card-hover: #222222;
+        --text-primary: #f5f5f5;
+        --text-secondary: #a3a3a3;
+        --text-muted: #737373;
+        --accent: #f59e0b;
+        --accent-hover: #fbbf24;
+        --accent-dim: rgba(245, 158, 11, 0.15);
+        --border: #262626;
+        --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+        --max-width: 1100px;
+        --section-padding: 6rem 1.5rem;
+      }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        font-family: var(--font-sans) !important;
+        background: var(--bg-primary) !important;
+        color: var(--text-primary) !important;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow-x: hidden;
+      }
+
+      a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+      a:hover { color: var(--accent-hover); }
+
+      /* ===== Layout ===== */
+      .container { max-width: var(--max-width); margin: 0 auto; }
+
+      section {
+        padding: var(--section-padding);
+      }
+
+      .section-title {
+        font-size: clamp(1.75rem, 4vw, 2.5rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 1rem;
+        text-align: center;
+      }
+
+      .section-subtitle {
+        color: var(--text-secondary);
+        font-size: 1.125rem;
+        text-align: center;
+        max-width: 600px;
+        margin: 0 auto 3rem;
+      }
+
+      /* ===== Fade-in Animation ===== */
+      .fade-in {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.6s ease, transform 0.6s ease;
+      }
+      .fade-in.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ===== Hero ===== */
+      .hero {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 4rem 1.5rem;
+        background: radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, 0.08) 0%, transparent 60%);
+      }
+
+      .hero-inner { max-width: 800px; }
+
+      .hero-icon {
+        width: 96px;
+        height: 96px;
+        border-radius: 22px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      }
+
+      .hero-badge {
+        display: inline-block;
+        padding: 0.375rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        font-size: 0.8125rem;
+        color: var(--accent);
+        background: var(--accent-dim);
+        margin-bottom: 2rem;
+        letter-spacing: 0.03em;
+      }
+
+      .hero h1 {
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        margin-bottom: 1.5rem;
+      }
+
+      .hero h1 .highlight {
+        background: linear-gradient(135deg, var(--accent) 0%, #fbbf24 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .hero-sub {
+        font-size: clamp(1rem, 2.5vw, 1.25rem);
+        color: var(--text-secondary);
+        line-height: 1.7;
+        max-width: 640px;
+        margin: 0 auto 2.5rem;
+      }
+
+      .hero-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 3.5rem;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.875rem 1.75rem;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        cursor: pointer;
+        border: none;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #0a0a0a;
+      }
+      .btn-primary:hover {
+        background: var(--accent-hover);
+        color: #0a0a0a;
+        transform: translateY(-1px);
+        box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25);
+      }
+
+      .btn-outline {
+        background: transparent;
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+      }
+      .btn-outline:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        transform: translateY(-1px);
+      }
+
+      .hero-screenshot {
+        max-width: 100%;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        aspect-ratio: 16/10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        overflow: hidden;
+      }
+
+      .hero-screenshot img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      /* ===== Problem ===== */
+      .problem { background: var(--bg-secondary); }
+
+      .problem-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .problem-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        transition: border-color 0.2s, transform 0.2s;
+      }
+      .problem-card:hover {
+        border-color: #333;
+        transform: translateY(-2px);
+      }
+
+      .problem-card .icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        display: block;
+      }
+
+      .problem-card h3 {
+        font-size: 1.125rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .problem-card p {
+        color: var(--text-secondary);
+        font-size: 0.9375rem;
+        line-height: 1.6;
+      }
+
+      /* ===== Features ===== */
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .feature-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        text-align: center;
+        transition: border-color 0.2s, transform 0.2s;
+      }
+      .feature-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+      }
+
+      .feature-card .icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: var(--accent-dim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin: 0 auto 1.25rem;
+      }
+
+      .feature-card h3 {
+        font-size: 1.125rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .feature-card p {
+        color: var(--text-secondary);
+        font-size: 0.9375rem;
+        line-height: 1.5;
+      }
+
+      /* ===== How It Works ===== */
+      .how-it-works { background: var(--bg-secondary); }
+
+      .steps {
+        display: flex;
+        gap: 2rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 2.5rem;
+      }
+
+      .step {
+        flex: 1;
+        min-width: 220px;
+        max-width: 320px;
+        text-align: center;
+        position: relative;
+      }
+
+      .step-number {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #0a0a0a;
+        font-weight: 800;
+        font-size: 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.25rem;
+      }
+
+      .step h3 {
+        font-size: 1.125rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .step p {
+        color: var(--text-secondary);
+        font-size: 0.9375rem;
+      }
+
+      .step-connector {
+        display: none;
+      }
+
+      @media (min-width: 768px) {
+        .step-connector {
+          display: block;
+          position: absolute;
+          top: 24px;
+          left: calc(50% + 32px);
+          width: calc(100% - 64px);
+          height: 1px;
+          background: var(--border);
+        }
+        .step:last-child .step-connector { display: none; }
+      }
+
+      .mcp-note {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        padding: 1rem 1.5rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+
+      /* ===== Comparison Table ===== */
+      .comparison-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 600px;
+        font-size: 0.9375rem;
+      }
+
+      .comparison-table th,
+      .comparison-table td {
+        padding: 1rem 1.25rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .comparison-table thead th {
+        font-weight: 700;
+        font-size: 1rem;
+        padding-bottom: 1.25rem;
+        color: var(--text-secondary);
+      }
+
+      .comparison-table thead th:first-child {
+        text-align: left;
+      }
+
+      .comparison-table tbody td:first-child {
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .comparison-table tbody td {
+        color: var(--text-secondary);
+      }
+
+      /* Highlight Novi Note column */
+      .comparison-table th.highlight-col {
+        color: var(--accent) !important;
+        position: relative;
+      }
+
+      .comparison-table td.highlight-col {
+        color: var(--text-primary) !important;
+        background: var(--accent-dim);
+        font-weight: 600;
+      }
+
+      .comparison-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      /* ===== CTA ===== */
+      .cta-section {
+        text-align: center;
+        background: radial-gradient(ellipse at 50% 100%, rgba(245, 158, 11, 0.08) 0%, transparent 60%);
+      }
+
+      .cta-section .section-title {
+        margin-bottom: 0.75rem;
+      }
+
+      .cta-sub {
+        color: var(--text-secondary);
+        font-size: 1.125rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .cta-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 2.5rem;
+      }
+
+      .ph-badge {
+        display: inline-block;
+        margin-top: 1rem;
+      }
+
+      .ph-badge img {
+        height: 54px;
+      }
+
+      /* ===== Footer ===== */
+      .landing-footer {
+        text-align: center;
+        padding: 3rem 1.5rem;
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 0.875rem;
+      }
+
+      .landing-footer p {
+        margin-bottom: 0.5rem;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 1.5rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+      }
+
+      .footer-links a {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+      }
+      .footer-links a:hover {
+        color: var(--accent);
+      }
+
+      /* ===== Responsive ===== */
+      @media (max-width: 640px) {
+        :root {
+          --section-padding: 4rem 1.25rem;
+        }
+
+        .hero { min-height: auto; padding: 6rem 1.25rem 3rem; }
+        .hero h1 { font-size: 2.25rem; }
+
+        .steps { flex-direction: column; align-items: center; }
+        .step { max-width: 100%; }
+        .step-connector { display: none; }
+
+        .btn { width: 100%; justify-content: center; padding: 0.875rem 1.25rem; }
+        .hero-buttons, .cta-buttons { flex-direction: column; align-items: center; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ===== Hero ===== -->
+    <section class="hero">
+      <div class="hero-inner fade-in">
+        <img src="/images/novi-note-icon.png" alt="Novi Note app icon" class="hero-icon" width="96" height="96" />
+        <br />
+        <span class="hero-badge">Launching on Product Hunt</span>
+
+        <h1>Your notes, your Mac,<br />your <span class="highlight">AI</span>.</h1>
+
+        <p class="hero-sub">
+          A local-first note app with zero-config AI integration via MCP.
+          Works with ChatGPT, Gemini, and Claude &mdash; no plugins, no API keys, no subscription.
+        </p>
+
+        <div class="hero-buttons">
+          <a href="https://apps.apple.com/app/novi-notes/id6759056556" class="btn btn-primary" target="_blank" rel="noopener">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            Download on Mac App Store
+          </a>
+          <a href="#" class="btn btn-outline">
+            <!-- TODO: Replace with actual Product Hunt link -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.8 0-.995-.806-1.8-1.801-1.8zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804c2.319 0 4.2 1.88 4.2 4.2 0 2.321-1.881 4.2-4.201 4.2z"/></svg>
+            Launching on Product Hunt
+          </a>
+        </div>
+
+        <div class="hero-screenshot">
+          <!-- TODO: Replace with actual app screenshot -->
+          <!-- <img src="/images/novi-note-screenshot.png" alt="Novi Note app screenshot" /> -->
+          <span>App screenshot placeholder &mdash; replace with actual image</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Problem ===== -->
+    <section class="problem">
+      <div class="container fade-in">
+        <h2 class="section-title">Note apps in 2026 still make you choose</h2>
+        <p class="section-subtitle">You shouldn't have to pick between power, simplicity, and ownership.</p>
+
+        <div class="problem-grid">
+          <div class="problem-card">
+            <span class="icon">💰</span>
+            <h3>Pay monthly forever</h3>
+            <p>Notion, Bear charge subscriptions just to take notes. Your productivity shouldn't come with a recurring fee.</p>
+          </div>
+          <div class="problem-card">
+            <span class="icon">🔧</span>
+            <h3>Set up AI yourself</h3>
+            <p>Obsidian needs plugins + API keys. Notion charges extra for AI. Getting AI to work with your notes is way too complicated.</p>
+          </div>
+          <div class="problem-card">
+            <span class="icon">⚖️</span>
+            <h3>Structure or simplicity, not both</h3>
+            <p>Notion is heavy. Bear is light but flat. Obsidian requires setup. Why can't a note app be both powerful and simple?</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Features / Solution ===== -->
+    <section class="features">
+      <div class="container fade-in">
+        <h2 class="section-title">Novi Note gives you all three</h2>
+        <p class="section-subtitle">Everything you need, nothing you don't.</p>
+
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon">🤖</div>
+            <h3>AI Native</h3>
+            <p>ChatGPT, Gemini, Claude read and write your notes via MCP. Zero config required.</p>
+          </div>
+          <div class="feature-card">
+            <div class="icon">🔒</div>
+            <h3>Local First</h3>
+            <p>Your data stays on your Mac. Works fully offline. No cloud dependency.</p>
+          </div>
+          <div class="feature-card">
+            <div class="icon">📋</div>
+            <h3>Built for Work</h3>
+            <p>Daily notes, manuals, post-its, calendar &mdash; structured sections for real workflows.</p>
+          </div>
+          <div class="feature-card">
+            <div class="icon">💵</div>
+            <h3>One-Time Purchase</h3>
+            <p>Pay once, use forever. No subscription, ever.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== How It Works ===== -->
+    <section class="how-it-works">
+      <div class="container fade-in">
+        <h2 class="section-title">How it works with your AI</h2>
+        <p class="section-subtitle">Three steps. No configuration needed.</p>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step-connector"></div>
+            <div class="step-number">1</div>
+            <h3>Install Novi Note</h3>
+            <p>Download from the Mac App Store. That's it.</p>
+          </div>
+          <div class="step">
+            <div class="step-connector"></div>
+            <div class="step-number">2</div>
+            <h3>Open your AI app</h3>
+            <p>ChatGPT, Gemini, or Claude desktop app.</p>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <h3>Just ask</h3>
+            <p>&ldquo;Summarize my meeting notes&rdquo; &mdash; AI reads your notes and responds.</p>
+          </div>
+        </div>
+
+        <div class="mcp-note">
+          No plugins. No API keys. No config files. It just works via <strong>MCP</strong> (Model Context Protocol).
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Comparison Table ===== -->
+    <section class="comparison">
+      <div class="container fade-in">
+        <h2 class="section-title">How Novi Note compares</h2>
+        <p class="section-subtitle">See how it stacks up against popular alternatives.</p>
+
+        <div class="comparison-wrapper">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th class="highlight-col">Novi Note</th>
+                <th>Notion</th>
+                <th>Obsidian</th>
+                <th>Bear</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Price</td>
+                <td class="highlight-col">One-time purchase</td>
+                <td>$10/mo</td>
+                <td>$50/yr (Sync)</td>
+                <td>$30/yr</td>
+              </tr>
+              <tr>
+                <td>AI Integration</td>
+                <td class="highlight-col">Built-in via MCP</td>
+                <td>$10/mo add-on</td>
+                <td>Plugins + API key</td>
+                <td>None</td>
+              </tr>
+              <tr>
+                <td>Data Storage</td>
+                <td class="highlight-col">Local (your Mac)</td>
+                <td>Cloud only</td>
+                <td>Local (Markdown)</td>
+                <td>iCloud</td>
+              </tr>
+              <tr>
+                <td>Works Offline</td>
+                <td class="highlight-col">Yes, fully</td>
+                <td>Limited</td>
+                <td>Yes</td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <td>Data Portability</td>
+                <td class="highlight-col">PDF, Markdown export</td>
+                <td>CSV, Markdown</td>
+                <td>Native Markdown</td>
+                <td>Markdown, PDF</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CTA ===== -->
+    <section class="cta-section">
+      <div class="container fade-in">
+        <h2 class="section-title">Take back your notes.</h2>
+        <p class="cta-sub">Local. AI-native. No subscription.</p>
+
+        <div class="cta-buttons">
+          <a href="https://apps.apple.com/app/novi-notes/id6759056556" class="btn btn-primary" target="_blank" rel="noopener">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            Download on Mac App Store
+          </a>
+        </div>
+
+        <!-- TODO: Replace with actual Product Hunt badge -->
+        <!--
+        <a href="#" class="ph-badge">
+          <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=YOUR_POST_ID&theme=dark" alt="Novi Note on Product Hunt" />
+        </a>
+        -->
+        <div class="ph-badge" style="padding:1rem 2rem; border:1px solid var(--border); border-radius:12px; display:inline-block;">
+          <span style="color:var(--text-muted); font-size:0.875rem;">Product Hunt badge placeholder</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Footer ===== -->
+    <footer class="landing-footer">
+      <p>Built by an indie developer in Seoul 🇰🇷</p>
+      <div class="footer-links">
+        <a href="/">Blog</a>
+        <a href="/novi/privacy">Privacy Policy</a>
+        <a href="/novi/terms">Terms of Service</a>
+        <a href="/novi/support">Support</a>
+      </div>
+    </footer>
+
+    <!-- Scroll fade-in observer -->
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+              }
+            });
+          },
+          { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+        );
+
+        document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
+      });
+    </script>
+  </body>
+</html>
