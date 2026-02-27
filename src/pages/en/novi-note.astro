@@ -1,15 +1,15 @@
 ---
-import BaseHead from "../components/BaseHead.astro";
-import { SITE_TITLE } from "../consts";
+import BaseHead from "../../components/BaseHead.astro";
+import { SITE_TITLE } from "../../consts";
 ---
 
 <!doctype html>
-<html lang="ko" class="dark">
+<html lang="en" class="dark">
   <head>
     <BaseHead
-      title="Novi Note — 로컬 우선 AI 노트앱 (MCP 지원)"
-      description="macOS용 로컬 우선 노트앱. MCP를 통해 ChatGPT, Gemini, Claude와 바로 연동. 플러그인 없이, API 키 없이, 구독 없이."
-      lang="ko"
+      title="Novi Note — Local-First Note App with AI via MCP"
+      description="A local-first Mac note app with zero-config AI integration via MCP. Works with ChatGPT, Gemini, and Claude. One-time purchase, no subscription."
+      lang="en"
     />
     <style>
       /* ===== Reset & Base ===== */
@@ -497,33 +497,33 @@ import { SITE_TITLE } from "../consts";
     <!-- ===== Hero ===== -->
     <section class="hero">
       <div class="hero-inner fade-in">
-        <img src="/images/novi-note-icon.png" alt="Novi Note 앱 아이콘" class="hero-icon" width="96" height="96" />
+        <img src="/images/novi-note-icon.png" alt="Novi Note app icon" class="hero-icon" width="96" height="96" />
         <br />
-        <span class="hero-badge">Product Hunt 런칭</span>
+        <span class="hero-badge">Launching on Product Hunt</span>
 
-        <h1>내 노트, 내 Mac,<br />내 <span class="highlight">AI</span>.</h1>
+        <h1>Your notes, your Mac,<br />your <span class="highlight">AI</span>.</h1>
 
         <p class="hero-sub">
-          MCP를 통해 AI와 바로 연동되는 로컬 우선 노트앱.
-          ChatGPT, Gemini, Claude와 함께 &mdash; 플러그인 없이, API 키 없이, 구독 없이.
+          A local-first note app with zero-config AI integration via MCP.
+          Works with ChatGPT, Gemini, and Claude &mdash; no plugins, no API keys, no subscription.
         </p>
 
         <div class="hero-buttons">
           <a href="https://apps.apple.com/app/novi-notes/id6759056556" class="btn btn-primary" target="_blank" rel="noopener">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-            Mac App Store에서 다운로드
+            Download on Mac App Store
           </a>
           <a href="#" class="btn btn-outline">
-            <!-- TODO: Product Hunt 링크로 교체 -->
+            <!-- TODO: Replace with actual Product Hunt link -->
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.8 0-.995-.806-1.8-1.801-1.8zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804c2.319 0 4.2 1.88 4.2 4.2 0 2.321-1.881 4.2-4.201 4.2z"/></svg>
-            Product Hunt에서 런칭
+            Launching on Product Hunt
           </a>
         </div>
 
         <div class="hero-screenshot">
-          <!-- TODO: 실제 앱 스크린샷으로 교체 -->
-          <!-- <img src="/images/novi-note-screenshot.png" alt="Novi Note 앱 스크린샷" /> -->
-          <span>앱 스크린샷 자리 &mdash; 실제 이미지로 교체</span>
+          <!-- TODO: Replace with actual app screenshot -->
+          <!-- <img src="/images/novi-note-screenshot.png" alt="Novi Note app screenshot" /> -->
+          <span>App screenshot placeholder &mdash; replace with actual image</span>
         </div>
       </div>
     </section>
@@ -531,24 +531,24 @@ import { SITE_TITLE } from "../consts";
     <!-- ===== Problem ===== -->
     <section class="problem">
       <div class="container fade-in">
-        <h2 class="section-title">2026년, 노트앱은 여전히 선택을 강요합니다</h2>
-        <p class="section-subtitle">기능, 단순함, 소유권 &mdash; 왜 하나만 골라야 하나요?</p>
+        <h2 class="section-title">Note apps in 2026 still make you choose</h2>
+        <p class="section-subtitle">You shouldn't have to pick between power, simplicity, and ownership.</p>
 
         <div class="problem-grid">
           <div class="problem-card">
             <span class="icon">💰</span>
-            <h3>매달 구독료 결제</h3>
-            <p>Notion, Bear는 노트 하나 쓰려고 구독료를 냅니다. 생산성 도구에 매달 돈을 낼 필요가 있을까요?</p>
+            <h3>Pay monthly forever</h3>
+            <p>Notion, Bear charge subscriptions just to take notes. Your productivity shouldn't come with a recurring fee.</p>
           </div>
           <div class="problem-card">
             <span class="icon">🔧</span>
-            <h3>AI 연동은 직접 설정</h3>
-            <p>Obsidian은 플러그인과 API 키가 필요합니다. Notion은 AI에 추가 요금을 받습니다. 노트에 AI를 붙이는 게 이렇게 복잡해야 하나요?</p>
+            <h3>Set up AI yourself</h3>
+            <p>Obsidian needs plugins + API keys. Notion charges extra for AI. Getting AI to work with your notes is way too complicated.</p>
           </div>
           <div class="problem-card">
             <span class="icon">⚖️</span>
-            <h3>구조 아니면 단순함</h3>
-            <p>Notion은 무겁고, Bear는 가볍지만 단조롭고, Obsidian은 설정이 필요합니다. 강력하면서 단순한 노트앱은 왜 없을까요?</p>
+            <h3>Structure or simplicity, not both</h3>
+            <p>Notion is heavy. Bear is light but flat. Obsidian requires setup. Why can't a note app be both powerful and simple?</p>
           </div>
         </div>
       </div>
@@ -557,29 +557,29 @@ import { SITE_TITLE } from "../consts";
     <!-- ===== Features / Solution ===== -->
     <section class="features">
       <div class="container fade-in">
-        <h2 class="section-title">Novi Note는 세 가지를 모두 드립니다</h2>
-        <p class="section-subtitle">필요한 것만, 불필요한 것은 없이.</p>
+        <h2 class="section-title">Novi Note gives you all three</h2>
+        <p class="section-subtitle">Everything you need, nothing you don't.</p>
 
         <div class="features-grid">
           <div class="feature-card">
             <div class="icon">🤖</div>
-            <h3>AI 네이티브</h3>
-            <p>ChatGPT, Gemini, Claude가 MCP를 통해 노트를 읽고 씁니다. 설정 필요 없음.</p>
+            <h3>AI Native</h3>
+            <p>ChatGPT, Gemini, Claude read and write your notes via MCP. Zero config required.</p>
           </div>
           <div class="feature-card">
             <div class="icon">🔒</div>
-            <h3>로컬 우선</h3>
-            <p>데이터는 내 Mac에만 저장됩니다. 완전한 오프라인 지원. 클라우드 의존 없음.</p>
+            <h3>Local First</h3>
+            <p>Your data stays on your Mac. Works fully offline. No cloud dependency.</p>
           </div>
           <div class="feature-card">
             <div class="icon">📋</div>
-            <h3>업무에 최적화</h3>
-            <p>데일리 노트, 매뉴얼, 포스트잇, 캘린더 &mdash; 실제 업무 흐름에 맞춘 구조.</p>
+            <h3>Built for Work</h3>
+            <p>Daily notes, manuals, post-its, calendar &mdash; structured sections for real workflows.</p>
           </div>
           <div class="feature-card">
             <div class="icon">💵</div>
-            <h3>일회성 구매</h3>
-            <p>한 번 사면 영원히. 구독 없음, 절대로.</p>
+            <h3>One-Time Purchase</h3>
+            <p>Pay once, use forever. No subscription, ever.</p>
           </div>
         </div>
       </div>
@@ -588,31 +588,31 @@ import { SITE_TITLE } from "../consts";
     <!-- ===== How It Works ===== -->
     <section class="how-it-works">
       <div class="container fade-in">
-        <h2 class="section-title">AI와 이렇게 연동됩니다</h2>
-        <p class="section-subtitle">3단계. 설정 필요 없음.</p>
+        <h2 class="section-title">How it works with your AI</h2>
+        <p class="section-subtitle">Three steps. No configuration needed.</p>
 
         <div class="steps">
           <div class="step">
             <div class="step-connector"></div>
             <div class="step-number">1</div>
-            <h3>Novi Note 설치</h3>
-            <p>Mac App Store에서 다운로드하면 끝.</p>
+            <h3>Install Novi Note</h3>
+            <p>Download from the Mac App Store. That's it.</p>
           </div>
           <div class="step">
             <div class="step-connector"></div>
             <div class="step-number">2</div>
-            <h3>AI 앱 실행</h3>
-            <p>ChatGPT, Gemini, 또는 Claude 데스크탑 앱.</p>
+            <h3>Open your AI app</h3>
+            <p>ChatGPT, Gemini, or Claude desktop app.</p>
           </div>
           <div class="step">
             <div class="step-number">3</div>
-            <h3>그냥 물어보세요</h3>
-            <p>&ldquo;회의 노트 요약해줘&rdquo; &mdash; AI가 노트를 읽고 답합니다.</p>
+            <h3>Just ask</h3>
+            <p>&ldquo;Summarize my meeting notes&rdquo; &mdash; AI reads your notes and responds.</p>
           </div>
         </div>
 
         <div class="mcp-note">
-          플러그인 없이. API 키 없이. 설정 파일 없이. <strong>MCP</strong>(Model Context Protocol)로 그냥 됩니다.
+          No plugins. No API keys. No config files. It just works via <strong>MCP</strong> (Model Context Protocol).
         </div>
       </div>
     </section>
@@ -620,8 +620,8 @@ import { SITE_TITLE } from "../consts";
     <!-- ===== Comparison Table ===== -->
     <section class="comparison">
       <div class="container fade-in">
-        <h2 class="section-title">Novi Note 비교</h2>
-        <p class="section-subtitle">주요 노트앱과 비교해 보세요.</p>
+        <h2 class="section-title">How Novi Note compares</h2>
+        <p class="section-subtitle">See how it stacks up against popular alternatives.</p>
 
         <div class="comparison-wrapper">
           <table class="comparison-table">
@@ -636,38 +636,38 @@ import { SITE_TITLE } from "../consts";
             </thead>
             <tbody>
               <tr>
-                <td>가격</td>
-                <td class="highlight-col">일회성 구매</td>
-                <td>월 $10</td>
-                <td>연 $50 (동기화)</td>
-                <td>연 $30</td>
+                <td>Price</td>
+                <td class="highlight-col">One-time purchase</td>
+                <td>$10/mo</td>
+                <td>$50/yr (Sync)</td>
+                <td>$30/yr</td>
               </tr>
               <tr>
-                <td>AI 연동</td>
-                <td class="highlight-col">MCP 내장</td>
-                <td>월 $10 추가</td>
-                <td>플러그인 + API 키</td>
-                <td>없음</td>
+                <td>AI Integration</td>
+                <td class="highlight-col">Built-in via MCP</td>
+                <td>$10/mo add-on</td>
+                <td>Plugins + API key</td>
+                <td>None</td>
               </tr>
               <tr>
-                <td>데이터 저장</td>
-                <td class="highlight-col">로컬 (내 Mac)</td>
-                <td>클라우드 전용</td>
-                <td>로컬 (Markdown)</td>
+                <td>Data Storage</td>
+                <td class="highlight-col">Local (your Mac)</td>
+                <td>Cloud only</td>
+                <td>Local (Markdown)</td>
                 <td>iCloud</td>
               </tr>
               <tr>
-                <td>오프라인 사용</td>
-                <td class="highlight-col">완전 지원</td>
-                <td>제한적</td>
-                <td>지원</td>
-                <td>지원</td>
+                <td>Works Offline</td>
+                <td class="highlight-col">Yes, fully</td>
+                <td>Limited</td>
+                <td>Yes</td>
+                <td>Yes</td>
               </tr>
               <tr>
-                <td>데이터 이동성</td>
-                <td class="highlight-col">PDF, Markdown 내보내기</td>
+                <td>Data Portability</td>
+                <td class="highlight-col">PDF, Markdown export</td>
                 <td>CSV, Markdown</td>
-                <td>네이티브 Markdown</td>
+                <td>Native Markdown</td>
                 <td>Markdown, PDF</td>
               </tr>
             </tbody>
@@ -679,36 +679,36 @@ import { SITE_TITLE } from "../consts";
     <!-- ===== CTA ===== -->
     <section class="cta-section">
       <div class="container fade-in">
-        <h2 class="section-title">내 노트를 되찾으세요.</h2>
-        <p class="cta-sub">로컬. AI 네이티브. 구독 없음.</p>
+        <h2 class="section-title">Take back your notes.</h2>
+        <p class="cta-sub">Local. AI-native. No subscription.</p>
 
         <div class="cta-buttons">
           <a href="https://apps.apple.com/app/novi-notes/id6759056556" class="btn btn-primary" target="_blank" rel="noopener">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-            Mac App Store에서 다운로드
+            Download on Mac App Store
           </a>
         </div>
 
-        <!-- TODO: 실제 Product Hunt 배지로 교체 -->
+        <!-- TODO: Replace with actual Product Hunt badge -->
         <!--
         <a href="#" class="ph-badge">
-          <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=YOUR_POST_ID&theme=dark" alt="Product Hunt의 Novi Note" />
+          <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=YOUR_POST_ID&theme=dark" alt="Novi Note on Product Hunt" />
         </a>
         -->
         <div class="ph-badge" style="padding:1rem 2rem; border:1px solid var(--border); border-radius:12px; display:inline-block;">
-          <span style="color:var(--text-muted); font-size:0.875rem;">Product Hunt 배지 자리</span>
+          <span style="color:var(--text-muted); font-size:0.875rem;">Product Hunt badge placeholder</span>
         </div>
       </div>
     </section>
 
     <!-- ===== Footer ===== -->
     <footer class="landing-footer">
-      <p>서울의 인디 개발자가 만들었습니다 🇰🇷</p>
+      <p>Built by an indie developer in Seoul 🇰🇷</p>
       <div class="footer-links">
-        <a href="/">블로그</a>
-        <a href="/novi/privacy">개인정보 처리방침</a>
-        <a href="/novi/terms">이용약관</a>
-        <a href="/novi/support">고객 지원</a>
+        <a href="/en">Blog</a>
+        <a href="/en/novi/privacy">Privacy Policy</a>
+        <a href="/en/novi/terms">Terms of Service</a>
+        <a href="/en/novi/support">Support</a>
       </div>
     </footer>
 
