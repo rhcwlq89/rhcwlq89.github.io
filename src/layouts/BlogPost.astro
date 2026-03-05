@@ -100,16 +100,11 @@ const t = useTranslations(lang);
             <h1>{title}</h1>
             <hr />
           </div>
-          <!-- Google AdSense -->
+          <!-- Coupang Partners -->
           <div class="ad-container">
-            <ins class="adsbygoogle"
-                 style="display:block"
-                 data-ad-client="ca-pub-6258435285844682"
-                 data-ad-slot="2530322076"
-                 data-ad-format="auto"
-                 data-full-width-responsive="true"></ins>
+            <script src="https://ads-partners.coupang.com/g.js"></script>
             <script>
-                 (adsbygoogle = window.adsbygoogle || []).push({});
+              new PartnersCoupang.G({"id":970016,"template":"carousel","trackingCode":"AF9926225","width":"720","height":"140","tsource":""});
             </script>
           </div>
           <slot />
