@@ -3,7 +3,7 @@ title: "Claude Code 인기 플러그인 10선: 기능·장점·단점 완전 분
 description: "Claude Code를 강력하게 확장하는 인기 플러그인 10개를 엄선해 각각의 핵심 기능, 인기 이유, 그리고 실제 사용 시 주의해야 할 단점까지 정리했습니다."
 pubDate: 2026-03-05T10:00:00+09:00
 tags: ["Claude Code", "Plugin", "MCP", "AI", "개발도구", "생산성"]
-heroImage: "../../assets/OhMyOpenCodeSetupGuide.png"
+heroImage: "../../assets/TOP10ClaudeCodePlugins.png"
 ---
 
 ## 들어가며

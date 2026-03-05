@@ -4,7 +4,7 @@ description: "We handpicked 10 popular plugins that supercharge Claude Code, bre
 pubDate: 2026-03-05T10:00:00+09:00
 lang: en
 tags: ["Claude Code", "Plugin", "MCP", "AI", "DevTools", "Productivity"]
-heroImage: "../../../assets/OhMyOpenCodeSetupGuide.png"
+heroImage: "../../../assets/TOP10ClaudeCodePlugins.png"
 ---
 
 ## Introduction
