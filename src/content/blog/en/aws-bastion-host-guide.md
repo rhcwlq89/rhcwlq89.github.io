@@ -1,7 +1,7 @@
 ---
 title: "AWS Bastion Host Setup Guide"
 description: "A complete guide to configuring SSH access to Private EC2 instances through a Bastion Host"
-pubDate: 2026-02-08T14:40:00+09:00
+pubDate: "2026-02-03T10:00:00+09:00"
 lang: en
 tags: ["AWS", "EC2", "Bastion Host", "SSH", "Security", "Infrastructure"]
 heroImage: "../../../assets/bastion_setting_guide.png"

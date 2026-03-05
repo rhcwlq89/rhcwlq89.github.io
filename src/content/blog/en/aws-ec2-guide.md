@@ -1,7 +1,7 @@
 ---
 title: "AWS EC2 Guide"
 description: "A complete guide from EC2 instance basics to production operations"
-pubDate: 2026-02-08T14:30:00+09:00
+pubDate: "2026-02-02T10:00:00+09:00"
 lang: en
 tags: ["AWS", "EC2", "Cloud", "Infrastructure"]
 heroImage: "../../../assets/AWS_EC2_GUIDE/AwsEc2Guide.png"

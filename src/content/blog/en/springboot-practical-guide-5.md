@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Practical Guide Part 5: Database Optimization"
 description: "Handling large-scale data with index design, cursor-based pagination, and Read Replicas"
-pubDate: 2026-02-08T12:30:00+09:00
+pubDate: "2026-01-25T14:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Database", "MySQL", "JPA", "Backend", "Practical Guide"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

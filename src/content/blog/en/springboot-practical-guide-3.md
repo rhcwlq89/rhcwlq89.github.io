@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Practical Guide Part 3: Event-Driven Architecture"
 description: "Building a reliable event system with Kafka and the Outbox pattern"
-pubDate: 2026-02-08T12:10:00+09:00
+pubDate: "2026-01-25T12:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Kafka", "Event-Driven", "Backend", "Practical Guide"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

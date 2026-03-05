@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 2: Database & Testing"
 description: "H2/MySQL setup, JPA entity mapping, and test strategies (unit, integration, slice) with practical examples"
-pubDate: 2026-02-08T13:10:00+09:00
+pubDate: "2026-01-11T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "JPA", "Testing", "Database", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"

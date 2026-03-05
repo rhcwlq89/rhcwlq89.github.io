@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Practical Guide Part 7: Logging Strategy and Practice"
 description: "From SLF4J, Logback, Log4j2 comparison to structured logging, MDC, and centralized log management"
-pubDate: 2026-02-08T12:50:00+09:00
+pubDate: "2026-02-02T09:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Logging", "SLF4J", "Logback", "Backend", "Practical Guide"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

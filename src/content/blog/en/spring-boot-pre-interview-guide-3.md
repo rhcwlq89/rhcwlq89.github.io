@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 3: Documentation & AOP"
 description: "API documentation with Swagger/SpringDoc, SLF4J logging, and cross-cutting concerns with AOP"
-pubDate: 2026-02-08T13:20:00+09:00
+pubDate: "2026-01-13T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Swagger", "AOP", "Logging", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"

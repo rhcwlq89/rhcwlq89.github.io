@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Practical Guide Part 6: Monitoring and Observability"
 description: "Real-time system monitoring with Prometheus, Grafana, and custom metrics"
-pubDate: 2026-02-08T12:40:00+09:00
+pubDate: "2026-01-25T15:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Prometheus", "Grafana", "Monitoring", "Backend", "Practical Guide"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

@@ -1,7 +1,7 @@
 ---
 title: "AWS Database Selection Guide: EC2+Docker vs RDS vs Aurora"
 description: "How to choose between running a DB directly on EC2 with Docker, RDS, Aurora, and Aurora Serverless v2 — a detailed comparison based on cost, performance, and operational burden"
-pubDate: 2026-02-08T10:00:00+09:00
+pubDate: "2026-02-03T15:30:00+09:00"
 lang: en
 tags: ["AWS", "RDS", "Aurora", "EC2", "Docker", "Database", "MySQL", "PostgreSQL", "Infrastructure"]
 heroImage: "../../../assets/AwsDatabaseSelectionGuide.png"

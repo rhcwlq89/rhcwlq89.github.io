@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide: Comprehensive Assignment"
 description: "Spring Boot-based online marketplace REST API comprehensive assignment — from product, order, and member domain design to testing and deployment"
-pubDate: 2026-02-08T14:10:00+09:00
+pubDate: "2026-01-23T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "REST API", "Backend", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"

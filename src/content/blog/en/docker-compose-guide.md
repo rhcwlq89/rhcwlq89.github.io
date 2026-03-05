@@ -1,7 +1,7 @@
 ---
 title: "Docker Compose Configuration Guide"
 description: "A guide to setting up multi-container environments with Docker Compose"
-pubDate: 2026-02-08T14:20:00+09:00
+pubDate: "2026-01-07T10:00:00+09:00"
 lang: en
 tags: ["Docker", "Docker Compose", "DevOps", "Infrastructure"]
 heroImage: "../../../assets/DockerComposeGuide.png"

@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot SSO Integration Guide: OAuth2/OIDC and SAML in Practice"
 description: "A practical guide to SSO integration with IdPs like Keycloak, Okta, and Azure AD using Spring Security"
-pubDate: 2026-02-08T15:00:00+09:00
+pubDate: "2026-02-05T15:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "SSO", "OAuth2", "OIDC", "SAML", "Spring Security"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

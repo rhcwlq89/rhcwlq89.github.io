@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Practical Guide Part 1: Concurrency Control and Inventory Management"
 description: "A practical guide to solving concurrency issues with atomic UPDATEs and idempotency keys"
-pubDate: 2026-02-08T11:00:00+09:00
+pubDate: "2026-01-25T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Concurrency", "Backend", "Practical Guide"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

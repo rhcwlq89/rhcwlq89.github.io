@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 6: DevOps & Deployment"
 description: "Deployment environment setup and CI/CD — Docker, GitHub Actions, and Actuator"
-pubDate: 2026-02-08T13:50:00+09:00
+pubDate: "2026-01-19T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Docker", "CI/CD", "GitHub Actions", "DevOps", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"

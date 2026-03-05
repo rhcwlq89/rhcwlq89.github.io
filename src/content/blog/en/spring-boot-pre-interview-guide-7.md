@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 7: Advanced Patterns"
 description: "Advanced patterns and architecture — events, async processing, file handling, and multi-module"
-pubDate: 2026-02-08T14:00:00+09:00
+pubDate: "2026-01-21T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Architecture", "Async", "Events", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"

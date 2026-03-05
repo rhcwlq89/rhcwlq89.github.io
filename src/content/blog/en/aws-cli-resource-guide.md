@@ -1,7 +1,7 @@
 ---
 title: "Complete Guide to AWS CLI Setup and Resource Queries"
 description: "A comprehensive guide to AWS CLI authentication methods (CloudShell, IAM Identity Center, access keys) and resource query commands for major services"
-pubDate: 2026-02-08T14:50:00+09:00
+pubDate: "2026-02-03T11:00:00+09:00"
 lang: en
 tags: ["AWS", "CLI", "IAM", "Cloud", "Infrastructure"]
 heroImage: "../../../assets/AWSCliGuide.png"

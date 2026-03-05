@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Practical Guide Part 4: Resilience Patterns"
 description: "Building fault-tolerant systems with Circuit Breaker, Rate Limiter, and Bulkhead"
-pubDate: 2026-02-08T12:20:00+09:00
+pubDate: "2026-01-25T13:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Resilience4j", "Circuit Breaker", "Backend", "Practical Guide"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 5: Security & Authentication"
 description: "Authentication/authorization and security configuration — Spring Security, JWT, and role management"
-pubDate: 2026-02-08T13:40:00+09:00
+pubDate: "2026-01-17T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Spring Security", "JWT", "Authentication", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"

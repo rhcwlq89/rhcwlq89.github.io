@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Practical Guide Part 2: Caching Strategy and Redis"
 description: "A complete caching guide from Cache-Aside pattern to cache problem resolution, ready to apply in production"
-pubDate: 2026-02-08T12:00:00+09:00
+pubDate: "2026-01-25T11:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Redis", "Cache", "Backend", "Practical Guide"]
 heroImage: "../../../assets/PracticalGuideSeries.png"

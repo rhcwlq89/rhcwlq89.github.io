@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 1: Core Application Layer"
 description: "Core implementation guide for REST API, Service, Repository, and Domain layers"
-pubDate: 2026-02-08T13:00:00+09:00
+pubDate: "2026-01-09T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "REST API", "Backend", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"

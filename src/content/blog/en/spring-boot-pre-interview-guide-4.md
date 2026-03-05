@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 4: Performance & Optimization"
 description: "Performance optimization and query tuning — N+1 problem, pagination, and caching strategies"
-pubDate: 2026-02-08T13:30:00+09:00
+pubDate: "2026-01-15T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Performance", "JPA", "Cache", "Interview", "Practical Guide"]
 heroImage: "../../../assets/PreinterviewTaskGuide.png"
