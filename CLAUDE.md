@@ -1,5 +1,6 @@
-# 프로젝트 설정
+# Project Settings
 
-## 블로그 글 작성 규칙
+## Blog Writing Rules
 
-- pubDate는 항상 시간까지 포함 (예: `2026-02-03T15:30:00+09:00`)
+- `pubDate` must always include the time (e.g., `2026-02-03T15:30:00+09:00`)
+- Every blog post must be written in both Korean and English versions
