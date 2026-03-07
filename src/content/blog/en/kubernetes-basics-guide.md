@@ -373,6 +373,36 @@ spec:
 
 ---
 
+## Container Images and Registries
+
+### Does Kubernetes Have a Built-in Registry?
+
+The short answer is **no.**
+
+Kubernetes does not **store** images. It only **pulls and runs** images from external registries.
+
+In practice, you connect an external registry:
+
+- Docker Hub
+- AWS ECR (Elastic Container Registry)
+- GCP Artifact Registry
+- GitHub Container Registry (ghcr.io)
+- Self-hosted solutions like Harbor, Nexus, etc.
+
+In environments where external internet access is restricted (e.g., on-premise clusters with strict security policies), registries like **Harbor** are sometimes deployed directly on top of Kubernetes.
+
+### Node-Local Cache
+
+Each Worker Node retains a local cache of previously pulled images (e.g., `/var/lib/containerd`). However, this is just a cache, not a registry, and it is not shared across nodes.
+
+| Category | Description |
+|----------|-------------|
+| Kubernetes default | No registry; pulls from external sources |
+| Node-local | Cache only (not a registry) |
+| If an internal registry is needed | Requires a separate installation like Harbor |
+
+---
+
 ## Networking
 
 ### Why Services Are Needed
@@ -459,8 +489,30 @@ An external IP (or DNS name) is automatically assigned to the load balancer, mak
 
 ### Ingress
 
-Ingress provides L7 (HTTP/HTTPS) level routing.
-It allows you to distribute traffic to multiple services through a single load balancer.
+Ingress is the gateway that routes HTTP/HTTPS traffic from outside the cluster to internal services.
+
+#### Without Ingress
+
+Exposing services externally using only Services has its drawbacks:
+
+- `LoadBalancer` type -> Each service gets its own external IP (load balancer), leading to cost explosion
+- `NodePort` -> Requires accessing services by port number, which is inconvenient
+
+```
+Service A -> 1.2.3.4:30001
+Service B -> 1.2.3.5:30002
+Service C -> 1.2.3.6:30003
+```
+
+#### With Ingress
+
+A single entry point routes traffic to internal services based on path or domain:
+
+```
+api.myapp.com/users  ->  user-service
+api.myapp.com/orders ->  order-service
+admin.myapp.com      ->  admin-service
+```
 
 Key features:
 - **Host-based routing**: `api.example.com` -> API service, `web.example.com` -> Web service
@@ -509,6 +561,34 @@ spec:
 
 > To use Ingress, an Ingress Controller must be installed in the cluster.
 > On AWS, the AWS Load Balancer Controller is commonly used, while on-premises environments often use the Nginx Ingress Controller.
+
+#### Components
+
+Ingress consists of two components:
+
+| Component | Role |
+|-----------|------|
+| **Ingress Resource** | A YAML that defines routing rules (the example above) |
+| **Ingress Controller** | The implementation that reads the rules and handles traffic (must be installed separately) |
+
+Popular Ingress Controllers:
+
+- **Nginx Ingress Controller** - The most versatile option
+- **AWS Load Balancer Controller** - Integrates with AWS ALB
+- **Traefik** - Convenient auto-configuration
+- **Istio** - Includes service mesh capabilities
+
+> Simply creating an Ingress resource will not make it work. A Controller must be installed.
+
+#### Spring Boot Analogy
+
+| Kubernetes | Spring Boot |
+|-----------|-------------|
+| Ingress Controller | API Gateway / Nginx reverse proxy |
+| Ingress rules | `@RequestMapping` path routing |
+| Service | Individual microservices |
+
+Think of it as essentially the same role that an **API Gateway** plays in a microservice architecture.
 
 ---
 

@@ -56,6 +56,40 @@ GitOps를 구현하는 대표적인 도구로 ArgoCD와 Flux가 있다.
 > [Part 1 (실무 레벨 EKS 클러스터 구축 가이드)](/blog/eks-production-setup-guide)에서 구축한 EKS 클러스터가 이미 있다는 전제로 진행한다.
 > 특히 AWS Load Balancer Controller가 설치되어 있어야 ArgoCD 대시보드 외부 노출이 가능하다.
 
+### Helm과 Argo CD — 역할이 어떻게 다를까?
+
+Helm과 Argo CD를 처음 접하면 역할이 헷갈릴 수 있다. 한 줄로 정리하면: **Helm은 패키징 도구, Argo CD는 배포 자동화 도구**다. 역할 레이어 자체가 다르다.
+
+**Helm**은 쿠버네티스용 패키지 매니저다 (apt, npm과 같은 개념):
+- `values.yaml`로 환경별 설정을 변수화
+- 여러 YAML을 **Chart**라는 단위로 묶어서 관리
+- `helm install / upgrade / rollback` 명령으로 배포
+- 자체적으로 Git을 감시하거나 자동 동기화하지 않는다
+
+**Argo CD**는 GitOps 기반 배포 자동화 도구다:
+- Git 저장소를 단일 진실의 원천(Source of Truth)으로 삼는다
+- Git과 클러스터 상태를 **지속적으로 비교**하고 차이가 생기면 자동 Sync
+- 수동으로 `kubectl`이나 `helm` 명령을 직접 치지 않아도 된다
+- 배포 이력을 UI에서 시각화
+
+| 구분 | Helm | Argo CD |
+|------|------|---------|
+| 역할 | 매니페스트 템플릿/패키징 | 배포 상태 관리/자동화 |
+| 실행 방식 | CLI 명령 직접 실행 | Git 감시 → 자동 Sync |
+| 상태 감시 | 없음 | 있음 (지속적 비교) |
+| 롤백 | `helm rollback` | Git revert → 자동 반영 |
+| UI | 없음 | 있음 |
+
+둘은 경쟁 관계가 아니라 **보완 관계**다. Argo CD가 Helm Chart를 렌더링 엔진으로 내부적으로 호출하는 구조로 함께 사용하는 것이 일반적이다:
+
+```
+Git (values.yaml + Chart)
+    → Argo CD가 변경 감지
+    → Helm Chart를 렌더링해서 클러스터에 적용
+```
+
+이 글에서도 Helm Chart를 Argo CD로 관리하는 방법을 다룰 예정이다.
+
 ---
 
 ## ArgoCD 설치

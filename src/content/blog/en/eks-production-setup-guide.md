@@ -798,6 +798,53 @@ With this configuration:
 2. The ACM certificate is used for HTTPS communication
 3. TLS termination occurs at the ALB, so Pods only need to handle HTTP
 
+### 5. Do You Need Both an API Gateway and Ingress?
+
+Ingress and API Gateway have overlapping roles, but they are not exactly the same. Depending on the situation, you might use just one or both.
+
+#### Role Comparison
+
+| Feature | Ingress | API Gateway |
+|---------|---------|-------------|
+| External traffic entry point | Yes | Yes |
+| Domain/path routing | Yes | Yes |
+| TLS/HTTPS termination | Yes | Yes |
+| Authentication/Authorization | Limited | Yes |
+| Rate Limiting | Limited | Yes |
+| Request/Response transformation | No | Yes |
+| Circuit Breaker | No | Yes |
+| Fine-grained business routing | No | Yes |
+
+#### Case-by-Case Decision
+
+**When Ingress alone is sufficient:**
+- Only simple path routing is needed
+- Authentication is handled directly by each service
+- Small-scale service architecture
+
+**When both are used (common in practice):**
+
+```
+External Traffic
+    ↓
+Ingress (ALB)                              ← TLS termination, cluster entry
+    ↓
+API Gateway (Spring Cloud Gateway, etc.)   ← Auth, Rate limit, routing
+    ↓
+Individual Microservices
+```
+
+Ingress serves as the **infrastructure layer**, while the API Gateway serves as the **application layer**, separating their responsibilities.
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Simple services | Ingress (ALB) only |
+| Complex auth/shared processing | Ingress + API Gateway |
+| AWS ALB features are sufficient | ALB Ingress Controller alone can cover it |
+
+> AWS ALB natively provides features such as authentication (Cognito integration), fixed responses, and redirects.
+> For simple cases, ALB alone may be sufficient without a separate API Gateway.
+
 ---
 
 ## Operational Tips

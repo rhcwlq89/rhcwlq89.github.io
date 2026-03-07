@@ -48,6 +48,40 @@ This guide uses ArgoCD. Here is why:
 > It assumes you already have an EKS cluster built by following [Part 1 (Production-Level EKS Cluster Setup Guide)](/blog/en/eks-production-setup-guide).
 > In particular, the AWS Load Balancer Controller must be installed for exposing the ArgoCD dashboard externally.
 
+### Helm vs Argo CD -- How Do Their Roles Differ?
+
+When you first encounter Helm and Argo CD, it is easy to confuse their roles. Here is the one-line summary: **Helm is a packaging tool; Argo CD is a deployment automation tool.** They operate at entirely different layers.
+
+**Helm** is a package manager for Kubernetes (think apt or npm):
+- Parameterize environment-specific settings via `values.yaml`
+- Bundle multiple YAML manifests into a single unit called a **Chart**
+- Deploy using `helm install / upgrade / rollback` commands
+- It does not watch Git or perform automatic synchronization on its own
+
+**Argo CD** is a GitOps-based deployment automation tool:
+- Treats a Git repository as the Single Source of Truth
+- **Continuously compares** Git and cluster state, and auto-syncs when drift is detected
+- Eliminates the need to manually run `kubectl` or `helm` commands
+- Visualizes deployment history through a built-in UI
+
+| Aspect | Helm | Argo CD |
+|--------|------|---------|
+| Role | Manifest templating/packaging | Deployment state management/automation |
+| Execution | Run CLI commands manually | Watch Git and auto-sync |
+| State monitoring | None | Yes (continuous comparison) |
+| Rollback | `helm rollback` | Git revert triggers automatic update |
+| UI | None | Yes |
+
+The two are not competitors -- they are **complementary**. In practice, Argo CD internally invokes Helm as a rendering engine, and using them together is the standard approach:
+
+```
+Git (values.yaml + Chart)
+    → Argo CD detects the change
+    → Renders the Helm Chart and applies it to the cluster
+```
+
+This guide will also cover how to manage Helm Charts with Argo CD.
+
 ---
 
 ## Installing ArgoCD

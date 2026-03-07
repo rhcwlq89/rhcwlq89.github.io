@@ -378,6 +378,36 @@ spec:
 
 ---
 
+## 컨테이너 이미지와 레지스트리
+
+### 쿠버네티스에 내장 레지스트리가 있을까?
+
+결론부터 말하면, **없다.**
+
+쿠버네티스는 이미지를 **저장**하는 역할을 하지 않는다. 외부 레지스트리에서 이미지를 **pull해서 실행**하는 역할만 한다.
+
+실무에서는 외부 레지스트리를 연결해서 사용한다:
+
+- Docker Hub
+- AWS ECR (Elastic Container Registry)
+- GCP Artifact Registry
+- GitHub Container Registry (ghcr.io)
+- 사내 구축형 Harbor, Nexus 등
+
+보안 정책상 외부 인터넷이 차단된 환경(사내 on-premise 클러스터 등)에서는 **Harbor** 같은 레지스트리를 쿠버네티스 위에 직접 배포해서 사용하기도 한다.
+
+### 노드 로컬 캐시
+
+각 워커 노드에는 한 번 pull한 이미지가 로컬 캐시(`/var/lib/containerd` 등)로 남는다. 하지만 이건 레지스트리가 아니라 단순 캐시이며, 노드 간 공유도 되지 않는다.
+
+| 구분 | 설명 |
+|------|------|
+| 쿠버네티스 기본 | 레지스트리 없음, 외부에서 pull |
+| 노드 로컬 | 캐시만 존재 (레지스트리 아님) |
+| 내부 레지스트리가 필요하다면 | Harbor 등 별도 설치 필요 |
+
+---
+
 ## 네트워킹
 
 ### Service가 필요한 이유
@@ -464,8 +494,30 @@ spec:
 
 ### Ingress
 
-Ingress는 L7(HTTP/HTTPS) 레벨의 라우팅을 제공한다.
-하나의 로드밸런서로 여러 서비스에 트래픽을 분배할 수 있다.
+Ingress는 클러스터 외부에서 내부 서비스로 들어오는 HTTP/HTTPS 트래픽을 라우팅하는 관문이다.
+
+#### 인그레스가 없으면?
+
+Service만으로 외부 노출 시 문제가 있다:
+
+- `LoadBalancer` 타입 → 서비스마다 외부 IP(로드밸런서)가 하나씩 생긴다 (비용 폭탄)
+- `NodePort` → 포트 번호로 접근해야 해서 불편하다
+
+```
+서비스 A → 1.2.3.4:30001
+서비스 B → 1.2.3.5:30002
+서비스 C → 1.2.3.6:30003
+```
+
+#### 인그레스가 있으면?
+
+하나의 진입점에서 경로/도메인 기반으로 내부 서비스로 분기한다:
+
+```
+api.myapp.com/users  →  user-service
+api.myapp.com/orders →  order-service
+admin.myapp.com      →  admin-service
+```
 
 주요 기능:
 - **호스트 기반 라우팅**: `api.example.com` → API 서비스, `web.example.com` → 웹 서비스
@@ -514,6 +566,34 @@ spec:
 
 > Ingress를 사용하려면 Ingress Controller가 클러스터에 설치되어 있어야 한다.
 > AWS에서는 AWS Load Balancer Controller, 온프레미스에서는 Nginx Ingress Controller를 많이 사용한다.
+
+#### 구성 요소
+
+Ingress는 2가지 구성 요소로 나뉜다:
+
+| 구성 요소 | 역할 |
+|-----------|------|
+| **Ingress 리소스** | 라우팅 규칙을 정의하는 YAML (위 예시) |
+| **Ingress Controller** | 규칙을 실제로 읽고 트래픽을 처리하는 구현체 (별도 설치 필요) |
+
+대표적인 Ingress Controller:
+
+- **Nginx Ingress Controller** - 가장 범용적
+- **AWS Load Balancer Controller** - AWS ALB와 연동
+- **Traefik** - 자동 설정이 편리
+- **Istio** - 서비스 메시 기능 포함
+
+> Ingress 리소스만 만든다고 동작하지 않는다. Controller가 반드시 설치되어 있어야 한다.
+
+#### Spring Boot 개발자를 위한 비유
+
+| 쿠버네티스 | Spring Boot |
+|-----------|-------------|
+| Ingress Controller | API Gateway / Nginx 리버스 프록시 |
+| Ingress 규칙 | `@RequestMapping` 경로 라우팅 |
+| Service | 각 마이크로서비스 |
+
+MSA에서 **API Gateway**가 하는 역할과 거의 동일하다고 보면 된다.
 
 ---
 
