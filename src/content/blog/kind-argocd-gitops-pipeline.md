@@ -206,7 +206,7 @@ replicaCount: 2
 
 image:
   repository: marketplace
-  tag: v3
+  tag: v2
   pullPolicy: Never  # kind load로 직접 로드했으므로
 
 service:
@@ -584,7 +584,7 @@ Kubernetes: Rolling Update로 Pod 교체
 
 ---
 
-## selfHeal 동작 확인
+### selfHeal 동작 확인
 
 `selfHeal: true`가 실제로 어떻게 동작하는지도 확인해보자.
 
