@@ -33,19 +33,18 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 
 **Single Sign-On(SSO)**은 한 번의 인증으로 여러 애플리케이션에 접근할 수 있게 하는 인증 방식이다.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Identity Provider (IdP)                   │
-│                  (Keycloak, Okta, Azure AD)                  │
-└─────────────────────────────────────────────────────────────┘
-         │              │              │
-         ▼              ▼              ▼
-    ┌─────────┐   ┌─────────┐   ┌─────────┐
-    │  App A  │   │  App B  │   │  App C  │
-    │  (SP)   │   │  (SP)   │   │  (SP)   │
-    └─────────┘   └─────────┘   └─────────┘
+```mermaid
+graph TD
+    IdP["Identity Provider (IdP)\n(Keycloak, Okta, Azure AD)"]
+    AppA["App A\n(SP)"]
+    AppB["App B\n(SP)"]
+    AppC["App C\n(SP)"]
 
-SP = Service Provider (우리가 개발하는 애플리케이션)
+    IdP --> AppA
+    IdP --> AppB
+    IdP --> AppC
+
+    note["SP = Service Provider (우리가 개발하는 애플리케이션)"]
 ```
 
 ### 1.2 프로토콜 비교
@@ -90,29 +89,21 @@ dependencies {
 
 가장 안전하고 권장되는 흐름이다:
 
-```
-┌──────┐                              ┌──────┐                              ┌──────┐
-│ User │                              │  SP  │                              │ IdP  │
-└──┬───┘                              └──┬───┘                              └──┬───┘
-   │  1. /dashboard 접근                 │                                    │
-   │─────────────────────────────────▶│                                    │
-   │                                    │  2. 302 Redirect to IdP            │
-   │◀─────────────────────────────────│                                    │
-   │  3. IdP 로그인 페이지               │                                    │
-   │────────────────────────────────────────────────────────────────────▶│
-   │                                    │                                    │
-   │  4. 로그인 (ID/PW 또는 SSO)         │                                    │
-   │────────────────────────────────────────────────────────────────────▶│
-   │                                    │  5. 302 Redirect with code         │
-   │◀────────────────────────────────────────────────────────────────────│
-   │  6. Redirect to SP (/callback)     │                                    │
-   │─────────────────────────────────▶│                                    │
-   │                                    │  7. code → token 교환               │
-   │                                    │───────────────────────────────────▶│
-   │                                    │  8. Access Token + ID Token        │
-   │                                    │◀───────────────────────────────────│
-   │  9. 세션 생성, 원래 페이지 이동      │                                    │
-   │◀─────────────────────────────────│                                    │
+```mermaid
+sequenceDiagram
+    participant User
+    participant SP
+    participant IdP
+
+    User->>SP: 1. /dashboard 접근
+    SP-->>User: 2. 302 Redirect to IdP
+    User->>IdP: 3. IdP 로그인 페이지
+    User->>IdP: 4. 로그인 (ID/PW 또는 SSO)
+    IdP-->>User: 5. 302 Redirect with code
+    User->>SP: 6. Redirect to SP (/callback)
+    SP->>IdP: 7. code → token 교환
+    IdP-->>SP: 8. Access Token + ID Token
+    SP-->>User: 9. 세션 생성, 원래 페이지 이동
 ```
 
 ### 2.3 기본 설정 (application.yml)

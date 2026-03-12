@@ -34,19 +34,18 @@ This guide covers two primary approaches to implementing SSO in a Spring Boot ap
 
 **Single Sign-On (SSO)** is an authentication method that allows users to access multiple applications with a single authentication.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Identity Provider (IdP)                   │
-│                  (Keycloak, Okta, Azure AD)                  │
-└─────────────────────────────────────────────────────────────┘
-         │              │              │
-         ▼              ▼              ▼
-    ┌─────────┐   ┌─────────┐   ┌─────────┐
-    │  App A  │   │  App B  │   │  App C  │
-    │  (SP)   │   │  (SP)   │   │  (SP)   │
-    └─────────┘   └─────────┘   └─────────┘
+```mermaid
+graph TD
+    IdP["Identity Provider (IdP)\n(Keycloak, Okta, Azure AD)"]
+    AppA["App A\n(SP)"]
+    AppB["App B\n(SP)"]
+    AppC["App C\n(SP)"]
 
-SP = Service Provider (the application we develop)
+    IdP --> AppA
+    IdP --> AppB
+    IdP --> AppC
+
+    note["SP = Service Provider (the application we develop)"]
 ```
 
 ### 1.2 Protocol Comparison
@@ -91,30 +90,21 @@ dependencies {
 
 This is the most secure and recommended flow:
 
-```
-┌──────┐                              ┌──────┐                              ┌──────┐
-│ User │                              │  SP  │                              │ IdP  │
-└──┬───┘                              └──┬───┘                              └──┬───┘
-   │  1. Access /dashboard                │                                    │
-   │─────────────────────────────────▶│                                    │
-   │                                    │  2. 302 Redirect to IdP            │
-   │◀─────────────────────────────────│                                    │
-   │  3. IdP login page                  │                                    │
-   │────────────────────────────────────────────────────────────────────▶│
-   │                                    │                                    │
-   │  4. Login (ID/PW or SSO)            │                                    │
-   │────────────────────────────────────────────────────────────────────▶│
-   │                                    │  5. 302 Redirect with code         │
-   │◀────────────────────────────────────────────────────────────────────│
-   │  6. Redirect to SP (/callback)     │                                    │
-   │─────────────────────────────────▶│                                    │
-   │                                    │  7. Exchange code for token         │
-   │                                    │───────────────────────────────────▶│
-   │                                    │  8. Access Token + ID Token        │
-   │                                    │◀───────────────────────────────────│
-   │  9. Create session, redirect to     │                                    │
-   │     original page                   │                                    │
-   │◀─────────────────────────────────│                                    │
+```mermaid
+sequenceDiagram
+    participant User
+    participant SP
+    participant IdP
+
+    User->>SP: 1. Access /dashboard
+    SP-->>User: 2. 302 Redirect to IdP
+    User->>IdP: 3. IdP login page
+    User->>IdP: 4. Login (ID/PW or SSO)
+    IdP-->>User: 5. 302 Redirect with code
+    User->>SP: 6. Redirect to SP (/callback)
+    SP->>IdP: 7. Exchange code for token
+    IdP-->>SP: 8. Access Token + ID Token
+    SP-->>User: 9. Create session, redirect to original page
 ```
 
 ### 2.3 Basic Configuration (application.yml)

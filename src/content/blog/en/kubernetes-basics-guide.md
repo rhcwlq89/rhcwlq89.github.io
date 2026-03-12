@@ -64,38 +64,34 @@ Worker Nodes are the servers where containers actually run. Each Worker Node run
 
 ### Overall Architecture Diagram
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Control Plane                         │
-│                                                         │
-│  ┌────────────┐  ┌────────┐  ┌───────────┐  ┌────────┐ │
-│  │ API Server │  │  etcd  │  │ Scheduler │  │Controller│ │
-│  │            │  │        │  │           │  │ Manager │ │
-│  └─────┬──────┘  └────────┘  └───────────┘  └────────┘ │
-└────────┼────────────────────────────────────────────────┘
-         │
-         │  kubectl, API requests
-         │
-┌────────┼────────────────────────────────────────────────┐
-│        ▼         Worker Node 1                          │
-│  ┌─────────┐  ┌────────────┐  ┌───────────────────┐    │
-│  │ kubelet │  │ kube-proxy │  │ Container Runtime │    │
-│  └────┬────┘  └────────────┘  └───────────────────┘    │
-│       │                                                 │
-│  ┌────▼────┐  ┌─────────┐  ┌─────────┐                │
-│  │  Pod A  │  │  Pod B  │  │  Pod C  │                │
-│  └─────────┘  └─────────┘  └─────────┘                │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│                  Worker Node 2                          │
-│  ┌─────────┐  ┌────────────┐  ┌───────────────────┐    │
-│  │ kubelet │  │ kube-proxy │  │ Container Runtime │    │
-│  └────┬────┘  └────────────┘  └───────────────────┘    │
-│       │                                                 │
-│  ┌────▼────┐  ┌─────────┐                              │
-│  │  Pod D  │  │  Pod E  │                              │
-│  └─────────┘  └─────────┘                              │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+  subgraph CP["Control Plane"]
+    API["API Server"]
+    ETCD["etcd"]
+    SCHED["Scheduler"]
+    CM["Controller Manager"]
+  end
+
+  API -- "kubectl, API requests" --> WN1
+  API -- "kubectl, API requests" --> WN2
+
+  subgraph WN1["Worker Node 1"]
+    KL1["kubelet"]
+    KP1["kube-proxy"]
+    CR1["Container Runtime"]
+    KL1 --> PA["Pod A"]
+    KL1 --> PB["Pod B"]
+    KL1 --> PC["Pod C"]
+  end
+
+  subgraph WN2["Worker Node 2"]
+    KL2["kubelet"]
+    KP2["kube-proxy"]
+    CR2["Container Runtime"]
+    KL2 --> PD["Pod D"]
+    KL2 --> PE["Pod E"]
+  end
 ```
 
 Here is an example of the core workflow:

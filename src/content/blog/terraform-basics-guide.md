@@ -524,12 +524,9 @@ State는 Terraform에서 가장 중요한 개념 중 하나다. 제대로 이해
 
 `terraform.tfstate` 파일에 Terraform이 관리하는 모든 리소스의 현재 상태가 JSON 형태로 저장된다.
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   코드(.tf)   │     │    State     │     │  실제 인프라   │
-│              │     │ (.tfstate)   │     │   (AWS 등)    │
-│ desired state│ ←→  │ known state  │ ←→  │ actual state │
-└──────────────┘     └──────────────┘     └──────────────┘
+```mermaid
+flowchart LR
+    A["코드(.tf)\ndesired state"] <--> B["State(.tfstate)\nknown state"] <--> C["실제 인프라(AWS 등)\nactual state"]
 ```
 
 - **terraform plan**: 코드 ↔ State를 비교해서 변경사항을 계산한다
