@@ -159,11 +159,20 @@ sequenceDiagram
 
 ### 2.3 SAML Binding Methods
 
+SAML Binding defines **how SAML messages (AuthnRequest, SAMLResponse, etc.) are transported over HTTP** between IdP and SP. Think of it as the "transport method" — the same SAML flow can use different bindings depending on the message type and size.
+
 | Binding | Description | Usage |
 |---------|-------------|-------|
 | **HTTP-Redirect** | Sent via URL query parameters (GET) | AuthnRequest delivery |
 | **HTTP-POST** | Sent via HTML Form hidden fields (POST) | SAMLResponse delivery |
 | **HTTP-Artifact** | Only reference token is passed; actual data via back-channel | Large Assertions |
+
+Using the SP-Initiated SSO flow above as an example:
+
+- **Step 2** (SP → IdP): The AuthnRequest is small, so it is sent via **HTTP-Redirect** (as a URL query parameter in a GET request)
+- **Step 5** (IdP → SP): The SAMLResponse contains a signed XML Assertion which is large, so it is sent via **HTTP-POST** (as a hidden field in an HTML form)
+
+> **Note**: HTTP-Artifact only passes a reference token through the browser, while the actual SAML data is exchanged via direct server-to-server communication (back-channel). It is used when security is critical or the Assertion is too large, but due to its implementation complexity, the HTTP-Redirect + HTTP-POST combination is the most common in practice.
 
 ---
 
@@ -283,15 +292,18 @@ spring:
             # ACS configuration
             acs:
               location: "{baseUrl}/login/saml2/sso/{registrationId}"
-              binding: POST
+              binding: POST  # POST is the default, so this can be omitted. SAMLResponse uses POST because the signed XML is too large for URL parameters
 
             # SP signing key (optional: needed for signing AuthnRequest)
+            # ⚠️ private-key is a secret — NEVER commit to Git (add to .gitignore)
+            # certificate is a public key — safe to commit
             signing:
               credentials:
                 - private-key-location: classpath:credentials/sp-private.key
                   certificate-location: classpath:credentials/sp-certificate.crt
 
             # IdP configuration - use metadata URL (recommended)
+            # This URL, tenant-id, and app-id are public information — safe to commit to Git
             assertingparty:
               metadata-uri: https://login.microsoftonline.com/{tenant-id}/federationmetadata/2007-06/federationmetadata.xml?appid={app-id}
 
@@ -301,6 +313,33 @@ logging:
     org.springframework.security.saml2: DEBUG
     org.opensaml: DEBUG
 ```
+
+#### What is metadata-uri?
+
+`metadata-uri` is the **URL of the Federation Metadata XML document** provided by the IdP. When accessed, it returns an XML document containing all of the IdP's configuration:
+
+- **IdP Entity ID** — A unique URI that identifies the IdP
+- **SSO Login URL** — The endpoint to send AuthnRequest to
+- **SLO Logout URL** — The endpoint to send LogoutRequest to
+- **Signing Certificate** — The public certificate used to verify XML signatures in SAMLResponse
+
+Spring Security automatically parses this XML and populates all the above settings, so developers don't need to configure each value manually.
+
+The `{tenant-id}` and `{app-id}` can be found on the **Overview page** of the Enterprise Application registered in section 3.1.
+
+> **Git Commit Security Checklist**
+>
+> | Item | Git Commit | Reason |
+> |------|-----------|--------|
+> | `metadata-uri` URL, `tenant-id`, `app-id` | ✅ Safe | Public information |
+> | `azure-idp.cer` (IdP public certificate) | ✅ Safe | Public key (for signature verification) |
+> | `sp-certificate.crt` (SP public certificate) | ✅ Safe | Public key |
+> | **`sp-private.key` (SP private key)** | ❌ **Never** | Leakage enables AuthnRequest forgery |
+
+> **Why is metadata-uri recommended?**
+> - When the IdP's certificate is renewed, the **new certificate is automatically picked up** on application restart
+> - With manual configuration, you must replace the certificate file yourself — missing a renewal can break authentication
+> - Any IdP configuration changes are reflected without code modifications
 
 **Manual configuration instead of metadata URL:**
 
@@ -323,6 +362,7 @@ spring:
                 sign-request: false
               verification:
                 credentials:
+                  # IdP's public certificate — same public key found in metadata-uri XML, safe to commit to Git
                   - certificate-location: classpath:credentials/azure-idp.cer
 ```
 
@@ -366,7 +406,82 @@ class SecurityConfig {
 }
 ```
 
-### 4.4 Custom SAML Response Processing
+### 4.4 Session Management Strategy
+
+SAML authentication's role ends at receiving the SAMLResponse from the IdP and validating the Assertion. **How the SP maintains user state after that** is a separate concern, and the Security configuration differs by approach.
+
+| Strategy | Description | Best For |
+|----------|-------------|----------|
+| **Server Session (default)** | Maintains server-side session via `JSESSIONID` cookie | MPA, single server, quick setup |
+| **JWT (Stateless)** | Issues JWT after SAML auth, no server session | SPA + API server, microservices |
+| **Redis Session** | Stores server session in Redis | Multi-instance, horizontal scaling |
+
+The 4.3 Security Configuration above uses the **server session approach (default)**. If JWT is needed, configure as follows.
+
+#### JWT Configuration
+
+After successful SAML authentication, the SP issues a JWT. Subsequent requests are authenticated using the JWT:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SP
+    participant IdP
+
+    User->>SP: 1. Access /dashboard
+    SP-->>User: 2. SAML auth flow (via IdP)
+    User->>SP: 3. SAMLResponse delivered
+    Note right of SP: 4. Validate Assertion
+    SP-->>User: 5. Issue JWT (Authorization header or cookie)
+    User->>SP: 6. Attach JWT to subsequent requests
+    Note right of SP: 7. Validate JWT (no server session)
+```
+
+```kotlin
+@Configuration
+@EnableWebSecurity
+class SecurityConfig(
+    private val jwtTokenProvider: JwtTokenProvider
+) {
+
+    @Bean
+    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            // Stateless — no server session created
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers("/", "/health", "/error", "/api/auth/**").permitAll()
+                    .anyRequest().authenticated()
+            }
+            .saml2Login { saml2 ->
+                saml2
+                    // Issue JWT on successful SAML authentication
+                    .successHandler { request, response, authentication ->
+                        val principal = authentication.principal as SamlUserPrincipal
+                        val token = jwtTokenProvider.createToken(principal)
+                        response.contentType = "application/json"
+                        response.writer.write("""{"token": "$token"}""")
+                    }
+            }
+            .saml2Metadata { }
+            // Add JWT validation filter
+            .addFilterBefore(
+                JwtAuthenticationFilter(jwtTokenProvider),
+                UsernamePasswordAuthenticationFilter::class.java
+            )
+
+        return http.build()
+    }
+}
+```
+
+> **Important notes**:
+> - With `SessionCreationPolicy.STATELESS`, SAML SLO (Single Logout) depends on server sessions, so **additional handling is required** (e.g., JWT blacklist)
+> - It is recommended to set the JWT expiration based on the SAML Assertion's `SessionNotOnOrAfter` value
+> - In SPA environments, return the JWT as JSON in the `successHandler`. In MPA environments, set it as an `httpOnly` cookie
+
+### 4.5 Custom SAML Response Processing
 
 To extract user information more granularly from the Assertion instead of using the default `OpenSaml4AuthenticationProvider`, use a custom converter:
 
@@ -480,7 +595,7 @@ class SamlResponseAuthenticationConverter : Converter<ResponseToken, AbstractAut
 }
 ```
 
-### 4.5 User Principal Class
+### 4.6 User Principal Class
 
 ```kotlin
 import org.springframework.security.saml2.provider.service.authentication.Saml2AuthenticatedPrincipal
@@ -510,7 +625,7 @@ data class SamlUserPrincipal(
 }
 ```
 
-### 4.6 Applying Custom Converter to Security Config
+### 4.7 Applying Custom Converter to Security Config
 
 ```kotlin
 @Configuration

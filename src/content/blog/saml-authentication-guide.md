@@ -159,11 +159,20 @@ sequenceDiagram
 
 ### 2.3 SAML Binding 방식
 
+SAML Binding이란 IdP와 SP 사이에서 SAML 메시지(AuthnRequest, SAMLResponse 등)를 **어떤 HTTP 방식으로 전달할지**를 정의하는 규약이다. 같은 SAML 플로우라도 메시지를 실어 나르는 "교통수단"이 다를 수 있고, 그것을 Binding이라고 부른다.
+
 | Binding | 설명 | 용도 |
 |---------|------|------|
 | **HTTP-Redirect** | URL 쿼리 파라미터로 전송 (GET) | AuthnRequest 전송 |
 | **HTTP-POST** | HTML Form의 hidden field로 전송 (POST) | SAMLResponse 전송 |
 | **HTTP-Artifact** | 참조 토큰만 전달, 실제 데이터는 백채널로 | 대용량 Assertion |
+
+위의 SP-Initiated SSO 플로우를 예로 들면:
+
+- **2단계** (SP → IdP): AuthnRequest는 데이터가 작기 때문에 **HTTP-Redirect** (GET 요청의 URL 쿼리 파라미터)로 전송한다
+- **5단계** (IdP → SP): SAMLResponse는 서명된 XML이라 데이터가 크기 때문에 **HTTP-POST** (HTML Form의 hidden field)로 전송한다
+
+> **참고**: HTTP-Artifact는 브라우저를 통해 참조용 토큰만 전달하고, 실제 SAML 데이터는 서버 간 직접 통신(백채널)으로 교환하는 방식이다. 보안이 중요하거나 Assertion 크기가 클 때 사용하지만, 구현 복잡도가 높아 실무에서는 HTTP-Redirect + HTTP-POST 조합이 가장 일반적이다.
 
 ---
 
@@ -283,15 +292,18 @@ spring:
             # ACS 설정
             acs:
               location: "{baseUrl}/login/saml2/sso/{registrationId}"
-              binding: POST
+              binding: POST  # 기본값이 POST이므로 생략 가능. SAMLResponse는 서명된 XML이라 데이터가 크기 때문에 POST만 사용한다
 
             # SP 서명 키 (선택: AuthnRequest 서명 시 필요)
+            # ⚠️ private-key는 비밀키이므로 절대 Git에 커밋하지 말 것 (.gitignore에 추가)
+            # certificate는 공개키이므로 커밋해도 무방
             signing:
               credentials:
                 - private-key-location: classpath:credentials/sp-private.key
                   certificate-location: classpath:credentials/sp-certificate.crt
 
             # IdP 설정 - 메타데이터 URL 사용 (권장)
+            # 이 URL과 tenant-id, app-id는 공개 정보이므로 Git에 커밋해도 무방
             assertingparty:
               metadata-uri: https://login.microsoftonline.com/{tenant-id}/federationmetadata/2007-06/federationmetadata.xml?appid={app-id}
 
@@ -301,6 +313,33 @@ logging:
     org.springframework.security.saml2: DEBUG
     org.opensaml: DEBUG
 ```
+
+#### metadata-uri란?
+
+`metadata-uri`는 IdP가 제공하는 **Federation Metadata XML 문서의 URL**이다. 이 URL에 접속하면 IdP의 모든 설정 정보가 담긴 XML을 반환한다:
+
+- **IdP Entity ID** — IdP를 식별하는 고유 URI
+- **SSO 로그인 URL** — AuthnRequest를 보낼 엔드포인트
+- **SLO 로그아웃 URL** — LogoutRequest를 보낼 엔드포인트
+- **서명 인증서** — SAMLResponse의 XML 서명을 검증할 공개 인증서
+
+Spring Security는 이 XML을 자동으로 파싱하여 위 정보를 전부 채워주므로, 개발자가 하나하나 수동으로 입력할 필요가 없다.
+
+`{tenant-id}`와 `{app-id}`는 3.1절에서 등록한 Enterprise Application의 **개요(Overview) 페이지**에서 확인할 수 있다.
+
+> **Git 커밋 시 보안 체크리스트**
+>
+> | 항목 | Git 커밋 | 이유 |
+> |------|---------|------|
+> | `metadata-uri` URL, `tenant-id`, `app-id` | ✅ 가능 | 공개 정보 |
+> | `azure-idp.cer` (IdP 공개 인증서) | ✅ 가능 | 공개키 (서명 검증용) |
+> | `sp-certificate.crt` (SP 공개 인증서) | ✅ 가능 | 공개키 |
+> | **`sp-private.key` (SP 비밀키)** | ❌ **절대 불가** | 유출 시 AuthnRequest 위조 가능 |
+
+> **왜 metadata-uri가 권장인가?**
+> - IdP의 인증서가 갱신되면 애플리케이션 재시작 시 **자동으로 새 인증서를 반영**한다
+> - 수동 설정은 인증서 파일을 직접 교체해야 하므로, 갱신을 놓치면 인증이 깨질 수 있다
+> - IdP 설정이 변경되어도 별도 수정 없이 반영된다
 
 **메타데이터 URL 대신 수동 설정 시:**
 
@@ -323,6 +362,7 @@ spring:
                 sign-request: false
               verification:
                 credentials:
+                  # IdP의 공개 인증서 — metadata-uri XML에 포함된 것과 동일한 공개키이므로 Git에 커밋해도 무방
                   - certificate-location: classpath:credentials/azure-idp.cer
 ```
 
@@ -366,7 +406,82 @@ class SecurityConfig {
 }
 ```
 
-### 4.4 SAML Response 커스텀 처리
+### 4.4 세션 관리 방식 선택
+
+SAML 인증은 IdP에서 SAMLResponse를 받아 Assertion을 검증하는 것까지가 역할이다. **그 이후 SP에서 사용자 상태를 어떻게 유지하느냐**는 별개의 문제이며, 방식에 따라 Security 설정이 달라진다.
+
+| 방식 | 특징 | 적합한 경우 |
+|------|------|------------|
+| **서버 세션 (기본)** | `JSESSIONID` 쿠키로 서버 측 세션 유지 | MPA, 단일 서버, 빠른 구현 |
+| **JWT (Stateless)** | SAML 인증 후 JWT 발급, 서버에 세션 저장 안 함 | SPA + API 서버, 마이크로서비스 |
+| **Redis 세션** | 서버 세션을 Redis에 저장 | 다중 인스턴스, 수평 확장 |
+
+위의 4.3절 Security Configuration은 **서버 세션 방식 (기본값)**이다. JWT 방식이 필요한 경우 아래와 같이 설정한다.
+
+#### JWT 방식 설정
+
+SAML 인증 성공 후 JWT를 발급하고, 이후 요청은 JWT로 인증하는 구조다:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SP
+    participant IdP
+
+    User->>SP: 1. /dashboard 접근
+    SP-->>User: 2. SAML 인증 플로우 (IdP 경유)
+    User->>SP: 3. SAMLResponse 전달
+    Note right of SP: 4. Assertion 검증
+    SP-->>User: 5. JWT 발급 (Authorization 헤더 또는 쿠키)
+    User->>SP: 6. 이후 요청마다 JWT 첨부
+    Note right of SP: 7. JWT 검증 (서버 세션 없음)
+```
+
+```kotlin
+@Configuration
+@EnableWebSecurity
+class SecurityConfig(
+    private val jwtTokenProvider: JwtTokenProvider
+) {
+
+    @Bean
+    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            // JWT 방식이므로 서버 세션을 생성하지 않는다
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers("/", "/health", "/error", "/api/auth/**").permitAll()
+                    .anyRequest().authenticated()
+            }
+            .saml2Login { saml2 ->
+                saml2
+                    // SAML 인증 성공 시 JWT를 발급하는 핸들러
+                    .successHandler { request, response, authentication ->
+                        val principal = authentication.principal as SamlUserPrincipal
+                        val token = jwtTokenProvider.createToken(principal)
+                        response.contentType = "application/json"
+                        response.writer.write("""{"token": "$token"}""")
+                    }
+            }
+            .saml2Metadata { }
+            // JWT 검증 필터 추가
+            .addFilterBefore(
+                JwtAuthenticationFilter(jwtTokenProvider),
+                UsernamePasswordAuthenticationFilter::class.java
+            )
+
+        return http.build()
+    }
+}
+```
+
+> **주의사항**:
+> - `SessionCreationPolicy.STATELESS`를 설정하면 SAML SLO(Single Logout)는 서버 세션에 의존하므로 **별도 처리가 필요**하다 (JWT 블랙리스트 등)
+> - JWT의 만료 시간은 SAML Assertion의 `SessionNotOnOrAfter` 값을 참고하여 설정하는 것을 권장한다
+> - SPA 환경에서는 `successHandler`에서 JWT를 JSON으로 응답하고, MPA 환경에서는 `httpOnly` 쿠키로 설정하는 것이 일반적이다
+
+### 4.5 SAML Response 커스텀 처리
 
 기본 `OpenSaml4AuthenticationProvider` 대신 Assertion에서 사용자 정보를 세밀하게 추출하려면 커스텀 컨버터를 사용한다:
 
@@ -480,7 +595,7 @@ class SamlResponseAuthenticationConverter : Converter<ResponseToken, AbstractAut
 }
 ```
 
-### 4.5 사용자 Principal 클래스
+### 4.6 사용자 Principal 클래스
 
 ```kotlin
 import org.springframework.security.saml2.provider.service.authentication.Saml2AuthenticatedPrincipal
@@ -510,7 +625,7 @@ data class SamlUserPrincipal(
 }
 ```
 
-### 4.6 Security Config에 커스텀 컨버터 적용
+### 4.7 Security Config에 커스텀 컨버터 적용
 
 ```kotlin
 @Configuration
