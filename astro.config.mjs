@@ -2,6 +2,7 @@
 
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import rehypeMermaid from 'rehype-mermaid';
 import { defineConfig } from 'astro/config';
 
 // https://astro.build/config
@@ -17,7 +18,9 @@ export default defineConfig({
 	},
 	markdown: {
         shikiConfig: {
-            theme: 'github-dark'
+            theme: 'github-dark',
+            excludeLangs: ['mermaid'],
         },
+        rehypePlugins: [[rehypeMermaid, { strategy: 'img-svg' }]],
     },
 });
