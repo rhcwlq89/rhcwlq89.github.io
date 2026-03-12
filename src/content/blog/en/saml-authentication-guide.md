@@ -311,7 +311,7 @@ spring:
               location: "{baseUrl}/login/saml2/sso/{registrationId}"
               binding: POST  # POST is the default, so this can be omitted. SAMLResponse uses POST because the signed XML is too large for URL parameters
 
-            # SP signing key (optional: needed for signing AuthnRequest)
+            # SP signing key (optional for AuthnRequest signing, REQUIRED for SLO)
             # ⚠️ private-key is a secret — NEVER commit to Git (add to .gitignore)
             # certificate is a public key — safe to commit
             signing:
@@ -663,6 +663,8 @@ class SamlResponseAuthenticationConverter : Converter<ResponseToken, AbstractAut
 
 ### 4.6 User Principal Class
 
+Why `Serializable`? Spring Security stores the `Authentication` object in the **HTTP session**. With server sessions, the Principal is serialized and stored; in Redis session or session clustering environments, it may also be transmitted over the network. Without `Serializable`, a `NotSerializableException` is thrown when the session is persisted.
+
 ```kotlin
 import org.springframework.security.saml2.provider.service.authentication.Saml2AuthenticatedPrincipal
 import java.io.Serializable
@@ -738,6 +740,8 @@ class SecurityConfig(
 
 ### 5.1 Using User Information in Controllers
 
+Adding `@AuthenticationPrincipal` to a parameter injects the currently authenticated user's Principal object directly. No additional configuration is needed — Spring Security automatically registers an `AuthenticationPrincipalArgumentResolver`. Internally, this is equivalent to calling `SecurityContextHolder` → `Authentication` → `getPrincipal()`.
+
 ```kotlin
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.stereotype.Controller
@@ -772,7 +776,9 @@ class DashboardController {
 
 ### 5.2 Automatic User Provisioning (JIT Provisioning)
 
-A pattern for automatically creating/updating local users during SAML authentication:
+**JIT (Just-In-Time) Provisioning** is a pattern where a local user account is **automatically created on first SAML login** if it doesn't already exist in the database. There's no need for an admin to pre-register users — as long as they pass IdP authentication, their account is created automatically.
+
+There are several ways to implement this, but here we use Spring's `@EventListener`. Spring Security publishes an `AuthenticationSuccessEvent` on successful authentication (available since Spring Security 4.0+ / Spring Boot 1.3+), and by subscribing to this event, we can handle side effects (user creation/update) **without modifying the authentication logic itself**:
 
 ```kotlin
 import org.springframework.context.event.EventListener
@@ -839,6 +845,8 @@ sequenceDiagram
 ```
 
 ### 6.2 SLO Configuration
+
+In SLO, the SP must **sign the LogoutRequest XML** before sending it to the IdP. Therefore, the `signing.credentials` (SP private key + certificate) from section 4.2 are **required**. Without them, LogoutRequest signing fails and SLO will not work.
 
 ```yaml
 # Add to application.yml

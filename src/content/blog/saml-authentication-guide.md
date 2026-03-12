@@ -311,7 +311,7 @@ spring:
               location: "{baseUrl}/login/saml2/sso/{registrationId}"
               binding: POST  # 기본값이 POST이므로 생략 가능. SAMLResponse는 서명된 XML이라 데이터가 크기 때문에 POST만 사용한다
 
-            # SP 서명 키 (선택: AuthnRequest 서명 시 필요)
+            # SP 서명 키 (AuthnRequest 서명 시 선택, SLO 사용 시 필수)
             # ⚠️ private-key는 비밀키이므로 절대 Git에 커밋하지 말 것 (.gitignore에 추가)
             # certificate는 공개키이므로 커밋해도 무방
             signing:
@@ -663,6 +663,8 @@ class SamlResponseAuthenticationConverter : Converter<ResponseToken, AbstractAut
 
 ### 4.6 사용자 Principal 클래스
 
+`Serializable`을 구현하는 이유: Spring Security는 인증 객체(`Authentication`)를 **HTTP 세션에 저장**한다. 서버 세션 방식에서는 Principal이 세션에 직렬화되어 저장되고, Redis 세션이나 세션 클러스터링 환경에서는 네트워크를 통해 전송되기도 한다. `Serializable`이 없으면 세션 저장 시 `NotSerializableException`이 발생한다.
+
 ```kotlin
 import org.springframework.security.saml2.provider.service.authentication.Saml2AuthenticatedPrincipal
 import java.io.Serializable
@@ -738,6 +740,8 @@ class SecurityConfig(
 
 ### 5.1 컨트롤러에서 사용자 정보 사용
 
+`@AuthenticationPrincipal`을 파라미터에 붙이면 현재 인증된 사용자의 Principal 객체를 바로 주입받을 수 있다. Spring Security가 `AuthenticationPrincipalArgumentResolver`를 자동 등록하기 때문에 별도 설정은 필요 없다. 내부적으로는 `SecurityContextHolder` → `Authentication` → `getPrincipal()` 순서로 꺼내오는 것과 동일하다.
+
 ```kotlin
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.stereotype.Controller
@@ -772,7 +776,9 @@ class DashboardController {
 
 ### 5.2 자동 사용자 프로비저닝 (JIT Provisioning)
 
-SAML 인증 시 자동으로 로컬 사용자를 생성/업데이트하는 패턴이다:
+**JIT(Just-In-Time) Provisioning**이란 사용자가 처음 SAML 로그인할 때 로컬 DB에 해당 사용자가 없으면 **그 즉시 자동으로 생성**하는 패턴이다. 관리자가 미리 사용자를 등록할 필요 없이, IdP에서 인증만 통과하면 자동으로 계정이 만들어진다.
+
+구현 방법은 여러 가지가 있지만, 여기서는 Spring의 `@EventListener`를 사용한다. Spring Security는 인증 성공 시 `AuthenticationSuccessEvent`를 발행하는데 (Spring Security 4.0+, Spring Boot 1.3+부터 지원), 이 이벤트를 구독하면 **인증 로직을 수정하지 않고도** 부가 작업(사용자 생성/업데이트)을 처리할 수 있다:
 
 ```kotlin
 import org.springframework.context.event.EventListener
@@ -839,6 +845,8 @@ sequenceDiagram
 ```
 
 ### 6.2 SLO 설정
+
+SLO에서는 SP가 IdP에 **LogoutRequest를 XML 서명하여 전송**해야 한다. 따라서 4.2절의 `signing.credentials` (SP private key + certificate)가 **필수**다. 설정이 없으면 LogoutRequest 서명에 실패하여 SLO가 동작하지 않는다.
 
 ```yaml
 # application.yml에 추가
