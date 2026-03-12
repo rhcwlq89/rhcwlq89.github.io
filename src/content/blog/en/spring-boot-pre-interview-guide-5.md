@@ -1083,6 +1083,8 @@ public MemberResponse getCurrentMember(@CurrentUser Long userId) {
 
 ## CORS Configuration
 
+> For a deeper understanding of how CORS works (SOP, Simple/Preflight/Credentialed requests, error pattern solutions, etc.), see [Understanding CORS: From Browser Security Policy to Spring Boot Configuration](/en/blog/cors-understanding-guide/).
+
 ### 1. Global CORS Configuration
 
 ```java

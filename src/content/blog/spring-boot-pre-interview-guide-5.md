@@ -1082,6 +1082,8 @@ public MemberResponse getCurrentMember(@CurrentUser Long userId) {
 
 ## CORS 설정
 
+> CORS의 동작 원리(SOP, Simple/Preflight/Credentialed 요청, 에러 패턴별 해결법 등)를 자세히 알고 싶다면 [CORS를 이해하기: 브라우저 보안 정책부터 Spring Boot 설정까지](/blog/cors-understanding-guide/) 글을 참고하라.
+
 ### 1. 전역 CORS 설정
 
 ```java

@@ -3,7 +3,7 @@ title: "Understanding CORS: From Browser Security Policy to Spring Boot Configur
 description: "Understand how CORS (Cross-Origin Resource Sharing) works and learn how to resolve common CORS errors in practice"
 pubDate: 2026-03-12T15:00:00+09:00
 tags: ["CORS", "Web Security", "Spring Boot", "Browser", "HTTP"]
-heroImage: "../../../assets/PracticalGuideSeries.png"
+heroImage: "../../../assets/CorsUnderstandingGuide.png"
 ---
 
 ## Introduction

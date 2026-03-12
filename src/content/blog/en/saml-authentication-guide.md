@@ -57,7 +57,24 @@ flowchart TB
 | **RelayState** | Original URL to redirect to after authentication |
 | **Name ID** | Value that identifies the user (email, UPN, etc.) |
 
-### 1.3 SAML Assertion Structure
+### 1.3 Spring Security Terminology Mapping
+
+Spring Security uses its **own terminology** instead of the standard SAML terms (IdP, SP). Since these terms appear in `application.yml` and APIs, understanding the mapping upfront helps avoid confusion:
+
+| Spring Security Term | Standard SAML Term | Meaning |
+|---------------------|-------------------|---------|
+| **RP (Relying Party)** | SP (Service Provider) | Our service |
+| **AP (Asserting Party)** | IdP (Identity Provider) | Microsoft Entra ID, etc. |
+
+For example:
+- `relyingparty.registration` = SAML configuration for **SP (our app)**
+- `assertingparty.metadata-uri` = Metadata URL of the **IdP (Microsoft)**
+- RP-initiated SLO = Logout initiated from our service
+- AP-initiated SLO = Logout initiated from IdP (Microsoft)
+
+> **Tip**: Whenever you see "AP" in Spring Security docs, just think "IdP" — they mean the same thing.
+
+### 1.4 SAML Assertion Structure
 
 A SAML Assertion consists of three types of Statements:
 
@@ -94,7 +111,7 @@ A SAML Assertion consists of three types of Statements:
 </saml:Assertion>
 ```
 
-### 1.4 SAML vs OAuth2/OIDC Comparison
+### 1.5 SAML vs OAuth2/OIDC Comparison
 
 | Aspect | SAML 2.0 | OAuth2/OIDC |
 |--------|----------|-------------|
@@ -437,6 +454,8 @@ sequenceDiagram
     Note right of SP: 7. Validate JWT (no server session)
 ```
 
+SAML authentication and JWT validation require **different session policies**. SAML needs sessions for the IdP redirect flow, while API requests should be stateless. The recommended approach is to **separate SecurityFilterChains using `@Order`**:
+
 ```kotlin
 @Configuration
 @EnableWebSecurity
@@ -444,28 +463,45 @@ class SecurityConfig(
     private val jwtTokenProvider: JwtTokenProvider
 ) {
 
+    // ① SAML auth chain — handles login/logout/metadata paths only
     @Bean
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    @Order(1)
+    fun samlFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
-            // Stateless — no server session created
-            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .authorizeHttpRequests { auth ->
-                auth
-                    .requestMatchers("/", "/health", "/error", "/api/auth/**").permitAll()
-                    .anyRequest().authenticated()
-            }
+            .securityMatcher("/login/saml2/**", "/saml2/**", "/logout", "/saml/metadata")
+            // SAML redirect flow requires session
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED) }
             .saml2Login { saml2 ->
                 saml2
                     // Issue JWT on successful SAML authentication
                     .successHandler { request, response, authentication ->
                         val principal = authentication.principal as SamlUserPrincipal
                         val token = jwtTokenProvider.createToken(principal)
+                        // SPA: respond with JSON
                         response.contentType = "application/json"
                         response.writer.write("""{"token": "$token"}""")
                     }
             }
+            .saml2Logout { logout ->
+                logout.logoutUrl("/logout").logoutSuccessUrl("/")
+            }
             .saml2Metadata { }
-            // Add JWT validation filter
+
+        return http.build()
+    }
+
+    // ② API chain — JWT authentication, no session
+    @Bean
+    @Order(2)
+    fun apiFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .securityMatcher("/api/**")
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers("/api/public/**").permitAll()
+                    .anyRequest().authenticated()
+            }
             .addFilterBefore(
                 JwtAuthenticationFilter(jwtTokenProvider),
                 UsernamePasswordAuthenticationFilter::class.java
@@ -473,17 +509,47 @@ class SecurityConfig(
 
         return http.build()
     }
+
+    // ③ Default chain (static resources, health checks, etc.)
+    @Bean
+    @Order(3)
+    fun defaultFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers("/", "/health", "/error").permitAll()
+                    .anyRequest().authenticated()
+            }
+
+        return http.build()
+    }
 }
 ```
 
+> **Why separate chains?**
+> - Setting `STATELESS` on a single chain breaks the SAML redirect flow because the session cannot be found
+> - With `@Order` separation, SAML paths use sessions while API paths operate with JWT only
+> - Each chain's `securityMatcher` clearly scopes the paths, preventing configuration conflicts
+
 > **Important notes**:
-> - With `SessionCreationPolicy.STATELESS`, SAML SLO (Single Logout) depends on server sessions, so **additional handling is required** (e.g., JWT blacklist)
+> - SAML SLO (Single Logout) depends on server sessions, so in a JWT environment, **additional handling is required** (e.g., token blacklist)
 > - It is recommended to set the JWT expiration based on the SAML Assertion's `SessionNotOnOrAfter` value
 > - In SPA environments, return the JWT as JSON in the `successHandler`. In MPA environments, set it as an `httpOnly` cookie
 
 ### 4.5 Custom SAML Response Processing
 
-To extract user information more granularly from the Assertion instead of using the default `OpenSaml4AuthenticationProvider`, use a custom converter:
+#### Default Behavior
+
+Spring Security internally uses `OpenSaml4AuthenticationProvider` to process SAML Responses. Here's what the default Provider does:
+
+1. **Verifies the XML signature** of the SAMLResponse
+2. **Validates conditions** such as expiration and Audience in the Assertion
+3. Sets the `NameID` value as the Principal name
+4. Stores Assertion Attributes in a `Saml2AuthenticatedPrincipal` and creates a `Saml2Authentication` object
+
+Authentication works without any custom configuration, but the default Provider simply stores Attributes as a flat map. In practice, you need to **extract email, name, groups/roles and map them to Spring Security's `GrantedAuthority`**, which requires a custom converter:
+
+#### Custom Converter Implementation
 
 ```kotlin
 import org.opensaml.saml.saml2.core.Assertion

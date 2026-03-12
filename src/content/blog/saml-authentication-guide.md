@@ -57,7 +57,24 @@ graph TB
 | **RelayState** | 인증 완료 후 리다이렉트할 원래 URL |
 | **Name ID** | 사용자를 식별하는 값 (이메일, UPN 등) |
 
-### 1.3 SAML Assertion 구조
+### 1.3 Spring Security 용어와의 매핑
+
+Spring Security 문서는 SAML 표준 용어(IdP, SP) 대신 **자체 용어**를 사용한다. `application.yml`이나 API에서 이 용어가 등장하므로 미리 알아두면 혼란을 줄일 수 있다:
+
+| Spring Security 용어 | 일반 SAML 용어 | 의미 |
+|---------------------|---------------|------|
+| **RP (Relying Party)** | SP (Service Provider) | 우리 서비스 |
+| **AP (Asserting Party)** | IdP (Identity Provider) | Microsoft Entra ID 등 |
+
+예를 들어:
+- `relyingparty.registration` = **SP(우리 앱)**의 SAML 설정
+- `assertingparty.metadata-uri` = **IdP(Microsoft)**의 메타데이터 URL
+- RP-initiated SLO = 우리 서비스에서 시작하는 로그아웃
+- AP-initiated SLO = IdP(Microsoft)에서 시작하는 로그아웃
+
+> **팁**: Spring Security 문서에서 AP라는 용어를 보면 "IdP와 같은 뜻"이라고 생각하면 된다.
+
+### 1.4 SAML Assertion 구조
 
 SAML Assertion은 세 가지 Statement로 구성된다:
 
@@ -94,7 +111,7 @@ SAML Assertion은 세 가지 Statement로 구성된다:
 </saml:Assertion>
 ```
 
-### 1.4 SAML vs OAuth2/OIDC 비교
+### 1.5 SAML vs OAuth2/OIDC 비교
 
 | 항목 | SAML 2.0 | OAuth2/OIDC |
 |------|----------|-------------|
@@ -437,6 +454,8 @@ sequenceDiagram
     Note right of SP: 7. JWT 검증 (서버 세션 없음)
 ```
 
+SAML 인증과 JWT 검증은 **서로 다른 세션 정책**이 필요하다. SAML은 IdP와의 리다이렉트 과정에서 세션이 필요하지만, API 요청은 Stateless여야 한다. 이를 해결하기 위해 `@Order`로 **SecurityFilterChain을 분리**하는 것이 권장된다:
+
 ```kotlin
 @Configuration
 @EnableWebSecurity
@@ -444,28 +463,45 @@ class SecurityConfig(
     private val jwtTokenProvider: JwtTokenProvider
 ) {
 
+    // ① SAML 인증 체인 — 로그인/로그아웃/메타데이터 경로만 처리
     @Bean
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    @Order(1)
+    fun samlFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
-            // JWT 방식이므로 서버 세션을 생성하지 않는다
-            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .authorizeHttpRequests { auth ->
-                auth
-                    .requestMatchers("/", "/health", "/error", "/api/auth/**").permitAll()
-                    .anyRequest().authenticated()
-            }
+            .securityMatcher("/login/saml2/**", "/saml2/**", "/logout", "/saml/metadata")
+            // SAML 리다이렉트 과정에서 세션이 필요하므로 세션 허용
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED) }
             .saml2Login { saml2 ->
                 saml2
                     // SAML 인증 성공 시 JWT를 발급하는 핸들러
                     .successHandler { request, response, authentication ->
                         val principal = authentication.principal as SamlUserPrincipal
                         val token = jwtTokenProvider.createToken(principal)
+                        // SPA: JSON으로 응답
                         response.contentType = "application/json"
                         response.writer.write("""{"token": "$token"}""")
                     }
             }
+            .saml2Logout { logout ->
+                logout.logoutUrl("/logout").logoutSuccessUrl("/")
+            }
             .saml2Metadata { }
-            // JWT 검증 필터 추가
+
+        return http.build()
+    }
+
+    // ② API 체인 — JWT로 인증, 세션 사용 안 함
+    @Bean
+    @Order(2)
+    fun apiFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .securityMatcher("/api/**")
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers("/api/public/**").permitAll()
+                    .anyRequest().authenticated()
+            }
             .addFilterBefore(
                 JwtAuthenticationFilter(jwtTokenProvider),
                 UsernamePasswordAuthenticationFilter::class.java
@@ -473,17 +509,47 @@ class SecurityConfig(
 
         return http.build()
     }
+
+    // ③ 나머지 경로 (정적 리소스, 헬스체크 등)
+    @Bean
+    @Order(3)
+    fun defaultFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers("/", "/health", "/error").permitAll()
+                    .anyRequest().authenticated()
+            }
+
+        return http.build()
+    }
 }
 ```
 
+> **왜 체인을 분리하는가?**
+> - 하나의 체인에 `STATELESS`를 설정하면 SAML 리다이렉트 과정에서 세션을 찾지 못해 인증이 실패한다
+> - `@Order`로 분리하면 SAML 경로는 세션을 사용하고, API 경로는 JWT만으로 동작한다
+> - 각 체인의 `securityMatcher`로 경로를 명확히 구분하므로 설정이 충돌하지 않는다
+
 > **주의사항**:
-> - `SessionCreationPolicy.STATELESS`를 설정하면 SAML SLO(Single Logout)는 서버 세션에 의존하므로 **별도 처리가 필요**하다 (JWT 블랙리스트 등)
+> - SAML SLO(Single Logout)는 서버 세션에 의존하므로, JWT 환경에서는 **토큰 블랙리스트** 등 별도 처리가 필요하다
 > - JWT의 만료 시간은 SAML Assertion의 `SessionNotOnOrAfter` 값을 참고하여 설정하는 것을 권장한다
 > - SPA 환경에서는 `successHandler`에서 JWT를 JSON으로 응답하고, MPA 환경에서는 `httpOnly` 쿠키로 설정하는 것이 일반적이다
 
 ### 4.5 SAML Response 커스텀 처리
 
-기본 `OpenSaml4AuthenticationProvider` 대신 Assertion에서 사용자 정보를 세밀하게 추출하려면 커스텀 컨버터를 사용한다:
+#### 기본 동작
+
+Spring Security는 SAML Response를 처리할 때 내부적으로 `OpenSaml4AuthenticationProvider`를 사용한다. 이 기본 Provider가 하는 일은:
+
+1. SAMLResponse의 **XML 서명을 검증**한다
+2. Assertion의 **유효기간, Audience 등 조건을 확인**한다
+3. `NameID` 값을 Principal 이름으로 설정한다
+4. Assertion의 Attribute들을 `Saml2AuthenticatedPrincipal`에 담아 `Saml2Authentication` 객체를 생성한다
+
+별도 설정 없이도 인증 자체는 동작하지만, 기본 Provider는 Attribute를 단순히 맵으로 저장할 뿐이다. 실무에서는 **이메일, 이름, 그룹/역할 등을 추출하여 Spring Security의 `GrantedAuthority`로 매핑**해야 하므로 커스텀 컨버터가 필요하다:
+
+#### 커스텀 컨버터 구현
 
 ```kotlin
 import org.opensaml.saml.saml2.core.Assertion
