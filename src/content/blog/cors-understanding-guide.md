@@ -135,35 +135,39 @@ sequenceDiagram
 
 실제로 단순 요청 조건(`POST` + `application/x-www-form-urlencoded`)을 만족하면 Preflight 없이 서버까지 요청이 도달할 수 있다. 이것이 바로 CSRF 공격이 여전히 위험한 이유이며, 서버 측에서 CSRF 토큰 검증이 필요한 이유다.
 
-> 참고: 위 시나리오는 CSRF(Cross-Site Request Forgery) 공격과도 연관된다. CSRF는 사용자가 인증된 상태를 악용해, 사용자 모르게 다른 사이트에서 위조된 요청을 보내는 공격이다. 예를 들어 로그인된 은행 사이트의 쿠키를 이용해 악성 사이트가 송금 요청을 대신 보내는 식이다. SOP는 응답 읽기를 차단해 공격 표면을 줄여주지만, 요청 자체는 나갈 수 있으므로 CSRF를 완전히 막지는 못한다. 이를 방어하려면 CSRF 토큰, SameSite 쿠키 등의 추가 대책이 필요하다.
+### CSRF와 인증 방식의 관계
 
-> **"JWT를 쓰면 SOP/CORS와 상관없지 않나?"**
->
-> 아니다. SOP와 CORS는 **인증 방식과 무관하게 동작**한다. 세션 쿠키든 JWT든, 브라우저에서 다른 Origin으로 요청을 보내면 동일하게 CORS 정책이 적용된다. 위 시나리오에서는 쿠키를 예로 들었지만, JWT를 `Authorization` 헤더로 전달하는 경우에도 SOP는 동일하게 응답을 차단한다.
->
-> 다만 인증 방식에 따라 **CORS 설정에서 달라지는 점**이 있다:
->
-> | | 세션 쿠키 | JWT (`Authorization` 헤더) |
-> |--|----------|--------------------------|
-> | 전송 방식 | 브라우저가 자동 첨부 | JS가 직접 헤더에 추가 |
-> | `allowCredentials` | `true` 필요 | 불필요 (쿠키를 안 쓰므로) |
-> | Preflight 발생 | 쿠키 자체로는 발생 안 함 | `Authorization`이 커스텀 헤더이므로 **항상 발생** |
-> | `allowedHeaders` | 기본값으로 충분할 수 있음 | `Authorization` 포함 필요 |
->
-> JWT를 쓰면 `Authorization` 헤더 때문에 GET 요청이라도 **무조건 Preflight가 발생**한다. 오히려 세션 쿠키보다 Preflight를 더 자주 만나게 된다.
+위 시나리오는 **CSRF(Cross-Site Request Forgery)** 공격과도 연관된다. CSRF는 사용자가 인증된 상태를 악용해, 사용자 모르게 다른 사이트에서 위조된 요청을 보내는 공격이다. 예를 들어 로그인된 은행 사이트의 쿠키를 이용해 악성 사이트가 송금 요청을 대신 보내는 식이다.
 
-> **"그러면 JWT를 쓰면 CSRF는 걱정 안 해도 되나?"**
->
-> **JWT를 어디에 저장하고 어떻게 전달하느냐에 따라 다르다.** CSRF가 성립하려면 브라우저가 인증 정보를 **자동으로 첨부**해야 한다. 쿠키는 자동 첨부되지만, `Authorization` 헤더는 JS가 직접 넣어야 한다. `evil.com`의 스크립트는 SOP 때문에 `bank.com`의 `localStorage`에 접근할 수 없으므로, JWT를 가져올 방법이 없다.
->
-> | 인증 방식 | CSRF 위험 | 이유 |
-> |-----------|:---------:|------|
-> | 세션 쿠키 | **있음** | 브라우저가 쿠키를 자동 첨부 |
-> | JWT를 쿠키에 저장 | **있음** | 결국 쿠키이므로 자동 첨부됨 |
-> | JWT를 `Authorization` 헤더로 전달 | **없음** | JS가 수동으로 추가, 다른 Origin에서 접근 불가 |
-> | JWT를 `HttpOnly` 쿠키에 저장 | **있음** | 쿠키 자동 첨부 + JS에서 읽지도 못함 |
->
-> 핵심은 JWT 자체가 아니라 **전달 방식**이다. JWT를 쿠키에 담으면 세션 쿠키와 동일하게 CSRF에 취약하고, `Authorization` 헤더로 보내면 CSRF 걱정이 없는 대신 XSS로 `localStorage`의 토큰이 탈취될 수 있다. 어떤 방식이든 트레이드오프가 있다.
+SOP는 응답 읽기를 차단해 공격 표면을 줄여주지만, 요청 자체는 나갈 수 있으므로 CSRF를 완전히 막지는 못한다. 이를 방어하려면 CSRF 토큰, SameSite 쿠키 등의 추가 대책이 필요하다.
+
+#### SOP/CORS는 인증 방식과 무관하다
+
+"JWT를 쓰면 SOP/CORS와 상관없지 않나?"라고 생각할 수 있지만, 아니다. SOP와 CORS는 **인증 방식과 무관하게 동작**한다. 세션 쿠키든 JWT든, 브라우저에서 다른 Origin으로 요청을 보내면 동일하게 CORS 정책이 적용된다.
+
+다만 인증 방식에 따라 **CORS 설정에서 달라지는 점**이 있다:
+
+| | 세션 쿠키 | JWT (`Authorization` 헤더) |
+|--|----------|--------------------------|
+| 전송 방식 | 브라우저가 자동 첨부 | JS가 직접 헤더에 추가 |
+| `allowCredentials` | `true` 필요 | 불필요 (쿠키를 안 쓰므로) |
+| Preflight 발생 | 쿠키 자체로는 발생 안 함 | `Authorization`이 커스텀 헤더이므로 **항상 발생** |
+| `allowedHeaders` | 기본값으로 충분할 수 있음 | `Authorization` 포함 필요 |
+
+JWT를 쓰면 `Authorization` 헤더 때문에 GET 요청이라도 **무조건 Preflight가 발생**한다. 오히려 세션 쿠키보다 Preflight를 더 자주 만나게 된다.
+
+#### JWT 저장 방식에 따른 CSRF 위험도
+
+CSRF가 성립하려면 브라우저가 인증 정보를 **자동으로 첨부**해야 한다. 쿠키는 자동 첨부되지만, `Authorization` 헤더는 JS가 직접 넣어야 한다. `evil.com`의 스크립트는 SOP 때문에 `bank.com`의 `localStorage`에 접근할 수 없으므로, JWT를 가져올 방법이 없다.
+
+| 인증 방식 | CSRF 위험 | 이유 |
+|-----------|:---------:|------|
+| 세션 쿠키 | **있음** | 브라우저가 쿠키를 자동 첨부 |
+| JWT를 쿠키에 저장 | **있음** | 결국 쿠키이므로 자동 첨부됨 |
+| JWT를 `Authorization` 헤더로 전달 | **없음** | JS가 수동으로 추가, 다른 Origin에서 접근 불가 |
+| JWT를 `HttpOnly` 쿠키에 저장 | **있음** | 쿠키 자동 첨부 + JS에서 읽지도 못함 |
+
+핵심은 JWT 자체가 아니라 **전달 방식**이다. JWT를 쿠키에 담으면 세션 쿠키와 동일하게 CSRF에 취약하고, `Authorization` 헤더로 보내면 CSRF 걱정이 없는 대신 XSS로 `localStorage`의 토큰이 탈취될 수 있다. 어떤 방식이든 트레이드오프가 있다.
 
 ### 왜 서버가 아니라 브라우저에서 차단하는가?
 
@@ -432,22 +436,6 @@ class WebConfig : WebMvcConfigurer {
 | `allowCredentials(true)` | 쿠키/인증 정보 허용 |
 | `maxAge(3600)` | Preflight 캐시 시간 1시간 |
 
-> **Q: `allowedMethods`에 `OPTIONS`를 안 넣어도 되나?**
->
-> 된다. Preflight(`OPTIONS`) 요청은 Spring의 CORS 처리 메커니즘(`CorsFilter` 또는 `DispatcherServlet`)이 자동으로 가로채서 응답한다. 컨트롤러까지 도달하지 않기 때문에, `allowedMethods`에 `OPTIONS`를 명시할 필요가 없다. `allowedMethods`는 **본 요청에서 허용할 메서드**를 선언하는 것이다.
->
-> 단, 모든 `OPTIONS` 요청이 Preflight인 것은 아니다. Spring은 내부적으로 아래 **세 가지 조건을 모두 확인**해서 Preflight 여부를 판단한다.
->
-> 1. HTTP 메서드가 `OPTIONS`
-> 2. `Origin` 헤더 존재
-> 3. `Access-Control-Request-Method` 헤더 존재
->
-> 이 조건을 충족하지 않는 순수 `OPTIONS` 요청(예: API 디스커버리 용도)은 CorsFilter를 그대로 통과하고 컨트롤러까지 도달한다. 만약 컨트롤러에 `OPTIONS` 매핑이 없으면 `405 Method Not Allowed`가 응답될 수 있으니, 순수 `OPTIONS`를 지원해야 한다면 별도 핸들러를 만들어야 한다. 다만 실무에서 순수 `OPTIONS`를 쓰는 경우는 거의 없다.
-
-> **참고: Spring Framework 7.0 (Spring Boot 4.0) 동작 변경**
->
-> `WebMvcConfigurer`의 `addCorsMappings` API 자체는 Spring Boot 2.x → 3.x → 4.x 전 버전에서 변경 없이 동일하게 사용할 수 있다. 단, Spring Framework 7.0부터 한 가지 **동작 변경**이 있다: CORS 설정이 비어 있을 때 Preflight 요청을 **더 이상 거부하지 않는다.** 기존에는 CORS 미설정 상태에서 Preflight가 오면 자동으로 거부했지만, 7.0부터는 그대로 통과시킨다. CORS 미설정 상태에서의 Preflight 거부에 보안을 의존하고 있었다면 확인이 필요하다.
-
 ### 6.3 Spring Security와 함께 사용할 때 (실무 권장)
 
 Spring Security를 쓰고 있다면, 위의 `WebMvcConfigurer` 설정만으로는 **CORS가 동작하지 않을 수 있다**.
@@ -497,15 +485,6 @@ class SecurityConfig {
 
 **핵심**: `cors { }`를 Security 설정에 포함해야 Spring Security가 CORS Preflight 요청을 정상 처리한다. 이걸 빠뜨리면 OPTIONS 요청이 401/403으로 거부된다.
 
-> **6.2와 6.3을 둘 다 설정해야 하나?**
->
-> 아니다. Spring Security를 사용하는 프로젝트라면 **6.3만으로 충분하다.** `CorsConfigurationSource`를 `@Bean`으로 등록하면 Spring Security의 `CorsFilter`가 모든 CORS 처리를 담당하기 때문에, `WebMvcConfigurer`의 `addCorsMappings`는 중복 설정이 된다. 둘 다 설정하면 동작은 하지만, 같은 CORS 정책을 두 곳에서 관리하게 되어 설정 불일치 버그가 생길 수 있다.
->
-> | 구성 | `WebMvcConfigurer` (6.2) | `CorsConfigurationSource` (6.3) |
-> |------|:------------------------:|:-------------------------------:|
-> | Spring Security **없음** | 이것만 사용 | - |
-> | Spring Security **있음** | 불필요 (중복) | **이것만 사용** |
-
 ### 6.4 환경별 설정 (개발 vs 프로덕션)
 
 개발 환경과 프로덕션 환경에서 허용할 Origin이 다른 게 일반적이다.
@@ -542,9 +521,7 @@ class WebConfig(
 }
 ```
 
-> **주의: `Access-Control-Allow-Origin: *`의 위험성**
->
-> 개발 편의를 위해 `allowedOrigins("*")`를 쓰는 경우가 있다. 개발 환경에서야 상관없지만, **프로덕션에서는 절대 사용하지 말자**. 모든 Origin을 허용한다는 것은 어떤 사이트에서든 우리 API에 접근할 수 있다는 뜻이다. 특히 인증이 필요한 API라면 심각한 보안 위험이 된다.
+개발 편의를 위해 `allowedOrigins("*")`를 쓰는 경우가 있다. 개발 환경에서야 상관없지만, **프로덕션에서는 절대 사용하지 말자**. 모든 Origin을 허용한다는 것은 어떤 사이트에서든 우리 API에 접근할 수 있다는 뜻이다. 특히 인증이 필요한 API라면 심각한 보안 위험이 된다.
 
 ### 6.5 와일드카드 서브도메인 허용 (`allowedOriginPatterns`)
 
@@ -568,14 +545,50 @@ val configuration = CorsConfiguration().apply {
 2. Spring이 `https://*.example.com` 패턴과 매칭한다
 3. 매칭되면 응답에 `Access-Control-Allow-Origin: https://app.example.com`을 **구체적인 값으로** 내려준다
 
-> **주의: `allowedOrigins`와 `allowedOriginPatterns`는 다르다**
->
-> | 메서드 | 패턴 지원 | `allowCredentials(true)` + `*` |
-> |--------|:---------:|:------------------------------:|
-> | `allowedOrigins("https://*.example.com")` | 리터럴로 취급 (동작 안 함) | 사용 불가 (`*`와 credentials 동시 불가) |
-> | `allowedOriginPatterns("https://*.example.com")` | **패턴 매칭** | `allowedOriginPatterns("*")`로 가능 |
->
-> `allowedOrigins`에 `*`를 넣으면 `allowCredentials(true)`와 함께 사용할 수 없지만, `allowedOriginPatterns("*")`는 가능하다. 이유는 패턴 매칭 시 응답에 실제 Origin 값을 구체적으로 내려주기 때문이다.
+주의할 점은, `allowedOrigins`와 `allowedOriginPatterns`는 다르다:
+
+| 메서드 | 패턴 지원 | `allowCredentials(true)` + `*` |
+|--------|:---------:|:------------------------------:|
+| `allowedOrigins("https://*.example.com")` | 리터럴로 취급 (동작 안 함) | 사용 불가 (`*`와 credentials 동시 불가) |
+| `allowedOriginPatterns("https://*.example.com")` | **패턴 매칭** | `allowedOriginPatterns("*")`로 가능 |
+
+`allowedOrigins`에 `*`를 넣으면 `allowCredentials(true)`와 함께 사용할 수 없지만, `allowedOriginPatterns("*")`는 가능하다. 이유는 패턴 매칭 시 응답에 실제 Origin 값을 구체적으로 내려주기 때문이다.
+
+### 6.6 자주 묻는 질문
+
+<details>
+<summary><strong>Q: allowedMethods에 OPTIONS를 안 넣어도 되나?</strong></summary>
+
+된다. Preflight(`OPTIONS`) 요청은 Spring의 CORS 처리 메커니즘(`CorsFilter` 또는 `DispatcherServlet`)이 자동으로 가로채서 응답한다. 컨트롤러까지 도달하지 않기 때문에, `allowedMethods`에 `OPTIONS`를 명시할 필요가 없다. `allowedMethods`는 **본 요청에서 허용할 메서드**를 선언하는 것이다.
+
+단, 모든 `OPTIONS` 요청이 Preflight인 것은 아니다. Spring은 내부적으로 아래 **세 가지 조건을 모두 확인**해서 Preflight 여부를 판단한다.
+
+1. HTTP 메서드가 `OPTIONS`
+2. `Origin` 헤더 존재
+3. `Access-Control-Request-Method` 헤더 존재
+
+이 조건을 충족하지 않는 순수 `OPTIONS` 요청(예: API 디스커버리 용도)은 CorsFilter를 그대로 통과하고 컨트롤러까지 도달한다. 만약 컨트롤러에 `OPTIONS` 매핑이 없으면 `405 Method Not Allowed`가 응답될 수 있으니, 순수 `OPTIONS`를 지원해야 한다면 별도 핸들러를 만들어야 한다. 다만 실무에서 순수 `OPTIONS`를 쓰는 경우는 거의 없다.
+
+</details>
+
+<details>
+<summary><strong>Q: 6.2와 6.3을 둘 다 설정해야 하나?</strong></summary>
+
+아니다. Spring Security를 사용하는 프로젝트라면 **6.3만으로 충분하다.** `CorsConfigurationSource`를 `@Bean`으로 등록하면 Spring Security의 `CorsFilter`가 모든 CORS 처리를 담당하기 때문에, `WebMvcConfigurer`의 `addCorsMappings`는 중복 설정이 된다. 둘 다 설정하면 동작은 하지만, 같은 CORS 정책을 두 곳에서 관리하게 되어 설정 불일치 버그가 생길 수 있다.
+
+| 구성 | `WebMvcConfigurer` (6.2) | `CorsConfigurationSource` (6.3) |
+|------|:------------------------:|:-------------------------------:|
+| Spring Security **없음** | 이것만 사용 | - |
+| Spring Security **있음** | 불필요 (중복) | **이것만 사용** |
+
+</details>
+
+<details>
+<summary><strong>Q: Spring Framework 7.0 (Spring Boot 4.0)에서 변경된 점이 있나?</strong></summary>
+
+`WebMvcConfigurer`의 `addCorsMappings` API 자체는 Spring Boot 2.x → 3.x → 4.x 전 버전에서 변경 없이 동일하게 사용할 수 있다. 단, Spring Framework 7.0부터 한 가지 **동작 변경**이 있다: CORS 설정이 비어 있을 때 Preflight 요청을 **더 이상 거부하지 않는다.** 기존에는 CORS 미설정 상태에서 Preflight가 오면 자동으로 거부했지만, 7.0부터는 그대로 통과시킨다. CORS 미설정 상태에서의 Preflight 거부에 보안을 의존하고 있었다면 확인이 필요하다.
+
+</details>
 
 ---
 

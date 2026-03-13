@@ -144,35 +144,39 @@ This means SOP alone cannot fully prevent this attack. **Blocking the request it
 
 In fact, if a request meets the Simple Request conditions (`POST` + `application/x-www-form-urlencoded`), it can reach the server without any preflight check. This is exactly why CSRF attacks remain dangerous and why server-side CSRF token validation is necessary.
 
-> Note: This scenario is closely related to CSRF (Cross-Site Request Forgery). CSRF is an attack where a malicious site sends forged requests on behalf of an authenticated user — for example, using a logged-in bank session cookie to initiate a money transfer without the user's knowledge. SOP reduces the attack surface by blocking the response from being read, but since the request itself can still go through, SOP alone cannot fully prevent CSRF. Additional defenses like CSRF tokens and SameSite cookies are needed.
+### CSRF and Authentication Methods
 
-> **"Does using JWT mean I don't have to worry about SOP/CORS?"**
->
-> No. SOP and CORS apply **regardless of the authentication method**. Whether you use session cookies or JWT, the browser enforces the same CORS policy when making cross-origin requests. The scenario above uses cookies as an example, but SOP blocks the response in exactly the same way when JWT is sent via the `Authorization` header.
->
-> However, the authentication method does affect **how CORS is configured**:
->
-> | | Session Cookie | JWT (`Authorization` header) |
-> |--|---------------|------------------------------|
-> | How it's sent | Browser attaches automatically | JS adds header manually |
-> | `allowCredentials` | `true` required | Not needed (no cookies involved) |
-> | Preflight triggered | Not by cookies alone | **Always** — `Authorization` is a custom header |
-> | `allowedHeaders` | Defaults may suffice | Must include `Authorization` |
->
-> With JWT, the `Authorization` header triggers a preflight on **every request, even GET**. You'll actually encounter preflight requests more frequently than with session cookies.
+This scenario is closely related to **CSRF (Cross-Site Request Forgery)**. CSRF is an attack where a malicious site sends forged requests on behalf of an authenticated user — for example, using a logged-in bank session cookie to initiate a money transfer without the user's knowledge.
 
-> **"So if I use JWT, do I not need to worry about CSRF?"**
->
-> **It depends on where you store the JWT and how you transmit it.** CSRF works because the browser **automatically attaches** credentials. Cookies are auto-attached, but the `Authorization` header must be added by JS explicitly. Since `evil-site.com`'s script cannot access `bank.com`'s `localStorage` (thanks to SOP), it has no way to obtain the JWT.
->
-> | Auth Method | CSRF Risk | Reason |
-> |-------------|:---------:|--------|
-> | Session cookie | **Yes** | Browser auto-attaches cookies |
-> | JWT stored in cookie | **Yes** | It's still a cookie — auto-attached |
-> | JWT via `Authorization` header | **No** | JS adds it manually; other Origins can't access it |
-> | JWT in `HttpOnly` cookie | **Yes** | Cookie auto-attached + JS can't even read it |
->
-> The key factor is not JWT itself but **how it's transmitted**. Store JWT in a cookie and it's just as vulnerable to CSRF as a session cookie. Send it via `Authorization` header and CSRF is not a concern — but XSS could steal the token from `localStorage` instead. Every approach has trade-offs.
+SOP reduces the attack surface by blocking the response from being read, but since the request itself can still go through, SOP alone cannot fully prevent CSRF. Additional defenses like CSRF tokens and SameSite cookies are needed.
+
+#### SOP/CORS Applies Regardless of Authentication Method
+
+You might think "JWT means no SOP/CORS issues," but that's not the case. SOP and CORS apply **regardless of the authentication method**. Whether you use session cookies or JWT, the browser enforces the same CORS policy when making cross-origin requests.
+
+However, the authentication method does affect **how CORS is configured**:
+
+| | Session Cookie | JWT (`Authorization` header) |
+|--|---------------|------------------------------|
+| How it's sent | Browser attaches automatically | JS adds header manually |
+| `allowCredentials` | `true` required | Not needed (no cookies involved) |
+| Preflight triggered | Not by cookies alone | **Always** — `Authorization` is a custom header |
+| `allowedHeaders` | Defaults may suffice | Must include `Authorization` |
+
+With JWT, the `Authorization` header triggers a preflight on **every request, even GET**. You'll actually encounter preflight requests more frequently than with session cookies.
+
+#### CSRF Risk by JWT Storage Method
+
+CSRF works because the browser **automatically attaches** credentials. Cookies are auto-attached, but the `Authorization` header must be added by JS explicitly. Since `evil-site.com`'s script cannot access `bank.com`'s `localStorage` (thanks to SOP), it has no way to obtain the JWT.
+
+| Auth Method | CSRF Risk | Reason |
+|-------------|:---------:|--------|
+| Session cookie | **Yes** | Browser auto-attaches cookies |
+| JWT stored in cookie | **Yes** | It's still a cookie — auto-attached |
+| JWT via `Authorization` header | **No** | JS adds it manually; other Origins can't access it |
+| JWT in `HttpOnly` cookie | **Yes** | Cookie auto-attached + JS can't even read it |
+
+The key factor is not JWT itself but **how it's transmitted**. Store JWT in a cookie and it's just as vulnerable to CSRF as a session cookie. Send it via `Authorization` header and CSRF is not a concern — but XSS could steal the token from `localStorage` instead. Every approach has trade-offs.
 
 ### 2.3 Why the Browser, Not the Server?
 
@@ -470,22 +474,6 @@ class WebConfig : WebMvcConfigurer {
 
 This approach applies CORS settings to all endpoints matching `/api/**` in a single place.
 
-> **Q: Do I need to add `OPTIONS` to `allowedMethods`?**
->
-> No. Preflight (`OPTIONS`) requests are automatically intercepted and handled by Spring's CORS mechanism (`CorsFilter` or `DispatcherServlet`). They never reach your controller, so there is no need to include `OPTIONS` in `allowedMethods`. That setting declares which methods are allowed for **actual requests**.
->
-> Note that not every `OPTIONS` request is a preflight. Spring internally checks **all three conditions** to determine if a request is a preflight:
->
-> 1. The HTTP method is `OPTIONS`
-> 2. The `Origin` header is present
-> 3. The `Access-Control-Request-Method` header is present
->
-> A plain `OPTIONS` request without these CORS headers (e.g., for API discovery) passes through the CorsFilter untouched and reaches the controller. If the controller has no `OPTIONS` mapping, it will respond with `405 Method Not Allowed`. If you need to support plain `OPTIONS` requests, you must add a dedicated handler. In practice, this is rarely needed.
-
-> **Note: Spring Framework 7.0 (Spring Boot 4.0) Behavioral Change**
->
-> The `WebMvcConfigurer` and `addCorsMappings` API remains unchanged across Spring Boot 2.x, 3.x, and 4.x — no migration is needed. However, Spring Framework 7.0 introduced one **behavioral change**: preflight requests are **no longer rejected** when CORS configuration is empty. Previously, an unconfigured CORS setup would automatically reject preflight requests; from 7.0 onward, they pass through. If your security relied on preflight rejection in the absence of explicit CORS configuration, verify that this change does not affect you.
-
 ### 6.3 Using with Spring Security (Recommended for Most Projects)
 
 When Spring Security is in the project, there is a critical issue: **Spring Security's filter chain processes the request before Spring MVC's CORS handling kicks in.** This means that preflight `OPTIONS` requests may be rejected by Spring Security before CORS headers are added.
@@ -529,15 +517,6 @@ class SecurityConfig {
 
 The `cors { }` block in the security configuration tells Spring Security to look for a `CorsConfigurationSource` bean and apply it **before** the authentication filters. Without this, `OPTIONS` preflight requests will receive a `401 Unauthorized` or `403 Forbidden` response.
 
-> **Do I need both 6.2 and 6.3?**
->
-> No. If your project uses Spring Security, **6.3 alone is sufficient.** When you register a `CorsConfigurationSource` as a `@Bean`, Spring Security's `CorsFilter` handles all CORS processing — making `WebMvcConfigurer`'s `addCorsMappings` redundant. Having both configured will work, but you end up managing the same CORS policy in two places, which can lead to configuration drift bugs.
->
-> | Setup | `WebMvcConfigurer` (6.2) | `CorsConfigurationSource` (6.3) |
-> |-------|:------------------------:|:-------------------------------:|
-> | **No** Spring Security | Use this | - |
-> | **With** Spring Security | Unnecessary (redundant) | **Use this** |
-
 ### 6.4 Environment-specific Configuration (Dev vs Production)
 
 In real projects, you need different CORS settings per environment:
@@ -580,7 +559,7 @@ cors:
     - https://www.myapp.example.com
 ```
 
-> **Never use `Access-Control-Allow-Origin: *` in production**, especially with credentialed requests. Always whitelist specific domains. The wildcard tells the browser "any website in the world can read responses from this API," which is almost never what you want for an authenticated API.
+**Never use `Access-Control-Allow-Origin: *` in production**, especially with credentialed requests. Always whitelist specific domains. The wildcard tells the browser "any website in the world can read responses from this API," which is almost never what you want for an authenticated API.
 
 ### 6.5 Wildcard Subdomain Patterns (`allowedOriginPatterns`)
 
@@ -604,14 +583,50 @@ How it works:
 2. Spring matches it against the `https://*.example.com` pattern
 3. If matched, the response contains `Access-Control-Allow-Origin: https://app.example.com` — the **concrete value**, not the pattern
 
-> **Warning: `allowedOrigins` and `allowedOriginPatterns` are different**
->
-> | Method | Pattern support | `allowCredentials(true)` + `*` |
-> |--------|:--------------:|:------------------------------:|
-> | `allowedOrigins("https://*.example.com")` | Treated as literal (won't work) | Cannot use (`*` + credentials not allowed) |
-> | `allowedOriginPatterns("https://*.example.com")` | **Pattern matching** | `allowedOriginPatterns("*")` works |
->
-> Using `allowedOrigins("*")` with `allowCredentials(true)` throws an error. But `allowedOriginPatterns("*")` works with credentials because Spring responds with the actual Origin value, not the literal `*`.
+Note that `allowedOrigins` and `allowedOriginPatterns` are different:
+
+| Method | Pattern support | `allowCredentials(true)` + `*` |
+|--------|:--------------:|:------------------------------:|
+| `allowedOrigins("https://*.example.com")` | Treated as literal (won't work) | Cannot use (`*` + credentials not allowed) |
+| `allowedOriginPatterns("https://*.example.com")` | **Pattern matching** | `allowedOriginPatterns("*")` works |
+
+Using `allowedOrigins("*")` with `allowCredentials(true)` throws an error. But `allowedOriginPatterns("*")` works with credentials because Spring responds with the actual Origin value, not the literal `*`.
+
+### 6.6 Frequently Asked Questions
+
+<details>
+<summary><strong>Q: Do I need to add OPTIONS to allowedMethods?</strong></summary>
+
+No. Preflight (`OPTIONS`) requests are automatically intercepted and handled by Spring's CORS mechanism (`CorsFilter` or `DispatcherServlet`). They never reach your controller, so there is no need to include `OPTIONS` in `allowedMethods`. That setting declares which methods are allowed for **actual requests**.
+
+Note that not every `OPTIONS` request is a preflight. Spring internally checks **all three conditions** to determine if a request is a preflight:
+
+1. The HTTP method is `OPTIONS`
+2. The `Origin` header is present
+3. The `Access-Control-Request-Method` header is present
+
+A plain `OPTIONS` request without these CORS headers (e.g., for API discovery) passes through the CorsFilter untouched and reaches the controller. If the controller has no `OPTIONS` mapping, it will respond with `405 Method Not Allowed`. If you need to support plain `OPTIONS` requests, you must add a dedicated handler. In practice, this is rarely needed.
+
+</details>
+
+<details>
+<summary><strong>Q: Do I need both 6.2 and 6.3?</strong></summary>
+
+No. If your project uses Spring Security, **6.3 alone is sufficient.** When you register a `CorsConfigurationSource` as a `@Bean`, Spring Security's `CorsFilter` handles all CORS processing — making `WebMvcConfigurer`'s `addCorsMappings` redundant. Having both configured will work, but you end up managing the same CORS policy in two places, which can lead to configuration drift bugs.
+
+| Setup | `WebMvcConfigurer` (6.2) | `CorsConfigurationSource` (6.3) |
+|-------|:------------------------:|:-------------------------------:|
+| **No** Spring Security | Use this | - |
+| **With** Spring Security | Unnecessary (redundant) | **Use this** |
+
+</details>
+
+<details>
+<summary><strong>Q: Are there any changes in Spring Framework 7.0 (Spring Boot 4.0)?</strong></summary>
+
+The `WebMvcConfigurer` and `addCorsMappings` API remains unchanged across Spring Boot 2.x, 3.x, and 4.x — no migration is needed. However, Spring Framework 7.0 introduced one **behavioral change**: preflight requests are **no longer rejected** when CORS configuration is empty. Previously, an unconfigured CORS setup would automatically reject preflight requests; from 7.0 onward, they pass through. If your security relied on preflight rejection in the absence of explicit CORS configuration, verify that this change does not affect you.
+
+</details>
 
 ---
 
