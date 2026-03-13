@@ -26,7 +26,7 @@ on the requested resource.
 
 ## 1. Origin이란?
 
-CORS를 이해하려면 먼저 **Origin(출처)**이 뭔지 알아야 한다.
+CORS를 이해하려면 먼저 **Origin(출처)** 이 뭔지 알아야 한다.
 
 Origin은 URL에서 **Protocol + Host + Port**를 합친 것이다.
 
@@ -56,7 +56,7 @@ localhost라는 같은 호스트인데도, **포트가 다르면 다른 Origin**
 
 ### 브라우저의 기본 보안 정책
 
-**Same-Origin Policy(동일 출처 정책, SOP)**는 브라우저가 기본적으로 적용하는 보안 정책이다.
+**Same-Origin Policy(동일 출처 정책, SOP)** 는 브라우저가 기본적으로 적용하는 보안 정책이다.
 핵심 규칙은 단순하다: **다른 Origin으로의 요청에 대한 응답을 브라우저가 차단한다.**
 
 여기서 중요한 포인트가 있다.
@@ -189,7 +189,7 @@ CSRF가 성립하려면 브라우저가 인증 정보를 **자동으로 첨부**
 
 ## 3. CORS란?
 
-**CORS(Cross-Origin Resource Sharing)**는 SOP의 예외를 안전하게 허용하는 메커니즘이다.
+**CORS(Cross-Origin Resource Sharing)** 는 SOP의 예외를 안전하게 허용하는 메커니즘이다.
 
 현실에서는 프론트엔드와 백엔드가 다른 Origin에서 동작하는 경우가 대부분이다.
 SPA(Single Page Application)가 API 서버와 통신하려면 Cross-Origin 요청이 필수다.
