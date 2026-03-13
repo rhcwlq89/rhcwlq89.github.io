@@ -31,7 +31,7 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 
 ### 1.1 SSO란?
 
-**Single Sign-On(SSO)**은 한 번의 인증으로 여러 애플리케이션에 접근할 수 있게 하는 인증 방식이다.
+**Single Sign-On(SSO)** 은 한 번의 인증으로 여러 애플리케이션에 접근할 수 있게 하는 인증 방식이다.
 
 ```mermaid
 graph TD
@@ -58,7 +58,7 @@ graph TD
 | **사용처** | 현대 웹/모바일 앱 | 엔터프라이즈 레거시 |
 | **Spring 지원** | 매우 좋음 | 좋음 |
 
-**권장사항**: 신규 프로젝트는 **OAuth2/OIDC**를 선택하라. SAML은 레거시 시스템 연동 시에만 고려한다.
+**권장사항**: 신규 프로젝트는 **OAuth2/OIDC** 를 선택하라. SAML은 레거시 시스템 연동 시에만 고려한다.
 
 ### 1.3 주요 용어
 
@@ -644,9 +644,9 @@ class UserControllerTest {
 
 ### Q1. OAuth2와 OIDC의 차이점은?
 
-**OAuth2**는 인가(Authorization) 프레임워크로, "이 앱이 사용자 데이터에 접근해도 되는가?"를 다룬다.
+**OAuth2** 는 인가(Authorization) 프레임워크로, "이 앱이 사용자 데이터에 접근해도 되는가?"를 다룬다.
 
-**OIDC (OpenID Connect)**는 OAuth2 위에 인증(Authentication) 레이어를 추가한 것으로, "이 사용자가 누구인가?"를 다룬다. ID Token(JWT)을 통해 사용자 정보를 제공한다.
+**OIDC (OpenID Connect)** 는 OAuth2 위에 인증(Authentication) 레이어를 추가한 것으로, "이 사용자가 누구인가?"를 다룬다. ID Token(JWT)을 통해 사용자 정보를 제공한다.
 
 **실무에서는**: OIDC를 사용하라. Spring Security의 `oauth2Login()`은 기본적으로 OIDC를 지원한다.
 

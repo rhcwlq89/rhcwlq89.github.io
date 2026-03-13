@@ -825,6 +825,6 @@ SHOW INDEX FROM products;
 
 ---
 
-다음 편에서는 **모니터링과 옵저버빌리티**에 대해 다룹니다.
+다음 편에서는 **모니터링과 옵저버빌리티** 에 대해 다룹니다.
 
 👉 [다음: 6편 - 모니터링](/blog/springboot-practical-guide-6)

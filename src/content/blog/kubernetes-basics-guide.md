@@ -35,12 +35,12 @@ Kubernetes는 이 문제를 자동으로 해결한다:
 이 글의 목적은 EKS + ArgoCD 시리즈를 읽기 전에 필요한 Kubernetes 기본 개념을 정리하는 것이다.
 Docker 기본은 알지만 K8s 경험이 적은 개발자를 대상으로 한다.
 
-> 이 글은 시리즈의 **기본 개념 편**이다.
+> 이 글은 시리즈의 **기본 개념 편** 이다.
 > - **이 글**: Kubernetes 기본 개념 총정리
 > - **Part 1**: EKS 클러스터 구축 실무 가이드
 > - **Part 2**: ArgoCD를 활용한 GitOps 기반 배포 파이프라인 (예정)
 >
-> 로컬에서 직접 실습해보고 싶다면 **로컬 K8s 실습 시리즈**도 참고하자:
+> 로컬에서 직접 실습해보고 싶다면 **로컬 K8s 실습 시리즈** 도 참고하자:
 > - kind로 로컬 K8s 클러스터 구축하기
 > - ArgoCD로 GitOps 배포 파이프라인 만들기
 > - Loki + Grafana로 로그 모니터링 구성하기
@@ -124,10 +124,10 @@ graph TD
 핵심 동작 흐름을 예로 들면:
 
 1. 사용자가 `kubectl apply -f deployment.yaml` 실행
-2. **API Server**가 요청을 받고 etcd에 저장
-3. **Controller Manager**가 "Deployment에 Pod 3개가 필요한데 지금 0개다"를 감지
-4. **Scheduler**가 각 Pod를 어떤 노드에 배치할지 결정
-5. 해당 노드의 **kubelet**이 컨테이너를 실행
+2. **API Server** 가 요청을 받고 etcd에 저장
+3. **Controller Manager** 가 "Deployment에 Pod 3개가 필요한데 지금 0개다"를 감지
+4. **Scheduler** 가 각 Pod를 어떤 노드에 배치할지 결정
+5. 해당 노드의 **kubelet** 이 컨테이너를 실행
 
 ---
 
@@ -253,9 +253,9 @@ Deployment (my-app)
         └── Pod (my-app-7d9f8b6c4d-ghi56)
 ```
 
-- **Deployment**가 ReplicaSet을 생성하고 관리한다
-- **ReplicaSet**이 Pod의 복제본 수를 유지한다
-- **Pod**가 실제 컨테이너를 실행한다
+- **Deployment** 가 ReplicaSet을 생성하고 관리한다
+- **ReplicaSet** 이 Pod의 복제본 수를 유지한다
+- **Pod** 가 실제 컨테이너를 실행한다
 
 이미지 버전을 변경하면 Deployment가 새 ReplicaSet을 만들고,
 새 Pod를 하나씩 생성하면서 이전 Pod를 제거한다(롤링 업데이트).
@@ -402,7 +402,7 @@ spec:
 
 결론부터 말하면, **없다.**
 
-쿠버네티스는 이미지를 **저장**하는 역할을 하지 않는다. 외부 레지스트리에서 이미지를 **pull해서 실행**하는 역할만 한다.
+쿠버네티스는 이미지를 **저장** 하는 역할을 하지 않는다. 외부 레지스트리에서 이미지를 **pull해서 실행** 하는 역할만 한다.
 
 실무에서는 외부 레지스트리를 연결해서 사용한다:
 
@@ -415,7 +415,7 @@ spec:
 | **Harbor** | 오픈소스 (무료) | - | 자체 서버에 설치. 온프레미스 환경에서 주로 사용 |
 | **Nexus** | 오픈소스 (무료) | Pro 버전 유료 | Docker 외에 Maven, npm 등 다양한 패키지 저장소로도 활용 |
 
-> 개인 프로젝트나 학습 목적이라면 **GitHub Container Registry**가 가장 무난하다.
+> 개인 프로젝트나 학습 목적이라면 **GitHub Container Registry** 가 가장 무난하다.
 > GitHub Actions에서 빌드 → ghcr.io에 push → K8s에서 pull하는 파이프라인을 무료로 구성할 수 있다.
 
 보안 정책상 외부 인터넷이 차단된 환경(사내 on-premise 클러스터 등)에서는 **Harbor** 같은 오픈소스 레지스트리를 쿠버네티스 위에 직접 배포해서 사용하기도 한다.
@@ -440,7 +440,7 @@ Pod는 생성될 때마다 새로운 IP를 할당받는다.
 Pod가 재시작되거나 교체되면 IP가 바뀌기 때문에,
 다른 Pod나 외부에서 특정 Pod에 안정적으로 접근할 방법이 필요하다.
 
-**Service**는 Pod 집합에 대한 고정 접근점(Stable Endpoint)을 제공한다.
+**Service** 는 Pod 집합에 대한 고정 접근점(Stable Endpoint)을 제공한다.
 Label Selector로 대상 Pod를 지정하고, 트래픽을 자동으로 분산한다.
 
 ### Service 타입 비교
@@ -615,7 +615,7 @@ Ingress는 2가지 구성 요소로 나뉜다:
 | Ingress 규칙 | `@RequestMapping` 경로 라우팅 |
 | Service | 각 마이크로서비스 |
 
-MSA에서 **API Gateway**가 하는 역할과 거의 동일하다고 보면 된다.
+MSA에서 **API Gateway** 가 하는 역할과 거의 동일하다고 보면 된다.
 
 ---
 
@@ -1057,9 +1057,9 @@ spec:
 
 이 기본 개념을 이해했다면 실무 시리즈를 따라갈 준비가 된 것이다.
 
-**Part 1**에서는 AWS EKS 클러스터를 프로덕션 수준으로 구축하는 방법을 다룬다.
+**Part 1** 에서는 AWS EKS 클러스터를 프로덕션 수준으로 구축하는 방법을 다룬다.
 eksctl로 빠르게 시작하고, Terraform으로 IaC 전환하며,
 ALB, DNS, HTTPS 같은 네트워킹 설정까지 실무에서 바로 적용할 수 있는 내용을 정리한다.
 
-**Part 2**에서는 ArgoCD를 활용한 GitOps 기반 배포 파이프라인을 구축한다.
+**Part 2** 에서는 ArgoCD를 활용한 GitOps 기반 배포 파이프라인을 구축한다.
 Git 저장소를 단일 소스로 사용해서 자동으로 클러스터에 배포하는 방법을 다룰 예정이다.

@@ -890,7 +890,7 @@ public class Product {
 
 ---
 
-다음 편에서는 **Spring Security**, **JWT 인증**, **비밀번호 관리**에 대해 다룹니다.
+다음 편에서는 **Spring Security**, **JWT 인증**, **비밀번호 관리** 에 대해 다룹니다.
 
 👉 [이전: 3편 - Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
 👉 [다음: 5편 - Security & Authentication](/blog/spring-boot-pre-interview-guide-5)

@@ -382,7 +382,7 @@ class QuerydslConfig(
 
 > **`proxyBeanMethods = false`란?**
 >
-> Spring의 `@Configuration` 클래스는 기본적으로 CGLIB 프록시를 통해 `@Bean` 메서드 간 호출 시 **싱글톤을 보장**한다. 하지만 `@Bean` 메서드가 서로 호출하지 않는 경우 프록시가 불필요하며, `proxyBeanMethods = false`로 설정하면:
+> Spring의 `@Configuration` 클래스는 기본적으로 CGLIB 프록시를 통해 `@Bean` 메서드 간 호출 시 **싱글톤을 보장** 한다. 하지만 `@Bean` 메서드가 서로 호출하지 않는 경우 프록시가 불필요하며, `proxyBeanMethods = false`로 설정하면:
 > - **프록시 생성 비용 절감** (애플리케이션 시작 시간 단축)
 > - **메모리 사용량 감소**
 >
@@ -934,7 +934,7 @@ class UserControllerTest {
 
 **과제에서의 권장**
 
-대부분의 과제에서는 **H2로 충분**하다. 특별히 MySQL/PostgreSQL 전용 기능을 사용하는 경우에만 Testcontainers를 고려한다.
+대부분의 과제에서는 **H2로 충분** 하다. 특별히 MySQL/PostgreSQL 전용 기능을 사용하는 경우에만 Testcontainers를 고려한다.
 
 </details>
 
@@ -1038,7 +1038,7 @@ void 재고가_부족하면_예외가_발생한다() {
 
 ---
 
-다음 편에서는 **API 문서화(Swagger)**, **로깅 전략**, **AOP 활용**에 대해 다룹니다.
+다음 편에서는 **API 문서화(Swagger)**, **로깅 전략**, **AOP 활용** 에 대해 다룹니다.
 
 👉 [이전: 1편 - Core Application Layer](/blog/spring-boot-pre-interview-guide-1)
 👉 [다음: 3편 - Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)

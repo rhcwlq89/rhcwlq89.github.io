@@ -16,7 +16,7 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 
 ## 서론
 
-마이크로서비스 환경에서 서비스 간 통신은 시스템의 성능과 안정성을 좌우한다. 동기 방식의 직접 호출은 강한 결합과 장애 전파 문제를 야기하며, 이를 해결하기 위해 **이벤트 드리븐 아키텍처**가 널리 사용된다.
+마이크로서비스 환경에서 서비스 간 통신은 시스템의 성능과 안정성을 좌우한다. 동기 방식의 직접 호출은 강한 결합과 장애 전파 문제를 야기하며, 이를 해결하기 위해 **이벤트 드리븐 아키텍처** 가 널리 사용된다.
 
 **3편에서 다루는 내용:**
 - 동기 방식의 한계와 이벤트 드리븐의 장점
@@ -424,7 +424,7 @@ class OutboxEvent(
 
 ### 6.1 중복 발행이 발생하는 케이스
 
-Outbox 패턴은 **At-least-once**를 보장하므로 중복 발행이 발생할 수 있습니다.
+Outbox 패턴은 **At-least-once** 를 보장하므로 중복 발행이 발생할 수 있습니다.
 
 **Case 1: Kafka 발행 성공, DB 업데이트 전 장애**
 
@@ -874,7 +874,7 @@ DB 저장과 메시지 발행은 서로 다른 트랜잭션이라 둘 중 하나
 | At-least-once | 최소 한 번 (중복 가능) | 처리 후 커밋 |
 | Exactly-once | 정확히 한 번 | 트랜잭션 + 멱등성 |
 
-일반적으로 **At-least-once + Consumer 멱등성**이 현실적인 선택입니다.
+일반적으로 **At-least-once + Consumer 멱등성** 이 현실적인 선택입니다.
 
 ### Q4. Consumer 멱등성은 어떻게 구현하나요?
 
@@ -973,6 +973,6 @@ marketplace/
 
 ---
 
-다음 편에서는 **Resilience 패턴 (Circuit Breaker, Rate Limiter)**에 대해 다룹니다.
+다음 편에서는 **Resilience 패턴 (Circuit Breaker, Rate Limiter)** 에 대해 다룹니다.
 
 👉 [다음: 4편 - Resilience 패턴](/blog/springboot-practical-guide-4)

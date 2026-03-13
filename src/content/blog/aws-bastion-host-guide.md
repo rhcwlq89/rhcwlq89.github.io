@@ -16,7 +16,7 @@ heroImage: "../../assets/bastion_setting_guide.png"
 
 ## 서론
 
-프로덕션 환경에서 EC2 인스턴스는 보안을 위해 **Private Subnet**에 배치한다.
+프로덕션 환경에서 EC2 인스턴스는 보안을 위해 **Private Subnet** 에 배치한다.
 하지만 Private Subnet의 인스턴스는 인터넷에서 직접 접근할 수 없다.
 
 이때 **Bastion Host**(점프 서버)를 통해 안전하게 SSH 접속할 수 있다.
@@ -26,7 +26,7 @@ heroImage: "../../assets/bastion_setting_guide.png"
 
 ## Bastion Host란?
 
-Bastion Host는 **외부에서 내부 네트워크로 접근하기 위한 중계 서버**다.
+Bastion Host는 **외부에서 내부 네트워크로 접근하기 위한 중계 서버** 다.
 Public Subnet에 위치하여 인터넷에서 접근 가능하고,
 Private Subnet의 인스턴스로 SSH 연결을 중계한다.
 
@@ -240,7 +240,7 @@ aws ec2 associate-route-table \
 
 ### 5단계: NAT Gateway 설정 (Private 서브넷 아웃바운드용)
 
-NAT Gateway는 Private Subnet의 인스턴스가 **인터넷으로 아웃바운드 통신**할 때 사용한다.
+NAT Gateway는 Private Subnet의 인스턴스가 **인터넷으로 아웃바운드 통신** 할 때 사용한다.
 예를 들어 패키지 업데이트(`dnf update`), 외부 API 호출 등이 가능해진다.
 반대로 인터넷에서 Private 인스턴스로 직접 접근하는 것은 여전히 차단된다.
 
@@ -279,7 +279,7 @@ aws ec2 associate-route-table \
 
 ## Security Group 설정
 
-보안 그룹은 Bastion 아키텍처의 **핵심**이다.
+보안 그룹은 Bastion 아키텍처의 **핵심** 이다.
 잘못 설정하면 보안 취약점이 생기거나 접속이 불가능하다.
 
 ### Bastion Host Security Group
@@ -1224,7 +1224,7 @@ aws ec2 describe-route-tables --route-table-ids rtb-xxx
 
 ## ALB를 통한 안전한 웹 서비스 접근
 
-SSH 접근은 Bastion으로, **HTTP/HTTPS 웹 서비스 접근**은 ALB(Application Load Balancer)를 통해 구성한다.
+SSH 접근은 Bastion으로, **HTTP/HTTPS 웹 서비스 접근** 은 ALB(Application Load Balancer)를 통해 구성한다.
 이렇게 하면 Private Subnet의 EC2가 인터넷에 직접 노출되지 않으면서도 웹 서비스를 제공할 수 있다.
 
 ### ALB 아키텍처

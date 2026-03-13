@@ -1069,7 +1069,7 @@ scrape_configs:
 
 ---
 
-다음 편에서는 **이벤트 기반 아키텍처**, **비동기 처리**, **멀티 모듈 프로젝트**에 대해 다룹니다.
+다음 편에서는 **이벤트 기반 아키텍처**, **비동기 처리**, **멀티 모듈 프로젝트** 에 대해 다룹니다.
 
 👉 [이전: 5편 - Security & Authentication](/blog/spring-boot-pre-interview-guide-5)
 👉 [다음: 7편 - Advanced Patterns](/blog/spring-boot-pre-interview-guide-7)

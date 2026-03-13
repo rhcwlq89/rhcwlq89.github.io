@@ -559,7 +559,7 @@ class OpenApiConfig {
 
 ### 7. Spring REST Docs (대안)
 
-Swagger 대신 **테스트 기반**으로 API 문서를 생성하는 방식이다. 테스트가 통과해야만 문서가 생성되므로 **문서와 코드의 동기화가 보장**된다.
+Swagger 대신 **테스트 기반** 으로 API 문서를 생성하는 방식이다. 테스트가 통과해야만 문서가 생성되므로 **문서와 코드의 동기화가 보장** 된다.
 
 <details>
 <summary>💬 Swagger vs REST Docs</summary>
@@ -1423,7 +1423,7 @@ class MemberService(
 }
 ```
 
-**실무 팁**: 마스킹은 **로그 출력 시점**에만 적용하고, 실제 비즈니스 로직에서는 원본 데이터를 사용해야 한다. 마스킹된 데이터로 비교나 처리를 하면 안 된다.
+**실무 팁**: 마스킹은 **로그 출력 시점** 에만 적용하고, 실제 비즈니스 로직에서는 원본 데이터를 사용해야 한다. 마스킹된 데이터로 비교나 처리를 하면 안 된다.
 
 </details>
 
@@ -1921,7 +1921,7 @@ src/main/kotlin/com/example/app/
 
 ---
 
-다음 편에서는 **N+1 문제 해결**, **페이지네이션**, **캐싱 전략**에 대해 다룹니다.
+다음 편에서는 **N+1 문제 해결**, **페이지네이션**, **캐싱 전략** 에 대해 다룹니다.
 
 👉 [이전: 2편 - Database & Testing](/blog/spring-boot-pre-interview-guide-2)
 👉 [다음: 4편 - Performance & Optimization](/blog/spring-boot-pre-interview-guide-4)

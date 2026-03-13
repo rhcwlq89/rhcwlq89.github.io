@@ -520,13 +520,13 @@ public MemberResponse getMyProfile(@AuthenticationPrincipal UserDetails userDeta
 | **구현 복잡도** | 단순 | UserDetailsService 필요 |
 | **활용** | 대부분의 과제/실무 | 계정 잠금 등 실시간 검증 필요 시 |
 
-**권장**: 대부분의 경우 **방식 1 (userId 직접 사용)**이 적합하다. 단, 권한이 자주 변경되거나 계정 상태를 실시간으로 확인해야 하는 경우에는 방식 2를 고려한다.
+**권장**: 대부분의 경우 **방식 1 (userId 직접 사용)** 이 적합하다. 단, 권한이 자주 변경되거나 계정 상태를 실시간으로 확인해야 하는 경우에는 방식 2를 고려한다.
 
 </details>
 
 ### 5. UserDetailsService 구현 (선택사항)
 
-> **Note**: 앞서 설명한 **방식 1 (userId 직접 사용)**을 선택했다면 UserDetailsService는 필요하지 않다. 방식 2 (UserDetails 사용)를 선택한 경우에만 구현한다.
+> **Note**: 앞서 설명한 **방식 1 (userId 직접 사용)** 을 선택했다면 UserDetailsService는 필요하지 않다. 방식 2 (UserDetails 사용)를 선택한 경우에만 구현한다.
 
 <details>
 <summary>UserDetailsService 구현 (방식 2 사용 시)</summary>
@@ -742,7 +742,7 @@ public record SignupRequest(
 
 > **Argon2 암호화란?**
 >
-> BCrypt보다 최신의 비밀번호 해싱 알고리즘으로, **2015년 Password Hashing Competition 우승작**이다.
+> BCrypt보다 최신의 비밀번호 해싱 알고리즘으로, **2015년 Password Hashing Competition 우승작** 이다.
 >
 > | 알고리즘 | 특징 | 권장 상황 |
 > |---------|------|----------|
@@ -962,7 +962,7 @@ public class OrderAuthorizationService {
 | **유연성** | 비즈니스 로직과 결합 가능 | 검증 로직 분리 |
 | **디버깅** | 직관적 | SpEL 디버깅 어려움 |
 
-**권장**: 과제에서는 **방식 1 (Service 검증)**이 더 직관적이고 테스트하기 쉽다.
+**권장**: 과제에서는 **방식 1 (Service 검증)** 이 더 직관적이고 테스트하기 쉽다.
 
 </details>
 
@@ -1206,7 +1206,7 @@ public class PublicController {
 <details>
 <summary>💡 Refresh Token Rotation</summary>
 
-**Refresh Token Rotation**이란 Refresh Token 사용 시 새로운 Refresh Token도 함께 발급하는 방식이다.
+**Refresh Token Rotation** 이란 Refresh Token 사용 시 새로운 Refresh Token도 함께 발급하는 방식이다.
 
 ```java
 public TokenResponse refresh(String refreshToken) {
@@ -1327,7 +1327,7 @@ public class SessionService {
 
 ---
 
-다음 편에서는 **Docker**, **Docker Compose**, **GitHub Actions CI/CD**에 대해 다룹니다.
+다음 편에서는 **Docker**, **Docker Compose**, **GitHub Actions CI/CD** 에 대해 다룹니다.
 
 👉 [이전: 4편 - Performance & Optimization](/blog/spring-boot-pre-interview-guide-4)
 👉 [다음: 6편 - DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)

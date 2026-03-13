@@ -50,7 +50,7 @@ pending → running ⇄ stopping → stopped
 | `shutting-down` | 종료 중 | X |
 | `terminated` | 완전 삭제됨 | X |
 
-> **중요**: `stopped` 상태에서는 인스턴스 비용은 없지만 **EBS 볼륨 비용**은 계속 발생한다.
+> **중요**: `stopped` 상태에서는 인스턴스 비용은 없지만 **EBS 볼륨 비용** 은 계속 발생한다.
 
 ---
 
@@ -582,7 +582,7 @@ docker manifest inspect nginx:latest | grep architecture
 
 ## EBS (Elastic Block Store) 상세
 
-EBS는 EC2에 연결되는 **블록 스토리지**다.
+EBS는 EC2에 연결되는 **블록 스토리지** 다.
 인스턴스의 루트 볼륨 및 추가 데이터 볼륨으로 사용된다.
 
 ### EBS vs Instance Store
@@ -873,7 +873,7 @@ EBS 최적화 인스턴스는 EBS 전용 대역폭을 제공한다.
 
 ### EBS 스냅샷 상세
 
-EBS 스냅샷은 EBS 볼륨의 **특정 시점 복사본**이다.
+EBS 스냅샷은 EBS 볼륨의 **특정 시점 복사본** 이다.
 S3에 저장되며, 증분 백업 방식으로 효율적이다.
 
 #### 스냅샷 동작 원리
@@ -1470,7 +1470,7 @@ aws ec2 create-vpc-endpoint \
 
 ### 보안 그룹 (Security Group) 상세
 
-보안 그룹은 EC2 인스턴스의 **인스턴스 레벨 방화벽**이다.
+보안 그룹은 EC2 인스턴스의 **인스턴스 레벨 방화벽** 이다.
 
 #### Security Group vs NACL
 

@@ -51,7 +51,7 @@ Spring Boot 앱을 빌드해서 배포하는 전체 과정을 실습한다.
 
 kind는 Docker 위에서 동작하므로 Docker 런타임이 필요하다.
 Docker Desktop, Colima, Orbstack 중 아무거나 쓰면 된다.
-이 실습에서는 **Orbstack**을 사용한다.
+이 실습에서는 **Orbstack** 을 사용한다.
 
 Orbstack은 macOS 전용 Docker 런타임으로, Docker Desktop보다 가볍고 빠르다.
 아직 안 써봤다면 [orbstack.dev](https://orbstack.dev)에서 설치할 수 있다.
@@ -308,7 +308,7 @@ marketplace   v1        abc123def456   10 seconds ago   280MB
 ## kind로 이미지 로드
 
 일반적으로 K8s 클러스터에서 이미지를 사용하려면 Docker Hub 같은 레지스트리에 Push해야 한다.
-하지만 kind는 **로컬 이미지를 클러스터 노드에 직접 복사**하는 기능을 제공한다.
+하지만 kind는 **로컬 이미지를 클러스터 노드에 직접 복사** 하는 기능을 제공한다.
 
 ```bash
 kind load docker-image marketplace:v1 --name marketplace
@@ -497,7 +497,7 @@ marketplace-xxxxx-yyyyy        1/1     Running   0          30s
 
 ### 핵심 교훈
 
-이 문제의 핵심은 **Spring Boot auto-configuration은 프로필과 무관하게 classpath 기반으로 동작한다**는 점이다.
+이 문제의 핵심은 **Spring Boot auto-configuration은 프로필과 무관하게 classpath 기반으로 동작한다** 는 점이다.
 
 ```
 classpath에 spring-boot-starter-data-redis 존재
@@ -543,6 +543,6 @@ kind delete cluster --name marketplace
 이 한 줄이면 클러스터가 깔끔하게 사라진다.
 Docker 컨테이너 기반이라 찌꺼기가 남지 않는다.
 
-다음 편에서는 이 클러스터에 **ArgoCD**를 설치해서
+다음 편에서는 이 클러스터에 **ArgoCD** 를 설치해서
 GitOps 기반 자동 배포 파이프라인을 구성한다.
 Git에 Push하면 자동으로 K8s에 배포되는 환경을 만들어 보자.

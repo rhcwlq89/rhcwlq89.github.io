@@ -906,7 +906,7 @@ marketplace/
 - JPA/QueryDSL을 도메인 계층에서 직접 활용하고 싶은 경우
 - Repository 래핑 레이어가 단순 위임만 하는 경우
 
-대부분의 과제에서는 **Option B**로도 충분하며, 오버엔지니어링을 피할 수 있다.
+대부분의 과제에서는 **Option B** 로도 충분하며, 오버엔지니어링을 피할 수 있다.
 
 </details>
 
@@ -1502,7 +1502,7 @@ class ProductService(
 | **유연성** | DB 교체 용이 | JPA 생태계에 최적화 |
 | **러닝커브** | 높음 | 낮음 |
 
-**권장**: 대부분의 과제에서는 **Option B**가 적합. Option A는 외부 연동이 많거나 클린 아키텍처가 명시적으로 요구될 때 선택.
+**권장**: 대부분의 과제에서는 **Option B** 가 적합. Option A는 외부 연동이 많거나 클린 아키텍처가 명시적으로 요구될 때 선택.
 
 </details>
 
@@ -1715,7 +1715,7 @@ marketplace-infra → marketplace-domain (O)
 
 ---
 
-시리즈를 마쳤습니다! **종합 과제**에서 1~7편의 내용을 모두 활용해보세요.
+시리즈를 마쳤습니다! **종합 과제** 에서 1~7편의 내용을 모두 활용해보세요.
 
 👉 [이전: 6편 - DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)
 👉 [다음: 종합 과제](/blog/spring-boot-pre-interview-assignment)
