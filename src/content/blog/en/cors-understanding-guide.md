@@ -105,7 +105,7 @@ sequenceDiagram
     Note over Evil: Attack succeeds
 ```
 
-#### A World With SOP (Blocked)
+#### A World With SOP (Response Read Blocked)
 
 ```mermaid
 sequenceDiagram
@@ -128,9 +128,21 @@ sequenceDiagram
     Bank-->>Browser: 200 OK (transfer complete)
     Browser--xEvil: Response blocked (SOP)
     Note over Browser: Origin mismatch → response read denied
+    Note over Bank: ⚠️ The server already processed the request
 ```
 
-Without SOP, **any website could silently read responses from any other website** using your credentials. With SOP, the server still processes the request, but the browser blocks `evil-site.com` from reading `mybank.com`'s response.
+A critical point here: **SOP blocks "reading the response," not "sending the request."** In the scenario above, the transfer request reaches the server and is processed normally. SOP only prevents `evil-site.com`'s script from **reading the response data** (account balance, transaction details, etc.).
+
+This means SOP alone cannot fully prevent this attack. **Blocking the request itself requires additional defenses:**
+
+| Defense Mechanism | Role |
+|-------------------|------|
+| **SOP** | Blocks reading the response (prevents data theft) |
+| **CSRF Token** | Server verifies whether the request is forged (rejects the request itself) |
+| **SameSite Cookie** | Prevents cookies from being auto-attached on cross-site requests |
+| **Preflight (CORS)** | Dangerous methods like `PUT`/`DELETE` require prior approval |
+
+In fact, if a request meets the Simple Request conditions (`POST` + `application/x-www-form-urlencoded`), it can reach the server without any preflight check. This is exactly why CSRF attacks remain dangerous and why server-side CSRF token validation is necessary.
 
 > Note: This scenario is closely related to CSRF (Cross-Site Request Forgery). CSRF is an attack where a malicious site sends forged requests on behalf of an authenticated user — for example, using a logged-in bank session cookie to initiate a money transfer without the user's knowledge. SOP reduces the attack surface by blocking the response from being read, but since the request itself can still go through, SOP alone cannot fully prevent CSRF. Additional defenses like CSRF tokens and SameSite cookies are needed.
 
