@@ -161,6 +161,19 @@ In fact, if a request meets the Simple Request conditions (`POST` + `application
 >
 > With JWT, the `Authorization` header triggers a preflight on **every request, even GET**. You'll actually encounter preflight requests more frequently than with session cookies.
 
+> **"So if I use JWT, do I not need to worry about CSRF?"**
+>
+> **It depends on where you store the JWT and how you transmit it.** CSRF works because the browser **automatically attaches** credentials. Cookies are auto-attached, but the `Authorization` header must be added by JS explicitly. Since `evil-site.com`'s script cannot access `bank.com`'s `localStorage` (thanks to SOP), it has no way to obtain the JWT.
+>
+> | Auth Method | CSRF Risk | Reason |
+> |-------------|:---------:|--------|
+> | Session cookie | **Yes** | Browser auto-attaches cookies |
+> | JWT stored in cookie | **Yes** | It's still a cookie — auto-attached |
+> | JWT via `Authorization` header | **No** | JS adds it manually; other Origins can't access it |
+> | JWT in `HttpOnly` cookie | **Yes** | Cookie auto-attached + JS can't even read it |
+>
+> The key factor is not JWT itself but **how it's transmitted**. Store JWT in a cookie and it's just as vulnerable to CSRF as a session cookie. Send it via `Authorization` header and CSRF is not a concern — but XSS could steal the token from `localStorage` instead. Every approach has trade-offs.
+
 ### 2.3 Why the Browser, Not the Server?
 
 You might wonder: "Why can't the server just block these requests?" There is a structural reason why the server cannot handle this.
