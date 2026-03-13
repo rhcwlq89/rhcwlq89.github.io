@@ -80,14 +80,77 @@ flowchart LR
 
 Imagine a world without the Same-Origin Policy:
 
-1. You log into your bank at `https://mybank.com` and receive an authentication cookie.
-2. You then visit a malicious site `https://evil-site.com`.
-3. A script on `evil-site.com` sends a request to `https://mybank.com/api/transfer` — and the browser automatically attaches your bank cookie.
-4. The bank server processes the request as if it came from you. Your money is transferred to the attacker.
+#### A World Without SOP (Attack Succeeds)
 
-Without SOP, **any website could silently read responses from any other website** using your credentials. SOP prevents this by ensuring that `evil-site.com` cannot read the response from `mybank.com`.
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser
+    participant Evil as evil-site.com
+    participant Bank as mybank.com
 
-### 2.3 The Critical Insight: The Server Responds Normally
+    User->>Browser: Log into mybank.com
+    Browser->>Bank: Login request
+    Bank-->>Browser: Session cookie issued
+    Note over Browser: Cookie stored
+
+    User->>Browser: Visit evil-site.com
+    Browser->>Evil: Page request
+    Evil-->>Browser: Page with malicious JS
+
+    Note over Browser: Malicious script runs
+    Browser->>Bank: POST /api/transfer (cookie auto-attached)
+    Bank-->>Browser: 200 OK (transfer complete)
+    Browser-->>Evil: Response data delivered
+    Note over Evil: Attack succeeds
+```
+
+#### A World With SOP (Blocked)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser
+    participant Evil as evil-site.com
+    participant Bank as mybank.com
+
+    User->>Browser: Log into mybank.com
+    Browser->>Bank: Login request
+    Bank-->>Browser: Session cookie issued
+    Note over Browser: Cookie stored
+
+    User->>Browser: Visit evil-site.com
+    Browser->>Evil: Page request
+    Evil-->>Browser: Page with malicious JS
+
+    Note over Browser: Malicious script runs
+    Browser->>Bank: POST /api/transfer (cookie auto-attached)
+    Bank-->>Browser: 200 OK (transfer complete)
+    Browser--xEvil: Response blocked (SOP)
+    Note over Browser: Origin mismatch → response read denied
+```
+
+Without SOP, **any website could silently read responses from any other website** using your credentials. With SOP, the server still processes the request, but the browser blocks `evil-site.com` from reading `mybank.com`'s response.
+
+> Note: This scenario is closely related to CSRF (Cross-Site Request Forgery). CSRF is an attack where a malicious site sends forged requests on behalf of an authenticated user — for example, using a logged-in bank session cookie to initiate a money transfer without the user's knowledge. SOP reduces the attack surface by blocking the response from being read, but since the request itself can still go through, SOP alone cannot fully prevent CSRF. Additional defenses like CSRF tokens and SameSite cookies are needed.
+
+### 2.3 Why the Browser, Not the Server?
+
+You might wonder: "Why can't the server just block these requests?" There is a structural reason why the server cannot handle this.
+
+**The server cannot distinguish who sent the request.** The `Origin` header is attached by the browser — tools like curl or Postman can send any value they want. Blocking based on this header alone is trivially bypassable. Furthermore, if a valid cookie is attached, the server has no way to tell a legitimate user's request apart from one triggered by a malicious site.
+
+**The browser is the only trust boundary.** The browser knows exactly which tab (Origin) loaded which script and where the request was sent. "This script was loaded from `evil-site.com` and is trying to read the response from `mybank.com`" — only the browser can make this determination.
+
+| | Server | Browser |
+|--|--------|---------|
+| Origin verification | Relies on `Origin` header (spoofable) | Knows the actual execution context |
+| Cookie auto-send control | Cannot control | Can control via SameSite, etc. |
+| Response read blocking | Cannot block (response already sent) | Decides whether to deliver response to JS |
+
+In short, the server's role is to **declare which Origins are allowed** via CORS headers. The browser's role is to **enforce that declaration**. It's a division of responsibility.
+
+### 2.4 The Critical Insight: The Server Responds Normally
 
 This is the single most important concept to understand about CORS errors:
 
@@ -156,6 +219,16 @@ A **Simple Request** is one that meets all of the following conditions:
   - `multipart/form-data`
   - `text/plain`
 - Only standard headers are used (Accept, Accept-Language, Content-Language, Content-Type)
+
+**All three** conditions must be satisfied. If any one is violated, a preflight is triggered. Here's a per-method breakdown:
+
+| Method | Simple Request? | Condition |
+|--------|----------------|-----------|
+| `GET`, `HEAD` | Possible | Only if no custom headers |
+| `POST` | Possible | Only if Content-Type is one of the above 3 + no custom headers |
+| `PUT`, `DELETE`, `PATCH` | **Never** | Always triggers preflight |
+
+In other words, `PUT`/`DELETE` always require a preflight, but even a `GET` will trigger one if it includes an `Authorization` header. In practice, nearly all modern APIs use `Authorization` or `Content-Type: application/json`, so **preflight requests occur regardless of the HTTP method** in most real-world scenarios.
 
 When all conditions are met, the browser sends the request directly without a preflight check:
 
@@ -357,7 +430,23 @@ class WebConfig : WebMvcConfigurer {
 
 This approach applies CORS settings to all endpoints matching `/api/**` in a single place.
 
-### 6.3 Using with Spring Security
+> **Q: Do I need to add `OPTIONS` to `allowedMethods`?**
+>
+> No. Preflight (`OPTIONS`) requests are automatically intercepted and handled by Spring's CORS mechanism (`CorsFilter` or `DispatcherServlet`). They never reach your controller, so there is no need to include `OPTIONS` in `allowedMethods`. That setting declares which methods are allowed for **actual requests**.
+>
+> Note that not every `OPTIONS` request is a preflight. Spring internally checks **all three conditions** to determine if a request is a preflight:
+>
+> 1. The HTTP method is `OPTIONS`
+> 2. The `Origin` header is present
+> 3. The `Access-Control-Request-Method` header is present
+>
+> A plain `OPTIONS` request without these CORS headers (e.g., for API discovery) passes through the CorsFilter untouched and reaches the controller. If the controller has no `OPTIONS` mapping, it will respond with `405 Method Not Allowed`. If you need to support plain `OPTIONS` requests, you must add a dedicated handler. In practice, this is rarely needed.
+
+> **Note: Spring Framework 7.0 (Spring Boot 4.0) Behavioral Change**
+>
+> The `WebMvcConfigurer` and `addCorsMappings` API remains unchanged across Spring Boot 2.x, 3.x, and 4.x — no migration is needed. However, Spring Framework 7.0 introduced one **behavioral change**: preflight requests are **no longer rejected** when CORS configuration is empty. Previously, an unconfigured CORS setup would automatically reject preflight requests; from 7.0 onward, they pass through. If your security relied on preflight rejection in the absence of explicit CORS configuration, verify that this change does not affect you.
+
+### 6.3 Using with Spring Security (Recommended for Most Projects)
 
 When Spring Security is in the project, there is a critical issue: **Spring Security's filter chain processes the request before Spring MVC's CORS handling kicks in.** This means that preflight `OPTIONS` requests may be rejected by Spring Security before CORS headers are added.
 
@@ -399,6 +488,15 @@ class SecurityConfig {
 ```
 
 The `cors { }` block in the security configuration tells Spring Security to look for a `CorsConfigurationSource` bean and apply it **before** the authentication filters. Without this, `OPTIONS` preflight requests will receive a `401 Unauthorized` or `403 Forbidden` response.
+
+> **Do I need both 6.2 and 6.3?**
+>
+> No. If your project uses Spring Security, **6.3 alone is sufficient.** When you register a `CorsConfigurationSource` as a `@Bean`, Spring Security's `CorsFilter` handles all CORS processing — making `WebMvcConfigurer`'s `addCorsMappings` redundant. Having both configured will work, but you end up managing the same CORS policy in two places, which can lead to configuration drift bugs.
+>
+> | Setup | `WebMvcConfigurer` (6.2) | `CorsConfigurationSource` (6.3) |
+> |-------|:------------------------:|:-------------------------------:|
+> | **No** Spring Security | Use this | - |
+> | **With** Spring Security | Unnecessary (redundant) | **Use this** |
 
 ### 6.4 Environment-specific Configuration (Dev vs Production)
 
@@ -588,6 +686,72 @@ You check the server logs and see the request was processed successfully. The re
 **Diagnosis:** Open the browser's Developer Tools > Network tab. Look at the actual response headers. If `Access-Control-Allow-Origin` is missing or does not match, the browser will block the response regardless of the status code.
 
 **Remember:** The server processed the request. The data was returned. The browser just refused to show it to your JavaScript code.
+
+### Verifying CORS Configuration from the Server Side
+
+Since CORS errors are enforced by the browser, **no error appears in server logs** — the server successfully returned a `200 OK`. The request was processed; the browser simply refused to hand the response to JavaScript.
+
+Instead of looking for errors, you can verify that your server returns the correct CORS headers.
+
+#### Simulate with curl
+
+```bash
+# Simulate a preflight request
+curl -v -X OPTIONS http://localhost:8080/api/users \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: PUT" \
+  -H "Access-Control-Request-Headers: Authorization, Content-Type"
+```
+
+Check the response for:
+- `Access-Control-Allow-Origin` matches the requested Origin
+- `Access-Control-Allow-Methods` includes the desired method
+- `Access-Control-Allow-Headers` includes the desired headers
+
+```bash
+# Simulate a simple request
+curl -v http://localhost:8080/api/users \
+  -H "Origin: http://localhost:3000"
+```
+
+Verify that `Access-Control-Allow-Origin` is present in the response.
+
+#### Automate with Integration Tests
+
+You can verify CORS configuration in CI before deployment:
+
+```kotlin
+@SpringBootTest
+@AutoConfigureMockMvc
+class CorsTest {
+
+    @Autowired
+    lateinit var mockMvc: MockMvc
+
+    @Test
+    fun `preflight request returns correct CORS headers`() {
+        mockMvc.perform(
+            options("/api/users")
+                .header("Origin", "http://localhost:3000")
+                .header("Access-Control-Request-Method", "PUT")
+                .header("Access-Control-Request-Headers", "Authorization")
+        )
+            .andExpect(status().isOk)
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+            .andExpect(header().string("Access-Control-Allow-Methods", containsString("PUT")))
+    }
+
+    @Test
+    fun `disallowed Origin receives no CORS headers`() {
+        mockMvc.perform(
+            options("/api/users")
+                .header("Origin", "http://evil.com")
+                .header("Access-Control-Request-Method", "GET")
+        )
+            .andExpect(header().doesNotExist("Access-Control-Allow-Origin"))
+    }
+}
+```
 
 ---
 

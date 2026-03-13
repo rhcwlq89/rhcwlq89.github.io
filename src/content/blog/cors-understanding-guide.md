@@ -71,16 +71,75 @@ Postman은 브라우저가 아니기 때문에 SOP를 적용하지 않는다.
 
 SOP가 없다면 어떤 일이 벌어지는지 시나리오로 살펴보자.
 
-1. 사용자가 `bank.com`에 로그인한다. 브라우저에 세션 쿠키가 저장된다
-2. 사용자가 악성 사이트 `evil.com`에 접속한다
-3. `evil.com`의 자바스크립트가 `fetch('https://bank.com/api/transfer', { method: 'POST', body: '...' })`를 실행한다
-4. 브라우저가 `bank.com`으로 요청을 보낼 때, 저장된 쿠키가 자동으로 함께 전송된다
-5. `bank.com` 서버는 유효한 세션 쿠키를 받았으니 정상 요청으로 처리한다
-6. 사용자의 돈이 빠져나간다
+#### SOP가 없는 세상 (공격 성공)
 
-SOP가 있으면, 3번 단계에서 `evil.com`(Origin)이 `bank.com`(다른 Origin)으로 보낸 요청의 **응답을 브라우저가 차단**한다. 요청 자체는 나갈 수 있지만(특히 단순 요청의 경우), 악성 스크립트가 응답 데이터를 읽을 수 없다.
+```mermaid
+sequenceDiagram
+    participant User as 사용자
+    participant Browser as 브라우저
+    participant Evil as evil.com
+    participant Bank as bank.com
 
-> 참고: 위 시나리오는 CSRF(Cross-Site Request Forgery) 공격과도 연관된다. SOP만으로 CSRF를 완전히 막지는 못하지만, 공격 표면을 상당히 줄여준다.
+    User->>Browser: bank.com 로그인
+    Browser->>Bank: 로그인 요청
+    Bank-->>Browser: 세션 쿠키 발급
+    Note over Browser: 쿠키 저장됨
+
+    User->>Browser: evil.com 접속
+    Browser->>Evil: 페이지 요청
+    Evil-->>Browser: 악성 JS 포함 페이지
+
+    Note over Browser: 악성 스크립트 실행
+    Browser->>Bank: POST /api/transfer (쿠키 자동 첨부)
+    Bank-->>Browser: 200 OK (이체 완료)
+    Browser-->>Evil: 응답 데이터 전달
+    Note over Evil: 공격 성공 💀
+```
+
+#### SOP가 있는 세상 (차단)
+
+```mermaid
+sequenceDiagram
+    participant User as 사용자
+    participant Browser as 브라우저
+    participant Evil as evil.com
+    participant Bank as bank.com
+
+    User->>Browser: bank.com 로그인
+    Browser->>Bank: 로그인 요청
+    Bank-->>Browser: 세션 쿠키 발급
+    Note over Browser: 쿠키 저장됨
+
+    User->>Browser: evil.com 접속
+    Browser->>Evil: 페이지 요청
+    Evil-->>Browser: 악성 JS 포함 페이지
+
+    Note over Browser: 악성 스크립트 실행
+    Browser->>Bank: POST /api/transfer (쿠키 자동 첨부)
+    Bank-->>Browser: 200 OK (이체 완료)
+    Browser--xEvil: 응답 차단 (SOP)
+    Note over Browser: Origin 불일치 → 응답 읽기 거부
+```
+
+SOP가 있으면, 서버는 요청을 정상 처리하지만 `evil.com`(Origin)이 `bank.com`(다른 Origin)으로 보낸 요청의 **응답을 브라우저가 차단**한다. 요청 자체는 나갈 수 있지만(특히 단순 요청의 경우), 악성 스크립트가 응답 데이터를 읽을 수 없다.
+
+> 참고: 위 시나리오는 CSRF(Cross-Site Request Forgery) 공격과도 연관된다. CSRF는 사용자가 인증된 상태를 악용해, 사용자 모르게 다른 사이트에서 위조된 요청을 보내는 공격이다. 예를 들어 로그인된 은행 사이트의 쿠키를 이용해 악성 사이트가 송금 요청을 대신 보내는 식이다. SOP는 응답 읽기를 차단해 공격 표면을 줄여주지만, 요청 자체는 나갈 수 있으므로 CSRF를 완전히 막지는 못한다. 이를 방어하려면 CSRF 토큰, SameSite 쿠키 등의 추가 대책이 필요하다.
+
+### 왜 서버가 아니라 브라우저에서 차단하는가?
+
+"서버에서 막으면 되지 않나?"라는 의문이 들 수 있다. 하지만 서버 측에서 처리할 수 없는 구조적인 이유가 있다.
+
+**서버는 요청자를 구분할 수 없다.** HTTP 요청의 `Origin` 헤더는 브라우저가 붙이는 것이고, curl이나 Postman 같은 클라이언트는 아무 값이나 보낼 수 있다. 서버가 이를 기준으로 차단해봐야 우회가 너무 쉽다. 또한 유효한 쿠키가 달려 오면 서버 입장에선 정상 사용자의 요청과 악성 사이트가 보낸 요청을 구분할 방법이 없다.
+
+반면 **브라우저는 유일한 신뢰 경계(trust boundary)**다. 브라우저는 어떤 탭(Origin)에서 어떤 스크립트가 실행됐고, 어디로 요청을 보냈는지 정확히 알고 있다. "이 스크립트는 `evil.com`에서 로드됐고, `bank.com`의 응답을 읽으려 한다" — 이 판단은 브라우저만 할 수 있다.
+
+| | 서버 | 브라우저 |
+|--|------|----------|
+| 요청의 Origin 확인 | `Origin` 헤더에 의존 (위조 가능) | 실제 실행 컨텍스트를 정확히 안다 |
+| 쿠키 자동 전송 제어 | 할 수 없음 | SameSite 등으로 제어 가능 |
+| 응답 읽기 차단 | 할 수 없음 (이미 응답을 보냄) | JS에 응답 전달 여부를 결정 |
+
+정리하면, 서버는 "허용할 Origin을 CORS 헤더로 선언"하는 역할이고, 그 선언을 보고 **실제로 차단을 집행하는 건 브라우저**다. 역할 분담인 셈이다.
 
 ---
 
@@ -128,6 +187,16 @@ CORS 요청은 세 가지 유형으로 나뉜다.
 - 메서드: `GET`, `HEAD`, `POST` 중 하나
 - Content-Type: `application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain` 중 하나
 - 커스텀 헤더 없음 (Accept, Accept-Language, Content-Language 등 표준 헤더만 사용)
+
+세 조건을 **모두** 만족해야 단순 요청이다. 하나라도 벗어나면 Preflight가 발생한다. 메서드별로 정리하면:
+
+| 메서드 | 단순 요청 가능? | 조건 |
+|--------|----------------|------|
+| `GET`, `HEAD` | 가능 | 커스텀 헤더 없을 때만 |
+| `POST` | 가능 | Content-Type이 위 3가지 + 커스텀 헤더 없을 때만 |
+| `PUT`, `DELETE`, `PATCH` | **불가능** | 항상 Preflight |
+
+즉, `PUT`/`DELETE`는 무조건 Preflight이고, `GET`이라도 `Authorization` 헤더를 붙이면 Preflight가 된다. 실무에서는 거의 모든 API가 `Authorization` 헤더나 `Content-Type: application/json`을 사용하기 때문에, **메서드와 무관하게 대부분 Preflight가 발생**한다.
 
 단순 요청은 **Preflight 없이** 바로 서버로 전송된다. 서버의 응답에 포함된 `Access-Control-Allow-Origin`을 브라우저가 확인하고, 허용 여부를 결정한다.
 
@@ -323,7 +392,23 @@ class WebConfig : WebMvcConfigurer {
 | `allowCredentials(true)` | 쿠키/인증 정보 허용 |
 | `maxAge(3600)` | Preflight 캐시 시간 1시간 |
 
-### 6.3 Spring Security와 함께 사용할 때
+> **Q: `allowedMethods`에 `OPTIONS`를 안 넣어도 되나?**
+>
+> 된다. Preflight(`OPTIONS`) 요청은 Spring의 CORS 처리 메커니즘(`CorsFilter` 또는 `DispatcherServlet`)이 자동으로 가로채서 응답한다. 컨트롤러까지 도달하지 않기 때문에, `allowedMethods`에 `OPTIONS`를 명시할 필요가 없다. `allowedMethods`는 **본 요청에서 허용할 메서드**를 선언하는 것이다.
+>
+> 단, 모든 `OPTIONS` 요청이 Preflight인 것은 아니다. Spring은 내부적으로 아래 **세 가지 조건을 모두 확인**해서 Preflight 여부를 판단한다.
+>
+> 1. HTTP 메서드가 `OPTIONS`
+> 2. `Origin` 헤더 존재
+> 3. `Access-Control-Request-Method` 헤더 존재
+>
+> 이 조건을 충족하지 않는 순수 `OPTIONS` 요청(예: API 디스커버리 용도)은 CorsFilter를 그대로 통과하고 컨트롤러까지 도달한다. 만약 컨트롤러에 `OPTIONS` 매핑이 없으면 `405 Method Not Allowed`가 응답될 수 있으니, 순수 `OPTIONS`를 지원해야 한다면 별도 핸들러를 만들어야 한다. 다만 실무에서 순수 `OPTIONS`를 쓰는 경우는 거의 없다.
+
+> **참고: Spring Framework 7.0 (Spring Boot 4.0) 동작 변경**
+>
+> `WebMvcConfigurer`의 `addCorsMappings` API 자체는 Spring Boot 2.x → 3.x → 4.x 전 버전에서 변경 없이 동일하게 사용할 수 있다. 단, Spring Framework 7.0부터 한 가지 **동작 변경**이 있다: CORS 설정이 비어 있을 때 Preflight 요청을 **더 이상 거부하지 않는다.** 기존에는 CORS 미설정 상태에서 Preflight가 오면 자동으로 거부했지만, 7.0부터는 그대로 통과시킨다. CORS 미설정 상태에서의 Preflight 거부에 보안을 의존하고 있었다면 확인이 필요하다.
+
+### 6.3 Spring Security와 함께 사용할 때 (실무 권장)
 
 Spring Security를 쓰고 있다면, 위의 `WebMvcConfigurer` 설정만으로는 **CORS가 동작하지 않을 수 있다**.
 
@@ -371,6 +456,15 @@ class SecurityConfig {
 ```
 
 **핵심**: `cors { }`를 Security 설정에 포함해야 Spring Security가 CORS Preflight 요청을 정상 처리한다. 이걸 빠뜨리면 OPTIONS 요청이 401/403으로 거부된다.
+
+> **6.2와 6.3을 둘 다 설정해야 하나?**
+>
+> 아니다. Spring Security를 사용하는 프로젝트라면 **6.3만으로 충분하다.** `CorsConfigurationSource`를 `@Bean`으로 등록하면 Spring Security의 `CorsFilter`가 모든 CORS 처리를 담당하기 때문에, `WebMvcConfigurer`의 `addCorsMappings`는 중복 설정이 된다. 둘 다 설정하면 동작은 하지만, 같은 CORS 정책을 두 곳에서 관리하게 되어 설정 불일치 버그가 생길 수 있다.
+>
+> | 구성 | `WebMvcConfigurer` (6.2) | `CorsConfigurationSource` (6.3) |
+> |------|:------------------------:|:-------------------------------:|
+> | Spring Security **없음** | 이것만 사용 | - |
+> | Spring Security **있음** | 불필요 (중복) | **이것만 사용** |
 
 ### 6.4 환경별 설정 (개발 vs 프로덕션)
 
@@ -554,6 +648,72 @@ http {
 3. `Access-Control-Allow-Origin` 헤더가 있는지, 값이 올바른지 확인
 4. Preflight(OPTIONS) 요청이 있다면, 그 응답도 함께 확인
 5. Console 탭의 CORS 에러 메시지를 꼼꼼히 읽기 — 원인이 거기에 적혀있다
+
+### 서버 측에서 CORS 설정 검증하기
+
+CORS 에러는 브라우저가 응답 헤더를 검사해서 JS 전달을 차단하는 것이므로, **서버 로그에는 아무 에러도 남지 않는다.** 서버 입장에서는 정상 응답(200 OK)을 보낸 것이기 때문이다.
+
+대신, 서버가 CORS 헤더를 제대로 내려주는지를 검증할 수 있다.
+
+#### curl로 Preflight 시뮬레이션
+
+```bash
+# Preflight 요청 시뮬레이션
+curl -v -X OPTIONS http://localhost:8080/api/users \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: PUT" \
+  -H "Access-Control-Request-Headers: Authorization, Content-Type"
+```
+
+응답에서 확인할 것:
+- `Access-Control-Allow-Origin`이 요청한 Origin과 일치하는지
+- `Access-Control-Allow-Methods`에 원하는 메서드가 포함됐는지
+- `Access-Control-Allow-Headers`에 원하는 헤더가 포함됐는지
+
+```bash
+# 단순 요청 시뮬레이션
+curl -v http://localhost:8080/api/users \
+  -H "Origin: http://localhost:3000"
+```
+
+`Access-Control-Allow-Origin` 헤더가 응답에 있는지 확인한다.
+
+#### 통합 테스트로 자동화
+
+배포 전에 CI에서 CORS 설정이 의도대로 동작하는지 자동으로 검증할 수 있다.
+
+```kotlin
+@SpringBootTest
+@AutoConfigureMockMvc
+class CorsTest {
+
+    @Autowired
+    lateinit var mockMvc: MockMvc
+
+    @Test
+    fun `preflight 요청에 CORS 헤더가 정상 응답된다`() {
+        mockMvc.perform(
+            options("/api/users")
+                .header("Origin", "http://localhost:3000")
+                .header("Access-Control-Request-Method", "PUT")
+                .header("Access-Control-Request-Headers", "Authorization")
+        )
+            .andExpect(status().isOk)
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+            .andExpect(header().string("Access-Control-Allow-Methods", containsString("PUT")))
+    }
+
+    @Test
+    fun `허용하지 않은 Origin은 CORS 헤더가 없다`() {
+        mockMvc.perform(
+            options("/api/users")
+                .header("Origin", "http://evil.com")
+                .header("Access-Control-Request-Method", "GET")
+        )
+            .andExpect(header().doesNotExist("Access-Control-Allow-Origin"))
+    }
+}
+```
 
 ---
 
