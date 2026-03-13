@@ -134,6 +134,21 @@ Without SOP, **any website could silently read responses from any other website*
 
 > Note: This scenario is closely related to CSRF (Cross-Site Request Forgery). CSRF is an attack where a malicious site sends forged requests on behalf of an authenticated user — for example, using a logged-in bank session cookie to initiate a money transfer without the user's knowledge. SOP reduces the attack surface by blocking the response from being read, but since the request itself can still go through, SOP alone cannot fully prevent CSRF. Additional defenses like CSRF tokens and SameSite cookies are needed.
 
+> **"Does using JWT mean I don't have to worry about SOP/CORS?"**
+>
+> No. SOP and CORS apply **regardless of the authentication method**. Whether you use session cookies or JWT, the browser enforces the same CORS policy when making cross-origin requests. The scenario above uses cookies as an example, but SOP blocks the response in exactly the same way when JWT is sent via the `Authorization` header.
+>
+> However, the authentication method does affect **how CORS is configured**:
+>
+> | | Session Cookie | JWT (`Authorization` header) |
+> |--|---------------|------------------------------|
+> | How it's sent | Browser attaches automatically | JS adds header manually |
+> | `allowCredentials` | `true` required | Not needed (no cookies involved) |
+> | Preflight triggered | Not by cookies alone | **Always** — `Authorization` is a custom header |
+> | `allowedHeaders` | Defaults may suffice | Must include `Authorization` |
+>
+> With JWT, the `Authorization` header triggers a preflight on **every request, even GET**. You'll actually encounter preflight requests more frequently than with session cookies.
+
 ### 2.3 Why the Browser, Not the Server?
 
 You might wonder: "Why can't the server just block these requests?" There is a structural reason why the server cannot handle this.
