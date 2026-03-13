@@ -506,6 +506,37 @@ class WebConfig(
 >
 > 개발 편의를 위해 `allowedOrigins("*")`를 쓰는 경우가 있다. 개발 환경에서야 상관없지만, **프로덕션에서는 절대 사용하지 말자**. 모든 Origin을 허용한다는 것은 어떤 사이트에서든 우리 API에 접근할 수 있다는 뜻이다. 특히 인증이 필요한 API라면 심각한 보안 위험이 된다.
 
+### 6.5 와일드카드 서브도메인 허용 (`allowedOriginPatterns`)
+
+`https://app.example.com`, `https://admin.example.com` 등 여러 서브도메인을 허용해야 할 때, 하나씩 나열하는 대신 패턴을 쓸 수 있다.
+
+CORS 스펙의 `Access-Control-Allow-Origin` 헤더 자체는 와일드카드 서브도메인을 지원하지 않는다 — 정확한 Origin(`https://app.example.com`) 또는 `*`만 가능하다. 하지만 **Spring은 `allowedOriginPatterns`로 서버 측 패턴 매칭을 지원**한다.
+
+```kotlin
+// WebMvcConfigurer 방식
+registry.addMapping("/api/**")
+    .allowedOriginPatterns("https://*.example.com")
+
+// CorsConfigurationSource 방식
+val configuration = CorsConfiguration().apply {
+    allowedOriginPatterns = listOf("https://*.example.com")
+}
+```
+
+동작 원리:
+1. 브라우저가 `Origin: https://app.example.com` 헤더를 보낸다
+2. Spring이 `https://*.example.com` 패턴과 매칭한다
+3. 매칭되면 응답에 `Access-Control-Allow-Origin: https://app.example.com`을 **구체적인 값으로** 내려준다
+
+> **주의: `allowedOrigins`와 `allowedOriginPatterns`는 다르다**
+>
+> | 메서드 | 패턴 지원 | `allowCredentials(true)` + `*` |
+> |--------|:---------:|:------------------------------:|
+> | `allowedOrigins("https://*.example.com")` | 리터럴로 취급 (동작 안 함) | 사용 불가 (`*`와 credentials 동시 불가) |
+> | `allowedOriginPatterns("https://*.example.com")` | **패턴 매칭** | `allowedOriginPatterns("*")`로 가능 |
+>
+> `allowedOrigins`에 `*`를 넣으면 `allowCredentials(true)`와 함께 사용할 수 없지만, `allowedOriginPatterns("*")`는 가능하다. 이유는 패턴 매칭 시 응답에 실제 Origin 값을 구체적으로 내려주기 때문이다.
+
 ---
 
 ## 7. 프록시로 CORS 우회하기

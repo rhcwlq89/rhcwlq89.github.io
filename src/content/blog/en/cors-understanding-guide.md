@@ -542,6 +542,37 @@ cors:
 
 > **Never use `Access-Control-Allow-Origin: *` in production**, especially with credentialed requests. Always whitelist specific domains. The wildcard tells the browser "any website in the world can read responses from this API," which is almost never what you want for an authenticated API.
 
+### 6.5 Wildcard Subdomain Patterns (`allowedOriginPatterns`)
+
+When you need to allow multiple subdomains like `https://app.example.com`, `https://admin.example.com`, listing each one individually is tedious. You can use patterns instead.
+
+The CORS spec's `Access-Control-Allow-Origin` header itself does not support wildcard subdomains — only an exact Origin (`https://app.example.com`) or `*` is valid. However, **Spring supports server-side pattern matching via `allowedOriginPatterns`**.
+
+```kotlin
+// WebMvcConfigurer approach
+registry.addMapping("/api/**")
+    .allowedOriginPatterns("https://*.example.com")
+
+// CorsConfigurationSource approach
+val configuration = CorsConfiguration().apply {
+    allowedOriginPatterns = listOf("https://*.example.com")
+}
+```
+
+How it works:
+1. The browser sends `Origin: https://app.example.com`
+2. Spring matches it against the `https://*.example.com` pattern
+3. If matched, the response contains `Access-Control-Allow-Origin: https://app.example.com` — the **concrete value**, not the pattern
+
+> **Warning: `allowedOrigins` and `allowedOriginPatterns` are different**
+>
+> | Method | Pattern support | `allowCredentials(true)` + `*` |
+> |--------|:--------------:|:------------------------------:|
+> | `allowedOrigins("https://*.example.com")` | Treated as literal (won't work) | Cannot use (`*` + credentials not allowed) |
+> | `allowedOriginPatterns("https://*.example.com")` | **Pattern matching** | `allowedOriginPatterns("*")` works |
+>
+> Using `allowedOrigins("*")` with `allowCredentials(true)` throws an error. But `allowedOriginPatterns("*")` works with credentials because Spring responds with the actual Origin value, not the literal `*`.
+
 ---
 
 ## 7. Bypassing CORS with Proxies
