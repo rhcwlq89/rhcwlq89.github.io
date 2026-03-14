@@ -94,11 +94,26 @@ description: 코드 품질과 보안을 점검한다
 
 #### 로컬 테스트
 
+마켓플레이스에 올리거나 `claude plugin install`로 설치하기 전에, 로컬 디렉토리를 직접 가리켜서 테스트할 수 있다:
+
 ```bash
+# ./my-plugin 디렉토리를 임시 플러그인으로 로드하면서 Claude Code 시작
 claude --plugin-dir ./my-plugin
+
+# 여러 플러그인을 동시에 테스트
+claude --plugin-dir ./plugin-one --plugin-dir ./plugin-two
 ```
 
-변경 사항 반영은 Claude Code 안에서 `/reload-plugins` 실행.
+이 명령은 **Claude Code를 새로 시작하면서** 해당 폴더를 플러그인으로 인식시킨다. 해당 세션 동안만 유효하고, 세션이 끝나면 사라진다.
+
+테스트할 것들:
+
+- 스킬이 `/` 명령 목록에 나타나는지 (`/my-plugin:code-review`)
+- 에이전트가 `/agents`에 보이는지
+- 훅이 이벤트 발생 시 트리거되는지
+- MCP 서버가 `/mcp`에서 연결되는지
+
+개발 중 파일을 수정하면 Claude Code를 재시작할 필요 없이 `/reload-plugins`로 바로 반영할 수 있다. 단, LSP 서버 설정 변경은 전체 재시작이 필요하다.
 
 ### 1.3 플러그인 설치 & 마켓플레이스
 

@@ -85,11 +85,26 @@ When reviewing code, check for:
 
 #### Local testing
 
+Before publishing to a marketplace or installing with `claude plugin install`, you can test by pointing directly at a local directory:
+
 ```bash
+# Start Claude Code with ./my-plugin loaded as a temporary plugin
 claude --plugin-dir ./my-plugin
+
+# Test multiple plugins at once
+claude --plugin-dir ./plugin-one --plugin-dir ./plugin-two
 ```
 
-Reload changes without restarting: run `/reload-plugins` inside Claude Code.
+This **starts a new Claude Code session** with the directory recognized as a plugin. It's only active for that session — once the session ends, the plugin is unloaded.
+
+What to test:
+
+- Skills appear in the `/` command list (e.g., `/my-plugin:code-review`)
+- Agents show up in `/agents`
+- Hooks trigger on the correct events
+- MCP servers connect and appear in `/mcp`
+
+When you modify plugin files during development, run `/reload-plugins` to apply changes without restarting. Note: LSP server configuration changes require a full restart.
 
 ### 1.3 Installing plugins & marketplaces
 
