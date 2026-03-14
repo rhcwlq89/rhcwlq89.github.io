@@ -170,6 +170,7 @@ Here are useful MCP servers organized by category. Most can be installed with a 
 | **Vercel** | Deployment management, project analytics | `claude mcp add --transport http vercel https://mcp.vercel.com` |
 | **Context7** | Up-to-date library documentation | `claude mcp add --transport http context7 https://mcp.context7.com/mcp` |
 | **Stripe** | Payment and financial infrastructure | `claude mcp add --transport http stripe https://mcp.stripe.com` |
+| **Datadog** | Logs, metrics, traces, incident monitoring | `claude mcp add --transport http datadog https://mcp.datadoghq.com/mcp` |
 
 #### Databases
 
@@ -331,11 +332,13 @@ ENABLE_TOOL_SEARCH=false claude
 
 ---
 
-## 3. IDE Integration — Using Claude in VS Code
+## 3. IDE Integration — Using Claude in Your Editor
 
-Claude Code isn't just a terminal tool — it runs **natively inside VS Code**. Install the extension and work with Claude without leaving your editor.
+Claude Code isn't just a terminal tool — it runs **natively inside VS Code and JetBrains IDEs**. Work with Claude without leaving your editor.
 
-### 3.1 Installation
+### 3.1 VS Code
+
+#### Installation
 
 Requires VS Code 1.98.0 or higher.
 
@@ -345,42 +348,20 @@ Requires VS Code 1.98.0 or higher.
 
 Or click the [direct install link](vscode:extension/anthropic.claude-code).
 
-### 3.2 Key features
+#### Key features
 
-#### Code selection → Ask questions
+- **Code selection → Ask questions**: Select code and Claude automatically sees it. Press `Option+K` (Mac) / `Alt+K` (Windows/Linux) to insert an `@file.ts#5-10` reference.
+- **Review changes**: Claude shows side-by-side diffs. Accept, reject, or ask for modifications.
+- **@-mentions for context**: `@auth.js Explain the authentication logic` — fuzzy matching, no full paths needed.
+- **Permission modes**: Normal (asks each time), Plan (shows plan, waits for approval), Auto-accept (applies without asking).
 
-Select code and Claude automatically sees your highlighted text. Press `Option+K` (Mac) / `Alt+K` (Windows/Linux) to insert an `@file.ts#5-10` reference into your prompt.
-
-#### Review changes
-
-When Claude edits a file, it shows a side-by-side diff. You can accept, reject, or ask for modifications.
-
-#### @-mentions for context
-
-```
-@auth.js Explain the authentication logic in this file
-@src/components/ Analyze the structure of this folder
-```
-
-Fuzzy matching is supported — no need for full paths.
-
-#### Permission modes
-
-Switch modes at the bottom of the prompt box:
-
-| Mode | Behavior |
-|---|---|
-| **Normal** | Asks permission for each action |
-| **Plan** | Shows plan and waits for approval |
-| **Auto-accept** | Applies edits without asking |
-
-### 3.3 Conversation history & multiple tabs
+#### Conversation history & multiple tabs
 
 - Use the **top dropdown** to search and resume past conversations
 - Press `Cmd+Shift+Esc` to open a **new conversation tab**
 - Work on different tasks in parallel across multiple tabs/windows
 
-### 3.4 Chrome integration
+#### Chrome integration
 
 Install the Chrome extension to automate browser tasks:
 
@@ -388,7 +369,7 @@ Install the Chrome extension to automate browser tasks:
 @browser go to localhost:3000 and check the console for errors
 ```
 
-### 3.5 VS Code shortcuts
+#### Shortcuts
 
 | Command | Shortcut (Mac) | Description |
 |---|---|---|
@@ -397,7 +378,7 @@ Install the Chrome extension to automate browser tasks:
 | New Conversation | `Cmd+N` | Start new conversation (Claude focused) |
 | @-Mention | `Option+K` | Insert current file/selection reference |
 
-### 3.6 JetBrains IDE integration
+### 3.2 JetBrains IDE
 
 Claude Code works with most JetBrains IDEs: IntelliJ IDEA, PyCharm, WebStorm, GoLand, PhpStorm, and Android Studio.
 
