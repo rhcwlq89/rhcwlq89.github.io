@@ -294,7 +294,37 @@ agent: Explore
 Summarize this PR...
 ```
 
-`` !`gh pr diff` `` runs before the skill executes, and its output is passed to Claude.
+**How it works:**
+
+1. You run `/pr-summary`
+2. Shell commands like `` !`gh pr diff` `` execute **first**
+3. Each command's output replaces the `` !`command` `` placeholder as plain text
+4. The fully resolved content is then passed to Claude
+
+So what Claude actually sees is something like this:
+
+```markdown
+## PR Context
+- PR diff: (actual diff output here)
+- PR comments: (actual comment content here)
+- Changed files: (actual file list here)
+
+## Task
+Summarize this PR...
+```
+
+Think of `` !`command` `` as a **template variable**. Since you can't hardcode data into a skill file, it means "insert this command's output here at runtime."
+
+**Frontmatter explained:**
+
+| Field | Purpose |
+|---|---|
+| `context: fork` | Runs this skill in a separate sub-agent (prevents polluting main conversation context) |
+| `agent: Explore` | Sets the forked sub-agent type to Explore (read-only) |
+
+Without `context: fork`, the skill runs directly in the main conversation. For cases like PR diffs where output can be large, forking isolates the work and saves your main conversation's context window.
+
+> **What are agent types?** Claude Code has built-in agent types specialized for different purposes. `Explore` is for codebase search (read-only, uses the Haiku model), `Plan` is for planning, and `general-purpose` is for any task (all tools available). You can also create custom agents. See [Part 3](/blog/en/claude-code-advanced-guide-3) for details.
 
 ---
 
