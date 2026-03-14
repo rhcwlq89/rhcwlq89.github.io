@@ -509,17 +509,56 @@ Instead of rule-based (exit 0/2) decisions, hooks can use **AI judgment**. When 
 
 If `"ok": false` is returned, Claude continues working instead of stopping.
 
-### 3.5 Hook events summary
+### 3.5 Complete list of hook events
+
+These are all hook events supported by Claude Code. You can view them with the `/hooks` command.
+
+#### Session events
 
 | Event | When it fires | Use case |
 |---|---|---|
-| `SessionStart` | Session start/resume | Load env vars, inject context |
-| `UserPromptSubmit` | User submits prompt | Input validation, add context |
-| `PreToolUse` | Before tool execution | Block dangerous commands, protect files |
-| `PostToolUse` | After tool execution | Auto-format, logging |
-| `Notification` | Notification sent | Desktop notifications |
-| `Stop` | Claude finishes responding | Completion verification |
-| `SessionEnd` | Session ends | Cleanup tasks |
+| `SessionStart` | Session start, resume, compact, or clear | Load env vars, inject context |
+| `SessionEnd` | Session ends | Cleanup, release resources |
+
+#### User input events
+
+| Event | When it fires | Use case |
+|---|---|---|
+| `UserPromptSubmit` | User submits a prompt | Input validation, add context |
+
+#### Tool execution events
+
+| Event | When it fires | Use case |
+|---|---|---|
+| `PreToolUse` | Right before a tool executes | Block dangerous commands, protect files |
+| `PostToolUse` | Right after a tool executes | Auto-format, logging, run linters |
+
+#### Response events
+
+| Event | When it fires | Use case |
+|---|---|---|
+| `Notification` | Claude sends a notification | Desktop notifications |
+| `Stop` | Claude finishes responding | Completion verification, check for missed tasks |
+
+#### Sub-agent events
+
+| Event | When it fires | Use case |
+|---|---|---|
+| `SubagentStart` | A sub-agent starts | Set up DB connections, prepare environment |
+| `SubagentStop` | A sub-agent completes | Clean up resources, log results |
+
+#### Agent team events
+
+| Event | When it fires | Use case |
+|---|---|---|
+| `TeammateIdle` | A teammate enters idle state | Send feedback to keep them working |
+| `TaskCompleted` | A team task is marked complete | Validate completion criteria, quality gates |
+
+#### MCP events
+
+| Event | When it fires | Use case |
+|---|---|---|
+| `Elicitation` | An MCP server requests user input | Auto-respond to elicitation requests |
 
 ### 3.6 Hook configuration locations
 
