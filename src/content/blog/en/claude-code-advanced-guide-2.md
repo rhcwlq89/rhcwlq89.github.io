@@ -176,9 +176,15 @@ Here are useful MCP servers organized by category. Most can be installed with a 
 | Server | Description | Install command |
 |---|---|---|
 | **Supabase** | PostgreSQL + auth + storage | `claude mcp add --transport http supabase https://mcp.supabase.com/mcp` |
-| **DBHub** | Universal PostgreSQL/MySQL/SQLite access | `claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "postgresql://user:pass@host:5432/db"` |
+| **DBHub** | Universal PostgreSQL/MySQL/MariaDB/SQL Server/SQLite access | `claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "connection-string"` |
 
-> DBHub connects to PostgreSQL, MySQL, and SQLite via DSN strings. Using a read-only database account is strongly recommended.
+> DBHub connects to PostgreSQL, MySQL, MariaDB, **SQL Server**, and SQLite via a single DSN string. Using a read-only database account is strongly recommended.
+>
+> **DSN examples:**
+> - PostgreSQL: `postgresql://user:pass@host:5432/db`
+> - MySQL: `mysql://user:pass@host:3306/db`
+> - SQL Server: `sqlserver://user:pass@host:1433/db`
+> - SQLite: `sqlite:///path/to/db.sqlite`
 
 #### Project Management
 
@@ -393,7 +399,46 @@ Install the Chrome extension to automate browser tasks:
 
 ### 3.6 JetBrains IDE integration
 
-Claude Code also works with IntelliJ IDEA, WebStorm, and other JetBrains IDEs. Run `claude` in the terminal and use the `/ide` command to connect to your IDE.
+Claude Code works with most JetBrains IDEs: IntelliJ IDEA, PyCharm, WebStorm, GoLand, PhpStorm, and Android Studio.
+
+#### Installation
+
+1. Install the [Claude Code plugin](https://plugins.jetbrains.com/plugin/27310-claude-code-beta-) from the JetBrains Marketplace
+2. Restart the IDE
+
+#### Usage
+
+**From the IDE's integrated terminal:**
+
+```bash
+claude
+```
+
+Running `claude` from the integrated terminal automatically connects to the IDE.
+
+**From an external terminal:**
+
+```bash
+claude
+/ide   # Connect to the IDE
+```
+
+#### Key features
+
+| Feature | Description |
+|---|---|
+| **Diff viewer** | Code changes displayed directly in the IDE's diff viewer |
+| **Selection context** | Selected code in the editor is automatically shared with Claude |
+| **File references** | `Cmd+Option+K` (Mac) / `Alt+Ctrl+K` (Windows/Linux) inserts `@File#L1-99` references |
+| **Diagnostic sharing** | IDE lint errors, syntax errors, etc. are automatically shared with Claude |
+| **Quick launch** | `Cmd+Esc` (Mac) / `Ctrl+Esc` (Windows/Linux) to open Claude Code |
+
+#### Configuration
+
+Go to **Settings → Tools → Claude Code [Beta]**:
+
+- **Claude command**: Specify the Claude executable path (e.g., `claude`, `/usr/local/bin/claude`)
+- **ESC key setup**: If ESC doesn't interrupt Claude Code, go to Settings → Tools → Terminal and uncheck "Move focus to the editor with Escape"
 
 ---
 
