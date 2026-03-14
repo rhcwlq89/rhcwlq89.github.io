@@ -157,7 +157,49 @@ Check Sentry for errors in the last 24 hours and find which deployment caused th
 Query our PostgreSQL database for this month's revenue data.
 ```
 
-### 2.2 Installing MCP servers
+### 2.2 Recommended MCP servers
+
+Here are useful MCP servers organized by category. Most can be installed with a single command.
+
+#### Development & Code Management
+
+| Server | Description | Install command |
+|---|---|---|
+| **GitHub** | PR reviews, issue management, code search | `claude mcp add --transport http github https://api.githubcopilot.com/mcp/` |
+| **Sentry** | Error monitoring, stack trace analysis | `claude mcp add --transport http sentry https://mcp.sentry.dev/mcp` |
+| **Vercel** | Deployment management, project analytics | `claude mcp add --transport http vercel https://mcp.vercel.com` |
+| **Context7** | Up-to-date library documentation | `claude mcp add --transport http context7 https://mcp.context7.com/mcp` |
+| **Stripe** | Payment and financial infrastructure | `claude mcp add --transport http stripe https://mcp.stripe.com` |
+
+#### Databases
+
+| Server | Description | Install command |
+|---|---|---|
+| **Supabase** | PostgreSQL + auth + storage | `claude mcp add --transport http supabase https://mcp.supabase.com/mcp` |
+| **DBHub** | Universal PostgreSQL/MySQL/SQLite access | `claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "postgresql://user:pass@host:5432/db"` |
+
+> DBHub connects to PostgreSQL, MySQL, and SQLite via DSN strings. Using a read-only database account is strongly recommended.
+
+#### Project Management
+
+| Server | Description | Install command |
+|---|---|---|
+| **Atlassian** | Jira issues + Confluence docs | `claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp` |
+| **Linear** | Issues, projects, workflow management | `claude mcp add --transport http linear https://mcp.linear.app/mcp` |
+| **Notion** | Create, edit, search documents | `claude mcp add --transport http notion https://mcp.notion.com/mcp` |
+| **Asana** | Tasks, projects, goals management | `claude mcp add --transport http asana https://mcp.asana.com/v2/mcp` |
+
+#### Communication & Design
+
+| Server | Description | Install command |
+|---|---|---|
+| **Slack** | Send messages, fetch data | `claude mcp add --transport http slack https://mcp.slack.com/mcp` |
+| **Figma** | Generate code from design context | `claude mcp add --transport http figma https://mcp.figma.com/mcp` |
+| **Excalidraw** | Create hand-drawn style diagrams | `claude mcp add --transport http excalidraw https://mcp.excalidraw.com/mcp` |
+
+> Browse the full list at the [MCP server registry](https://github.com/modelcontextprotocol/servers). Third-party MCP servers are not verified by Anthropic — only install servers you trust.
+
+### 2.3 Installing MCP servers
 
 #### HTTP servers (recommended)
 
@@ -194,7 +236,7 @@ claude mcp remove github     # Remove a server
 /mcp                         # Check status inside Claude Code
 ```
 
-### 2.3 MCP installation scopes
+### 2.4 MCP installation scopes
 
 | Scope | Storage location | Use case |
 |---|---|---|
@@ -210,7 +252,7 @@ claude mcp add --transport http github --scope project \
 
 Project scope creates a `.mcp.json` file — commit it to Git so your whole team gets the same MCP servers.
 
-### 2.4 OAuth authentication
+### 2.5 OAuth authentication
 
 Many cloud MCP servers require OAuth authentication:
 
@@ -225,7 +267,7 @@ claude mcp add --transport http sentry https://mcp.sentry.dev/mcp
 
 Tokens are stored securely and refreshed automatically.
 
-### 2.5 Sharing team config with .mcp.json
+### 2.6 Sharing team config with .mcp.json
 
 Create `.mcp.json` at your project root and commit to Git. Environment variable expansion is supported:
 
@@ -245,7 +287,7 @@ Create `.mcp.json` at your project root and commit to Git. Environment variable 
 
 Use `${VAR:-default}` syntax for defaults. Keep sensitive values like API keys in environment variables.
 
-### 2.6 Using Claude Code as an MCP server
+### 2.7 Using Claude Code as an MCP server
 
 You can expose Claude Code itself as an MCP server:
 
@@ -267,7 +309,7 @@ Connect from Claude Desktop to use Claude Code's tools (file reading, editing, e
 }
 ```
 
-### 2.7 MCP Tool Search
+### 2.8 MCP Tool Search
 
 When you have many MCP servers, tool definitions can overwhelm the context window. **Tool Search** dynamically loads tools on demand instead of preloading them all.
 
