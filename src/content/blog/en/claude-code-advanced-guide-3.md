@@ -347,6 +347,54 @@ Solo debugging often anchors on the first plausible explanation. Multiple invest
 
 ---
 
+## 3. Oh My Claude Code — Community Multi-Agent Framework
+
+[Oh My Claude Code (OMCC)](https://github.com/Yeachan-Heo/oh-my-claudecode) is a **community open-source project** that adds multi-agent orchestration on top of Claude Code. Just as Oh My Zsh extends zsh, OMCC adds agents, skills, and automatic model routing to Claude Code.
+
+### 3.1 Key features
+
+- **32 specialized agents**: Pre-built agents for architecture, security, testing, code review, data science, and more
+- **40+ skills**: Pre-configured skills for common development tasks
+- **Smart model routing**: Automatically routes to Haiku (simple tasks) or Opus (complex reasoning) based on task complexity. 30-50% token savings
+
+### 3.2 Orchestration modes
+
+| Mode | Description | Best for |
+|---|---|---|
+| **Team** | `plan → prd → exec → verify → fix` pipeline | Structured feature development |
+| **Autopilot** | Fully autonomous execution, zero intervention | Simple feature implementation |
+| **Ultrapilot** | Up to 5 parallel workers | Multi-component projects |
+| **Ralph** | Continuous verify/fix loops until complete | Critical work |
+| **Pipeline** | Sequential staged processing | Multi-step transformations |
+
+### 3.3 Agent Teams vs OMCC
+
+|  | Agent Teams (built-in) | OMCC (community) |
+|---|---|---|
+| **Setup** | Enable with one env variable | Install from plugin marketplace |
+| **Configuration** | Natural language team composition | Keywords (`ralph`, `autopilot`, etc.) |
+| **Agents** | Define yourself or describe in natural language | 32 pre-defined |
+| **Model routing** | Manual (`model:` field) | Automatic (complexity-based) |
+| **Workflow** | Free-form — teammates self-coordinate | Structured — pipelines and verification loops |
+| **Token cost** | Higher (each teammate is a separate instance) | 30-50% savings via routing |
+| **Stability** | Experimental feature | Community-maintained |
+| **Best for** | Collaborative work needing debate and discussion | Systematic, repeatable workflows |
+
+> Agent Teams are "multiple Claudes debating and solving together." OMCC is "systematic processing through pre-built pipelines." They don't conflict — you can use OMCC's agents alongside Agent Teams.
+
+> OMCC's signature feature, Ralph (continuous verify/fix loops until completion), is also available as an official Claude Code plugin called `ralph-wiggum`. You can use it directly from the official plugin marketplace without installing OMCC.
+
+### 3.4 Installation
+
+```bash
+# Install as a Claude Code plugin
+/plugins  # Search for oh-my-claudecode in the marketplace and install
+```
+
+For details, see the [OMCC official docs](https://ohmyclaudecode.com/).
+
+---
+
 ## Wrapping Up the Series
 
 Across three parts, we've covered all of Claude Code's advanced features:
