@@ -92,7 +92,7 @@ const posts = (await getCollection("blog"))
       <section>
         <ul>
           {
-            posts.map((post) => (
+            posts.map((post, i) => (
               <li>
                 <a href={`/blog/${post.id}/`}>
                   {post.data.heroImage && (
@@ -101,6 +101,8 @@ const posts = (await getCollection("blog"))
                       height={360}
                       src={post.data.heroImage}
                       alt={post.data.title}
+                      loading={i === 0 ? "eager" : "lazy"}
+                      fetchpriority={i === 0 ? "high" : "auto"}
                     />
                   )}
                   <h3 class="title">{post.data.title}</h3>
