@@ -3,7 +3,7 @@ title: "실무에서 자주 쓰는 HTTP 커스텀 헤더 정리"
 description: "X-Request-ID, X-Forwarded-For 등 실무에서 흔히 사용하는 HTTP 커스텀 헤더의 용도와 사용법을 정리한다. X- 접두사 관례의 역사, CORS와의 관계, Spring Boot에서의 활용까지 다룬다."
 pubDate: 2026-03-16T14:00:00+09:00
 tags: ["HTTP", "Custom Header", "Spring Boot", "CORS", "Web"]
-heroImage: "../../assets/PracticalGuideSeries.png"
+heroImage: "../../assets/HttpCustomHeadersGuide.png"
 ---
 
 ## 서론

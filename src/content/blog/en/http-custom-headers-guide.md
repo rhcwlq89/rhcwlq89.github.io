@@ -3,7 +3,7 @@ title: "A Practical Guide to HTTP Custom Headers in Production"
 description: "A comprehensive guide to commonly used HTTP custom headers like X-Request-ID and X-Forwarded-For. Covers the history of the X- prefix convention, CORS implications, and Spring Boot implementation."
 pubDate: 2026-03-16T14:00:00+09:00
 tags: ["HTTP", "Custom Header", "Spring Boot", "CORS", "Web"]
-heroImage: "../../../assets/PracticalGuideSeries.png"
+heroImage: "../../../assets/HttpCustomHeadersGuide.png"
 ---
 
 ## Introduction
