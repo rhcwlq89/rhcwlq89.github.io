@@ -77,22 +77,15 @@ To understand isolation levels, you first need to know **"what goes wrong when i
 **Reading uncommitted data from another transaction.**
 
 ```
-Time  Transaction 1                  Transaction 2
-────────────────────────────────────────────────────
- t1   UPDATE accounts
-      SET balance = 0
-      WHERE id = 'A';
-      (A balance: $10,000 → $0)
+[t1] TX1: UPDATE accounts SET balance = 0 WHERE id = 'A'
+          (A balance: $10,000 → $0, NOT committed yet)
 
- t2                                  SELECT balance FROM accounts
-                                     WHERE id = 'A';
-                                     → reads $0 ← 💀 Dirty Read!
+[t2] TX2: SELECT balance FROM accounts WHERE id = 'A'
+          → reads $0  💀 Dirty Read!
 
- t3   ROLLBACK;
-      (A balance: back to $10,000)
+[t3] TX1: ROLLBACK  (A balance restored to $10,000)
 
- t4                                  Makes decisions based on
-                                     "$0 balance" — which never existed
+[t4] TX2: Makes decisions based on "$0 balance" — data that never existed
 ```
 
 Transaction 1 rolled back, but Transaction 2 already read $0. It saw **data that never actually existed**.
@@ -104,20 +97,12 @@ Analogy: a teacher is in the middle of correcting a test score (not finalized ye
 **Reading the same data twice in one transaction and getting different values.**
 
 ```
-Time  Transaction 1                  Transaction 2
-────────────────────────────────────────────────────
- t1   SELECT balance FROM accounts
-      WHERE id = 'A';
-      → $10,000
+[t1] TX1: SELECT balance WHERE id = 'A'  → $10,000
 
- t2                                  UPDATE accounts
-                                     SET balance = 5000
-                                     WHERE id = 'A';
-                                     COMMIT;
+[t2] TX2: UPDATE balance = $5,000 WHERE id = 'A'
+     TX2: COMMIT
 
- t3   SELECT balance FROM accounts
-      WHERE id = 'A';
-      → $5,000 ← 💀 It was $10,000 just a moment ago!
+[t3] TX1: SELECT balance WHERE id = 'A'  → $5,000  💀 Value changed!
 ```
 
 Same SELECT, different results. From Transaction 1's perspective: "Someone changed it while I was reading!"
@@ -129,19 +114,12 @@ Analogy: you're reading a book, step away to the restroom, and someone rewrites 
 **Same query condition returns a different number of rows.**
 
 ```
-Time  Transaction 1                  Transaction 2
-────────────────────────────────────────────────────
- t1   SELECT count(*) FROM accounts
-      WHERE balance > 5000;
-      → 3 rows
+[t1] TX1: SELECT count(*) WHERE balance > $5,000  → 3 rows
 
- t2                                  INSERT INTO accounts
-                                     VALUES ('D', 8000);
-                                     COMMIT;
+[t2] TX2: INSERT INTO accounts VALUES ('D', $8,000)
+     TX2: COMMIT
 
- t3   SELECT count(*) FROM accounts
-      WHERE balance > 5000;
-      → 4 rows ← 💀 It was 3 rows before!
+[t3] TX1: SELECT count(*) WHERE balance > $5,000  → 4 rows  💀 Phantom row!
 ```
 
 Existing rows didn't change — a **new row appeared like a phantom**. Hence the name.
@@ -153,28 +131,16 @@ Analogy: you count the students in a classroom, turn around, and someone sneaks 
 **Two transactions modify the same data simultaneously, and one change is lost.**
 
 ```
-Time  Transaction 1                  Transaction 2
-────────────────────────────────────────────────────
- t1   SELECT balance FROM accounts
-      WHERE id = 'A';
-      → $10,000
+[t1] TX1: SELECT balance WHERE id = 'A'  → $10,000
+[t2] TX2: SELECT balance WHERE id = 'A'  → $10,000
 
- t2                                  SELECT balance FROM accounts
-                                     WHERE id = 'A';
-                                     → $10,000
+[t3] TX1: UPDATE balance = 10000 - 3000 = $7,000
+     TX1: COMMIT
 
- t3   UPDATE accounts
-      SET balance = 10000 - 3000 = 7000
-      WHERE id = 'A';
-      COMMIT;
+[t4] TX2: UPDATE balance = 10000 - 2000 = $8,000  (unaware of TX1!)
+     TX2: COMMIT
 
- t4                                  UPDATE accounts
-                                     SET balance = 10000 - 2000 = 8000
-                                     WHERE id = 'A';
-                                     COMMIT;
-
- Result: A balance = $8,000 💀
-         (Should be 10000 - 3000 - 2000 = $5,000)
+Result: A balance = $8,000  💀 (should be 10000 - 3000 - 2000 = $5,000)
 ```
 
 Transaction 1's $3,000 deduction is completely lost. In a first-come-first-served system, this means **orders going through even when stock is zero**.

@@ -76,22 +76,15 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 **커밋되지 않은 데이터를 다른 트랜잭션이 읽는 것.**
 
 ```
-시간  트랜잭션 1                    트랜잭션 2
-────────────────────────────────────────────────
- t1   UPDATE accounts
-      SET balance = 0
-      WHERE id = 'A';
-      (A 잔액: 100만→0)
+[t1] TX1: UPDATE accounts SET balance = 0 WHERE id = 'A'
+          (A 잔액: 100만 → 0, 아직 커밋 안 함)
 
- t2                                 SELECT balance FROM accounts
-                                    WHERE id = 'A';
-                                    → 0원으로 읽음 ← 💀 Dirty Read!
+[t2] TX2: SELECT balance FROM accounts WHERE id = 'A'
+          → 0원 읽음  💀 Dirty Read!
 
- t3   ROLLBACK;
-      (A 잔액: 다시 100만원)
+[t3] TX1: ROLLBACK  (A 잔액: 다시 100만원으로 복구)
 
- t4                                 "A 잔액이 0원이다" 라고
-                                    잘못된 판단을 함
+[t4] TX2: "A 잔액이 0원이다" 라고 잘못된 판단
 ```
 
 트랜잭션 1이 롤백했는데, 트랜잭션 2는 이미 0원을 읽었다. **존재한 적 없는 데이터**를 본 것이다.
@@ -103,20 +96,12 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 **같은 트랜잭션에서 같은 데이터를 두 번 읽었는데 값이 다른 것.**
 
 ```
-시간  트랜잭션 1                    트랜잭션 2
-────────────────────────────────────────────────
- t1   SELECT balance FROM accounts
-      WHERE id = 'A';
-      → 100만원
+[t1] TX1: SELECT balance WHERE id = 'A'  → 100만원
 
- t2                                 UPDATE accounts
-                                    SET balance = 50만
-                                    WHERE id = 'A';
-                                    COMMIT;
+[t2] TX2: UPDATE balance = 50만 WHERE id = 'A'
+     TX2: COMMIT
 
- t3   SELECT balance FROM accounts
-      WHERE id = 'A';
-      → 50만원 ← 💀 아까는 100만원이었는데?
+[t3] TX1: SELECT balance WHERE id = 'A'  → 50만원  💀 값이 바뀌었다!
 ```
 
 같은 SELECT를 두 번 실행했는데 결과가 다르다. 트랜잭션 1 입장에서는 "내가 읽는 사이에 누가 바꿔버렸네?"가 된다.
@@ -128,19 +113,12 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 **같은 조건으로 조회했는데 행 개수가 달라지는 것.**
 
 ```
-시간  트랜잭션 1                    트랜잭션 2
-────────────────────────────────────────────────
- t1   SELECT count(*) FROM accounts
-      WHERE balance > 50만;
-      → 3건
+[t1] TX1: SELECT count(*) WHERE balance > 50만  → 3건
 
- t2                                 INSERT INTO accounts
-                                    VALUES ('D', 80만);
-                                    COMMIT;
+[t2] TX2: INSERT INTO accounts VALUES ('D', 80만)
+     TX2: COMMIT
 
- t3   SELECT count(*) FROM accounts
-      WHERE balance > 50만;
-      → 4건 ← 💀 아까는 3건이었는데?
+[t3] TX1: SELECT count(*) WHERE balance > 50만  → 4건  💀 유령 행 등장!
 ```
 
 기존 행의 값이 바뀐 게 아니라, **없던 행이 유령처럼 나타났다**(Phantom). 그래서 팬텀 리드라고 부른다.
@@ -152,28 +130,16 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 **두 트랜잭션이 동시에 같은 데이터를 수정해서 한쪽의 변경이 사라지는 것.**
 
 ```
-시간  트랜잭션 1                    트랜잭션 2
-────────────────────────────────────────────────
- t1   SELECT balance FROM accounts
-      WHERE id = 'A';
-      → 100만원
+[t1] TX1: SELECT balance WHERE id = 'A'  → 100만원
+[t2] TX2: SELECT balance WHERE id = 'A'  → 100만원
 
- t2                                 SELECT balance FROM accounts
-                                    WHERE id = 'A';
-                                    → 100만원
+[t3] TX1: UPDATE balance = 100만 - 30만 = 70만
+     TX1: COMMIT
 
- t3   UPDATE accounts
-      SET balance = 100만 - 30만 = 70만
-      WHERE id = 'A';
-      COMMIT;
+[t4] TX2: UPDATE balance = 100만 - 20만 = 80만  (TX1의 변경을 모름!)
+     TX2: COMMIT
 
- t4                                 UPDATE accounts
-                                    SET balance = 100만 - 20만 = 80만
-                                    WHERE id = 'A';
-                                    COMMIT;
-
- 결과  A 잔액 = 80만원 💀
-       (정상이라면 100 - 30 - 20 = 50만원이어야 함)
+결과: A 잔액 = 80만원  💀 (정상이라면 100 - 30 - 20 = 50만원)
 ```
 
 트랜잭션 1의 30만원 차감이 완전히 사라졌다. 선착순 시스템에서 재고 차감할 때 이런 일이 발생하면, **재고가 0인데 주문이 더 들어가는** 사고가 난다.
