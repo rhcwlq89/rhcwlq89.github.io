@@ -345,7 +345,61 @@ SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 | **MySQL (InnoDB)** | Repeatable Read | 바이너리 로그 기반 복제에서 일관성 보장을 위해 |
 | **PostgreSQL** | Read Committed | MVCC가 충분히 강력해서 대부분의 경우 이것으로 충분 |
 | **Oracle** | Read Committed | 높은 동시성 환경에서의 성능 우선 |
-| **SQL Server** | Read Committed | Oracle과 동일한 이유 |
+| **SQL Server** | Read Committed | Oracle과 동일한 이유. 단, RCSI 옵션으로 동작 변경 가능 |
+
+### Read Committed Snapshot Isolation (RCSI)
+
+표준 SQL에는 없지만, 실무에서 자주 만나는 변형이 있다 — **Read Committed Snapshot Isolation (RCSI)**.
+
+일반 Read Committed는 **락 기반**이다. 다른 트랜잭션이 쓰고 있는 행을 읽으려면 **락이 풀릴 때까지 기다려야** 한다:
+
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (수정)
+    participant DB as Database
+    participant TX2 as TX2 (조회)
+
+    TX1->>DB: UPDATE balance = 0 (락 획득)
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    Note over TX2: 락 대기... ⏳
+    TX1->>DB: COMMIT (락 해제)
+    DB-->>TX2: 0원 (이제야 읽을 수 있음)
+```
+
+RCSI는 이 문제를 해결한다. **읽기 시 락을 걸지 않고, 커밋된 마지막 버전의 스냅샷을 읽는다:**
+
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (수정)
+    participant DB as Database
+    participant TX2 as TX2 (조회)
+
+    TX1->>DB: UPDATE balance = 0 (락 획득)
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    Note over DB: 스냅샷에서 읽음 (대기 없음!)
+    DB-->>TX2: 100만원 (변경 전 커밋된 값)
+    TX1->>DB: COMMIT
+```
+
+핵심 차이:
+
+| | 일반 Read Committed | RCSI |
+|--|-------------------|------|
+| **읽기 시 락** | 공유 락 사용 (쓰기 락과 충돌) | 락 없음 (스냅샷 읽기) |
+| **읽기 vs 쓰기** | 서로 블로킹 | 서로 블로킹 안 함 |
+| **동시성** | 낮음 | 높음 |
+| **오버헤드** | 락 관리 | tempdb에 버전 저장 |
+
+#### DB별 지원 현황
+
+| DB | RCSI 지원 | 설정 방법 |
+|----|----------|----------|
+| **SQL Server** | O (DB 옵션) | `ALTER DATABASE mydb SET READ_COMMITTED_SNAPSHOT ON` |
+| **PostgreSQL** | 기본 동작 | MVCC로 항상 스냅샷 읽기 (별도 설정 불필요) |
+| **Oracle** | 기본 동작 | Undo 세그먼트로 항상 스냅샷 읽기 |
+| **MySQL (InnoDB)** | 기본 동작 | MVCC로 Read Committed에서도 스냅샷 읽기 |
+
+> **중요**: PostgreSQL, Oracle, MySQL은 Read Committed에서 이미 RCSI처럼 동작한다 (읽기 시 락을 안 건다). **SQL Server만 기본적으로 락 기반**이라서, RCSI를 명시적으로 켜야 한다. SQL Server를 쓰는 프로젝트라면 RCSI 활성화를 적극 고려해야 한다.
 
 ---
 

@@ -346,7 +346,61 @@ Concurrency: conflicting transactions get rolled back
 | **MySQL (InnoDB)** | Repeatable Read | Consistency guarantees for binary log replication |
 | **PostgreSQL** | Read Committed | MVCC is strong enough for most cases |
 | **Oracle** | Read Committed | Performance priority in high-concurrency environments |
-| **SQL Server** | Read Committed | Same reasoning as Oracle |
+| **SQL Server** | Read Committed | Same reasoning as Oracle. RCSI option changes behavior |
+
+### Read Committed Snapshot Isolation (RCSI)
+
+Not part of the SQL standard, but commonly encountered in practice — **Read Committed Snapshot Isolation (RCSI)**.
+
+Regular Read Committed is **lock-based**. Reading a row that another transaction is writing requires **waiting for the lock to be released**:
+
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Write)
+    participant DB as Database
+    participant TX2 as TX2 (Read)
+
+    TX1->>DB: UPDATE balance = 0 (lock acquired)
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    Note over TX2: Waiting for lock... ⏳
+    TX1->>DB: COMMIT (lock released)
+    DB-->>TX2: $0 (can finally read)
+```
+
+RCSI solves this. **Reads don't acquire locks — they read the last committed snapshot instead:**
+
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Write)
+    participant DB as Database
+    participant TX2 as TX2 (Read)
+
+    TX1->>DB: UPDATE balance = 0 (lock acquired)
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    Note over DB: Reads from snapshot (no waiting!)
+    DB-->>TX2: $10,000 (last committed value)
+    TX1->>DB: COMMIT
+```
+
+The key difference:
+
+| | Regular Read Committed | RCSI |
+|--|----------------------|------|
+| **Read locks** | Shared locks (conflicts with write locks) | No locks (snapshot read) |
+| **Reads vs Writes** | Block each other | Don't block each other |
+| **Concurrency** | Lower | Higher |
+| **Overhead** | Lock management | Version store in tempdb |
+
+#### Database Support
+
+| Database | RCSI Support | How to Enable |
+|----------|-------------|---------------|
+| **SQL Server** | Yes (DB option) | `ALTER DATABASE mydb SET READ_COMMITTED_SNAPSHOT ON` |
+| **PostgreSQL** | Default behavior | MVCC always reads snapshots (no config needed) |
+| **Oracle** | Default behavior | Undo segments always provide snapshots |
+| **MySQL (InnoDB)** | Default behavior | MVCC provides snapshot reads in Read Committed |
+
+> **Important**: PostgreSQL, Oracle, and MySQL already behave like RCSI in Read Committed (reads don't acquire locks). **Only SQL Server uses lock-based reads by default**, so RCSI must be explicitly enabled. If you're working with SQL Server, strongly consider enabling RCSI.
 
 ---
 
