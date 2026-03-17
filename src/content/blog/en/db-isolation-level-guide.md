@@ -434,11 +434,97 @@ Systems where errors mean lost money or legal issues. Accept the performance cos
 
 ## 7. Setting Isolation Levels in Spring Boot
 
+### 7.1 How It Works
+
+```java
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+public void deductStock(Long productId) { ... }
+```
+
+When this is set, Spring internally executes the following when starting the transaction:
+
+```
+1. Enter @Transactional
+2. Acquire Connection from DataSource
+3. connection.setTransactionIsolation(TRANSACTION_REPEATABLE_READ)
+   → Executes SET TRANSACTION ISOLATION LEVEL REPEATABLE READ on the DB
+4. BEGIN
+5. Execute business logic
+6. COMMIT or ROLLBACK
+7. Return Connection
+```
+
+This applies **only to that transaction** — it doesn't change the database's global default.
+
+### 7.2 Isolation Level Support by Database
+
+Not all databases support all 4 levels. If you set an unsupported level in Spring Boot, you'll get a runtime error.
+
+| Isolation Level | MySQL | MariaDB | PostgreSQL | Oracle | SQL Server |
+|----------------|:---:|:---:|:---:|:---:|:---:|
+| **Read Uncommitted** | Yes | Yes | △ | No | Yes |
+| **Read Committed** | Yes | Yes | Yes (**default**) | Yes (**default**) | Yes (**default**) |
+| **Repeatable Read** | Yes (**default**) | Yes (**default**) | △ | No | Yes |
+| **Serializable** | Yes | Yes | Yes | Yes | Yes |
+
+**△ = Can be set but behaves differently, No = Not supported (error on set)**
+
+### 7.3 Database-Specific Behavior
+
+#### PostgreSQL
+
+```
+Read Uncommitted → Set it, but it behaves as Read Committed (Dirty Read never allowed)
+Repeatable Read  → Works, but behaves close to Serializable (snapshot + first-updater-wins)
+```
+
+PostgreSQL never allows Dirty Reads by design. Think of it as having **3 effective levels**: Read Committed / Repeatable Read / Serializable (SSI).
+
+#### Oracle
+
+```
+Read Uncommitted  → Not supported (error)
+Repeatable Read   → Not supported (error)
+```
+
+**Only Read Committed and Serializable are supported.** Setting `Isolation.REPEATABLE_READ` in Spring Boot causes a runtime error.
+
+```java
+// This ERRORS on Oracle! (ORA-02179)
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+
+// For Repeatable Read behavior on Oracle → use explicit locks
+@Transactional
+public void doSomething() {
+    repository.findByIdForUpdate(id);  // SELECT ... FOR UPDATE
+}
+```
+
+#### MySQL (InnoDB)
+
+All 4 levels supported. Default is Repeatable Read. MVCC + Next-Key Lock prevents most Phantom Reads. However, **Lost Update is NOT prevented** → `FOR UPDATE` is needed.
+
+#### MariaDB (InnoDB)
+
+Behaves nearly identically to MySQL. All 4 levels supported, default Repeatable Read. Some internal implementation differences after MariaDB 10.5+, but isolation level behavior is the same.
+
+#### SQL Server
+
+All 4 levels supported + **Snapshot Isolation** as a 5th level. Default Read Committed is lock-based, so enabling RCSI is recommended.
+
+```sql
+-- SQL Server only: enable Snapshot Isolation
+ALTER DATABASE mydb SET ALLOW_SNAPSHOT_ISOLATION ON;
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
+```
+
+### 7.4 Code Examples
+
 ```java
 // Set isolation level per method
 @Transactional(isolation = Isolation.REPEATABLE_READ)
 public void deductStock(Long productId) {
-    Product product = productRepository.findByIdForUpdate(productId);  // FOR UPDATE
+    Product product = productRepository.findByIdForUpdate(productId);
     if (product.getStock() <= 0) {
         throw new SoldOutException();
     }
@@ -447,7 +533,7 @@ public void deductStock(Long productId) {
 ```
 
 ```java
-// FOR UPDATE in Repository
+// FOR UPDATE in Repository (pessimistic lock)
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -456,7 +542,32 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 }
 ```
 
-> **Note**: `@Transactional(isolation = ...)` only applies to that transaction. It doesn't change the database's global default.
+### 7.5 Gotchas
+
+```java
+// 1. Isolation.DEFAULT → uses the DB's default (safest choice)
+@Transactional(isolation = Isolation.DEFAULT)
+// MySQL: Repeatable Read, PostgreSQL/Oracle/SQL Server: Read Committed
+
+// 2. Nested transactions: inner transaction's isolation is IGNORED
+@Transactional(isolation = Isolation.SERIALIZABLE)
+public void outer() {
+    inner();  // inner's REPEATABLE_READ is ignored, outer's SERIALIZABLE applies
+}
+
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+public void inner() { ... }
+```
+
+### 7.6 Practical Recommendations
+
+| Situation | Recommended Setting |
+|-----------|-------------------|
+| General CRUD | `Isolation.DEFAULT` (use DB's default) |
+| Stock/point deduction | `Isolation.DEFAULT` + `@Lock(PESSIMISTIC_WRITE)` |
+| Multi-DB support needed | `Isolation.DEFAULT` + explicit locks (avoids DB differences) |
+| Financial settlements | `Isolation.SERIALIZABLE` (supported by Oracle too) |
+| Oracle projects | `Isolation.DEFAULT` + `FOR UPDATE` (REPEATABLE_READ unavailable) |
 
 ---
 

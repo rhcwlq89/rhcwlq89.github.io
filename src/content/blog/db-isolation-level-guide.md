@@ -433,11 +433,97 @@ COMMIT;
 
 ## 7. Spring Boot에서 격리 수준 설정
 
+### 7.1 동작 원리
+
+```java
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+public void deductStock(Long productId) { ... }
+```
+
+이렇게 설정하면 Spring이 트랜잭션을 시작할 때 내부적으로 다음을 실행한다:
+
+```
+1. @Transactional 진입
+2. DataSource에서 Connection 획득
+3. connection.setTransactionIsolation(TRANSACTION_REPEATABLE_READ)
+   → DB에 SET TRANSACTION ISOLATION LEVEL REPEATABLE READ 실행
+4. BEGIN
+5. 비즈니스 로직 실행
+6. COMMIT 또는 ROLLBACK
+7. Connection 반환
+```
+
+**해당 트랜잭션에만 적용**된다. DB 전체의 기본 격리 수준을 바꾸는 게 아니다.
+
+### 7.2 DB별 격리 수준 지원 현황
+
+모든 DB가 4가지를 다 지원하지는 **않는다.** Spring Boot에서 설정해도 DB가 지원하지 않으면 에러가 발생한다.
+
+| 격리 수준 | MySQL | MariaDB | PostgreSQL | Oracle | SQL Server |
+|-----------|:---:|:---:|:---:|:---:|:---:|
+| **Read Uncommitted** | O | O | △ | X | O |
+| **Read Committed** | O | O | O (**기본값**) | O (**기본값**) | O (**기본값**) |
+| **Repeatable Read** | O (**기본값**) | O (**기본값**) | △ | X | O |
+| **Serializable** | O | O | O | O | O |
+
+**△ = 설정은 가능하지만 실제 동작이 다름, X = 미지원 (설정 시 에러)**
+
+### 7.3 DB별 특이사항
+
+#### PostgreSQL
+
+```
+Read Uncommitted → 설정해도 Read Committed로 동작 (Dirty Read 허용 안 함)
+Repeatable Read  → 동작하지만 Serializable에 가까운 수준 (스냅샷 + 첫 번째 업데이트 우선)
+```
+
+PostgreSQL은 Dirty Read를 아예 허용하지 않는 설계다. 사실상 **3단계**라고 보면 된다: Read Committed / Repeatable Read / Serializable(SSI).
+
+#### Oracle
+
+```
+Read Uncommitted  → 미지원 (에러)
+Repeatable Read   → 미지원 (에러)
+```
+
+**Read Committed와 Serializable만 지원한다.** Spring Boot에서 `Isolation.REPEATABLE_READ`를 설정하면 런타임 에러가 발생한다.
+
+```java
+// Oracle에서 이렇게 하면 에러! (ORA-02179)
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+
+// Oracle에서 Repeatable Read가 필요하면 → 명시적 락으로 대체
+@Transactional
+public void doSomething() {
+    repository.findByIdForUpdate(id);  // SELECT ... FOR UPDATE
+}
+```
+
+#### MySQL (InnoDB)
+
+4가지 전부 지원, 기본값 Repeatable Read. MVCC + Next-Key Lock으로 Phantom Read도 대부분 방지한다. 단, **Lost Update는 방지 안 됨** → `FOR UPDATE` 필요.
+
+#### MariaDB (InnoDB)
+
+MySQL과 거의 동일하게 동작한다. 4가지 전부 지원, 기본값 Repeatable Read. MariaDB 10.5+ 이후 일부 내부 구현 차이가 있지만 격리 수준 동작은 동일하다.
+
+#### SQL Server
+
+4가지 전부 지원 + **Snapshot Isolation** (5번째 격리 수준)을 추가로 제공한다. 기본 Read Committed는 락 기반이라 RCSI 활성화를 권장한다.
+
+```sql
+-- SQL Server 전용: Snapshot Isolation 활성화
+ALTER DATABASE mydb SET ALLOW_SNAPSHOT_ISOLATION ON;
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
+```
+
+### 7.4 코드 예시
+
 ```java
 // 메서드 단위로 격리 수준 지정
 @Transactional(isolation = Isolation.REPEATABLE_READ)
 public void deductStock(Long productId) {
-    Product product = productRepository.findByIdForUpdate(productId);  // FOR UPDATE
+    Product product = productRepository.findByIdForUpdate(productId);
     if (product.getStock() <= 0) {
         throw new SoldOutException();
     }
@@ -446,7 +532,7 @@ public void deductStock(Long productId) {
 ```
 
 ```java
-// Repository에서 FOR UPDATE
+// Repository에서 FOR UPDATE (비관적 락)
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -455,7 +541,32 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 }
 ```
 
-> **주의**: `@Transactional(isolation = ...)`은 해당 트랜잭션에만 적용된다. DB 전체의 기본 격리 수준을 바꾸는 게 아니다.
+### 7.5 주의사항
+
+```java
+// 1. Isolation.DEFAULT → DB의 기본값 사용 (가장 안전한 선택)
+@Transactional(isolation = Isolation.DEFAULT)
+// MySQL: Repeatable Read, PostgreSQL/Oracle/SQL Server: Read Committed
+
+// 2. 트랜잭션 중첩 시 내부 트랜잭션의 isolation은 무시됨
+@Transactional(isolation = Isolation.SERIALIZABLE)
+public void outer() {
+    inner();  // inner의 REPEATABLE_READ는 무시, outer의 SERIALIZABLE 적용
+}
+
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+public void inner() { ... }
+```
+
+### 7.6 실무 권장 정리
+
+| 상황 | 권장 설정 |
+|------|---------|
+| 일반 CRUD | `Isolation.DEFAULT` (DB 기본값 그대로) |
+| 재고 차감, 포인트 등 | `Isolation.DEFAULT` + `@Lock(PESSIMISTIC_WRITE)` |
+| 멀티 DB 지원이 필요 | `Isolation.DEFAULT` + 명시적 락 (DB별 차이 회피) |
+| 금융/정산 | `Isolation.SERIALIZABLE` (단, Oracle은 지원됨) |
+| Oracle 프로젝트 | `Isolation.DEFAULT` + `FOR UPDATE` (REPEATABLE_READ 사용 불가) |
 
 ---
 
