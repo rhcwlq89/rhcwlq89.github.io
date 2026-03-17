@@ -23,5 +23,9 @@ export const AFFILIATE = {
   },
   amazon: {
     link: 'https://amzn.to/4s9Lyq5',
+    fullLink: 'https://www.amazon.com/SteelSeries-Apex-Pro-TKL-Gen/dp/B0DGZLHN8G?&linkCode=ll2&tag=hojongdevblog-20&linkId=4c2fec94cba1052c1bcc91e8169b4ee7&language=en_US&ref_=as_li_ss_tl',
+    imageUrl: 'https://ws-na.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=B0DGZLHN8G&Format=_SL250_&ID=AsinImage&MarketPlace=US&ServiceVersion=20070822&WS=1&tag=hojongdevblog-20',
+    productName: 'SteelSeries Apex Pro TKL Gen 3',
+    productDesc: 'Wireless HyperMagnetic Mechanical Gaming Keyboard',
   },
 };
