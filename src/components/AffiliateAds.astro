@@ -48,16 +48,10 @@ const { lang = 'ko' } = Astro.props;
   var banner = document.getElementById('affiliate-banner');
   if (!banner) return;
 
-  var pageLang = banner.dataset.pageLang;
+  var pageLang = banner.dataset.pageLang || 'ko';
 
-  // Determine which ad to show: use browser language for affiliate relevance
-  var browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
-  var isKorean = browserLang.startsWith('ko');
-
-  // If on a Korean page and browser is Korean → Coupang
-  // If on an English page and browser is not Korean → Amazon
-  // Mixed: follow browser language
-  var showCoupang = isKorean;
+  // Show ad based on the page language: Korean page → Coupang, English page → Amazon
+  var showCoupang = pageLang === 'ko';
 
   var coupangEl = document.getElementById('ad-coupang');
   var amazonEl = document.getElementById('ad-amazon');
