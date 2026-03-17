@@ -156,6 +156,45 @@ scrape_configs:
 >
 > Prometheus가 Pull을 쓰는 이유는, 대상이 죽었는지 살았는지를 "확인하러 갔는데 응답이 없네?"로 자연스럽게 감지할 수 있기 때문이다.
 
+#### Prometheus는 어떻게 Pull하는 걸까?
+
+원리는 아주 단순하다. 대상 앱이 `/metrics` 엔드포인트를 HTTP로 열어두면, Prometheus가 주기적으로 GET 요청을 보내서 데이터를 가져간다.
+
+```
+[Spring Boot App]                          [Prometheus]
+   :8080/actuator/prometheus                  :9090
+         │                                      │
+         │  ← GET /actuator/prometheus ────── │  (15초마다)
+         │                                      │
+         │  ── 텍스트 응답 ──────────────────→ │
+         │                                      │
+                                          파싱 → TSDB 저장
+```
+
+`/metrics` 응답은 이런 텍스트다:
+
+```
+# TYPE http_requests_total counter
+http_requests_total{method="GET",status="200"} 1523
+http_requests_total{method="POST",status="201"} 342
+
+# TYPE process_cpu_usage gauge
+process_cpu_usage 0.0423
+```
+
+JSON도 아니고, 특별한 프로토콜도 아니다. 그냥 **key-value 텍스트**다.
+
+Spring Boot에서는 의존성 하나면 끝이다:
+
+```groovy
+// build.gradle
+implementation 'io.micrometer:micrometer-registry-prometheus'
+```
+
+이걸 추가하면 `/actuator/prometheus` 엔드포인트가 자동으로 생기고, JVM 메트릭, HTTP 요청 수, 응답 시간 등이 자동으로 노출된다. 앱 코드를 건드릴 필요가 없다.
+
+Kubernetes 환경에서는 Prometheus가 **서비스 디스커버리**로 Pod를 자동 감지하기 때문에, 서버가 늘거나 줄어도 설정을 고칠 필요가 없다.
+
 PromQL 예시:
 
 ```promql
@@ -189,6 +228,30 @@ curl -XPOST 'http://localhost:8086/write?db=mydb' \
 > **InfluxDB는 어떤 느낌이야?**
 >
 > "MySQL은 좀 아는데 Prometheus 쿼리는 어렵다" 하는 사람에게 적합하다. InfluxQL은 SQL과 매우 비슷해서 `SELECT mean(cpu) FROM metrics WHERE time > now() - 1h GROUP BY time(5m)` 같은 쿼리를 바로 쓸 수 있다.
+
+#### InfluxDB의 Push 방식은 어떻게 동작할까?
+
+InfluxDB는 자체적으로 **HTTP API 포트(기본 8086)** 를 열고 대기한다. 클라이언트(앱, IoT 디바이스 등)가 이 포트로 데이터를 POST 요청으로 보내면 InfluxDB가 받아서 저장한다.
+
+```
+[IoT 센서]  ──POST──→  [InfluxDB :8086]
+[Spring App] ──POST──→  [InfluxDB :8086]
+[Telegraf]   ──POST──→  [InfluxDB :8086]
+```
+
+Prometheus처럼 대상을 찾아다니는 게 아니라, **데이터가 알아서 들어오는 구조**다. IoT 센서처럼 네트워크 안쪽에 있어서 외부에서 접근하기 어려운 디바이스에서 특히 유리하다.
+
+데이터 전송 포맷은 **Line Protocol**이라는 간단한 텍스트 형식이다:
+
+```
+# 형식: 메트릭이름,태그1=값1,태그2=값2 필드=값 타임스탬프
+cpu,host=server01,region=kr usage=0.64 1742212800000000000
+temperature,sensor=A1,floor=3 value=24.5 1742212800000000000
+```
+
+한 줄에 메트릭 하나. 초당 수십만 건도 거뜬히 받아낸다.
+
+실무에서는 InfluxDB에 직접 쏘기보다 **Telegraf**(InfluxDB의 공식 에이전트)를 중간에 두는 경우가 많다. Telegraf가 시스템 메트릭을 수집해서 InfluxDB로 전달하는 역할을 한다.
 
 Flux 쿼리 예시:
 
@@ -234,6 +297,44 @@ ORDER BY interval DESC;
 > **TimescaleDB는 어떤 상황에서 쓰면 좋을까?**
 >
 > 예를 들어 "주문 테이블(orders)과 서버 응답 시간(metrics)을 JOIN해서, 응답이 느렸던 시간대의 주문 취소율을 분석하고 싶다"는 경우. Prometheus나 InfluxDB에서는 불가능하지만, TimescaleDB는 같은 PostgreSQL 안에서 SQL JOIN으로 바로 할 수 있다.
+
+#### TimescaleDB는 정말 일반 SQL로 동작할까?
+
+그렇다. TimescaleDB는 PostgreSQL의 **확장(Extension)** 이기 때문에, 기존 PostgreSQL에 설치만 하면 된다. 새로운 데이터베이스를 배우는 게 아니다.
+
+```sql
+-- 1. 확장 설치 (한 번만)
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+-- 2. 일반 테이블 생성 (PostgreSQL과 동일)
+CREATE TABLE sensor_data (
+    time        TIMESTAMPTZ NOT NULL,
+    sensor_id   TEXT,
+    temperature DOUBLE PRECISION,
+    humidity    DOUBLE PRECISION
+);
+
+-- 3. 하이퍼테이블로 변환 (이 한 줄이 마법)
+SELECT create_hypertable('sensor_data', 'time');
+```
+
+`create_hypertable`을 실행하는 순간, 내부적으로 시간 기반 **자동 파티셔닝**이 적용된다. 하지만 사용하는 입장에서는 아무것도 달라지지 않는다:
+
+```sql
+-- INSERT도 똑같다
+INSERT INTO sensor_data VALUES (now(), 'A1', 24.5, 60.2);
+
+-- SELECT도 똑같다
+SELECT * FROM sensor_data WHERE time > now() - interval '1 hour';
+
+-- 다른 테이블과 JOIN도 된다 (Prometheus/InfluxDB에서는 불가능)
+SELECT s.sensor_id, s.temperature, l.location_name
+FROM sensor_data s
+JOIN sensor_locations l ON s.sensor_id = l.sensor_id
+WHERE s.time > now() - interval '1 hour';
+```
+
+`time_bucket`이라는 TimescaleDB 전용 함수만 빼면, 나머지는 **100% 표준 PostgreSQL SQL**이다. pg_dump, pg_restore, psql 같은 기존 도구도 전부 그대로 사용할 수 있다.
 
 ### 4.4 비교 요약
 

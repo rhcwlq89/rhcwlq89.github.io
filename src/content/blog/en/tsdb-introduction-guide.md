@@ -157,6 +157,45 @@ scrape_configs:
 >
 > Prometheus uses Pull because it naturally detects when a target is down: "I went to check, but nobody answered."
 
+#### How Does Prometheus Actually Pull Data?
+
+The mechanism is dead simple. The target app exposes a `/metrics` endpoint over HTTP, and Prometheus periodically sends GET requests to fetch the data.
+
+```
+[Spring Boot App]                          [Prometheus]
+   :8080/actuator/prometheus                  :9090
+         │                                      │
+         │  ← GET /actuator/prometheus ────── │  (every 15s)
+         │                                      │
+         │  ── text response ────────────────→ │
+         │                                      │
+                                          parse → store in TSDB
+```
+
+The `/metrics` response looks like this:
+
+```
+# TYPE http_requests_total counter
+http_requests_total{method="GET",status="200"} 1523
+http_requests_total{method="POST",status="201"} 342
+
+# TYPE process_cpu_usage gauge
+process_cpu_usage 0.0423
+```
+
+Not JSON. No special protocol. Just **plain text key-value pairs**.
+
+In Spring Boot, it takes a single dependency:
+
+```groovy
+// build.gradle
+implementation 'io.micrometer:micrometer-registry-prometheus'
+```
+
+Add this and `/actuator/prometheus` is automatically available, exposing JVM metrics, HTTP request counts, response times, and more. Zero application code changes needed.
+
+In Kubernetes, Prometheus uses **service discovery** to automatically detect Pods, so you don't need to update config when servers scale up or down.
+
 PromQL examples:
 
 ```promql
@@ -190,6 +229,30 @@ curl -XPOST 'http://localhost:8086/write?db=mydb' \
 > **What does InfluxDB feel like?**
 >
 > If you know SQL but find Prometheus queries intimidating, InfluxDB is for you. InfluxQL looks almost identical to SQL: `SELECT mean(cpu) FROM metrics WHERE time > now() - 1h GROUP BY time(5m)`.
+
+#### How Does InfluxDB's Push Model Work?
+
+InfluxDB opens its own **HTTP API port (default 8086)** and waits for data. Clients (apps, IoT devices, etc.) send data via POST requests to this port, and InfluxDB stores it.
+
+```
+[IoT Sensor]  ──POST──→  [InfluxDB :8086]
+[Spring App]  ──POST──→  [InfluxDB :8086]
+[Telegraf]    ──POST──→  [InfluxDB :8086]
+```
+
+Unlike Prometheus, which goes out to find targets, InfluxDB **waits for data to come in**. This is especially useful for IoT devices that sit behind firewalls and can't be scraped from outside.
+
+The data format is **Line Protocol** — a simple text format:
+
+```
+# Format: metric_name,tag1=val1,tag2=val2 field=value timestamp
+cpu,host=server01,region=kr usage=0.64 1742212800000000000
+temperature,sensor=A1,floor=3 value=24.5 1742212800000000000
+```
+
+One metric per line. It handles hundreds of thousands of writes per second with ease.
+
+In practice, rather than sending data directly to InfluxDB, many teams use **Telegraf** (InfluxDB's official agent) as a middleman. Telegraf collects system metrics and forwards them to InfluxDB.
 
 Flux query example:
 
@@ -235,6 +298,44 @@ ORDER BY interval DESC;
 > **When is TimescaleDB the right choice?**
 >
 > For example: "I want to JOIN the orders table with server response time metrics to analyze the order cancellation rate during slow response periods." This is impossible in Prometheus or InfluxDB, but TimescaleDB handles it with a simple SQL JOIN — because it's all in the same PostgreSQL instance.
+
+#### Does TimescaleDB Really Work with Regular SQL?
+
+Yes. TimescaleDB is a PostgreSQL **extension**, so you just install it on your existing PostgreSQL. You're not learning a new database.
+
+```sql
+-- 1. Install extension (once)
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+-- 2. Create a regular table (identical to PostgreSQL)
+CREATE TABLE sensor_data (
+    time        TIMESTAMPTZ NOT NULL,
+    sensor_id   TEXT,
+    temperature DOUBLE PRECISION,
+    humidity    DOUBLE PRECISION
+);
+
+-- 3. Convert to hypertable (this one line is the magic)
+SELECT create_hypertable('sensor_data', 'time');
+```
+
+The moment you run `create_hypertable`, automatic **time-based partitioning** kicks in behind the scenes. But from your perspective, nothing changes:
+
+```sql
+-- INSERT works the same
+INSERT INTO sensor_data VALUES (now(), 'A1', 24.5, 60.2);
+
+-- SELECT works the same
+SELECT * FROM sensor_data WHERE time > now() - interval '1 hour';
+
+-- JOIN with other tables works too (impossible in Prometheus/InfluxDB)
+SELECT s.sensor_id, s.temperature, l.location_name
+FROM sensor_data s
+JOIN sensor_locations l ON s.sensor_id = l.sensor_id
+WHERE s.time > now() - interval '1 hour';
+```
+
+Aside from `time_bucket` (a TimescaleDB-specific function), everything else is **100% standard PostgreSQL SQL**. Existing tools like pg_dump, pg_restore, and psql all work as-is.
 
 ### 4.4 Comparison Summary
 
