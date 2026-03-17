@@ -31,15 +31,27 @@ const { lang = 'ko' } = Astro.props;
   <!-- English: Amazon Associates -->
   <div class="affiliate-card affiliate-amazon" id="ad-amazon" style="display:none;">
     <button class="affiliate-close" aria-label="Close" data-target="ad-amazon">&times;</button>
-    <div class="affiliate-body">
-      <a class="affiliate-link" id="amazon-link" href={AFFILIATE.amazon.link} target="_blank" rel="noopener noreferrer nofollow">
-        <span class="affiliate-icon">&#128722;</span>
-        <span>Shop recommended tech on Amazon</span>
-      </a>
-      <p class="affiliate-disclosure">
-        As an Amazon Associate I earn from qualifying purchases.
-      </p>
-    </div>
+    <a class="amazon-card-link" href={AFFILIATE.amazon.link} target="_blank" rel="noopener noreferrer nofollow">
+      <div class="amazon-card-inner">
+        <div class="amazon-card-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+        </div>
+        <div class="amazon-card-text">
+          <strong class="amazon-card-title">Recommended Developer Tools & Books</strong>
+          <span class="amazon-card-desc">Curated picks for developers — keyboards, monitors, books & more.</span>
+        </div>
+        <div class="amazon-card-cta">
+          <span class="amazon-card-btn">Shop on Amazon &rarr;</span>
+        </div>
+      </div>
+    </a>
+    <p class="affiliate-disclosure">
+      As an Amazon Associate I earn from qualifying purchases.
+    </p>
   </div>
 </div>
 
@@ -129,33 +141,90 @@ const { lang = 'ko' } = Astro.props;
     text-align: center;
   }
 
-  .affiliate-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5em;
-    padding: 0.7em 1.5em;
-    border-radius: 8px;
-    background-color: var(--accent);
-    color: #fff;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 0.95em;
-    transition: opacity 0.2s ease;
-  }
-
-  .affiliate-link:hover {
-    opacity: 0.85;
-    color: #fff;
-  }
-
-  .affiliate-icon {
-    font-size: 1.2em;
-  }
-
   .affiliate-disclosure {
     font-size: 0.78em;
     color: rgb(var(--gray));
     margin: 0.8em 0 0;
+    text-align: center;
+  }
+
+  /* Amazon card design */
+  .amazon-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .amazon-card-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(var(--gray), 0.3);
+    color: inherit;
+  }
+
+  .amazon-card-inner {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    padding: 1em 1.2em;
+    background: linear-gradient(135deg, rgba(var(--gray-light), 0.5), rgba(var(--gray-light), 0.2));
+    border: 1px solid rgba(var(--gray-light), 0.8);
+    border-radius: 8px;
+  }
+
+  .amazon-card-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    background-color: var(--accent);
+    color: #fff;
+  }
+
+  .amazon-card-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .amazon-card-title {
+    display: block;
+    font-size: 0.95em;
+    font-weight: 700;
+    color: rgb(var(--black));
+    margin-bottom: 0.2em;
+  }
+
+  .amazon-card-desc {
+    display: block;
+    font-size: 0.82em;
+    color: rgb(var(--gray));
+    line-height: 1.4;
+  }
+
+  .amazon-card-cta {
+    flex-shrink: 0;
+  }
+
+  .amazon-card-btn {
+    display: inline-block;
+    padding: 0.5em 1em;
+    border-radius: 6px;
+    background-color: var(--accent);
+    color: #fff;
+    font-size: 0.82em;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: opacity 0.2s ease;
+  }
+
+  .amazon-card-link:hover .amazon-card-btn {
+    opacity: 0.85;
   }
 
   .affiliate-close {
@@ -187,9 +256,24 @@ const { lang = 'ko' } = Astro.props;
       padding: 1em;
     }
 
-    .affiliate-link {
-      font-size: 0.88em;
-      padding: 0.6em 1.2em;
+    .amazon-card-inner {
+      flex-direction: column;
+      text-align: center;
+      gap: 0.8em;
+    }
+
+    .amazon-card-text {
+      text-align: center;
+    }
+
+    .amazon-card-icon {
+      width: 44px;
+      height: 44px;
+    }
+
+    .amazon-card-icon svg {
+      width: 28px;
+      height: 28px;
     }
   }
 </style>
