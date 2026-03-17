@@ -518,13 +518,15 @@ ALTER DATABASE mydb SET ALLOW_SNAPSHOT_ISOLATION ON;
 SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
 ```
 
-### 7.4 Code Examples
+### 7.4 Do You Actually Change Isolation Levels in Practice?
+
+**Almost never.** Concurrency issues like stock deduction and point deduction are solved with **explicit locks (`FOR UPDATE`), not isolation level changes.** This is the standard pattern.
 
 ```java
-// Set isolation level per method
-@Transactional(isolation = Isolation.REPEATABLE_READ)
+// The most common code in production. No isolation setting at all.
+@Transactional
 public void deductStock(Long productId) {
-    Product product = productRepository.findByIdForUpdate(productId);
+    Product product = productRepository.findByIdForUpdate(productId);  // FOR UPDATE
     if (product.getStock() <= 0) {
         throw new SoldOutException();
     }
@@ -542,32 +544,46 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 }
 ```
 
-### 7.5 Gotchas
+Why don't you need to change the isolation level? Because once `FOR UPDATE` locks the row, **the result is identical regardless of isolation level**:
+
+- Read Committed + `FOR UPDATE` → row locked, other TXs wait, reads latest value
+- Repeatable Read + `FOR UPDATE` → row locked, other TXs wait, reads latest value
+- The result is **identical**
+
+Isolation levels only affect **regular SELECTs without locks**. The moment you use `FOR UPDATE`, the isolation level difference disappears.
+
+> So when would you use `@Transactional(isolation = ...)`? Only in **extreme cases like financial settlements where even every SELECT needs strict control.** In typical web services, you'll almost never need it.
+
+### 7.5 Isolation Level Syntax (Reference)
+
+Rarely needed, but good to know:
 
 ```java
-// 1. Isolation.DEFAULT → uses the DB's default (safest choice)
-@Transactional(isolation = Isolation.DEFAULT)
-// MySQL: Repeatable Read, PostgreSQL/Oracle/SQL Server: Read Committed
+// Set isolation level per method (extremely rare cases only)
+@Transactional(isolation = Isolation.SERIALIZABLE)
+public void settlePayments() { ... }
 
-// 2. Nested transactions: inner transaction's isolation is IGNORED
+// Isolation.DEFAULT = use DB's default
+// MySQL: Repeatable Read, PostgreSQL/Oracle/SQL Server: Read Committed
+@Transactional(isolation = Isolation.DEFAULT)  // same as plain @Transactional
+
+// Nested transactions: inner isolation is IGNORED
 @Transactional(isolation = Isolation.SERIALIZABLE)
 public void outer() {
-    inner();  // inner's REPEATABLE_READ is ignored, outer's SERIALIZABLE applies
+    inner();  // inner's setting is ignored, outer's SERIALIZABLE applies
 }
-
-@Transactional(isolation = Isolation.REPEATABLE_READ)
-public void inner() { ... }
 ```
 
-### 7.6 Practical Recommendations
+### 7.6 Practical Summary
 
-| Situation | Recommended Setting |
-|-----------|-------------------|
-| General CRUD | `Isolation.DEFAULT` (use DB's default) |
-| Stock/point deduction | `Isolation.DEFAULT` + `@Lock(PESSIMISTIC_WRITE)` |
-| Multi-DB support needed | `Isolation.DEFAULT` + explicit locks (avoids DB differences) |
-| Financial settlements | `Isolation.SERIALIZABLE` (supported by Oracle too) |
-| Oracle projects | `Isolation.DEFAULT` + `FOR UPDATE` (REPEATABLE_READ unavailable) |
+| Situation | Code | Change Isolation? |
+|-----------|------|:---:|
+| General CRUD | `@Transactional` | No (DB default) |
+| Stock/point deduction | `@Transactional` + `FOR UPDATE` | No (lock is the key) |
+| Post editing (rare conflicts) | `@Transactional` + `@Version` (optimistic lock) | No |
+| Financial settlements (very rare) | `@Transactional(isolation = Isolation.SERIALIZABLE)` | Yes |
+
+**Key takeaway: 99% of the time, don't touch isolation levels. Use explicit locks when needed.**
 
 ---
 

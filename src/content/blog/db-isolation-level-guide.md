@@ -517,13 +517,15 @@ ALTER DATABASE mydb SET ALLOW_SNAPSHOT_ISOLATION ON;
 SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
 ```
 
-### 7.4 코드 예시
+### 7.4 실무에서는 격리 수준을 바꾸나?
+
+**거의 바꾸지 않는다.** 재고 차감, 포인트 차감 같은 동시성 이슈는 **격리 수준이 아니라 명시적 락(`FOR UPDATE`)으로 해결**하는 게 표준 패턴이다.
 
 ```java
-// 메서드 단위로 격리 수준 지정
-@Transactional(isolation = Isolation.REPEATABLE_READ)
+// 실무에서 가장 흔한 코드. isolation 설정 자체가 없다.
+@Transactional
 public void deductStock(Long productId) {
-    Product product = productRepository.findByIdForUpdate(productId);
+    Product product = productRepository.findByIdForUpdate(productId);  // FOR UPDATE
     if (product.getStock() <= 0) {
         throw new SoldOutException();
     }
@@ -541,32 +543,46 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 }
 ```
 
-### 7.5 주의사항
+왜 격리 수준을 안 바꿔도 되는 걸까? `FOR UPDATE`가 행을 잠그는 순간, **격리 수준과 무관하게 동일한 결과**가 나오기 때문이다:
+
+- Read Committed + `FOR UPDATE` → 락 걸림, 다른 TX 대기, 최신 값 읽음
+- Repeatable Read + `FOR UPDATE` → 락 걸림, 다른 TX 대기, 최신 값 읽음
+- 결과가 **동일**하다
+
+격리 수준이 영향을 미치는 건 **락 없는 일반 SELECT**의 동작이다. `FOR UPDATE`를 쓰는 순간 격리 수준의 차이가 사라진다.
+
+> 그러면 `@Transactional(isolation = ...)`은 언제 쓸까? 격리 수준을 명시적으로 변경하는 경우는 **금융 정산처럼 모든 SELECT까지 엄격하게 제어해야 하는 극단적인 경우** 정도다. 일반 웹 서비스에서는 거의 쓸 일이 없다.
+
+### 7.5 격리 수준 설정 문법 (참고용)
+
+쓸 일은 거의 없지만, 문법은 알아두면 좋다:
 
 ```java
-// 1. Isolation.DEFAULT → DB의 기본값 사용 (가장 안전한 선택)
-@Transactional(isolation = Isolation.DEFAULT)
-// MySQL: Repeatable Read, PostgreSQL/Oracle/SQL Server: Read Committed
+// 메서드 단위로 격리 수준 지정 (극히 드문 경우에만 사용)
+@Transactional(isolation = Isolation.SERIALIZABLE)
+public void settlePayments() { ... }
 
-// 2. 트랜잭션 중첩 시 내부 트랜잭션의 isolation은 무시됨
+// Isolation.DEFAULT = DB의 기본값 사용
+// MySQL: Repeatable Read, PostgreSQL/Oracle/SQL Server: Read Committed
+@Transactional(isolation = Isolation.DEFAULT)  // @Transactional과 동일
+
+// 트랜잭션 중첩 시 내부 트랜잭션의 isolation은 무시됨
 @Transactional(isolation = Isolation.SERIALIZABLE)
 public void outer() {
-    inner();  // inner의 REPEATABLE_READ는 무시, outer의 SERIALIZABLE 적용
+    inner();  // inner의 설정은 무시, outer의 SERIALIZABLE 적용
 }
-
-@Transactional(isolation = Isolation.REPEATABLE_READ)
-public void inner() { ... }
 ```
 
-### 7.6 실무 권장 정리
+### 7.6 실무 요약
 
-| 상황 | 권장 설정 |
-|------|---------|
-| 일반 CRUD | `Isolation.DEFAULT` (DB 기본값 그대로) |
-| 재고 차감, 포인트 등 | `Isolation.DEFAULT` + `@Lock(PESSIMISTIC_WRITE)` |
-| 멀티 DB 지원이 필요 | `Isolation.DEFAULT` + 명시적 락 (DB별 차이 회피) |
-| 금융/정산 | `Isolation.SERIALIZABLE` (단, Oracle은 지원됨) |
-| Oracle 프로젝트 | `Isolation.DEFAULT` + `FOR UPDATE` (REPEATABLE_READ 사용 불가) |
+| 상황 | 코드 | 격리 수준 변경? |
+|------|------|:---:|
+| 일반 CRUD | `@Transactional` | X (DB 기본값) |
+| 재고 차감, 포인트 차감 | `@Transactional` + `FOR UPDATE` | X (락이 핵심) |
+| 게시글 수정 (충돌 드묾) | `@Transactional` + `@Version` (낙관적 락) | X |
+| 금융 정산 (극히 드묾) | `@Transactional(isolation = Isolation.SERIALIZABLE)` | O |
+
+**핵심: 99%의 경우 격리 수준은 건드리지 않고, 필요하면 명시적 락으로 해결한다.**
 
 ---
 
