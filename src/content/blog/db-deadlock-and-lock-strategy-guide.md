@@ -18,22 +18,14 @@ heroImage: "../../assets/DbDeadlockAndLockStrategyGuide.png"
 
 두 트랜잭션이 서로 상대방이 가진 락을 기다리면서 **영원히 진행하지 못하는 상태**다.
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1
-    participant DB as Database
-    participant TX2 as TX2
+| 단계 | TX1 | TX2 | 상태 |
+|:---:|------|------|:----:|
+| 1 | `UPDATE ... WHERE id = 1` (id=1 락 획득) | | |
+| 2 | | `UPDATE ... WHERE id = 2` (id=2 락 획득) | |
+| 3 | `UPDATE ... WHERE id = 2` → id=2 락 대기 ⏳ | | |
+| 4 | | `UPDATE ... WHERE id = 1` → id=1 락 대기 ⏳ | 💀 Deadlock! |
 
-    TX1->>DB: UPDATE accounts SET ... WHERE id = 1 (id=1 락 획득)
-    TX2->>DB: UPDATE accounts SET ... WHERE id = 2 (id=2 락 획득)
-    TX1->>DB: UPDATE accounts SET ... WHERE id = 2
-    Note over TX1: id=2 락 대기... ⏳
-    TX2->>DB: UPDATE accounts SET ... WHERE id = 1
-    Note over TX2: id=1 락 대기... ⏳
-    Note over TX1,TX2: 💀 Deadlock! 서로 영원히 기다림
-```
-
-비유하면, 좁은 골목에서 두 차가 마주보고 달리는 상황이다. 둘 다 "너 먼저 비켜"라고 하면서 아무도 움직이지 않는다. DB는 이걸 감지하면 **한쪽을 강제 롤백**시켜서 해결한다.
+> **비유**: 좁은 골목에서 두 차가 마주보고 달리는 상황이다. 둘 다 "너 먼저 비켜"라고 하면서 아무도 움직이지 않는다. DB는 이걸 감지하면 **한쪽을 강제 롤백**시켜서 해결한다.
 
 ---
 
@@ -47,20 +39,12 @@ Read Committed는 가장 느슨한 편인데도 데드락이 발생한다. 왜? 
 
 가장 흔한 패턴이다. 송금 시스템에서 A→B, B→A 이체가 동시에 일어나는 상황:
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (A→B 이체)
-    participant DB as Database
-    participant TX2 as TX2 (B→A 이체)
-
-    TX1->>DB: UPDATE balance WHERE id='A' (A 락 획득)
-    TX2->>DB: UPDATE balance WHERE id='B' (B 락 획득)
-    TX1->>DB: UPDATE balance WHERE id='B'
-    Note over TX1: B 락 대기... ⏳
-    TX2->>DB: UPDATE balance WHERE id='A'
-    Note over TX2: A 락 대기... ⏳
-    Note over TX1,TX2: 💀 Deadlock!
-```
+| 단계 | TX1 (A→B 이체) | TX2 (B→A 이체) | 상태 |
+|:---:|-----------|-----------|:----:|
+| 1 | `UPDATE balance WHERE id='A'` (A 락 획득) | | |
+| 2 | | `UPDATE balance WHERE id='B'` (B 락 획득) | |
+| 3 | `UPDATE balance WHERE id='B'` → B 락 대기 ⏳ | | |
+| 4 | | `UPDATE balance WHERE id='A'` → A 락 대기 ⏳ | 💀 Deadlock! |
 
 #### 케이스 2: FK 제약 조건으로 인한 암묵적 락
 
@@ -109,23 +93,14 @@ graph LR
 
 #### 케이스: Gap Lock으로 인한 데드락
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1
-    participant DB as Database
-    participant TX2 as TX2
+> products 테이블: id = 1, 5, 10이 존재
 
-    Note over DB: products: id = 1, 5, 10
-    TX1->>DB: SELECT * FROM products WHERE id = 3 FOR UPDATE
-    Note over TX1: id 1~5 gap 락 획득
-    TX2->>DB: SELECT * FROM products WHERE id = 7 FOR UPDATE
-    Note over TX2: id 5~10 gap 락 획득
-    TX1->>DB: INSERT INTO products (id) VALUES (8)
-    Note over TX1: id 5~10 gap 대기... ⏳
-    TX2->>DB: INSERT INTO products (id) VALUES (2)
-    Note over TX2: id 1~5 gap 대기... ⏳
-    Note over TX1,TX2: 💀 Deadlock!
-```
+| 단계 | TX1 | TX2 | 상태 |
+|:---:|------|------|:----:|
+| 1 | `SELECT ... WHERE id = 3 FOR UPDATE` → id 1~5 gap 락 획득 | | |
+| 2 | | `SELECT ... WHERE id = 7 FOR UPDATE` → id 5~10 gap 락 획득 | |
+| 3 | `INSERT (id=8)` → id 5~10 gap 대기 ⏳ | | |
+| 4 | | `INSERT (id=2)` → id 1~5 gap 대기 ⏳ | 💀 Deadlock! |
 
 두 트랜잭션이 각각 다른 gap을 잠그고, 상대방의 gap에 INSERT하려다 데드락이 발생한다. **Read Committed에서는 Gap Lock이 없으므로 이 데드락은 발생하지 않는다.**
 
@@ -145,20 +120,12 @@ SELECT balance FROM accounts WHERE id = 1 FOR SHARE;
 
 읽기만 해도 **공유 락**을 잡기 때문에, 이후 UPDATE 시 배타 락으로 업그레이드할 때 충돌이 빈번하다:
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1
-    participant DB as Database
-    participant TX2 as TX2
-
-    TX1->>DB: SELECT balance WHERE id=1 (공유 락 획득)
-    TX2->>DB: SELECT balance WHERE id=1 (공유 락 획득)
-    TX1->>DB: UPDATE balance WHERE id=1
-    Note over TX1: 배타 락 필요 → TX2 공유 락 대기... ⏳
-    TX2->>DB: UPDATE balance WHERE id=1
-    Note over TX2: 배타 락 필요 → TX1 공유 락 대기... ⏳
-    Note over TX1,TX2: 💀 Deadlock!
-```
+| 단계 | TX1 | TX2 | 상태 |
+|:---:|------|------|:----:|
+| 1 | `SELECT balance WHERE id=1` (공유 락 획득) | | |
+| 2 | | `SELECT balance WHERE id=1` (공유 락 획득) | |
+| 3 | `UPDATE balance WHERE id=1` → 배타 락 필요, TX2 공유 락 대기 ⏳ | | |
+| 4 | | `UPDATE balance WHERE id=1` → 배타 락 필요, TX1 공유 락 대기 ⏳ | 💀 Deadlock! |
 
 읽기-쓰기 패턴만으로도 데드락이 발생한다. **Serializable에서는 동시성이 극도로 낮아진다.**
 
@@ -379,42 +346,27 @@ public void processOrder(Long productId) {
 
 Repeatable Read는 **"읽은 값이 바뀌지 않는다"** 는 보장이지, **"동시에 수정하는 걸 막아준다"** 는 보장이 아니다.
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (주문 A)
-    participant DB as Database (재고: 1)
-    participant TX2 as TX2 (주문 B)
+| 단계 | TX1 (주문 A) | TX2 (주문 B) | 재고 |
+|:---:|-----------|-----------|:----:|
+| 1 | `SELECT stock` → **1** (스냅샷) | | 1 |
+| 2 | | `SELECT stock` → **1** (스냅샷) | 1 |
+| 3 | `UPDATE stock = 0` (1-1) | | 0 |
+| 4 | `COMMIT` | | 0 |
+| 5 | | `UPDATE stock = -1` (1로 알고 있으므로 1-1) 💀 | -1 |
+| 6 | | `COMMIT` | -1 |
 
-    TX1->>DB: SELECT stock WHERE id = 1
-    DB-->>TX1: 1 (스냅샷)
-    TX2->>DB: SELECT stock WHERE id = 1
-    DB-->>TX2: 1 (스냅샷)
-    TX1->>DB: UPDATE stock = 0 (1-1)
-    TX1->>DB: COMMIT
-    TX2->>DB: UPDATE stock = -1 (1-1=0인데 TX2는 1로 알고 있음)
-    TX2->>DB: COMMIT
-    Note over DB: 재고가 음수! 💀 Lost Update
-```
+재고가 음수! **Lost Update** 발생.
 
 ### FOR UPDATE를 추가하면 해결된다
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (주문 A)
-    participant DB as Database (재고: 1)
-    participant TX2 as TX2 (주문 B)
-
-    TX1->>DB: SELECT stock WHERE id = 1 FOR UPDATE
-    Note over DB: 행 락 획득 → TX1 독점
-    DB-->>TX1: 1
-    TX2->>DB: SELECT stock WHERE id = 1 FOR UPDATE
-    Note over TX2: 락 대기... ⏳
-    TX1->>DB: UPDATE stock = 0
-    TX1->>DB: COMMIT (락 해제)
-    DB-->>TX2: 0 (최신 값!)
-    Note over TX2: stock = 0 → 품절 처리
-    TX2->>DB: ROLLBACK
-```
+| 단계 | TX1 (주문 A) | TX2 (주문 B) | 재고 |
+|:---:|-----------|-----------|:----:|
+| 1 | `SELECT stock FOR UPDATE` → **1** (행 락 획득) | | 1 |
+| 2 | | `SELECT stock FOR UPDATE` → 락 대기 ⏳ | 1 |
+| 3 | `UPDATE stock = 0` | | 0 |
+| 4 | `COMMIT` (락 해제) | | 0 |
+| 5 | | → **0** (최신 값!) → 품절 처리 | 0 |
+| 6 | | `ROLLBACK` | 0 |
 
 ### 격리 수준은 중요하지 않다
 

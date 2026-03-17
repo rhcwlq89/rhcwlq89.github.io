@@ -19,22 +19,14 @@ In the [previous post](/blog/en/db-isolation-level-guide), we covered isolation 
 
 Two transactions waiting for each other's locks, **stuck forever**.
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1
-    participant DB as Database
-    participant TX2 as TX2
+| Step | TX1 | TX2 | Status |
+|:---:|------|------|:----:|
+| 1 | `UPDATE ... WHERE id = 1` (lock id=1) | | |
+| 2 | | `UPDATE ... WHERE id = 2` (lock id=2) | |
+| 3 | `UPDATE ... WHERE id = 2` → waiting for id=2 ⏳ | | |
+| 4 | | `UPDATE ... WHERE id = 1` → waiting for id=1 ⏳ | 💀 Deadlock! |
 
-    TX1->>DB: UPDATE accounts SET ... WHERE id = 1 (lock id=1)
-    TX2->>DB: UPDATE accounts SET ... WHERE id = 2 (lock id=2)
-    TX1->>DB: UPDATE accounts SET ... WHERE id = 2
-    Note over TX1: Waiting for id=2... ⏳
-    TX2->>DB: UPDATE accounts SET ... WHERE id = 1
-    Note over TX2: Waiting for id=1... ⏳
-    Note over TX1,TX2: 💀 Deadlock! Waiting forever
-```
-
-Analogy: two cars facing each other in a narrow alley. Both say "you go first" and neither moves. The DB detects this and **force-rolls back one side** to break the deadlock.
+> **Analogy**: Two cars facing each other in a narrow alley. Both say "you go first" and neither moves. The DB detects this and **force-rolls back one side** to break the deadlock.
 
 ---
 
@@ -48,20 +40,12 @@ Read Committed is relatively loose, yet deadlocks still occur. Why? **Reads don'
 
 The most common pattern. Two simultaneous transfers: A→B and B→A:
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (A→B transfer)
-    participant DB as Database
-    participant TX2 as TX2 (B→A transfer)
-
-    TX1->>DB: UPDATE balance WHERE id='A' (lock A)
-    TX2->>DB: UPDATE balance WHERE id='B' (lock B)
-    TX1->>DB: UPDATE balance WHERE id='B'
-    Note over TX1: Waiting for B... ⏳
-    TX2->>DB: UPDATE balance WHERE id='A'
-    Note over TX2: Waiting for A... ⏳
-    Note over TX1,TX2: 💀 Deadlock!
-```
+| Step | TX1 (A→B transfer) | TX2 (B→A transfer) | Status |
+|:---:|-----------|-----------|:----:|
+| 1 | `UPDATE balance WHERE id='A'` (lock A) | | |
+| 2 | | `UPDATE balance WHERE id='B'` (lock B) | |
+| 3 | `UPDATE balance WHERE id='B'` → waiting for B ⏳ | | |
+| 4 | | `UPDATE balance WHERE id='A'` → waiting for A ⏳ | 💀 Deadlock! |
 
 #### Case 2: Implicit Locks from FK Constraints
 
@@ -110,23 +94,14 @@ Non-existent rows (id=3, 4, 6, 7) get locked too, meaning **a wider range than e
 
 #### Case: Gap Lock Deadlock
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1
-    participant DB as Database
-    participant TX2 as TX2
+> products table: id = 1, 5, 10
 
-    Note over DB: products: id = 1, 5, 10
-    TX1->>DB: SELECT * FROM products WHERE id = 3 FOR UPDATE
-    Note over TX1: Gap lock on 1~5
-    TX2->>DB: SELECT * FROM products WHERE id = 7 FOR UPDATE
-    Note over TX2: Gap lock on 5~10
-    TX1->>DB: INSERT INTO products (id) VALUES (8)
-    Note over TX1: Waiting for 5~10 gap... ⏳
-    TX2->>DB: INSERT INTO products (id) VALUES (2)
-    Note over TX2: Waiting for 1~5 gap... ⏳
-    Note over TX1,TX2: 💀 Deadlock!
-```
+| Step | TX1 | TX2 | Status |
+|:---:|------|------|:----:|
+| 1 | `SELECT ... WHERE id = 3 FOR UPDATE` → gap lock on 1~5 | | |
+| 2 | | `SELECT ... WHERE id = 7 FOR UPDATE` → gap lock on 5~10 | |
+| 3 | `INSERT (id=8)` → waiting for 5~10 gap ⏳ | | |
+| 4 | | `INSERT (id=2)` → waiting for 1~5 gap ⏳ | 💀 Deadlock! |
 
 Two transactions lock different gaps, then try to INSERT into each other's gaps. **This deadlock doesn't occur in Read Committed because Gap Locks don't exist there.**
 
@@ -146,20 +121,12 @@ SELECT balance FROM accounts WHERE id = 1 FOR SHARE;
 
 Even reads acquire **shared locks**, so upgrading to exclusive locks for UPDATE frequently causes conflicts:
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1
-    participant DB as Database
-    participant TX2 as TX2
-
-    TX1->>DB: SELECT balance WHERE id=1 (shared lock)
-    TX2->>DB: SELECT balance WHERE id=1 (shared lock)
-    TX1->>DB: UPDATE balance WHERE id=1
-    Note over TX1: Needs exclusive lock → waiting for TX2... ⏳
-    TX2->>DB: UPDATE balance WHERE id=1
-    Note over TX2: Needs exclusive lock → waiting for TX1... ⏳
-    Note over TX1,TX2: 💀 Deadlock!
-```
+| Step | TX1 | TX2 | Status |
+|:---:|------|------|:----:|
+| 1 | `SELECT balance WHERE id=1` (shared lock) | | |
+| 2 | | `SELECT balance WHERE id=1` (shared lock) | |
+| 3 | `UPDATE balance WHERE id=1` → needs exclusive lock, waiting for TX2 ⏳ | | |
+| 4 | | `UPDATE balance WHERE id=1` → needs exclusive lock, waiting for TX1 ⏳ | 💀 Deadlock! |
 
 A simple read-then-write pattern causes deadlocks. **Concurrency drops dramatically in Serializable.**
 
@@ -380,42 +347,27 @@ Let's definitively answer this question from the previous post.
 
 Repeatable Read guarantees **"the values you read won't change"**, NOT **"nobody else can modify at the same time."**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Order A)
-    participant DB as Database (stock: 1)
-    participant TX2 as TX2 (Order B)
+| Step | TX1 (Order A) | TX2 (Order B) | Stock |
+|:---:|-----------|-----------|:----:|
+| 1 | `SELECT stock` → **1** (snapshot) | | 1 |
+| 2 | | `SELECT stock` → **1** (snapshot) | 1 |
+| 3 | `UPDATE stock = 0` (1-1) | | 0 |
+| 4 | `COMMIT` | | 0 |
+| 5 | | `UPDATE stock = -1` (thinks stock is still 1) 💀 | -1 |
+| 6 | | `COMMIT` | -1 |
 
-    TX1->>DB: SELECT stock WHERE id = 1
-    DB-->>TX1: 1 (snapshot)
-    TX2->>DB: SELECT stock WHERE id = 1
-    DB-->>TX2: 1 (snapshot)
-    TX1->>DB: UPDATE stock = 0 (1-1)
-    TX1->>DB: COMMIT
-    TX2->>DB: UPDATE stock = -1 (thinks stock is still 1)
-    TX2->>DB: COMMIT
-    Note over DB: Stock is negative! 💀 Lost Update
-```
+Stock is negative! **Lost Update**.
 
 ### Adding FOR UPDATE Fixes It
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Order A)
-    participant DB as Database (stock: 1)
-    participant TX2 as TX2 (Order B)
-
-    TX1->>DB: SELECT stock WHERE id = 1 FOR UPDATE
-    Note over DB: Row lock → TX1 exclusive
-    DB-->>TX1: 1
-    TX2->>DB: SELECT stock WHERE id = 1 FOR UPDATE
-    Note over TX2: Waiting for lock... ⏳
-    TX1->>DB: UPDATE stock = 0
-    TX1->>DB: COMMIT (lock released)
-    DB-->>TX2: 0 (latest value!)
-    Note over TX2: stock = 0 → sold out
-    TX2->>DB: ROLLBACK
-```
+| Step | TX1 (Order A) | TX2 (Order B) | Stock |
+|:---:|-----------|-----------|:----:|
+| 1 | `SELECT stock FOR UPDATE` → **1** (row lock acquired) | | 1 |
+| 2 | | `SELECT stock FOR UPDATE` → waiting ⏳ | 1 |
+| 3 | `UPDATE stock = 0` | | 0 |
+| 4 | `COMMIT` (lock released) | | 0 |
+| 5 | | → **0** (latest value!) → sold out | 0 |
+| 6 | | `ROLLBACK` | 0 |
 
 ### The Isolation Level Doesn't Matter
 
