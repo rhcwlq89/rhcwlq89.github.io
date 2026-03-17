@@ -6,109 +6,70 @@ interface Props {
 }
 
 const { lang = 'ko' } = Astro.props;
+const isKorean = lang === 'ko';
 ---
 
-<div
-  class="affiliate-banner"
-  id="affiliate-banner"
-  data-page-lang={lang}
-  data-coupang-id={AFFILIATE.coupang.id}
-  data-coupang-tracking={AFFILIATE.coupang.trackingCode}
-  data-coupang-link={AFFILIATE.coupang.link}
-  data-amazon-link={AFFILIATE.amazon.link}
->
-  <!-- Korean: Coupang Partners -->
-  <div class="affiliate-card affiliate-coupang" id="ad-coupang" style="display:none;">
-    <button class="affiliate-close" aria-label="닫기" data-target="ad-coupang">&times;</button>
-    <div class="affiliate-body">
-      <div class="affiliate-coupang-widget" id="coupang-widget"></div>
+<div class="affiliate-banner" id="affiliate-banner">
+  {isKorean ? (
+    <!-- Korean: Coupang Partners -->
+    <div class="affiliate-card affiliate-coupang" id="ad-card">
+      <button class="affiliate-close" aria-label="닫기" id="affiliate-close-btn">&times;</button>
+      <div class="affiliate-body">
+        <div class="affiliate-coupang-widget">
+          <script is:inline src="https://ads-partners.coupang.com/g.js"></script>
+          <script is:inline define:vars={{ coupangId: AFFILIATE.coupang.id, coupangTracking: AFFILIATE.coupang.trackingCode }}>
+            new PartnersCoupang.G({"id":coupangId,"template":"carousel","trackingCode":coupangTracking,"width":"100%","height":"140","tsource":""});
+          </script>
+        </div>
+        <p class="affiliate-disclosure">
+          이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
+        </p>
+      </div>
+    </div>
+  ) : (
+    <!-- English: Amazon Associates -->
+    <div class="affiliate-card affiliate-amazon" id="ad-card">
+      <button class="affiliate-close" aria-label="Close" id="affiliate-close-btn">&times;</button>
+      <a class="amazon-card-link" href={AFFILIATE.amazon.link} target="_blank" rel="noopener noreferrer nofollow">
+        <div class="amazon-card-inner">
+          <div class="amazon-card-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+          </div>
+          <div class="amazon-card-text">
+            <strong class="amazon-card-title">Recommended Developer Tools & Books</strong>
+            <span class="amazon-card-desc">Curated picks for developers — keyboards, monitors, books & more.</span>
+          </div>
+          <div class="amazon-card-cta">
+            <span class="amazon-card-btn">Shop on Amazon &rarr;</span>
+          </div>
+        </div>
+      </a>
       <p class="affiliate-disclosure">
-        이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
+        As an Amazon Associate I earn from qualifying purchases.
       </p>
     </div>
-  </div>
-
-  <!-- English: Amazon Associates -->
-  <div class="affiliate-card affiliate-amazon" id="ad-amazon" style="display:none;">
-    <button class="affiliate-close" aria-label="Close" data-target="ad-amazon">&times;</button>
-    <a class="amazon-card-link" href={AFFILIATE.amazon.link} target="_blank" rel="noopener noreferrer nofollow">
-      <div class="amazon-card-inner">
-        <div class="amazon-card-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <path d="M16 10a4 4 0 0 1-8 0"></path>
-          </svg>
-        </div>
-        <div class="amazon-card-text">
-          <strong class="amazon-card-title">Recommended Developer Tools & Books</strong>
-          <span class="amazon-card-desc">Curated picks for developers — keyboards, monitors, books & more.</span>
-        </div>
-        <div class="amazon-card-cta">
-          <span class="amazon-card-btn">Shop on Amazon &rarr;</span>
-        </div>
-      </div>
-    </a>
-    <p class="affiliate-disclosure">
-      As an Amazon Associate I earn from qualifying purchases.
-    </p>
-  </div>
+  )}
 </div>
 
 <script is:inline>
 (function() {
-  var banner = document.getElementById('affiliate-banner');
-  if (!banner) return;
-
-  var pageLang = banner.dataset.pageLang || 'ko';
-
-  // Show ad based on the page language: Korean page → Coupang, English page → Amazon
-  var showCoupang = pageLang === 'ko';
-
-  var coupangEl = document.getElementById('ad-coupang');
-  var amazonEl = document.getElementById('ad-amazon');
+  var card = document.getElementById('ad-card');
+  var btn = document.getElementById('affiliate-close-btn');
+  if (!card || !btn) return;
 
   // Check sessionStorage for dismissed state
-  var dismissedKey = showCoupang ? 'affiliate-coupang-dismissed' : 'affiliate-amazon-dismissed';
-  if (sessionStorage.getItem(dismissedKey)) return;
-
-  if (showCoupang && coupangEl) {
-    coupangEl.style.display = '';
-    // Load Coupang widget
-    var widgetContainer = document.getElementById('coupang-widget');
-    if (widgetContainer) {
-      var script = document.createElement('script');
-      script.src = 'https://ads-partners.coupang.com/g.js';
-      script.onload = function() {
-        if (typeof PartnersCoupang !== 'undefined') {
-          new PartnersCoupang.G({
-            id: parseInt(banner.dataset.coupangId),
-            template: 'carousel',
-            trackingCode: banner.dataset.coupangTracking,
-            width: '100%',
-            height: '140',
-            tsource: ''
-          });
-        }
-      };
-      widgetContainer.appendChild(script);
-    }
-  } else if (!showCoupang && amazonEl) {
-    amazonEl.style.display = '';
+  if (sessionStorage.getItem('affiliate-dismissed')) {
+    card.style.display = 'none';
+    return;
   }
 
-  // Close button handlers
-  var closeButtons = banner.querySelectorAll('.affiliate-close');
-  closeButtons.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var targetId = btn.dataset.target;
-      var target = document.getElementById(targetId);
-      if (target) {
-        target.style.display = 'none';
-        var key = targetId === 'ad-coupang' ? 'affiliate-coupang-dismissed' : 'affiliate-amazon-dismissed';
-        sessionStorage.setItem(key, '1');
-      }
-    });
+  btn.addEventListener('click', function() {
+    card.style.display = 'none';
+    sessionStorage.setItem('affiliate-dismissed', '1');
   });
 })();
 </script>
@@ -122,19 +83,9 @@ const { lang = 'ko' } = Astro.props;
     position: relative;
     border-radius: 10px;
     padding: 1.2em 1.5em;
+    background-color: rgba(var(--gray-light), 0.4);
+    border: 1px solid rgb(var(--gray-light));
     transition: background-color 0.3s ease, border-color 0.3s ease;
-  }
-
-  /* Coupang - uses blog accent tones */
-  .affiliate-coupang {
-    background-color: rgba(var(--gray-light), 0.4);
-    border: 1px solid rgb(var(--gray-light));
-  }
-
-  /* Amazon - warm accent */
-  .affiliate-amazon {
-    background-color: rgba(var(--gray-light), 0.4);
-    border: 1px solid rgb(var(--gray-light));
   }
 
   .affiliate-body {
@@ -146,6 +97,31 @@ const { lang = 'ko' } = Astro.props;
     color: rgb(var(--gray));
     margin: 0.8em 0 0;
     text-align: center;
+  }
+
+  .affiliate-close {
+    position: absolute;
+    top: 0.5em;
+    right: 0.7em;
+    background: none;
+    border: none;
+    font-size: 1.3em;
+    cursor: pointer;
+    color: rgb(var(--gray));
+    line-height: 1;
+    padding: 0.2em;
+    z-index: 1;
+    transition: color 0.2s ease;
+  }
+
+  .affiliate-close:hover {
+    color: rgb(var(--gray-dark));
+  }
+
+  .affiliate-coupang-widget {
+    margin-bottom: 0.5em;
+    overflow: hidden;
+    border-radius: 6px;
   }
 
   /* Amazon card design */
@@ -225,30 +201,6 @@ const { lang = 'ko' } = Astro.props;
 
   .amazon-card-link:hover .amazon-card-btn {
     opacity: 0.85;
-  }
-
-  .affiliate-close {
-    position: absolute;
-    top: 0.5em;
-    right: 0.7em;
-    background: none;
-    border: none;
-    font-size: 1.3em;
-    cursor: pointer;
-    color: rgb(var(--gray));
-    line-height: 1;
-    padding: 0.2em;
-    transition: color 0.2s ease;
-  }
-
-  .affiliate-close:hover {
-    color: rgb(var(--gray-dark));
-  }
-
-  .affiliate-coupang-widget {
-    margin-bottom: 0.5em;
-    overflow: hidden;
-    border-radius: 6px;
   }
 
   @media (max-width: 900px) {
