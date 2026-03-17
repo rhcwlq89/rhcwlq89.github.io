@@ -76,16 +76,19 @@ To understand isolation levels, you first need to know **"what goes wrong when i
 
 **Reading uncommitted data from another transaction.**
 
-```
-[t1] TX1: UPDATE accounts SET balance = 0 WHERE id = 'A'
-          (A balance: $10,000 → $0, NOT committed yet)
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Transfer)
+    participant DB as Database
+    participant TX2 as TX2 (Query)
 
-[t2] TX2: SELECT balance FROM accounts WHERE id = 'A'
-          → reads $0  💀 Dirty Read!
-
-[t3] TX1: ROLLBACK  (A balance restored to $10,000)
-
-[t4] TX2: Makes decisions based on "$0 balance" — data that never existed
+    TX1->>DB: UPDATE balance = 0 (NOT committed)
+    Note over DB: A balance: $10,000 → $0
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX2: $0 💀 Dirty Read!
+    TX1->>DB: ROLLBACK
+    Note over DB: A balance: back to $10,000
+    Note over TX2: Makes decisions based on<br/>"$0 balance" that never existed
 ```
 
 Transaction 1 rolled back, but Transaction 2 already read $0. It saw **data that never actually existed**.
@@ -96,13 +99,18 @@ Analogy: a teacher is in the middle of correcting a test score (not finalized ye
 
 **Reading the same data twice in one transaction and getting different values.**
 
-```
-[t1] TX1: SELECT balance WHERE id = 'A'  → $10,000
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Query)
+    participant DB as Database
+    participant TX2 as TX2 (Update)
 
-[t2] TX2: UPDATE balance = $5,000 WHERE id = 'A'
-     TX2: COMMIT
-
-[t3] TX1: SELECT balance WHERE id = 'A'  → $5,000  💀 Value changed!
+    TX1->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX1: $10,000
+    TX2->>DB: UPDATE balance = $5,000
+    TX2->>DB: COMMIT
+    TX1->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX1: $5,000 💀 Value changed!
 ```
 
 Same SELECT, different results. From Transaction 1's perspective: "Someone changed it while I was reading!"
@@ -111,36 +119,88 @@ Analogy: you're reading a book, step away to the restroom, and someone rewrites 
 
 ### 3.3 Phantom Read
 
-**Same query condition returns a different number of rows.**
+**Same query condition returns a different result set.** INSERT, UPDATE, and DELETE can all cause it.
 
+#### Phantom Read from INSERT
+
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Query)
+    participant DB as Database
+    participant TX2 as TX2 (Insert)
+
+    TX1->>DB: SELECT count(*) WHERE balance > $5,000
+    DB-->>TX1: 3 rows
+    TX2->>DB: INSERT ('D', $8,000)
+    TX2->>DB: COMMIT
+    TX1->>DB: SELECT count(*) WHERE balance > $5,000
+    DB-->>TX1: 4 rows 💀 New row appeared!
 ```
-[t1] TX1: SELECT count(*) WHERE balance > $5,000  → 3 rows
 
-[t2] TX2: INSERT INTO accounts VALUES ('D', $8,000)
-     TX2: COMMIT
+#### Phantom Read from UPDATE
 
-[t3] TX1: SELECT count(*) WHERE balance > $5,000  → 4 rows  💀 Phantom row!
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Query)
+    participant DB as Database
+    participant TX2 as TX2 (Update)
+
+    TX1->>DB: SELECT count(*) WHERE balance > $5,000
+    DB-->>TX1: 3 rows
+    Note over DB: D's balance: $3,000
+    TX2->>DB: UPDATE D's balance = $8,000
+    TX2->>DB: COMMIT
+    Note over DB: D's balance: $3,000 → $8,000
+    TX1->>DB: SELECT count(*) WHERE balance > $5,000
+    DB-->>TX1: 4 rows 💀 Row now matches the condition!
 ```
 
-Existing rows didn't change — a **new row appeared like a phantom**. Hence the name.
+#### Phantom Read from DELETE
 
-Analogy: you count the students in a classroom, turn around, and someone sneaks in and sits down.
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Query)
+    participant DB as Database
+    participant TX2 as TX2 (Delete)
+
+    TX1->>DB: SELECT count(*) WHERE balance > $5,000
+    DB-->>TX1: 3 rows
+    TX2->>DB: DELETE WHERE id = 'C' (balance $7,000)
+    TX2->>DB: COMMIT
+    TX1->>DB: SELECT count(*) WHERE balance > $5,000
+    DB-->>TX1: 2 rows 💀 Row disappeared!
+```
+
+In summary, Phantom Read has three causes:
+
+| Cause | What Happens |
+|-------|-------------|
+| **INSERT** | A new row appears like a phantom |
+| **UPDATE** | A row that didn't match the condition now matches (or vice versa) |
+| **DELETE** | An existing row disappears |
+
+Analogy: you count students wearing glasses in a classroom — then a new student walks in (INSERT), a student puts on glasses (UPDATE), or a student wearing glasses leaves (DELETE).
 
 ### 3.4 Lost Update
 
 **Two transactions modify the same data simultaneously, and one change is lost.**
 
-```
-[t1] TX1: SELECT balance WHERE id = 'A'  → $10,000
-[t2] TX2: SELECT balance WHERE id = 'A'  → $10,000
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (Withdraw $3,000)
+    participant DB as Database
+    participant TX2 as TX2 (Withdraw $2,000)
 
-[t3] TX1: UPDATE balance = 10000 - 3000 = $7,000
-     TX1: COMMIT
-
-[t4] TX2: UPDATE balance = 10000 - 2000 = $8,000  (unaware of TX1!)
-     TX2: COMMIT
-
-Result: A balance = $8,000  💀 (should be 10000 - 3000 - 2000 = $5,000)
+    TX1->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX1: $10,000
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX2: $10,000
+    TX1->>DB: UPDATE balance = $7,000 (10000-3000)
+    TX1->>DB: COMMIT
+    TX2->>DB: UPDATE balance = $8,000 (10000-2000) 💀
+    Note over TX2: Unaware TX1 changed it to $7,000!
+    TX2->>DB: COMMIT
+    Note over DB: Final balance: $8,000<br/>Should be $5,000 (10000-3000-2000)
 ```
 
 Transaction 1's $3,000 deduction is completely lost. In a first-come-first-served system, this means **orders going through even when stock is zero**.

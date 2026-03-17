@@ -75,16 +75,19 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 
 **커밋되지 않은 데이터를 다른 트랜잭션이 읽는 것.**
 
-```
-[t1] TX1: UPDATE accounts SET balance = 0 WHERE id = 'A'
-          (A 잔액: 100만 → 0, 아직 커밋 안 함)
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (이체)
+    participant DB as Database
+    participant TX2 as TX2 (조회)
 
-[t2] TX2: SELECT balance FROM accounts WHERE id = 'A'
-          → 0원 읽음  💀 Dirty Read!
-
-[t3] TX1: ROLLBACK  (A 잔액: 다시 100만원으로 복구)
-
-[t4] TX2: "A 잔액이 0원이다" 라고 잘못된 판단
+    TX1->>DB: UPDATE balance = 0 (커밋 안 함)
+    Note over DB: A 잔액: 100만 → 0
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX2: 0원 💀 Dirty Read!
+    TX1->>DB: ROLLBACK
+    Note over DB: A 잔액: 다시 100만원
+    Note over TX2: "잔액 0원" 기준으로<br/>잘못된 판단을 함
 ```
 
 트랜잭션 1이 롤백했는데, 트랜잭션 2는 이미 0원을 읽었다. **존재한 적 없는 데이터**를 본 것이다.
@@ -95,13 +98,18 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 
 **같은 트랜잭션에서 같은 데이터를 두 번 읽었는데 값이 다른 것.**
 
-```
-[t1] TX1: SELECT balance WHERE id = 'A'  → 100만원
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (조회)
+    participant DB as Database
+    participant TX2 as TX2 (수정)
 
-[t2] TX2: UPDATE balance = 50만 WHERE id = 'A'
-     TX2: COMMIT
-
-[t3] TX1: SELECT balance WHERE id = 'A'  → 50만원  💀 값이 바뀌었다!
+    TX1->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX1: 100만원
+    TX2->>DB: UPDATE balance = 50만
+    TX2->>DB: COMMIT
+    TX1->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX1: 50만원 💀 값이 바뀌었다!
 ```
 
 같은 SELECT를 두 번 실행했는데 결과가 다르다. 트랜잭션 1 입장에서는 "내가 읽는 사이에 누가 바꿔버렸네?"가 된다.
@@ -110,36 +118,88 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 
 ### 3.3 Phantom Read (팬텀 리드)
 
-**같은 조건으로 조회했는데 행 개수가 달라지는 것.**
+**같은 조건으로 조회했는데 결과 집합이 달라지는 것.** INSERT, UPDATE, DELETE 모두 원인이 될 수 있다.
 
+#### INSERT로 인한 Phantom Read
+
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (조회)
+    participant DB as Database
+    participant TX2 as TX2 (삽입)
+
+    TX1->>DB: SELECT count(*) WHERE balance > 50만
+    DB-->>TX1: 3건
+    TX2->>DB: INSERT ('D', 80만)
+    TX2->>DB: COMMIT
+    TX1->>DB: SELECT count(*) WHERE balance > 50만
+    DB-->>TX1: 4건 💀 없던 행이 나타남!
 ```
-[t1] TX1: SELECT count(*) WHERE balance > 50만  → 3건
 
-[t2] TX2: INSERT INTO accounts VALUES ('D', 80만)
-     TX2: COMMIT
+#### UPDATE로 인한 Phantom Read
 
-[t3] TX1: SELECT count(*) WHERE balance > 50만  → 4건  💀 유령 행 등장!
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (조회)
+    participant DB as Database
+    participant TX2 as TX2 (수정)
+
+    TX1->>DB: SELECT count(*) WHERE balance > 50만
+    DB-->>TX1: 3건
+    Note over DB: D의 잔액: 30만원
+    TX2->>DB: UPDATE D의 balance = 80만
+    TX2->>DB: COMMIT
+    Note over DB: D의 잔액: 30만 → 80만
+    TX1->>DB: SELECT count(*) WHERE balance > 50만
+    DB-->>TX1: 4건 💀 조건에 안 맞던 행이 맞게 변함!
 ```
 
-기존 행의 값이 바뀐 게 아니라, **없던 행이 유령처럼 나타났다**(Phantom). 그래서 팬텀 리드라고 부른다.
+#### DELETE로 인한 Phantom Read
 
-비유하면, 교실에서 학생 수를 세고 돌아섰는데, 뒤에서 몰래 한 명이 들어와 앉아 있는 것과 같다.
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (조회)
+    participant DB as Database
+    participant TX2 as TX2 (삭제)
+
+    TX1->>DB: SELECT count(*) WHERE balance > 50만
+    DB-->>TX1: 3건
+    TX2->>DB: DELETE WHERE id = 'C' (잔액 70만)
+    TX2->>DB: COMMIT
+    TX1->>DB: SELECT count(*) WHERE balance > 50만
+    DB-->>TX1: 2건 💀 있던 행이 사라짐!
+```
+
+정리하면 Phantom Read의 원인은 세 가지다:
+
+| 원인 | 현상 |
+|------|------|
+| **INSERT** | 없던 행이 유령처럼 나타남 |
+| **UPDATE** | 조건에 안 맞던 행이 조건에 맞게 변함 (또는 반대) |
+| **DELETE** | 있던 행이 사라짐 |
+
+비유하면, 교실에서 안경 쓴 학생 수를 세고 돌아섰는데 — 새 학생이 들어왔거나(INSERT), 안 쓰던 학생이 안경을 썼거나(UPDATE), 쓰고 있던 학생이 나갔거나(DELETE).
 
 ### 3.4 Lost Update (갱신 손실)
 
 **두 트랜잭션이 동시에 같은 데이터를 수정해서 한쪽의 변경이 사라지는 것.**
 
-```
-[t1] TX1: SELECT balance WHERE id = 'A'  → 100만원
-[t2] TX2: SELECT balance WHERE id = 'A'  → 100만원
+```mermaid
+sequenceDiagram
+    participant TX1 as TX1 (출금 30만)
+    participant DB as Database
+    participant TX2 as TX2 (출금 20만)
 
-[t3] TX1: UPDATE balance = 100만 - 30만 = 70만
-     TX1: COMMIT
-
-[t4] TX2: UPDATE balance = 100만 - 20만 = 80만  (TX1의 변경을 모름!)
-     TX2: COMMIT
-
-결과: A 잔액 = 80만원  💀 (정상이라면 100 - 30 - 20 = 50만원)
+    TX1->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX1: 100만원
+    TX2->>DB: SELECT balance WHERE id = 'A'
+    DB-->>TX2: 100만원
+    TX1->>DB: UPDATE balance = 70만 (100-30)
+    TX1->>DB: COMMIT
+    TX2->>DB: UPDATE balance = 80만 (100-20) 💀
+    Note over TX2: TX1이 70만으로 바꾼 걸 모름!
+    TX2->>DB: COMMIT
+    Note over DB: 최종 잔액: 80만원<br/>정상이라면 50만원 (100-30-20)
 ```
 
 트랜잭션 1의 30만원 차감이 완전히 사라졌다. 선착순 시스템에서 재고 차감할 때 이런 일이 발생하면, **재고가 0인데 주문이 더 들어가는** 사고가 난다.
