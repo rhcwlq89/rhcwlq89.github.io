@@ -6,50 +6,25 @@ interface Props {
 }
 
 const { lang = 'ko' } = Astro.props;
-const isKorean = lang === 'ko';
 ---
 
 <div class="affiliate-banner" id="affiliate-banner">
-  {isKorean ? (
-    <!-- Korean: Coupang Partners -->
-    <div class="affiliate-card affiliate-coupang" id="ad-card">
-      <button class="affiliate-close" aria-label="닫기" id="affiliate-close-btn">&times;</button>
-      <div class="affiliate-body">
-        <div class="affiliate-coupang-widget">
-          <script is:inline src="https://ads-partners.coupang.com/g.js"></script>
-          <script is:inline define:vars={{ coupangId: AFFILIATE.coupang.id, coupangTracking: AFFILIATE.coupang.trackingCode }}>
-            new PartnersCoupang.G({"id":coupangId,"template":"carousel","trackingCode":coupangTracking,"width":"100%","height":"140","tsource":""});
-          </script>
-        </div>
-        <p class="affiliate-disclosure">
-          이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
-        </p>
+  <div class="affiliate-card" id="ad-card">
+    <button class="affiliate-close" aria-label={lang === 'ko' ? '닫기' : 'Close'} id="affiliate-close-btn">&times;</button>
+    <div class="affiliate-body">
+      <div class="affiliate-coupang-widget">
+        <script is:inline src="https://ads-partners.coupang.com/g.js"></script>
+        <script is:inline define:vars={{ coupangId: AFFILIATE.coupang.id, coupangTracking: AFFILIATE.coupang.trackingCode }}>
+          new PartnersCoupang.G({"id":coupangId,"template":"carousel","trackingCode":coupangTracking,"width":"100%","height":"140","tsource":""});
+        </script>
       </div>
-    </div>
-  ) : (
-    <!-- English: Amazon Associates -->
-    <div class="affiliate-card affiliate-amazon" id="ad-card">
-      <button class="affiliate-close" aria-label="Close" id="affiliate-close-btn">&times;</button>
-      <a class="amazon-card-link" href={AFFILIATE.amazon.fullLink} target="_blank" rel="noopener noreferrer nofollow">
-        <div class="amazon-card-inner">
-          <div class="amazon-card-image">
-            <img src={AFFILIATE.amazon.imageUrl} alt={AFFILIATE.amazon.productName} loading="lazy" />
-          </div>
-          <div class="amazon-card-text">
-            <span class="amazon-card-badge">Recommended</span>
-            <strong class="amazon-card-title">{AFFILIATE.amazon.productName}</strong>
-            <span class="amazon-card-desc">{AFFILIATE.amazon.productDesc}</span>
-          </div>
-          <div class="amazon-card-cta">
-            <span class="amazon-card-btn">View on Amazon &rarr;</span>
-          </div>
-        </div>
-      </a>
       <p class="affiliate-disclosure">
-        As an Amazon Associate I earn from qualifying purchases.
+        {lang === 'ko'
+          ? '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.'
+          : 'This post is part of the Coupang Partners program, and a commission is earned from qualifying purchases.'}
       </p>
     </div>
-  )}
+  </div>
 </div>
 
 <script is:inline>
@@ -58,7 +33,6 @@ const isKorean = lang === 'ko';
   var btn = document.getElementById('affiliate-close-btn');
   if (!card || !btn) return;
 
-  // Check sessionStorage for dismissed state
   if (sessionStorage.getItem('affiliate-dismissed')) {
     card.style.display = 'none';
     return;
@@ -121,119 +95,9 @@ const isKorean = lang === 'ko';
     border-radius: 6px;
   }
 
-  /* Amazon card design */
-  .amazon-card-link {
-    display: block;
-    text-decoration: none;
-    color: inherit;
-    border-radius: 8px;
-    overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .amazon-card-link:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(var(--gray), 0.3);
-    color: inherit;
-  }
-
-  .amazon-card-inner {
-    display: flex;
-    align-items: center;
-    gap: 1.2em;
-    padding: 1em 1.2em;
-    border-radius: 8px;
-  }
-
-  .amazon-card-image {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 120px;
-    height: 120px;
-    background: #fff;
-    border-radius: 8px;
-    padding: 8px;
-  }
-
-  .amazon-card-image img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    border-radius: 0;
-  }
-
-  .amazon-card-text {
-    flex: 1;
-    min-width: 0;
-    text-align: left;
-  }
-
-  .amazon-card-badge {
-    display: inline-block;
-    font-size: 0.7em;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--accent);
-    margin-bottom: 0.3em;
-  }
-
-  .amazon-card-title {
-    display: block;
-    font-size: 1em;
-    font-weight: 700;
-    color: rgb(var(--black));
-    margin-bottom: 0.3em;
-    line-height: 1.3;
-  }
-
-  .amazon-card-desc {
-    display: block;
-    font-size: 0.82em;
-    color: rgb(var(--gray));
-    line-height: 1.4;
-  }
-
-  .amazon-card-cta {
-    flex-shrink: 0;
-  }
-
-  .amazon-card-btn {
-    display: inline-block;
-    padding: 0.6em 1.2em;
-    border-radius: 6px;
-    background-color: var(--accent);
-    color: #fff;
-    font-size: 0.82em;
-    font-weight: 600;
-    white-space: nowrap;
-    transition: opacity 0.2s ease;
-  }
-
-  .amazon-card-link:hover .amazon-card-btn {
-    opacity: 0.85;
-  }
-
   @media (max-width: 900px) {
     .affiliate-card {
       padding: 1em;
-    }
-
-    .amazon-card-inner {
-      flex-direction: column;
-      text-align: center;
-      gap: 0.8em;
-    }
-
-    .amazon-card-text {
-      text-align: center;
-    }
-
-    .amazon-card-image {
-      width: 100px;
-      height: 100px;
     }
   }
 </style>
