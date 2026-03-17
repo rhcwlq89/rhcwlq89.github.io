@@ -13,3 +13,15 @@ export const LOCALE_MAP: Record<string, string> = {
   ko: 'ko_KR',
   en: 'en_US',
 };
+
+// Affiliate settings
+export const AFFILIATE = {
+  coupang: {
+    id: 970016,
+    trackingCode: 'AF9926225',
+    link: 'COUPANG_AFFILIATE_LINK_HERE',
+  },
+  amazon: {
+    link: 'https://amzn.to/40AyEW6',
+  },
+};

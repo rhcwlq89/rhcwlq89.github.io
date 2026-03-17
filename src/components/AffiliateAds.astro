@@ -1,0 +1,201 @@
+---
+import { AFFILIATE } from '../consts';
+
+interface Props {
+  lang?: string;
+}
+
+const { lang = 'ko' } = Astro.props;
+---
+
+<div
+  class="affiliate-banner"
+  id="affiliate-banner"
+  data-page-lang={lang}
+  data-coupang-id={AFFILIATE.coupang.id}
+  data-coupang-tracking={AFFILIATE.coupang.trackingCode}
+  data-coupang-link={AFFILIATE.coupang.link}
+  data-amazon-link={AFFILIATE.amazon.link}
+>
+  <!-- Korean: Coupang Partners -->
+  <div class="affiliate-card affiliate-coupang" id="ad-coupang" style="display:none;">
+    <button class="affiliate-close" aria-label="닫기" data-target="ad-coupang">&times;</button>
+    <div class="affiliate-body">
+      <div class="affiliate-coupang-widget" id="coupang-widget"></div>
+      <p class="affiliate-disclosure">
+        이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
+      </p>
+    </div>
+  </div>
+
+  <!-- English: Amazon Associates -->
+  <div class="affiliate-card affiliate-amazon" id="ad-amazon" style="display:none;">
+    <button class="affiliate-close" aria-label="Close" data-target="ad-amazon">&times;</button>
+    <div class="affiliate-body">
+      <a class="affiliate-link" id="amazon-link" href={AFFILIATE.amazon.link} target="_blank" rel="noopener noreferrer nofollow">
+        <span class="affiliate-icon">&#128722;</span>
+        <span>Shop recommended tech on Amazon</span>
+      </a>
+      <p class="affiliate-disclosure">
+        As an Amazon Associate I earn from qualifying purchases.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+(function() {
+  var banner = document.getElementById('affiliate-banner');
+  if (!banner) return;
+
+  var pageLang = banner.dataset.pageLang;
+
+  // Determine which ad to show: use browser language for affiliate relevance
+  var browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
+  var isKorean = browserLang.startsWith('ko');
+
+  // If on a Korean page and browser is Korean → Coupang
+  // If on an English page and browser is not Korean → Amazon
+  // Mixed: follow browser language
+  var showCoupang = isKorean;
+
+  var coupangEl = document.getElementById('ad-coupang');
+  var amazonEl = document.getElementById('ad-amazon');
+
+  // Check sessionStorage for dismissed state
+  var dismissedKey = showCoupang ? 'affiliate-coupang-dismissed' : 'affiliate-amazon-dismissed';
+  if (sessionStorage.getItem(dismissedKey)) return;
+
+  if (showCoupang && coupangEl) {
+    coupangEl.style.display = '';
+    // Load Coupang widget
+    var widgetContainer = document.getElementById('coupang-widget');
+    if (widgetContainer) {
+      var script = document.createElement('script');
+      script.src = 'https://ads-partners.coupang.com/g.js';
+      script.onload = function() {
+        if (typeof PartnersCoupang !== 'undefined') {
+          new PartnersCoupang.G({
+            id: parseInt(banner.dataset.coupangId),
+            template: 'carousel',
+            trackingCode: banner.dataset.coupangTracking,
+            width: '100%',
+            height: '140',
+            tsource: ''
+          });
+        }
+      };
+      widgetContainer.appendChild(script);
+    }
+  } else if (!showCoupang && amazonEl) {
+    amazonEl.style.display = '';
+  }
+
+  // Close button handlers
+  var closeButtons = banner.querySelectorAll('.affiliate-close');
+  closeButtons.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var targetId = btn.dataset.target;
+      var target = document.getElementById(targetId);
+      if (target) {
+        target.style.display = 'none';
+        var key = targetId === 'ad-coupang' ? 'affiliate-coupang-dismissed' : 'affiliate-amazon-dismissed';
+        sessionStorage.setItem(key, '1');
+      }
+    });
+  });
+})();
+</script>
+
+<style>
+  .affiliate-banner {
+    margin: 2em 0 1em;
+  }
+
+  .affiliate-card {
+    position: relative;
+    border-radius: 10px;
+    padding: 1.2em 1.5em;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+
+  /* Coupang - uses blog accent tones */
+  .affiliate-coupang {
+    background-color: rgba(var(--gray-light), 0.4);
+    border: 1px solid rgb(var(--gray-light));
+  }
+
+  /* Amazon - warm accent */
+  .affiliate-amazon {
+    background-color: rgba(var(--gray-light), 0.4);
+    border: 1px solid rgb(var(--gray-light));
+  }
+
+  .affiliate-body {
+    text-align: center;
+  }
+
+  .affiliate-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.7em 1.5em;
+    border-radius: 8px;
+    background-color: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95em;
+    transition: opacity 0.2s ease;
+  }
+
+  .affiliate-link:hover {
+    opacity: 0.85;
+    color: #fff;
+  }
+
+  .affiliate-icon {
+    font-size: 1.2em;
+  }
+
+  .affiliate-disclosure {
+    font-size: 0.78em;
+    color: rgb(var(--gray));
+    margin: 0.8em 0 0;
+  }
+
+  .affiliate-close {
+    position: absolute;
+    top: 0.5em;
+    right: 0.7em;
+    background: none;
+    border: none;
+    font-size: 1.3em;
+    cursor: pointer;
+    color: rgb(var(--gray));
+    line-height: 1;
+    padding: 0.2em;
+    transition: color 0.2s ease;
+  }
+
+  .affiliate-close:hover {
+    color: rgb(var(--gray-dark));
+  }
+
+  .affiliate-coupang-widget {
+    margin-bottom: 0.5em;
+    overflow: hidden;
+    border-radius: 6px;
+  }
+
+  @media (max-width: 900px) {
+    .affiliate-card {
+      padding: 1em;
+    }
+
+    .affiliate-link {
+      font-size: 0.88em;
+      padding: 0.6em 1.2em;
+    }
+  }
+</style>

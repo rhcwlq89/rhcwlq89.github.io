@@ -130,6 +130,42 @@ Include the MDC value in your `logback-spring.xml` pattern for easy log tracing:
 <pattern>%d{HH:mm:ss.SSS} [%X{requestId}] %-5level %logger{36} - %msg%n</pattern>
 ```
 
+#### Real-World Case: Tracing a Production Incident
+
+It's Friday afternoon. The monitoring dashboard shows a spike in 500 errors from the order service. Where is the problem?
+
+Without `X-Request-ID`, you'd have to search through millions of log lines to find the relevant request. With `X-Request-ID`:
+
+```
+# 1. Find the Request ID in the error log
+[ERROR] [req-550e8400] OrderService - Order creation failed: PaymentService timeout
+
+# 2. Search other service logs with the same ID
+$ grep "550e8400" payment-service.log
+[WARN] [req-550e8400] PaymentService - PG response delayed: exceeded 30s
+
+# 3. Root cause: PG response delay → order service timeout
+```
+
+With log aggregation tools like Datadog or Grafana Loki, searching by `X-Request-ID` shows all logs from every service that request touched, in a single view.
+
+#### Real-World Case: X-Correlation-ID Flow in Microservices
+
+When a user clicks "Place Order," multiple internal APIs are called:
+
+```
+User → API Gateway → Order Service → Payment Service → Inventory Service → Notification Service
+
+X-Correlation-ID: order-user42-20260316  (same throughout the entire flow)
+
+X-Request-ID: req-001  (Gateway → Order)
+X-Request-ID: req-002  (Order → Payment)
+X-Request-ID: req-003  (Order → Inventory)
+X-Request-ID: req-004  (Order → Notification)
+```
+
+Later, when someone asks "What went wrong with user42's order on March 16?", searching for `X-Correlation-ID: order-user42-20260316` pulls up all related logs across every service at once.
+
 ---
 
 ### 3.2 Proxy / Load Balancer Headers
@@ -167,6 +203,74 @@ server:
 
 With `forward-headers-strategy: native`, `request.getRemoteAddr()` returns the first IP from `X-Forwarded-For`.
 
+#### Real-World Case: The IP-Based Rate Limiting Trap
+
+You've implemented IP-based rate limiting, but every request shows the same IP (`10.0.0.1`), causing all users to be blocked at once. Why? The server is treating the **load balancer's IP as the client IP**.
+
+```
+# Wrong config: all requests recorded with ALB IP
+Request 1: remoteAddr=10.0.0.1  (actual: 203.0.113.50)
+Request 2: remoteAddr=10.0.0.1  (actual: 198.51.100.23)
+
+# Correct config: using first IP from X-Forwarded-For
+Request 1: remoteAddr=203.0.113.50
+Request 2: remoteAddr=198.51.100.23
+```
+
+#### Real-World Case: The HTTPS Redirect Infinite Loop
+
+When a server behind a proxy doesn't check `X-Forwarded-Proto`, an infinite redirect loop occurs:
+
+```
+1. Client → (HTTPS) → ALB → (HTTP) → Server
+2. Server: "HTTP request? Redirect to HTTPS!"
+3. Client → (HTTPS) → ALB → (HTTP) → Server
+4. Server: "HTTP again? Redirect again!" → infinite loop
+```
+
+Checking `X-Forwarded-Proto: https` solves this:
+
+```java
+@Component
+public class HttpsRedirectFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     FilterChain filterChain) throws ServletException, IOException {
+        String proto = request.getHeader("X-Forwarded-Proto");
+
+        // If the proxy reports HTTPS, no redirect needed
+        if ("https".equals(proto) || request.isSecure()) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Only redirect when actually accessed via HTTP
+        String redirectUrl = "https://" + request.getServerName() + request.getRequestURI();
+        response.sendRedirect(redirectUrl);
+    }
+}
+```
+
+#### Real-World Case: X-Forwarded-For in Multi-Proxy Environments
+
+In production, requests often pass through multiple proxies:
+
+```
+Client(203.0.113.50) → CDN(54.230.1.1) → ALB(10.0.0.1) → Nginx(10.0.1.1) → App
+
+X-Forwarded-For: 203.0.113.50, 54.230.1.1, 10.0.0.1
+```
+
+The **leftmost** IP is the actual client. But if an attacker sends `X-Forwarded-For: 1.2.3.4` from the start:
+
+```
+X-Forwarded-For: 1.2.3.4, 203.0.113.50, 54.230.1.1, 10.0.0.1
+```
+
+The leftmost IP is now fake. The safe approach is to **strip trusted proxy IPs from the right** and use the rightmost remaining IP.
+
 ---
 
 ### 3.3 Client Information
@@ -201,6 +305,58 @@ public ResponseEntity<AppConfig> getConfig(
 }
 ```
 
+#### Real-World Case: Force Update
+
+When a critical security vulnerability is discovered in the app, you need to block usage of versions below a threshold:
+
+```java
+@GetMapping("/api/health")
+public ResponseEntity<?> healthCheck(
+        @RequestHeader(value = "X-Client-Version", required = false) String version,
+        @RequestHeader(value = "X-Platform", required = false) String platform) {
+
+    if (version != null && isVersionBelow(version, "3.0.0")) {
+        return ResponseEntity.status(HttpStatus.UPGRADE_REQUIRED)  // 426
+            .body(Map.of(
+                "message", "Security update required",
+                "minVersion", "3.0.0",
+                "storeUrl", "iOS".equals(platform)
+                    ? "https://apps.apple.com/app/myapp"
+                    : "https://play.google.com/store/apps/details?id=com.myapp"
+            ));
+    }
+    return ResponseEntity.ok(Map.of("status", "ok"));
+}
+```
+
+#### Real-World Case: Platform-Specific Responses
+
+Same API, different image formats for iOS and Android:
+
+```java
+@GetMapping("/api/banners")
+public ResponseEntity<List<Banner>> getBanners(
+        @RequestHeader(value = "X-Platform", required = false) String platform) {
+
+    String imageFormat = "Android".equals(platform) ? "webp" : "png";
+    List<Banner> banners = bannerService.getBanners(imageFormat);
+    return ResponseEntity.ok(banners);
+}
+```
+
+#### Real-World Case: Tracking Non-Logged-In Users with Device ID
+
+Even without login, `X-Device-ID` enables behavior analysis. For example, sending push notifications to users who "added to cart but didn't check out":
+
+```
+GET /api/recommendations HTTP/1.1
+X-Device-ID: 5A3F2B1C-8D7E-4A9B-B2C1-3E5F6A7B8C9D
+X-Platform: iOS
+X-Client-Version: 4.2.0
+```
+
+> **Privacy note**: `X-Device-ID` must be handled carefully under privacy regulations. If GDPR or similar laws apply, tracking without user consent is not permitted.
+
 ---
 
 ### 3.4 Authentication / Security
@@ -211,6 +367,83 @@ public ResponseEntity<AppConfig> getConfig(
 | `X-CSRF-Token` | CSRF token delivery | Used in form-based authentication |
 | `X-Forwarded-User` | Authenticated user info from proxy | Reverse proxy authentication |
 | `Idempotency-Key` | Idempotency guarantee | Prevents duplicate processing in payment APIs |
+
+#### X-API-Key in Practice
+
+For public-facing APIs, `X-API-Key` is the most common authentication method. Major API providers like Google Maps, Stripe, and Twilio all support it.
+
+```
+# Google Maps API example
+GET /maps/api/geocode/json?address=Seoul HTTP/1.1
+Host: maps.googleapis.com
+X-API-Key: AIzaSyD...your-key
+```
+
+```java
+// Spring Boot API Key validation filter
+@Component
+public class ApiKeyFilter extends OncePerRequestFilter {
+
+    @Value("${api.valid-keys}")
+    private List<String> validKeys;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     FilterChain filterChain) throws ServletException, IOException {
+        String apiKey = request.getHeader("X-API-Key");
+
+        if (apiKey == null || !validKeys.contains(apiKey)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("{\"error\": \"Invalid API Key\"}");
+            return;
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Skip API key validation for public endpoints
+        return request.getRequestURI().startsWith("/api/public/");
+    }
+}
+```
+
+> **`Authorization` vs `X-API-Key`**: OAuth2 tokens go in `Authorization: Bearer ...`, while simple API keys go in `X-API-Key`. Some services use both simultaneously — API key for app identification + Bearer token for user authentication.
+
+#### X-CSRF-Token in Practice
+
+The most common CSRF defense pattern in SPAs (Single Page Applications):
+
+```
+# 1. Server sends CSRF token as a cookie on page load
+Set-Cookie: XSRF-TOKEN=abc123; Path=/; SameSite=Lax
+
+# 2. Client includes token in header for state-changing requests
+POST /api/transfer HTTP/1.1
+X-CSRF-Token: abc123
+Cookie: XSRF-TOKEN=abc123; SESSION=xyz789
+```
+
+The server verifies that the cookie token matches the header token (Double Submit Cookie pattern). Attackers can trigger automatic cookie submission, but cannot set custom headers from a different origin — blocking CSRF attacks.
+
+```java
+// Spring Security handles CSRF tokens automatically
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf
+            .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+            // withHttpOnlyFalse(): allows JS to read the cookie and set the header
+        );
+        return http.build();
+    }
+}
+```
 
 #### Idempotency-Key Example
 
@@ -238,6 +471,113 @@ public ResponseEntity<PaymentResult> createPayment(
 
     PaymentResult result = paymentService.process(request, idempotencyKey);
     return ResponseEntity.status(HttpStatus.CREATED).body(result);
+}
+```
+
+#### Why Idempotency-Key Is Essential in Production
+
+Consider this scenario: you call a payment API but never receive a response. The client has no way of knowing whether the payment went through. Retrying risks a double charge; not retrying risks a missed payment. `Idempotency-Key` solves this — **multiple requests with the same key are processed exactly once.**
+
+#### How Real Services Use Idempotency-Key
+
+**Stripe** — the most well-known example. All POST requests support the `Idempotency-Key` header.
+
+```bash
+curl https://api.stripe.com/v1/charges \
+  -H "Idempotency-Key: order-12345-attempt-1" \
+  -d amount=5000 \
+  -d currency=usd
+```
+
+Stripe stores keys for **24 hours** and returns the original response for duplicate requests. However, sending a different payload with the same key returns `400 Bad Request`.
+
+**Toss Payments** (Korean PG) — the payment confirmation API uses `orderId` as the idempotency key.
+
+```bash
+curl https://api.tosspayments.com/v1/payments/confirm \
+  -H "Idempotency-Key: order-20260316-abc789"
+```
+
+**PayPal** — uses the `PayPal-Request-Id` header for idempotency in order creation and payment capture.
+
+```bash
+curl https://api.paypal.com/v2/checkout/orders \
+  -H "PayPal-Request-Id: order-unique-id-123"
+```
+
+#### Beyond Payments: Other Use Cases
+
+`Idempotency-Key` is not just for payments. It applies to **any important state-changing POST request**.
+
+| Scenario | Problem If Duplicated | Key Generation Strategy |
+|----------|----------------------|------------------------|
+| Payments/Transfers | Double charge, double withdrawal | `pay-{orderId}-{timestamp}` |
+| Order creation | Duplicate orders | `order-{userId}-{cartHash}` |
+| Messaging (SMS/Email) | Message sent twice | `msg-{templateId}-{recipientId}-{date}` |
+| Points/Coupon issuance | Double reward | `reward-{eventId}-{userId}` |
+| External API integration (webhooks) | Event processed twice | Use the provider's `event_id` |
+
+#### Implementation Considerations
+
+**1. Key generation is the client's responsibility**
+
+If the server generates the key, it defeats the purpose. The client must create the key before the request so the same key can be sent on retry.
+
+```javascript
+// Frontend — generate key when the order button is clicked
+const idempotencyKey = `order-${orderId}-${Date.now()}`;
+
+async function placeOrder() {
+  const response = await fetch('/api/orders', {
+    method: 'POST',
+    headers: {
+      'Idempotency-Key': idempotencyKey,  // Same key on retry
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(orderData),
+  });
+}
+```
+
+**2. Set a TTL on keys**
+
+Storing keys forever means unbounded storage growth. Typically **24–48 hours** is appropriate. Stripe uses 24 hours; some financial APIs use 72 hours.
+
+```java
+// TTL management with Redis — auto-expires after 24 hours
+redisTemplate.opsForValue().set(
+    "idempotency:" + key,
+    result,
+    Duration.ofHours(24)
+);
+```
+
+**3. Handle concurrent requests (race conditions)**
+
+What if two requests with the same key arrive simultaneously? One should be processed and the other should wait or receive `409 Conflict`.
+
+```java
+// Distributed lock with Redis SETNX
+Boolean acquired = redisTemplate.opsForValue()
+    .setIfAbsent("lock:idempotency:" + key, "1", Duration.ofSeconds(30));
+
+if (Boolean.FALSE.equals(acquired)) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body("Request is already being processed");
+}
+```
+
+**4. Store the full response, not just the key**
+
+Storing only the key is not enough. You must store the **complete response (status code + body)** to return an identical response on retry.
+
+```java
+@Data
+@AllArgsConstructor
+public class IdempotencyRecord {
+    private int statusCode;
+    private String responseBody;
+    private LocalDateTime createdAt;
 }
 ```
 
@@ -271,6 +611,87 @@ X-RateLimit-Remaining: 0
 
 > **Note**: Standardization of `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (without `X-`) is in progress ([draft-ietf-httpapi-ratelimit-headers](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/)).
 
+#### Real-World Case: GitHub API Rate Limiting
+
+GitHub's API is a textbook example of rate limit headers:
+
+```bash
+$ curl -I https://api.github.com/users/octocat
+
+HTTP/2 200
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 56
+X-RateLimit-Reset: 1742108400
+X-RateLimit-Used: 4
+X-RateLimit-Resource: core
+```
+
+Unauthenticated requests get 60/hour; token-authenticated requests get 5,000/hour. `X-RateLimit-Resource` indicates which limit category applies (core, search, graphql, etc.).
+
+#### Real-World Case: Client-Side Rate Limit Handling
+
+When the server sends rate limit headers, clients can intelligently throttle their requests:
+
+```javascript
+async function fetchWithRateLimit(url) {
+  const response = await fetch(url);
+
+  const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+  const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+
+  if (remaining === 0) {
+    const waitMs = (resetTime * 1000) - Date.now();
+    console.log(`Rate limit reached. Retrying in ${Math.ceil(waitMs / 1000)}s`);
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    return fetchWithRateLimit(url);  // retry
+  }
+
+  if (remaining < 10) {
+    console.warn(`Rate limit warning: ${remaining} remaining`);
+  }
+
+  return response;
+}
+```
+
+#### Implementing Rate Limiting in Spring Boot (Bucket4j)
+
+```java
+@Component
+public class RateLimitFilter extends OncePerRequestFilter {
+
+    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+
+    private Bucket createBucket() {
+        return Bucket.builder()
+            .addLimit(Bandwidth.classic(100, Refill.intervally(100, Duration.ofHours(1))))
+            .build();
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     FilterChain filterChain) throws ServletException, IOException {
+        String clientIp = request.getRemoteAddr();
+        Bucket bucket = buckets.computeIfAbsent(clientIp, k -> createBucket());
+
+        ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+
+        response.setHeader("X-RateLimit-Limit", "100");
+        response.setHeader("X-RateLimit-Remaining", String.valueOf(probe.getRemainingTokens()));
+
+        if (probe.isConsumed()) {
+            filterChain.doFilter(request, response);
+        } else {
+            long waitSeconds = probe.getNanosToWaitForRefill() / 1_000_000_000;
+            response.setHeader("Retry-After", String.valueOf(waitSeconds));
+            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+            response.getWriter().write("{\"error\": \"Rate limit exceeded\"}");
+        }
+    }
+}
+```
+
 ---
 
 ### 3.6 Cache / Performance
@@ -286,6 +707,64 @@ HTTP/1.1 200 OK
 X-Cache: HIT from edge-server-tokyo
 X-Response-Time: 45ms
 ```
+
+#### Real-World Case: CDN Cache Debugging
+
+"I updated the image but it still shows the old one" — a common complaint when using CDNs. The `X-Cache` header reveals the cause instantly:
+
+```bash
+$ curl -I https://cdn.example.com/images/logo.png
+
+X-Cache: HIT        # Served from CDN cache → still the old image
+X-Cache-TTL: 3600   # Expires in 1 hour
+Age: 2400           # Cached 40 minutes ago
+```
+
+CloudFront provides even more detail:
+
+```
+X-Cache: Hit from cloudfront
+X-Amz-Cf-Pop: ICN54-C1          # Served from Seoul edge server
+X-Amz-Cf-Id: abc123...          # Request ID for debugging
+```
+
+Common `X-Cache` values:
+
+| Value | Meaning |
+|-------|---------|
+| `HIT` | Served from cache (no origin server call) |
+| `MISS` | Not in cache, fetched from origin |
+| `REFRESH HIT` | Cache expired, revalidated with origin, content unchanged |
+| `ERROR` | Origin server error, served stale cache |
+
+#### Real-World Case: SLO Monitoring with X-Response-Time
+
+If your SLO (Service Level Objective) is "99th percentile API response time < 200ms," `X-Response-Time` is invaluable for monitoring:
+
+```java
+@Component
+public class ResponseTimeFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     FilterChain filterChain) throws ServletException, IOException {
+        long start = System.nanoTime();
+
+        filterChain.doFilter(request, response);
+
+        long duration = (System.nanoTime() - start) / 1_000_000;  // ms
+        response.setHeader("X-Response-Time", duration + "ms");
+
+        // Also record as Prometheus metric
+        if (duration > 200) {
+            log.warn("Slow API: {} {}ms", request.getRequestURI(), duration);
+        }
+    }
+}
+```
+
+With this header, frontend developers can check server processing time right in the browser's Network tab, quickly answering "Is it slow because of the server or the network?"
 
 ---
 
