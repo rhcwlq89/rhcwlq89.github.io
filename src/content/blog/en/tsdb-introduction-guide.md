@@ -13,6 +13,8 @@ Server CPU usage, request latency, IoT sensor temperature — these all share on
 
 "Can't I just add a timestamp column in MySQL?" — for small scale, sure. But once you're dealing with tens of thousands of metrics per second, RDBs hit a wall.
 
+Think of TSDB as a **specialized temperature log**. You could write temperatures in a regular notebook (RDB), but a dedicated temperature chart has time-marked columns, lets you draw graphs instantly, and automatically tears out old pages. When you're tracking a few entries, any notebook works. When you're logging tens of thousands of readings every day, the specialized one wins by a landslide.
+
 ---
 
 ## 1. Characteristics of Time Series Data
@@ -39,6 +41,8 @@ Here's what happens when you put time series data in MySQL or PostgreSQL.
 
 RDBs update indexes and write transaction logs for every row insert. With 10,000 metric points per second, this overhead becomes critical.
 
+Here's an analogy: inserting data into an RDB is like **shelving a book in a library while updating the catalog every single time**. One or two books? No problem. But when tens of thousands of books pour in every second, you can't even shelve them because you're stuck updating the catalog. TSDBs stack books in order first and update the catalog in bulk later — much faster.
+
 ```
 # 100 servers × 50 metrics × every 10 seconds = 500 writes/sec
 # 10,000 servers? 50,000 writes/sec
@@ -55,11 +59,15 @@ Storing a single metric at 1-second intervals for a year:
 365 days × 24 hours × 60 min × 60 sec = 31,536,000 rows (per metric)
 ```
 
+With 100 metrics, that's **3.1 billion rows**. In a regular RDB, the disk cost alone would be enormous.
+
 TSDBs use specialized **compression algorithms** (delta encoding, gorilla compression, etc.) and use 10–20x less space than a typical RDB.
 
 ### 2.3 Aggregation Query Performance
 
 Calculating "average CPU over the last 7 days" in an RDB means scanning millions of rows. TSDBs handle this in milliseconds using **time-based partitioning and pre-aggregation (downsampling)**.
+
+Think of it this way: finding "last March's average temperature" by **flipping through 365 pages of a diary one by one** is the RDB approach. TSDBs pre-build **monthly summary pages**, so you just flip to the right page and get the answer instantly.
 
 ---
 
@@ -88,6 +96,8 @@ Raw data at 1-second intervals is automatically aggregated over time:
 
 Recent data stays high-resolution while old data gets progressively compressed.
 
+Think of your smartwatch's heart rate history. Today's data shows second-by-second detail, but data from 6 months ago only shows "that day's average heart rate." The same principle applies here. Since detailed historical data is rarely needed, this approach can reduce storage by 10x or more.
+
 ### 3.2 Automatic Data Expiration (Retention Policy)
 
 Old data is deleted automatically. In RDBs, you'd need to run DELETE queries separately. In TSDBs, it's just a config setting.
@@ -114,6 +124,8 @@ rate(http_requests_total{service="order-api", status=~"5.."}[5m])
 
 The equivalent in an RDB would require complex JOINs and GROUP BYs.
 
+Labels work like **hashtags**. Just as searching `#Seoul #foodie #pasta` on Instagram filters to matching posts, combining labels like `service="order-api"` and `status="500"` in a TSDB instantly filters to exactly the metrics you need.
+
 ---
 
 ## 4. Major TSDB Comparison
@@ -137,6 +149,13 @@ scrape_configs:
 | **Strengths** | Kubernetes ecosystem standard, Grafana integration, built-in AlertManager |
 | **Weaknesses** | Not suited for long-term storage (single node), no clustering |
 | **Best for** | Infrastructure/application monitoring, K8s environments |
+
+> **What's Pull vs Push?**
+>
+> - **Pull (Prometheus)**: "I'll check your status every 10 seconds" — the server actively fetches data from targets.
+> - **Push (InfluxDB)**: "I'll tell you when my status changes" — clients send data to the server.
+>
+> Prometheus uses Pull because it naturally detects when a target is down: "I went to check, but nobody answered."
 
 PromQL examples:
 
@@ -167,6 +186,10 @@ curl -XPOST 'http://localhost:8086/write?db=mydb' \
 | **Strengths** | SQL-like queries, built-in downsampling, cloud service available |
 | **Weaknesses** | Open-source version has no clustering (Enterprise only) |
 | **Best for** | IoT, business metrics, standalone time series storage |
+
+> **What does InfluxDB feel like?**
+>
+> If you know SQL but find Prometheus queries intimidating, InfluxDB is for you. InfluxQL looks almost identical to SQL: `SELECT mean(cpu) FROM metrics WHERE time > now() - 1h GROUP BY time(5m)`.
 
 Flux query example:
 
@@ -208,6 +231,10 @@ ORDER BY interval DESC;
 | **Strengths** | Existing PostgreSQL knowledge transfers, JOINs supported, full SQL |
 | **Weaknesses** | Lower write performance than pure TSDBs, operational complexity |
 | **Best for** | When you need time series + relational data together |
+
+> **When is TimescaleDB the right choice?**
+>
+> For example: "I want to JOIN the orders table with server response time metrics to analyze the order cancellation rate during slow response periods." This is impossible in Prometheus or InfluxDB, but TimescaleDB handles it with a simple SQL JOIN — because it's all in the same PostgreSQL instance.
 
 ### 4.4 Comparison Summary
 
