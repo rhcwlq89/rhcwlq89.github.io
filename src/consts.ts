@@ -22,6 +22,6 @@ export const AFFILIATE = {
     link: 'COUPANG_AFFILIATE_LINK_HERE',
   },
   amazon: {
-    link: 'https://amzn.to/40AyEW6',
+    link: 'https://amzn.to/4s9Lyq5',
   },
 };
