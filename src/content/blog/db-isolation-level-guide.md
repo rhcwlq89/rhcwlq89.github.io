@@ -75,46 +75,31 @@ Read Uncommitted → Read Committed → Repeatable Read → Serializable
 
 **커밋되지 않은 데이터를 다른 트랜잭션이 읽는 것.**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (이체)
-    participant DB as Database
-    participant TX2 as TX2 (조회)
-
-    TX1->>DB: UPDATE balance = 0 (커밋 안 함)
-    Note over DB: A 잔액: 100만 → 0
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX2: 0원 💀 Dirty Read!
-    TX1->>DB: ROLLBACK
-    Note over DB: A 잔액: 다시 100만원
-    Note over TX2: "잔액 0원" 기준으로<br/>잘못된 판단을 함
-```
+| 단계 | TX1 (이체) | TX2 (조회) | A 잔액 |
+|:---:|-----------|-----------|:------:|
+| 1 | `UPDATE balance = 0` (커밋 안 함) | | 100만→0 |
+| 2 | | `SELECT balance` → **0원** 💀 | 0 |
+| 3 | `ROLLBACK` | | 100만 |
+| 4 | | 0원 기준으로 잘못된 판단 | 100만 |
 
 트랜잭션 1이 롤백했는데, 트랜잭션 2는 이미 0원을 읽었다. **존재한 적 없는 데이터**를 본 것이다.
 
-비유하면, 선생님이 시험 점수를 고치고 있는데(아직 확정 전) 옆에서 누가 그 점수를 읽어간 것과 같다.
+> **비유**: 선생님이 시험 점수를 고치고 있는데(아직 확정 전) 옆에서 누가 그 점수를 읽어간 것과 같다.
 
 ### 3.2 Non-Repeatable Read (반복 불가능 읽기)
 
 **같은 트랜잭션에서 같은 데이터를 두 번 읽었는데 값이 다른 것.**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (조회)
-    participant DB as Database
-    participant TX2 as TX2 (수정)
-
-    TX1->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX1: 100만원
-    TX2->>DB: UPDATE balance = 50만
-    TX2->>DB: COMMIT
-    TX1->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX1: 50만원 💀 값이 바뀌었다!
-```
+| 단계 | TX1 (조회) | TX2 (수정) | A 잔액 |
+|:---:|-----------|-----------|:------:|
+| 1 | `SELECT balance` → **100만원** | | 100만 |
+| 2 | | `UPDATE balance = 50만` | 100만→50만 |
+| 3 | | `COMMIT` | 50만 |
+| 4 | `SELECT balance` → **50만원** 💀 값이 바뀌었다! | | 50만 |
 
 같은 SELECT를 두 번 실행했는데 결과가 다르다. 트랜잭션 1 입장에서는 "내가 읽는 사이에 누가 바꿔버렸네?"가 된다.
 
-비유하면, 책을 읽다가 잠시 화장실 다녀왔더니 누가 페이지 내용을 고쳐놓은 것과 같다.
+> **비유**: 책을 읽다가 잠시 화장실 다녀왔더니 누가 페이지 내용을 고쳐놓은 것과 같다.
 
 ### 3.3 Phantom Read (팬텀 리드)
 
@@ -122,87 +107,37 @@ sequenceDiagram
 
 #### INSERT로 인한 Phantom Read
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (조회)
-    participant DB as Database
-    participant TX2 as TX2 (삽입)
+| 단계 | TX1 (조회) | TX2 (삽입) | 결과 |
+|:---:|-----------|-----------|:------:|
+| 1 | `SELECT count(*) WHERE balance > 50만` → **3건** | | 3건 |
+| 2 | | `INSERT ('D', 80만)` | |
+| 3 | | `COMMIT` | |
+| 4 | `SELECT count(*) WHERE balance > 50만` → **4건** 💀 없던 행이 나타남! | | 4건 |
 
-    TX1->>DB: SELECT count(*) WHERE balance > 50만
-    DB-->>TX1: 3건
-    TX2->>DB: INSERT ('D', 80만)
-    TX2->>DB: COMMIT
-    TX1->>DB: SELECT count(*) WHERE balance > 50만
-    DB-->>TX1: 4건 💀 없던 행이 나타남!
-```
+#### Phantom Read 원인 요약
 
-#### UPDATE로 인한 Phantom Read
+| 원인 | 현상 | 예시 |
+|------|------|------|
+| **INSERT** | 없던 행이 유령처럼 나타남 | 새 계좌 D(80만) 추가 → 3건→4건 |
+| **UPDATE** | 조건에 안 맞던 행이 조건에 맞게 변함 (또는 반대) | D 잔액 30만→80만 → 3건→4건 |
+| **DELETE** | 있던 행이 사라짐 | C(70만) 삭제 → 3건→2건 |
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (조회)
-    participant DB as Database
-    participant TX2 as TX2 (수정)
-
-    TX1->>DB: SELECT count(*) WHERE balance > 50만
-    DB-->>TX1: 3건
-    Note over DB: D의 잔액: 30만원
-    TX2->>DB: UPDATE D의 balance = 80만
-    TX2->>DB: COMMIT
-    Note over DB: D의 잔액: 30만 → 80만
-    TX1->>DB: SELECT count(*) WHERE balance > 50만
-    DB-->>TX1: 4건 💀 조건에 안 맞던 행이 맞게 변함!
-```
-
-#### DELETE로 인한 Phantom Read
-
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (조회)
-    participant DB as Database
-    participant TX2 as TX2 (삭제)
-
-    TX1->>DB: SELECT count(*) WHERE balance > 50만
-    DB-->>TX1: 3건
-    TX2->>DB: DELETE WHERE id = 'C' (잔액 70만)
-    TX2->>DB: COMMIT
-    TX1->>DB: SELECT count(*) WHERE balance > 50만
-    DB-->>TX1: 2건 💀 있던 행이 사라짐!
-```
-
-정리하면 Phantom Read의 원인은 세 가지다:
-
-| 원인 | 현상 |
-|------|------|
-| **INSERT** | 없던 행이 유령처럼 나타남 |
-| **UPDATE** | 조건에 안 맞던 행이 조건에 맞게 변함 (또는 반대) |
-| **DELETE** | 있던 행이 사라짐 |
-
-비유하면, 교실에서 안경 쓴 학생 수를 세고 돌아섰는데 — 새 학생이 들어왔거나(INSERT), 안 쓰던 학생이 안경을 썼거나(UPDATE), 쓰고 있던 학생이 나갔거나(DELETE).
+> **비유**: 교실에서 안경 쓴 학생 수를 세고 돌아섰는데 — 새 학생이 들어왔거나(INSERT), 안 쓰던 학생이 안경을 썼거나(UPDATE), 쓰고 있던 학생이 나갔거나(DELETE).
 
 ### 3.4 Lost Update (갱신 손실)
 
 **두 트랜잭션이 동시에 같은 데이터를 수정해서 한쪽의 변경이 사라지는 것.**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (출금 30만)
-    participant DB as Database
-    participant TX2 as TX2 (출금 20만)
+| 단계 | TX1 (출금 30만) | TX2 (출금 20만) | A 잔액 |
+|:---:|-----------|-----------|:------:|
+| 1 | `SELECT balance` → **100만원** | | 100만 |
+| 2 | | `SELECT balance` → **100만원** | 100만 |
+| 3 | `UPDATE balance = 70만` (100-30) | | 70만 |
+| 4 | `COMMIT` | | 70만 |
+| 5 | | `UPDATE balance = 80만` (100-20) 💀 TX1이 70만으로 바꾼 걸 모름! | 80만 |
+| 6 | | `COMMIT` | 80만 |
 
-    TX1->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX1: 100만원
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX2: 100만원
-    TX1->>DB: UPDATE balance = 70만 (100-30)
-    TX1->>DB: COMMIT
-    TX2->>DB: UPDATE balance = 80만 (100-20) 💀
-    Note over TX2: TX1이 70만으로 바꾼 걸 모름!
-    TX2->>DB: COMMIT
-    Note over DB: 최종 잔액: 80만원<br/>정상이라면 50만원 (100-30-20)
-```
-
-트랜잭션 1의 30만원 차감이 완전히 사라졌다. 선착순 시스템에서 재고 차감할 때 이런 일이 발생하면, **재고가 0인데 주문이 더 들어가는** 사고가 난다.
+최종 잔액: **80만원** (정상이라면 50만원 = 100-30-20). 트랜잭션 1의 30만원 차감이 완전히 사라졌다. 선착순 시스템에서 재고 차감할 때 이런 일이 발생하면, **재고가 0인데 주문이 더 들어가는** 사고가 난다.
 
 ---
 
@@ -347,39 +282,33 @@ SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 | **Oracle** | Read Committed | 높은 동시성 환경에서의 성능 우선 |
 | **SQL Server** | Read Committed | Oracle과 동일한 이유. 단, RCSI 옵션으로 동작 변경 가능 |
 
+<details>
+<summary>Read Committed Snapshot Isolation (RCSI) 상세 비교 (클릭하여 펼치기)</summary>
+
 ### Read Committed Snapshot Isolation (RCSI)
 
 표준 SQL에는 없지만, 실무에서 자주 만나는 변형이 있다 — **Read Committed Snapshot Isolation (RCSI)**.
 
 일반 Read Committed는 **락 기반**이다. 다른 트랜잭션이 쓰고 있는 행을 읽으려면 **락이 풀릴 때까지 기다려야** 한다:
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (수정)
-    participant DB as Database
-    participant TX2 as TX2 (조회)
+**일반 Read Committed (락 기반)**
 
-    TX1->>DB: UPDATE balance = 0 (락 획득)
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    Note over TX2: 락 대기... ⏳
-    TX1->>DB: COMMIT (락 해제)
-    DB-->>TX2: 0원 (이제야 읽을 수 있음)
-```
+| 단계 | TX1 (수정) | TX2 (조회) | 비고 |
+|:---:|-----------|-----------|:------:|
+| 1 | `UPDATE balance = 0` (락 획득) | | |
+| 2 | | `SELECT balance` → 락 대기... ⏳ | 블로킹 |
+| 3 | `COMMIT` (락 해제) | | |
+| 4 | | → **0원** (이제야 읽을 수 있음) | |
 
 RCSI는 이 문제를 해결한다. **읽기 시 락을 걸지 않고, 커밋된 마지막 버전의 스냅샷을 읽는다:**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (수정)
-    participant DB as Database
-    participant TX2 as TX2 (조회)
+**RCSI (스냅샷 기반)**
 
-    TX1->>DB: UPDATE balance = 0 (락 획득)
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    Note over DB: 스냅샷에서 읽음 (대기 없음!)
-    DB-->>TX2: 100만원 (변경 전 커밋된 값)
-    TX1->>DB: COMMIT
-```
+| 단계 | TX1 (수정) | TX2 (조회) | 비고 |
+|:---:|-----------|-----------|:------:|
+| 1 | `UPDATE balance = 0` (락 획득) | | |
+| 2 | | `SELECT balance` → **100만원** (변경 전 커밋된 값) | 대기 없음! |
+| 3 | `COMMIT` | | |
 
 핵심 차이:
 
@@ -400,6 +329,8 @@ sequenceDiagram
 | **MySQL (InnoDB)** | 기본 동작 | MVCC로 Read Committed에서도 스냅샷 읽기 |
 
 > **중요**: PostgreSQL, Oracle, MySQL은 Read Committed에서 이미 RCSI처럼 동작한다 (읽기 시 락을 안 건다). **SQL Server만 기본적으로 락 기반**이라서, RCSI를 명시적으로 켜야 한다. SQL Server를 쓰는 프로젝트라면 RCSI 활성화를 적극 고려해야 한다.
+
+</details>
 
 ---
 

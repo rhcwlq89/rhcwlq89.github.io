@@ -76,46 +76,31 @@ To understand isolation levels, you first need to know **"what goes wrong when i
 
 **Reading uncommitted data from another transaction.**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Transfer)
-    participant DB as Database
-    participant TX2 as TX2 (Query)
-
-    TX1->>DB: UPDATE balance = 0 (NOT committed)
-    Note over DB: A balance: $10,000 → $0
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX2: $0 💀 Dirty Read!
-    TX1->>DB: ROLLBACK
-    Note over DB: A balance: back to $10,000
-    Note over TX2: Makes decisions based on<br/>"$0 balance" that never existed
-```
+| Step | TX1 (Transfer) | TX2 (Query) | A Balance |
+|:---:|-----------|-----------|:------:|
+| 1 | `UPDATE balance = 0` (not committed) | | $10,000→$0 |
+| 2 | | `SELECT balance` → **$0** 💀 | $0 |
+| 3 | `ROLLBACK` | | $10,000 |
+| 4 | | Makes wrong decision based on $0 | $10,000 |
 
 Transaction 1 rolled back, but Transaction 2 already read $0. It saw **data that never actually existed**.
 
-Analogy: a teacher is in the middle of correcting a test score (not finalized yet) and someone reads that score.
+> **Analogy**: A teacher is in the middle of correcting a test score (not finalized yet) and someone reads that score.
 
 ### 3.2 Non-Repeatable Read
 
 **Reading the same data twice in one transaction and getting different values.**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Query)
-    participant DB as Database
-    participant TX2 as TX2 (Update)
-
-    TX1->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX1: $10,000
-    TX2->>DB: UPDATE balance = $5,000
-    TX2->>DB: COMMIT
-    TX1->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX1: $5,000 💀 Value changed!
-```
+| Step | TX1 (Query) | TX2 (Update) | A Balance |
+|:---:|-----------|-----------|:------:|
+| 1 | `SELECT balance` → **$10,000** | | $10,000 |
+| 2 | | `UPDATE balance = $5,000` | $10,000→$5,000 |
+| 3 | | `COMMIT` | $5,000 |
+| 4 | `SELECT balance` → **$5,000** 💀 | | $5,000 |
 
 Same SELECT, different results. From Transaction 1's perspective: "Someone changed it while I was reading!"
 
-Analogy: you're reading a book, step away to the restroom, and someone rewrites the page while you're gone.
+> **Analogy**: You're reading a book, step away to the restroom, and someone rewrites the page while you're gone.
 
 ### 3.3 Phantom Read
 
@@ -123,87 +108,37 @@ Analogy: you're reading a book, step away to the restroom, and someone rewrites 
 
 #### Phantom Read from INSERT
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Query)
-    participant DB as Database
-    participant TX2 as TX2 (Insert)
+| Step | TX1 (Query) | TX2 (Insert) | Rows matching `balance > $5,000` |
+|:---:|-----------|-----------|:------:|
+| 1 | `SELECT count(*)` → **3 rows** | | 3 |
+| 2 | | `INSERT ('D', $8,000)` | 3 |
+| 3 | | `COMMIT` | 4 |
+| 4 | `SELECT count(*)` → **4 rows** 💀 | | 4 |
 
-    TX1->>DB: SELECT count(*) WHERE balance > $5,000
-    DB-->>TX1: 3 rows
-    TX2->>DB: INSERT ('D', $8,000)
-    TX2->>DB: COMMIT
-    TX1->>DB: SELECT count(*) WHERE balance > $5,000
-    DB-->>TX1: 4 rows 💀 New row appeared!
-```
+UPDATE and DELETE cause the same problem — the result set changes between reads:
 
-#### Phantom Read from UPDATE
+| Cause | What TX2 Does | TX1's count(*) Before → After |
+|-------|-------------|:------:|
+| **INSERT** | Adds account D with $8,000 | 3 → **4** (new row appeared) |
+| **UPDATE** | Changes D's balance from $3,000 to $8,000 | 3 → **4** (row now matches condition) |
+| **DELETE** | Deletes account C (balance $7,000) | 3 → **2** (row disappeared) |
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Query)
-    participant DB as Database
-    participant TX2 as TX2 (Update)
-
-    TX1->>DB: SELECT count(*) WHERE balance > $5,000
-    DB-->>TX1: 3 rows
-    Note over DB: D's balance: $3,000
-    TX2->>DB: UPDATE D's balance = $8,000
-    TX2->>DB: COMMIT
-    Note over DB: D's balance: $3,000 → $8,000
-    TX1->>DB: SELECT count(*) WHERE balance > $5,000
-    DB-->>TX1: 4 rows 💀 Row now matches the condition!
-```
-
-#### Phantom Read from DELETE
-
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Query)
-    participant DB as Database
-    participant TX2 as TX2 (Delete)
-
-    TX1->>DB: SELECT count(*) WHERE balance > $5,000
-    DB-->>TX1: 3 rows
-    TX2->>DB: DELETE WHERE id = 'C' (balance $7,000)
-    TX2->>DB: COMMIT
-    TX1->>DB: SELECT count(*) WHERE balance > $5,000
-    DB-->>TX1: 2 rows 💀 Row disappeared!
-```
-
-In summary, Phantom Read has three causes:
-
-| Cause | What Happens |
-|-------|-------------|
-| **INSERT** | A new row appears like a phantom |
-| **UPDATE** | A row that didn't match the condition now matches (or vice versa) |
-| **DELETE** | An existing row disappears |
-
-Analogy: you count students wearing glasses in a classroom — then a new student walks in (INSERT), a student puts on glasses (UPDATE), or a student wearing glasses leaves (DELETE).
+> **Analogy**: You count students wearing glasses in a classroom — then a new student walks in (INSERT), a student puts on glasses (UPDATE), or a student wearing glasses leaves (DELETE).
 
 ### 3.4 Lost Update
 
 **Two transactions modify the same data simultaneously, and one change is lost.**
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Withdraw $3,000)
-    participant DB as Database
-    participant TX2 as TX2 (Withdraw $2,000)
+| Step | TX1 (Withdraw $3,000) | TX2 (Withdraw $2,000) | A Balance |
+|:---:|-----------|-----------|:------:|
+| 1 | `SELECT balance` → **$10,000** | | $10,000 |
+| 2 | | `SELECT balance` → **$10,000** | $10,000 |
+| 3 | `UPDATE balance = $7,000` (10000-3000) | | $7,000 |
+| 4 | `COMMIT` | | $7,000 |
+| 5 | | `UPDATE balance = $8,000` (10000-2000) 💀 | $8,000 |
+| 6 | | `COMMIT` | $8,000 |
 
-    TX1->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX1: $10,000
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    DB-->>TX2: $10,000
-    TX1->>DB: UPDATE balance = $7,000 (10000-3000)
-    TX1->>DB: COMMIT
-    TX2->>DB: UPDATE balance = $8,000 (10000-2000) 💀
-    Note over TX2: Unaware TX1 changed it to $7,000!
-    TX2->>DB: COMMIT
-    Note over DB: Final balance: $8,000<br/>Should be $5,000 (10000-3000-2000)
-```
-
-Transaction 1's $3,000 deduction is completely lost. In a first-come-first-served system, this means **orders going through even when stock is zero**.
+Final balance: **$8,000** — should be **$5,000** (10000-3000-2000). Transaction 1's $3,000 deduction is completely lost. In a first-come-first-served system, this means **orders going through even when stock is zero**.
 
 ---
 
@@ -350,39 +285,29 @@ Concurrency: conflicting transactions get rolled back
 
 ### Read Committed Snapshot Isolation (RCSI)
 
-Not part of the SQL standard, but commonly encountered in practice — **Read Committed Snapshot Isolation (RCSI)**.
+Not part of the SQL standard, but commonly encountered in practice — **Read Committed Snapshot Isolation (RCSI)**. In short: regular Read Committed uses locks (readers wait for writers), while RCSI uses snapshots (readers never wait). PostgreSQL, Oracle, and MySQL already behave like RCSI by default — **only SQL Server needs it explicitly enabled**.
 
-Regular Read Committed is **lock-based**. Reading a row that another transaction is writing requires **waiting for the lock to be released**:
+<details>
+<summary>RCSI Deep Dive (click to expand)</summary>
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Write)
-    participant DB as Database
-    participant TX2 as TX2 (Read)
+#### Regular Read Committed (Lock-Based)
 
-    TX1->>DB: UPDATE balance = 0 (lock acquired)
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    Note over TX2: Waiting for lock... ⏳
-    TX1->>DB: COMMIT (lock released)
-    DB-->>TX2: $0 (can finally read)
-```
+| Step | TX1 (Write) | TX2 (Read) | A Balance |
+|:---:|-----------|-----------|:------:|
+| 1 | `UPDATE balance = 0` (lock acquired) | | $10,000→$0 |
+| 2 | | `SELECT balance` → waiting for lock... ⏳ | $0 |
+| 3 | `COMMIT` (lock released) | | $0 |
+| 4 | | `SELECT` completes → **$0** | $0 |
 
-RCSI solves this. **Reads don't acquire locks — they read the last committed snapshot instead:**
+#### RCSI (Snapshot-Based)
 
-```mermaid
-sequenceDiagram
-    participant TX1 as TX1 (Write)
-    participant DB as Database
-    participant TX2 as TX2 (Read)
+| Step | TX1 (Write) | TX2 (Read) | A Balance |
+|:---:|-----------|-----------|:------:|
+| 1 | `UPDATE balance = 0` (lock acquired) | | $10,000→$0 |
+| 2 | | `SELECT balance` → **$10,000** (reads snapshot, no waiting!) | $0 |
+| 3 | `COMMIT` | | $0 |
 
-    TX1->>DB: UPDATE balance = 0 (lock acquired)
-    TX2->>DB: SELECT balance WHERE id = 'A'
-    Note over DB: Reads from snapshot (no waiting!)
-    DB-->>TX2: $10,000 (last committed value)
-    TX1->>DB: COMMIT
-```
-
-The key difference:
+#### The Key Difference
 
 | | Regular Read Committed | RCSI |
 |--|----------------------|------|
@@ -401,6 +326,8 @@ The key difference:
 | **MySQL (InnoDB)** | Default behavior | MVCC provides snapshot reads in Read Committed |
 
 > **Important**: PostgreSQL, Oracle, and MySQL already behave like RCSI in Read Committed (reads don't acquire locks). **Only SQL Server uses lock-based reads by default**, so RCSI must be explicitly enabled. If you're working with SQL Server, strongly consider enabling RCSI.
+
+</details>
 
 ---
 
