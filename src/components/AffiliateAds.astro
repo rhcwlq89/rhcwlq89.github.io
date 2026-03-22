@@ -6,22 +6,36 @@ interface Props {
 }
 
 const { lang = 'ko' } = Astro.props;
+const amazonTag = AFFILIATE.amazon.tag;
 ---
 
 <div class="affiliate-banner" id="affiliate-banner">
   <div class="affiliate-card" id="ad-card">
     <button class="affiliate-close" aria-label={lang === 'ko' ? '닫기' : 'Close'} id="affiliate-close-btn">&times;</button>
     <div class="affiliate-body">
-      <div class="affiliate-coupang-widget">
-        <script is:inline src="https://ads-partners.coupang.com/g.js"></script>
-        <script is:inline define:vars={{ coupangId: AFFILIATE.coupang.id, coupangTracking: AFFILIATE.coupang.trackingCode }}>
-          new PartnersCoupang.G({"id":coupangId,"template":"carousel","trackingCode":coupangTracking,"width":"100%","height":"140","tsource":""});
-        </script>
-      </div>
+      {lang === 'ko' ? (
+        <div class="affiliate-coupang-widget">
+          <script is:inline src="https://ads-partners.coupang.com/g.js"></script>
+          <script is:inline define:vars={{ coupangId: AFFILIATE.coupang.id, coupangTracking: AFFILIATE.coupang.trackingCode }}>
+            new PartnersCoupang.G({"id":coupangId,"template":"carousel","trackingCode":coupangTracking,"width":"100%","height":"140","tsource":""});
+          </script>
+        </div>
+      ) : (
+        <a class="affiliate-amazon-link" href={`https://www.amazon.com/?tag=${amazonTag}`} target="_blank" rel="noopener noreferrer sponsored">
+          <div class="affiliate-amazon-banner">
+            <svg class="amazon-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 603 182" width="100" height="30">
+              <path fill="currentColor" d="M374.00 142.06C339.63 167.17 289.65 180.50 247.04 180.50C187.95 180.50 135.18 158.98 95.41 123.66C92.26 120.81 95.07 116.94 98.87 119.19C141.65 144.16 194.60 159.12 249.35 159.12C286.41 159.12 327.02 151.50 364.42 135.71C369.88 133.40 374.49 138.58 374.00 142.06Z"/>
+              <path fill="currentColor" d="M385.76 128.44C381.52 122.98 356.87 125.94 345.74 127.27C342.42 127.67 341.92 124.76 344.92 122.66C364.76 108.60 397.34 112.60 401.00 117.14C404.66 121.72 399.98 154.30 381.34 170.00C378.54 172.38 375.88 171.12 377.14 167.98C381.28 157.78 389.98 133.86 385.76 128.44Z"/>
+              <path fill="#currentColor" d="M346.34 20.86L346.34 6.42C346.34 4.32 347.92 2.94 349.82 2.94L411.76 2.94C413.74 2.94 415.32 4.36 415.32 6.42L415.32 19.20C415.28 21.18 413.58 23.78 410.70 27.80L378.56 74.26C390.62 73.96 403.36 75.76 414.24 81.92C416.72 83.32 417.38 85.36 417.56 87.34L417.56 102.74C417.56 104.76 415.34 107.10 413.02 105.88C392.78 95.22 365.80 94.06 343.54 106.02C341.42 107.16 339.16 104.86 339.16 102.84L339.16 88.18C339.16 85.94 339.20 82.06 341.46 78.68L379.08 24.22L349.90 24.22C347.92 24.22 346.34 22.84 346.34 20.86Z"/>
+            </svg>
+            <span class="amazon-cta">Shop on Amazon</span>
+          </div>
+        </a>
+      )}
       <p class="affiliate-disclosure">
         {lang === 'ko'
           ? '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.'
-          : 'This post is part of the Coupang Partners program, and a commission is earned from qualifying purchases.'}
+          : 'As an Amazon Associate, I earn from qualifying purchases.'}
       </p>
     </div>
   </div>
@@ -93,6 +107,38 @@ const { lang = 'ko' } = Astro.props;
     margin-bottom: 0.5em;
     overflow: hidden;
     border-radius: 6px;
+  }
+
+  .affiliate-amazon-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .affiliate-amazon-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1em;
+    padding: 1em 1.5em;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #232f3e 0%, #37475a 100%);
+    color: #ff9900;
+    transition: opacity 0.2s ease;
+  }
+
+  .affiliate-amazon-banner:hover {
+    opacity: 0.9;
+  }
+
+  .amazon-logo {
+    flex-shrink: 0;
+  }
+
+  .amazon-cta {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #ffffff;
   }
 
   @media (max-width: 900px) {

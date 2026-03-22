@@ -20,4 +20,7 @@ export const AFFILIATE = {
     id: 970016,
     trackingCode: 'AF9926225',
   },
+  amazon: {
+    tag: 'hojongdevblog-20',
+  },
 };
