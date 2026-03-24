@@ -57,13 +57,12 @@ COMMIT;
 
 격리가 높을수록 안전하지만 느리고, 낮을수록 빠르지만 이상한 현상이 발생할 수 있다.
 
-```
-낮음 ◄──────────────────────────────► 높음
-빠름                                    느림
-위험                                    안전
-
-Read Uncommitted → Read Committed → Repeatable Read → Serializable
-```
+| 격리 수준 | 속도 | 안전성 | 한마디 |
+|----------|:---:|:---:|--------|
+| Read Uncommitted | ⚡⚡⚡⚡ | 🛡️ | 거의 안 씀 |
+| Read Committed | ⚡⚡⚡ | 🛡️🛡️ | PostgreSQL, Oracle 기본값 |
+| Repeatable Read | ⚡⚡ | 🛡️🛡️🛡️ | MySQL 기본값 |
+| Serializable | ⚡ | 🛡️🛡️🛡️🛡️ | 완벽하지만 느림 |
 
 ---
 

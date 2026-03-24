@@ -58,13 +58,12 @@ So a trade-off emerged: **"Allow some interference in exchange for better perfor
 
 Higher isolation = safer but slower. Lower isolation = faster but weird things can happen.
 
-```
-Low ◄──────────────────────────────► High
-Fast                                   Slow
-Risky                                  Safe
-
-Read Uncommitted → Read Committed → Repeatable Read → Serializable
-```
+| Isolation Level | Speed | Safety | Note |
+|----------------|:---:|:---:|--------|
+| Read Uncommitted | ⚡⚡⚡⚡ | 🛡️ | Rarely used |
+| Read Committed | ⚡⚡⚡ | 🛡️🛡️ | PostgreSQL, Oracle default |
+| Repeatable Read | ⚡⚡ | 🛡️🛡️🛡️ | MySQL default |
+| Serializable | ⚡ | 🛡️🛡️🛡️🛡️ | Perfect but slow |
 
 ---
 
