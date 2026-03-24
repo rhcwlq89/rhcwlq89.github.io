@@ -381,20 +381,60 @@ public void transfer(Long fromId, Long toId, int amount) {
 영원히 기다리지 않도록 타임아웃을 건다.
 
 ```sql
--- MySQL: 5초 후 락 대기 포기
-SET innodb_lock_wait_timeout = 5;
+-- MySQL: 3초 후 락 대기 포기
+SET innodb_lock_wait_timeout = 3;
 
--- PostgreSQL: 5초 후 포기
-SET lock_timeout = '5s';
+-- PostgreSQL: 3초 후 포기
+SET lock_timeout = '3s';
 ```
 
 ```java
 // Spring Boot에서 JPA 힌트로 설정
-@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
 @Lock(LockModeType.PESSIMISTIC_WRITE)
 @Query("SELECT p FROM Product p WHERE p.id = :id")
 Product findByIdForUpdate(@Param("id") Long id);
 ```
+
+#### 타임아웃은 어떻게 결정하나?
+
+DB 기본값은 대부분 너무 길다. MySQL은 50초, PostgreSQL은 무제한이다. **"정상 처리 시간의 2~3배"** 가 일반적인 기준이다.
+
+| 상황 | 정상 처리 시간 | 권장 타임아웃 | 이유 |
+|------|-------------|------------|------|
+| 재고 차감 (단순) | ~50ms | **1~3초** | 짧은 트랜잭션, 오래 기다리면 커넥션 낭비 |
+| 주문 생성 (복잡) | ~200ms | **3~5초** | 여러 테이블 접근, 약간의 여유 |
+| 결제 처리 (외부 API 포함) | ~2초 | **5~10초** | 외부 API 지연 감안 |
+| 배치/정산 | ~10초 | **30~60초** | 대량 처리, 긴 트랜잭션 허용 |
+
+결정할 때 가장 중요한 3가지:
+
+**1. 커넥션 풀 크기와의 관계**
+
+```
+HikariCP maxPoolSize: 10
+락 타임아웃: 30초
+
+→ 최악의 경우: 10개 커넥션이 전부 30초씩 대기
+→ 300초(5분) 동안 다른 요청 처리 불가 💀
+```
+
+타임아웃이 길수록 커넥션 고갈 위험이 커진다. **커넥션 풀이 작으면 타임아웃도 짧게** 설정해야 한다.
+
+**2. 사용자 경험**
+
+API 응답 시간이 3초를 넘으면 사용자가 떠난다. 락 타임아웃 5초 + 비즈니스 로직 1초 = 최악 6초 응답이다. 선착순 같은 빠른 응답이 필요한 경우 **1~2초**가 적절하다.
+
+**3. 재시도 전략과의 조합**
+
+```
+타임아웃 3초 × 재시도 3회 = 최대 9초
+타임아웃 1초 × 재시도 3회 = 최대 3초  ← 더 나은 UX
+```
+
+타임아웃을 짧게 잡고 재시도 횟수로 보완하는 게 보통 더 낫다. 빠르게 실패하고 빠르게 재시도하는 편이 오래 기다리는 것보다 성공 확률도 높다.
+
+> 한 줄 요약: **선착순 시스템이면 1~3초, 일반 서비스면 3~5초, 배치면 30~60초.**
 
 ### 4.3 재시도 로직
 

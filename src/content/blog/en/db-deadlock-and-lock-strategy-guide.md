@@ -382,20 +382,60 @@ public void transfer(Long fromId, Long toId, int amount) {
 Don't wait forever. Set a timeout.
 
 ```sql
--- MySQL: give up after 5 seconds
-SET innodb_lock_wait_timeout = 5;
+-- MySQL: give up after 3 seconds
+SET innodb_lock_wait_timeout = 3;
 
--- PostgreSQL: give up after 5 seconds
-SET lock_timeout = '5s';
+-- PostgreSQL: give up after 3 seconds
+SET lock_timeout = '3s';
 ```
 
 ```java
 // Spring Boot JPA hint
-@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
 @Lock(LockModeType.PESSIMISTIC_WRITE)
 @Query("SELECT p FROM Product p WHERE p.id = :id")
 Product findByIdForUpdate(@Param("id") Long id);
 ```
+
+#### How to Determine the Timeout
+
+DB defaults are usually too long. MySQL is 50 seconds, PostgreSQL is unlimited. **"2-3x the normal processing time"** is the general guideline.
+
+| Scenario | Normal Processing | Recommended Timeout | Why |
+|----------|------------------|-------------------|-----|
+| Stock deduction (simple) | ~50ms | **1-3s** | Short transaction, long waits waste connections |
+| Order creation (complex) | ~200ms | **3-5s** | Multiple tables, some headroom |
+| Payment (external API) | ~2s | **5-10s** | Account for API latency |
+| Batch/settlement | ~10s | **30-60s** | Bulk processing, long transactions acceptable |
+
+Three key factors when deciding:
+
+**1. Relationship with Connection Pool Size**
+
+```
+HikariCP maxPoolSize: 10
+Lock timeout: 30s
+
+→ Worst case: all 10 connections waiting 30s each
+→ 300s (5 min) unable to process other requests 💀
+```
+
+Longer timeouts increase connection exhaustion risk. **Small connection pool = short timeout.**
+
+**2. User Experience**
+
+Users leave when API response exceeds 3 seconds. Lock timeout 5s + business logic 1s = worst case 6s response. For FCFS systems needing fast responses, **1-2 seconds** is appropriate.
+
+**3. Combination with Retry Strategy**
+
+```
+3s timeout × 3 retries = 9s max
+1s timeout × 3 retries = 3s max  ← better UX
+```
+
+Short timeout + more retries is usually better than long waits. Failing fast and retrying quickly has a higher success rate than waiting long.
+
+> TL;DR: **FCFS systems: 1-3s, general services: 3-5s, batch jobs: 30-60s.**
 
 ### 4.3 Retry Logic
 
