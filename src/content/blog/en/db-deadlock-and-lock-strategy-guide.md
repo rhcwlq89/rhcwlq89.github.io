@@ -153,7 +153,40 @@ A simple read-then-write pattern causes deadlocks. **Concurrency drops dramatica
 
 #### PostgreSQL: SSI Is Different
 
-PostgreSQL implements Serializable as SSI (Serializable Snapshot Isolation). It's conflict-detection based, not lock-based, so deadlocks are rare. Instead, you get **serialization failures**:
+MySQL's Serializable places **shared locks on every SELECT** to guarantee serializability. Even reads acquire locks, so concurrency drops drastically and deadlocks are frequent (as shown above).
+
+PostgreSQL takes a completely different approach. It uses **SSI (Serializable Snapshot Isolation)** — instead of locking, it lets transactions execute and detects conflicts at commit time.
+
+**How it works:**
+
+1. Each transaction **reads from a snapshot** (no locks, same as MVCC)
+2. PostgreSQL **tracks "who read what and who wrote what"**
+3. At commit time, it checks: **"Would the result be the same if these transactions ran sequentially?"**
+4. If the result could differ → one transaction gets rolled back
+
+```
+[MySQL Serializable]
+TX1: SELECT → shared lock 🔒 → TX2 waits ⏳ → TX1 done → TX2 executes
+→ Serialized via locks (slow, deadlock risk)
+
+[PostgreSQL SSI]
+TX1: SELECT → snapshot read (no lock)
+TX2: SELECT → snapshot read (no lock, runs concurrently)
+TX1: COMMIT → OK
+TX2: COMMIT → conflict detected → rollback!
+→ Serialized via conflict detection (fast, no deadlocks, but needs retry)
+```
+
+**MySQL vs PostgreSQL:**
+
+| Aspect | MySQL (lock-based) | PostgreSQL (SSI) |
+|--------|-------------------|-----------------|
+| On read | Shared lock → other TX waits to write | No lock → concurrent execution |
+| Conflict resolution | Deadlock → DB rolls back one | Serialization failure → rolls back one |
+| Concurrency | Low (even reads wait) | High (reads run concurrently) |
+| Error | `Deadlock found` | `could not serialize access` |
+
+The error you get from PostgreSQL SSI:
 
 ```
 ERROR: could not serialize access due to concurrent update

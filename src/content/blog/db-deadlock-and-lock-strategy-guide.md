@@ -152,7 +152,40 @@ SELECT balance FROM accounts WHERE id = 1 FOR SHARE;
 
 #### PostgreSQL: SSI는 다르다
 
-PostgreSQL의 Serializable은 SSI(Serializable Snapshot Isolation)로 구현되어 있다. 락 기반이 아니라 **충돌 감지 기반**이라서 데드락은 적지만, 대신 **직렬화 실패(serialization failure)** 가 발생한다:
+MySQL의 Serializable은 **모든 SELECT에 공유 락**을 걸어서 직렬성을 보장한다. 읽기만 해도 락이 걸리니 동시성이 극도로 낮아지고, 위 예시처럼 데드락이 빈번하다.
+
+PostgreSQL은 완전히 다른 접근을 한다. **SSI(Serializable Snapshot Isolation)** 라는 방식으로, 락을 걸지 않고 트랜잭션을 일단 실행한 뒤 커밋 시점에 충돌을 감지한다.
+
+**동작 원리:**
+
+1. 각 트랜잭션은 **스냅샷을 읽는다** (락 없음, MVCC와 동일)
+2. PostgreSQL이 **"누가 무엇을 읽고 무엇을 썼는지"** 를 추적한다
+3. 커밋 시점에 **"이 트랜잭션들이 순서대로 실행됐다면 같은 결과가 나왔을까?"** 를 검사한다
+4. 결과가 달라질 수 있으면 → 한쪽을 롤백시킨다
+
+```
+[MySQL Serializable]
+TX1: SELECT → 공유 락 🔒 → TX2 대기 ⏳ → TX1 완료 → TX2 실행
+→ 락으로 직렬화 (느림, 데드락 위험)
+
+[PostgreSQL SSI]
+TX1: SELECT → 스냅샷 읽기 (락 없음)
+TX2: SELECT → 스냅샷 읽기 (락 없음, 동시에 실행)
+TX1: COMMIT → OK
+TX2: COMMIT → 충돌 감지 → 롤백!
+→ 충돌 감지로 직렬화 (빠름, 데드락 없음, 대신 재시도 필요)
+```
+
+**MySQL과의 차이:**
+
+| 항목 | MySQL (락 기반) | PostgreSQL (SSI) |
+|------|---------------|-----------------|
+| 읽기 시 | 공유 락 → 다른 TX 쓰기 대기 | 락 없음 → 동시 실행 |
+| 충돌 해결 | 데드락 → DB가 한쪽 롤백 | 직렬화 실패 → 한쪽 롤백 |
+| 동시성 | 낮음 (읽기도 대기) | 높음 (읽기 동시 가능) |
+| 에러 | `Deadlock found` | `could not serialize access` |
+
+PostgreSQL SSI에서 발생하는 에러:
 
 ```
 ERROR: could not serialize access due to concurrent update
