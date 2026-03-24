@@ -67,6 +67,39 @@ Higher isolation = safer but slower. Lower isolation = faster but weird things c
 
 ---
 
+## 2.1 How Isolation Levels Are Implemented: MVCC
+
+If isolation levels define "how much to isolate," **MVCC (Multi-Version Concurrency Control) answers "how to isolate."**
+
+The core idea of MVCC is simple: **when data is modified, the old version is kept instead of being overwritten.** Readers access the old version without locks, while writers create a new version.
+
+```
+[Without MVCC (lock-based)]
+TX1: UPDATE → row locked 🔒
+TX2: SELECT → waiting for lock ⏳ (until TX1 finishes)
+→ Reads and writes block each other
+
+[With MVCC]
+TX1: UPDATE → creates new version (v2), keeps old version (v1)
+TX2: SELECT → reads v1 (no lock, executes immediately)
+→ Reads and writes don't block each other
+```
+
+MySQL (InnoDB), PostgreSQL, and Oracle all use MVCC. This enables the principle: **"reads don't block writes, and writes don't block reads."**
+
+The isolation level determines **which version gets read**:
+
+| Isolation Level | MVCC Behavior |
+|----------------|--------------|
+| Read Uncommitted | Always reads the latest version (even uncommitted) |
+| Read Committed | Latest committed version **at each query's start** |
+| Repeatable Read | Committed version **at the transaction's start** (fixed snapshot) |
+| Serializable | Varies by DB (MySQL: adds locks, PostgreSQL: SSI) |
+
+> Throughout this series, phrases like "reads from a snapshot" and "previous version in the undo log" all refer to MVCC in action.
+
+---
+
 ## 3. Concurrency Anomalies
 
 To understand isolation levels, you first need to know **"what goes wrong when isolation is insufficient?"** All examples start with **Account A balance: $10,000**.
