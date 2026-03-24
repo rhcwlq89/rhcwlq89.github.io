@@ -193,6 +193,61 @@ ERROR: could not serialize access due to concurrent update
 
 데드락은 아니지만 한쪽 트랜잭션이 롤백되므로, 재시도 로직이 반드시 필요하다.
 
+#### 참고: SSI의 충돌 감지는 어떻게 동작하나?
+
+SSI는 **rw-dependency(읽기-쓰기 의존성)** 를 추적한다. TX1이 읽은 데이터를 TX2가 수정하면 "TX1 → TX2" 의존성이 생기는데, 이걸 **rw-conflict**라고 한다.
+
+```sql
+TX1: SELECT * FROM accounts WHERE id = 1;  -- 잔액 100 읽음
+TX2: UPDATE accounts SET balance = 50 WHERE id = 1;  -- 잔액 수정
+-- → rw-conflict: TX1이 읽은 걸 TX2가 바꿈 (TX1 → TX2)
+```
+
+rw-conflict가 하나뿐이면 괜찮다. **두 트랜잭션이 서로의 읽기를 수정하는 순환 구조**가 되면 롤백한다.
+
+```
+[안전 — 한 방향]
+TX1 읽기 → TX2 쓰기
+→ TX1이 먼저 실행된 것으로 간주하면 결과 동일 → OK
+
+[위험 — 순환 (rw-antidependency cycle)]
+TX1 읽기 → TX2 쓰기
+TX2 읽기 → TX1 쓰기
+→ TX1이 먼저? TX2가 먼저? 어떤 순서로도 같은 결과 불가능 → 롤백!
+```
+
+구체적 예시:
+
+```sql
+-- accounts: Alice 잔액 100, Bob 잔액 100
+
+-- TX1
+SELECT sum(balance) FROM accounts;  -- 200 읽음
+UPDATE accounts SET balance = 50 WHERE name = 'Alice';
+
+-- TX2 (동시에)
+SELECT sum(balance) FROM accounts;  -- 200 읽음
+UPDATE accounts SET balance = 50 WHERE name = 'Bob';
+
+-- TX1 COMMIT → OK
+-- TX2 COMMIT → 직렬화 실패! 롤백!
+```
+
+왜 롤백인가?
+- TX1→TX2 순서였다면: TX1이 Alice를 50으로 바꾼 후 TX2가 sum = **150**을 읽었어야 한다
+- TX2→TX1 순서였다면: TX2가 Bob을 50으로 바꾼 후 TX1이 sum = **150**을 읽었어야 한다
+- 하지만 **둘 다 200을 읽었다** → 어떤 순서로든 재현 불가능 → 직렬화 위반
+
+PostgreSQL은 내부적으로 **SIRead Lock(predicate lock)** 이라는 가벼운 마커를 사용한다. 실제로 행을 잠그지 않고 **"이 트랜잭션이 이 범위를 읽었다"를 기록만** 한다.
+
+| 항목 | 일반 Lock | SIRead Lock |
+|------|----------|-------------|
+| 다른 TX 차단 | O (대기 발생) | **X (차단 안 함)** |
+| 역할 | 동시 접근 방지 | 읽기 범위 기록 |
+| 오버헤드 | 대기 시간 | 메모리 (추적 정보 저장) |
+
+SSI는 **낙관적 락과 비슷한 철학**이다. 일단 동시에 실행하고, 문제가 있으면 나중에 롤백한다.
+
 ---
 
 ## 3. 비관적 락 vs 낙관적 락

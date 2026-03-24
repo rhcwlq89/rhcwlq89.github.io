@@ -194,6 +194,61 @@ ERROR: could not serialize access due to concurrent update
 
 Not a deadlock, but one transaction gets rolled back — retry logic is essential.
 
+#### Reference: How Does SSI Detect Conflicts?
+
+SSI tracks **rw-dependencies (read-write dependencies)**. When TX1 reads data that TX2 then modifies, a "TX1 → TX2" dependency forms — this is called an **rw-conflict**.
+
+```sql
+TX1: SELECT * FROM accounts WHERE id = 1;  -- reads balance 100
+TX2: UPDATE accounts SET balance = 50 WHERE id = 1;  -- modifies balance
+-- → rw-conflict: TX2 modified what TX1 read (TX1 → TX2)
+```
+
+A single rw-conflict is fine. SSI triggers a rollback when **two transactions form a cycle by modifying each other's reads**.
+
+```
+[Safe — one direction]
+TX1 read → TX2 write
+→ Treat TX1 as running first → same result → OK
+
+[Dangerous — cycle (rw-antidependency cycle)]
+TX1 read → TX2 write
+TX2 read → TX1 write
+→ TX1 first? TX2 first? No ordering produces the same result → Rollback!
+```
+
+Concrete example:
+
+```sql
+-- accounts: Alice balance 100, Bob balance 100
+
+-- TX1
+SELECT sum(balance) FROM accounts;  -- reads 200
+UPDATE accounts SET balance = 50 WHERE name = 'Alice';
+
+-- TX2 (concurrently)
+SELECT sum(balance) FROM accounts;  -- reads 200
+UPDATE accounts SET balance = 50 WHERE name = 'Bob';
+
+-- TX1 COMMIT → OK
+-- TX2 COMMIT → serialization failure! Rollback!
+```
+
+Why the rollback?
+- If TX1→TX2 order: after TX1 changes Alice to 50, TX2 should have read sum = **150**
+- If TX2→TX1 order: after TX2 changes Bob to 50, TX1 should have read sum = **150**
+- But **both read 200** → no sequential ordering reproduces this → serialization violation
+
+PostgreSQL internally uses **SIRead Locks (predicate locks)** — lightweight markers that don't actually block rows. They only **record "this transaction read this range."**
+
+| Aspect | Regular Lock | SIRead Lock |
+|--------|-------------|-------------|
+| Blocks other TX | Yes (causes waiting) | **No (no blocking)** |
+| Purpose | Prevent concurrent access | Record read ranges |
+| Overhead | Wait time | Memory (tracking info) |
+
+SSI follows the **same philosophy as optimistic locking**. Let transactions run concurrently, and roll back later if there's a problem.
+
 ---
 
 ## 3. Pessimistic vs Optimistic Locking
