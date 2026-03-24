@@ -72,14 +72,35 @@ Repeatable Read holds **more locks for longer** than Read Committed. In MySQL In
 
 Gap Locks lock the **gaps between index records**. InnoDB uses them in Repeatable Read to prevent Phantom Reads.
 
+#### How Is the Gap Range Determined?
+
+Gaps are defined by **actual index values in the table**. If the products table has id = 1, 5, 10:
+
+```
+(-∞) ... [id=1] ... (2,3,4 empty) ... [id=5] ... (6,7,8,9 empty) ... [id=10] ... (+∞)
+         actual row     gap (1,5)        actual row     gap (5,10)        actual row
+```
+
+Different data means different gaps. If id = 1, 3, 10 existed, gaps would be (1,3), (3,10), etc. **Without an index**, a full table scan occurs and **the entire range gets gap-locked** — the worst case scenario.
+
+#### Example: Lock Range with BETWEEN
+
 ```sql
 -- products table: id = 1, 5, 10
 
 -- TX1: Query ids 3-7 (FOR UPDATE)
 SELECT * FROM products WHERE id BETWEEN 3 AND 7 FOR UPDATE;
--- → Locks the gap between 1-5 AND the gap between 5-10!
--- → INSERT of id=3, 4, 6, 7 is blocked
 ```
+
+InnoDB internally uses **Next-Key Locks** (record lock + gap lock before it). Here's what actually gets locked:
+
+| Target | Lock Type | Locked? | Explanation |
+|--------|----------|:---:|-------------|
+| id=1 | - | ❌ | Outside range, unaffected |
+| (1, 5) gap | Gap Lock | 🔒 | INSERT(id=2,3,4) blocked |
+| id=5 | Record Lock | 🔒 | Actual record within range |
+| (5, 10) gap | Gap Lock | 🔒 | INSERT(id=6,7,8,9) blocked |
+| id=10 | Next-Key Lock boundary | 🔒 | May be locked as scan endpoint |
 
 ```mermaid
 graph LR
@@ -90,7 +111,7 @@ graph LR
     style D fill:#ff6b6b,stroke:#333,color:#fff
 ```
 
-Non-existent rows (id=3, 4, 6, 7) get locked too, meaning **a wider range than expected gets locked, causing deadlocks**.
+Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan boundary id=10 may be locked.** A wider range than expected gets locked, increasing deadlock risk.
 
 #### Case: Gap Lock Deadlock
 

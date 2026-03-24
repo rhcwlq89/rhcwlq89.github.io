@@ -71,14 +71,35 @@ Repeatable Read는 Read Committed보다 **더 많은 락을 더 오래 잡는다
 
 Gap Lock은 인덱스 레코드 **사이의 간격(gap)** 을 잠그는 락이다. Phantom Read를 방지하기 위해 InnoDB가 Repeatable Read에서 사용한다.
 
+#### Gap의 범위는 어떻게 결정되나?
+
+Gap은 **테이블에 실제 존재하는 인덱스 값**을 기준으로 나뉜다. products 테이블에 id = 1, 5, 10이 존재한다면:
+
+```
+(-∞) ... [id=1] ... (2,3,4 비어있음) ... [id=5] ... (6,7,8,9 비어있음) ... [id=10] ... (+∞)
+         실제 행        gap (1,5)            실제 행        gap (5,10)            실제 행
+```
+
+테이블 데이터가 달라지면 gap도 달라진다. id = 1, 3, 10이 있었다면 gap은 (1,3), (3,10), ...이 된다. **인덱스가 없으면** 테이블 풀스캔이 되어 **전체 범위에 gap lock이 걸린다** — 최악의 상황이다.
+
+#### 예시: BETWEEN 조건의 락 범위
+
 ```sql
 -- products 테이블: id = 1, 5, 10이 존재
 
 -- TX1: id가 3~7 사이인 행을 조회 (FOR UPDATE)
 SELECT * FROM products WHERE id BETWEEN 3 AND 7 FOR UPDATE;
--- → id 1~5 사이의 gap, id 5~10 사이의 gap 모두 잠금!
--- → id=3, 4, 6, 7에 INSERT 불가능
 ```
+
+InnoDB는 내부적으로 **Next-Key Lock**(레코드 락 + 그 앞의 gap lock)을 사용한다. 실제로 걸리는 락을 정리하면:
+
+| 대상 | 락 종류 | 잠김? | 설명 |
+|------|--------|:---:|------|
+| id=1 | - | ❌ | 범위 밖, 영향 없음 |
+| (1, 5) gap | Gap Lock | 🔒 | INSERT(id=2,3,4) 차단 |
+| id=5 | Record Lock | 🔒 | 범위 안의 실제 레코드 |
+| (5, 10) gap | Gap Lock | 🔒 | INSERT(id=6,7,8,9) 차단 |
+| id=10 | Next-Key Lock 경계 | 🔒 | 스캔 끝점으로 잠길 수 있음 |
 
 ```mermaid
 graph LR
@@ -89,7 +110,7 @@ graph LR
     style D fill:#ff6b6b,stroke:#333,color:#fff
 ```
 
-실제로 존재하지 않는 행(id=3, 4, 6, 7)까지 잠기기 때문에, **예상보다 넓은 범위가 잠겨서 데드락이 발생**한다.
+핵심: **존재하지 않는 행(id=3, 4, 6, 7)까지 잠기고, 스캔 경계인 id=10까지 잠길 수 있다.** 예상보다 넓은 범위가 잠기기 때문에 데드락 위험이 높아진다.
 
 #### 케이스: Gap Lock으로 인한 데드락
 
