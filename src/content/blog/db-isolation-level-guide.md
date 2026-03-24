@@ -483,7 +483,41 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
 > 그러면 `@Transactional(isolation = ...)`은 언제 쓸까? 격리 수준을 명시적으로 변경하는 경우는 **금융 정산처럼 모든 SELECT까지 엄격하게 제어해야 하는 극단적인 경우** 정도다. 일반 웹 서비스에서는 거의 쓸 일이 없다.
 
-### 7.5 격리 수준 설정 문법 (참고용)
+### 7.5 FOR UPDATE 락과 일반 SELECT의 관계
+
+`FOR UPDATE`로 행을 잠갔을 때, **다른 트랜잭션의 일반 SELECT는 어떻게 되는 걸까?**
+
+예를 들어 TX1이 상품 1번에 `FOR UPDATE` 락을 건 상태에서, TX2가 `COUNT(*)`를 실행하면?
+
+```sql
+-- TX1
+SELECT * FROM products WHERE id = 1 FOR UPDATE;  -- 행 락 🔒
+
+-- TX2 (동시에)
+SELECT COUNT(*) FROM products WHERE status = 'ON_SALE';  -- id=1 포함
+```
+
+**결과: TX2는 대기 없이 바로 실행된다.**
+
+InnoDB는 MVCC(Multi-Version Concurrency Control)를 사용하기 때문에, 일반 SELECT는 **스냅샷(undo log의 이전 버전)을 읽는다.** FOR UPDATE 락과 충돌하지 않는다.
+
+그렇다면 COUNT에도 `FOR UPDATE`를 붙이면?
+
+```sql
+-- TX2
+SELECT COUNT(*) FROM products WHERE status = 'ON_SALE' FOR UPDATE;
+```
+
+이 경우 WHERE 조건에 해당하는 **모든 행에 배타 락**을 걸려고 시도한다. TX1이 잡고 있는 행이 포함되면 **그 행의 락이 풀릴 때까지 대기**한다.
+
+| SELECT 유형 | FOR UPDATE 락 걸린 행 만나면 | 이유 |
+|------------|-------------------------|------|
+| `SELECT COUNT(*)` | 대기 없음, 바로 실행 | MVCC 스냅샷 읽기 |
+| `SELECT COUNT(*) FOR UPDATE` | 락 해제까지 대기 | 모든 해당 행에 배타 락 시도 |
+
+> 실무에서 COUNT는 거의 항상 일반 SELECT이므로 FOR UPDATE 락에 영향받지 않는다. 선착순 이벤트 중에 "현재 남은 재고 수"를 조회하는 API가 느려질 걱정은 안 해도 된다.
+
+### 7.6 격리 수준 설정 문법 (참고용)
 
 쓸 일은 거의 없지만, 문법은 알아두면 좋다:
 
@@ -503,7 +537,7 @@ public void outer() {
 }
 ```
 
-### 7.6 실무 요약
+### 7.7 실무 요약
 
 | 상황 | 코드 | 격리 수준 변경? |
 |------|------|:---:|

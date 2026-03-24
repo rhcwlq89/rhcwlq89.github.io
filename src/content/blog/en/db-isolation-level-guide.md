@@ -480,7 +480,41 @@ Isolation levels only affect **regular SELECTs without locks**. The moment you u
 
 > So when would you use `@Transactional(isolation = ...)`? Only in **extreme cases like financial settlements where even every SELECT needs strict control.** In typical web services, you'll almost never need it.
 
-### 7.5 Isolation Level Syntax (Reference)
+### 7.5 FOR UPDATE Locks and Regular SELECTs
+
+When a row is locked with `FOR UPDATE`, **what happens to regular SELECTs from other transactions?**
+
+For example, TX1 locks product #1 with `FOR UPDATE`, and TX2 runs `COUNT(*)`:
+
+```sql
+-- TX1
+SELECT * FROM products WHERE id = 1 FOR UPDATE;  -- row locked 🔒
+
+-- TX2 (simultaneously)
+SELECT COUNT(*) FROM products WHERE status = 'ON_SALE';  -- includes id=1
+```
+
+**Result: TX2 executes immediately with no waiting.**
+
+InnoDB uses MVCC (Multi-Version Concurrency Control), so regular SELECTs **read from a snapshot (previous version in the undo log).** They don't conflict with FOR UPDATE locks.
+
+But what if you add `FOR UPDATE` to the COUNT?
+
+```sql
+-- TX2
+SELECT COUNT(*) FROM products WHERE status = 'ON_SALE' FOR UPDATE;
+```
+
+Now it tries to place an **exclusive lock on every matching row.** If any of those rows are locked by TX1, it **waits until that lock is released.**
+
+| SELECT Type | When it hits a FOR UPDATE locked row | Reason |
+|------------|--------------------------------------|--------|
+| `SELECT COUNT(*)` | No wait, executes immediately | MVCC snapshot read |
+| `SELECT COUNT(*) FOR UPDATE` | Waits until lock is released | Attempts exclusive lock on all matching rows |
+
+> In practice, COUNT is almost always a regular SELECT, so it's unaffected by FOR UPDATE locks. During an FCFS event, you don't need to worry about a "check remaining stock" API slowing down.
+
+### 7.6 Isolation Level Syntax (Reference)
 
 Rarely needed, but good to know:
 
@@ -500,7 +534,7 @@ public void outer() {
 }
 ```
 
-### 7.6 Practical Summary
+### 7.7 Practical Summary
 
 | Situation | Code | Change Isolation? |
 |-----------|------|:---:|
