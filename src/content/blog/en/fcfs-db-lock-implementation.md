@@ -31,16 +31,16 @@ DB locks are the **most fundamental FCFS implementation**.
 
 Two users trying to buy the last item simultaneously:
 
-| Step | TX1 (Order A) | TX2 (Order B) | Stock |
+| Step | TX1 (Order A) | TX2 (Order B) | Actual Stock |
 |:---:|-----------|-----------|:----:|
-| 1 | `SELECT stock FROM products WHERE id = 1` → **1** | | 1 |
-| 2 | | `SELECT stock FROM products WHERE id = 1` → **1** | 1 |
-| 3 | stock > 0? yes → `UPDATE stock = 0` | | 0 |
+| 1 | `SELECT stock` → **1** (saved in app memory) | | 1 |
+| 2 | | `SELECT stock` → **1** (saved in app memory) | 1 |
+| 3 | App checks 1 > 0 → `UPDATE stock = stock - 1` | | 0 |
 | 4 | `COMMIT` | | 0 |
-| 5 | | stock > 0? yes (read 1) → `UPDATE stock = -1` 💀 | -1 |
+| 5 | | App checks 1 > 0 (stale read) → `UPDATE stock = stock - 1` | -1 💀 |
 | 6 | | `COMMIT` | -1 |
 
-**Stock went negative.** Both transactions read the same value (1) and deducted independently — a **Lost Update**.
+**Stock went negative.** TX2 passed the check using its stale value (1), but `UPDATE`'s `stock - 1` deducts from the DB's **current value (0)**. Result: 0 - 1 = -1. This is the **Lost Update** problem.
 
 ---
 
