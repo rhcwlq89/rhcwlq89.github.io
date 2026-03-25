@@ -78,9 +78,6 @@ public class Product {
     @Enumerated(EnumType.STRING)
     private ProductStatus status; // ON_SALE, SOLD_OUT
 
-    @Version
-    private Long version;
-
     public void decreaseStock(int quantity) {
         if (this.stockQuantity < quantity) {
             throw new RuntimeException("Insufficient stock");
