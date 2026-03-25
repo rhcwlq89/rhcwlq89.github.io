@@ -54,7 +54,7 @@ Concert ticket sales, limited-edition sneaker drops, flash deals — all systems
 
 ### 2.2 Redis Atomic Operations (DECR)
 
-**Core principle**: Redis `DECR` is a command that decrements a key's value by 1. Because Redis processes commands on a single thread, this operation executes atomically — making stock deduction safe without locks.
+**Core principle**: `DECR` is a Redis command that decrements a key's value by 1. Since Redis processes all commands on a single thread, `DECR` is inherently atomic — making stock deduction safe without any locks.
 
 | Step | Client | Server (Redis → DB) | Status |
 |:---:|--------|---------------------|:------:|
