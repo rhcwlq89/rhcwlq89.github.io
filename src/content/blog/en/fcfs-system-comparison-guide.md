@@ -27,7 +27,7 @@ Concert ticket sales, limited-edition sneaker drops, flash deals — all systems
 | **Accurate stock deduction** | Non-atomic deduction operations cause miscounts | Stock goes negative, or two requests read the same value and only one deduction registers |
 | **Duplicate prevention** | Same user submits multiple requests and wins multiple times | One person takes 10 items |
 
-> **Analogy**: A bakery selling 100 limited loaves. Without a line (no concurrency control), people scramble and grab. Without counting (deduction errors), person #101 gets a loaf too. Without checking tickets (no duplicate prevention), one person lines up multiple times.
+> **Analogy**: A bakery selling 100 limited loaves. Without a line (no concurrency control), people scramble and grab. If two clerks both see "1 left" at the same time and each hand out a loaf (deduction error), 1 loaf turns into 2 successful purchases. Without checking tickets (no duplicate prevention), one person lines up multiple times.
 
 ---
 
