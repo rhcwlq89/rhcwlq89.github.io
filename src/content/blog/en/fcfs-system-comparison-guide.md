@@ -167,15 +167,15 @@ Redis can execute Lua scripts internally via the `EVAL` command. Every command i
 
 ### Decision Flow
 
-| Step | Question | Answer → Direction |
-|:---:|---------|-------------------|
-| 1 | How many concurrent users? | A few dozen → **DB pessimistic lock** is enough |
-| 2 | Can you add infrastructure (Redis)? | No → **DB pessimistic lock** |
-| 3 | Is immediate response required? | Yes → **Redis DECR** or **Redis + Lua** |
-| 4 | Want duplicate prevention at Redis level? | Yes → **Redis + Lua** |
-| 5 | Tens of thousands of users, async response OK? | Yes → **Message queue** |
-| 6 | Is fair waiting order important? | Yes → **Waiting queue** |
-| 7 | Need to physically separate purchase traffic? | Yes → **Token issuance** |
+| Step | Question | Yes | No |
+|:---:|---------|-----|-----|
+| 1 | Are concurrent users a few dozen or less? | → **DB pessimistic lock** (done) | → Go to 2 |
+| 2 | Can you add infrastructure (Redis)? | → Go to 3 | → **DB pessimistic lock** (done) |
+| 3 | Is immediate response required? | → Go to 4 | → Go to 5 |
+| 4 | Need duplicate prevention at the Redis level? | → **Redis + Lua** (done) | → **Redis DECR** (done) |
+| 5 | Is fair waiting order (FCFS guarantee) important? | → **Waiting queue** (done) | → **Message queue** (done) |
+
+> **Token issuance** is not a standalone strategy — it's a supplementary layer for bot prevention or traffic separation, combined with the strategies above. Example: waiting queue + token, Redis + Lua + token.
 
 ### Real Systems Combine Strategies
 
