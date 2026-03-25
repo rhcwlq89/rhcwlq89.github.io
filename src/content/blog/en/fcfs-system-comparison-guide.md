@@ -72,7 +72,9 @@ Concert ticket sales, limited-edition sneaker drops, flash deals — all systems
 
 ### 2.3 Redis + Lua Script
 
-**Core principle**: Bundle stock check and deduction into a single Lua script that executes atomically in Redis. Unlike plain DECR, **"check → deduct" runs as one unit**, eliminating negative stock entirely.
+Redis can execute Lua scripts internally via the `EVAL` command. Every command inside a script is processed as a single atomic unit, so no other request can intervene mid-execution.
+
+**Core principle**: Bundle stock check and deduction into a single Lua script that executes atomically. Unlike plain DECR, **"check → deduct" runs as one unit**, eliminating negative stock entirely.
 
 | Step | Client | Server (Redis → DB) | Status |
 |:---:|--------|---------------------|:------:|
@@ -86,7 +88,7 @@ Concert ticket sales, limited-edition sneaker drops, flash deals — all systems
 | Negative stock is impossible | Data loss risk on Redis failure |
 | No rollback logic needed (check-then-deduct) | Long scripts can block Redis |
 
-**Best for**: High traffic + want to handle duplicate prevention at the Redis level
+**Best for**: Thousands to tens of thousands of concurrent users, where stock check + deduction + duplicate prevention all need to happen at the Redis level without hitting the DB. Ideal when plain DECR's rollback logic becomes a burden, or when you don't want to handle duplicate checks in a separate layer.
 
 ### 2.4 Message Queue (Kafka / RabbitMQ)
 
