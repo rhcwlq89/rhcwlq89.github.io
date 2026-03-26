@@ -511,22 +511,54 @@ Redis가 완전히 다운된 경우의 복구 순서:
 2. **복구 후**: DB 주문 수 기준으로 Redis 재고 재설정
 3. **검증**: 정합성 스케줄러로 불일치 확인
 
+여기서 사용하는 `CircuitBreaker`는 **Resilience4j** 라이브러리가 제공하는 것이다. Spring Boot에서 선언적으로 설정할 수 있다.
+
+```yaml
+# build.gradle
+# implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+
+# application.yml
+resilience4j:
+  circuitbreaker:
+    instances:
+      redisStock:
+        slidingWindowSize: 10           # 최근 10번의 호출을 기준으로 판단
+        failureRateThreshold: 50        # 실패율 50% 이상이면 서킷 오픈
+        waitDurationInOpenState: 30s    # 오픈 후 30초 뒤에 half-open 시도
+        permittedNumberOfCallsInHalfOpenState: 3  # half-open에서 3번 시도
+```
+
 ```java
 @Service
+@RequiredArgsConstructor
 public class StockServiceFacade {
     private final RedisLuaStockService redisService;
     private final PessimisticLockStockService dbService;
-    private final CircuitBreaker circuitBreaker;
 
+    @CircuitBreaker(name = "redisStock", fallbackMethod = "fallbackPurchase")
     public OrderResult purchase(Long productId, Long userId) {
-        if (circuitBreaker.isOpen()) {
-            // Redis 장애 시 DB 락으로 폴백
-            return dbService.decreaseStock(productId, 1);
-        }
         return redisService.tryPurchase(productId, userId);
+    }
+
+    private OrderResult fallbackPurchase(Long productId, Long userId, Exception ex) {
+        log.warn("Redis 서킷 오픈 — DB 락으로 폴백. 원인: {}", ex.getMessage());
+        return dbService.decreaseStock(productId, 1);
     }
 }
 ```
+
+**서킷 브레이커의 3가지 상태:**
+
+```
+CLOSED (정상)
+  ↓ 실패율이 임계치 초과
+OPEN (차단) → Redis 호출 안 하고 바로 fallback 실행
+  ↓ waitDuration 경과
+HALF_OPEN (시험) → 몇 건만 Redis로 보내서 복구 확인
+  ↓ 성공하면 → CLOSED / 실패하면 → OPEN
+```
+
+> Resilience4j는 이 글의 서킷 브레이커 외에도, [j.u.c 실무 패턴](/blog/java-concurrent-practical-patterns/) 6절에서 다룬 `@Bulkhead`(동시 접근 수 제한)도 함께 제공한다. 하나의 라이브러리로 서킷 브레이커, 벌크헤드, 리트라이, 레이트 리미터를 조합할 수 있다.
 
 ---
 

@@ -509,22 +509,54 @@ Recovery sequence when Redis goes completely down:
 2. **After recovery**: Reset Redis stock based on DB order count
 3. **Verification**: Consistency scheduler checks for mismatches
 
+The `CircuitBreaker` used here comes from the **Resilience4j** library. It can be configured declaratively in Spring Boot.
+
+```yaml
+# build.gradle
+# implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+
+# application.yml
+resilience4j:
+  circuitbreaker:
+    instances:
+      redisStock:
+        slidingWindowSize: 10           # judge based on last 10 calls
+        failureRateThreshold: 50        # open circuit if failure rate >= 50%
+        waitDurationInOpenState: 30s    # try half-open after 30s
+        permittedNumberOfCallsInHalfOpenState: 3  # allow 3 trial calls in half-open
+```
+
 ```java
 @Service
+@RequiredArgsConstructor
 public class StockServiceFacade {
     private final RedisLuaStockService redisService;
     private final PessimisticLockStockService dbService;
-    private final CircuitBreaker circuitBreaker;
 
+    @CircuitBreaker(name = "redisStock", fallbackMethod = "fallbackPurchase")
     public OrderResult purchase(Long productId, Long userId) {
-        if (circuitBreaker.isOpen()) {
-            // Redis down → fall back to DB locks
-            return dbService.decreaseStock(productId, 1);
-        }
         return redisService.tryPurchase(productId, userId);
+    }
+
+    private OrderResult fallbackPurchase(Long productId, Long userId, Exception ex) {
+        log.warn("Redis circuit open — falling back to DB locks. Cause: {}", ex.getMessage());
+        return dbService.decreaseStock(productId, 1);
     }
 }
 ```
+
+**The circuit breaker's 3 states:**
+
+```
+CLOSED (normal)
+  ↓ failure rate exceeds threshold
+OPEN (blocked) → skips Redis, executes fallback immediately
+  ↓ waitDuration elapses
+HALF_OPEN (trial) → sends a few requests to Redis to check recovery
+  ↓ success → CLOSED / failure → OPEN
+```
+
+> Resilience4j provides more than just circuit breakers — it also offers `@Bulkhead` (concurrency limiting) as covered in [j.u.c Practical Patterns](/blog/en/java-concurrent-practical-patterns/) Section 6. One library gives you circuit breakers, bulkheads, retries, and rate limiters that compose together.
 
 ---
 
