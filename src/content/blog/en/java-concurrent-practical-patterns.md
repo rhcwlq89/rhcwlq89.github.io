@@ -45,6 +45,28 @@ List<Product> recommends = recommendFuture.get(3, TimeUnit.SECONDS);
 | Forgetting `executor.shutdown()` | Threads stay alive, app won't terminate | Always shutdown in `try-finally` |
 | Overusing `Executors.newCachedThreadPool()` | Traffic spike → unlimited thread creation → OOM | Use `newFixedThreadPool` or configure `ThreadPoolExecutor` directly |
 
+### Rejection Policy (RejectedExecutionHandler)
+
+When all threads in the pool are busy and the work queue is also full, what happens to a new incoming task? This is decided by the **rejection policy**.
+
+| Policy | Behavior | Best For |
+|--------|----------|----------|
+| `AbortPolicy` (default) | Throws `RejectedExecutionException` | When task loss is unacceptable |
+| `CallerRunsPolicy` | The **submitting thread runs the task itself** | When tasks must not be dropped and you want natural slowdown |
+| `DiscardPolicy` | Silently drops the task (no exception) | When some loss is acceptable (e.g., log collection) |
+| `DiscardOldestPolicy` | Drops the oldest task in the queue and adds the new one | When the latest data matters more |
+
+```java
+// Rejection policy configuration example
+ThreadPoolExecutor executor = new ThreadPoolExecutor(
+    3, 10, 60L, TimeUnit.SECONDS,
+    new LinkedBlockingQueue<>(50),
+    new ThreadPoolExecutor.CallerRunsPolicy() // caller runs when pool is full
+);
+```
+
+> `CallerRunsPolicy` is the most commonly used policy in production. When the pool is overloaded, the calling thread (usually the request thread) runs the task directly, creating natural **backpressure** — incoming requests slow down, preventing the system from spiraling out of control.
+
 ### In Spring Boot?
 
 In Spring Boot, you don't create `ExecutorService` directly. Instead, register a `ThreadPoolTaskExecutor` as a bean and delegate async execution with `@Async`.
@@ -80,7 +102,7 @@ public class ProductService {
 **Why is the Spring approach better?**
 - Spring manages thread pool lifecycle (shutdown) — no manual `try-finally` needed
 - Pool size configurable externally via `application.yml`
-- Rejection policy (`RejectedExecutionHandler`) set declaratively
+- Rejection policy (`RejectedExecutionHandler`) set declaratively — uses the same pure Java classes like `CallerRunsPolicy` described above
 
 **When you still need the raw API:** In test code requiring fine-grained thread control, or batch utilities running outside the Spring context.
 

@@ -44,6 +44,28 @@ List<Product> recommends = recommendFuture.get(3, TimeUnit.SECONDS);
 | `executor.shutdown()`을 안 호출 | 스레드가 안 죽어서 앱이 종료 안 됨 | `try-finally`로 반드시 shutdown |
 | `Executors.newCachedThreadPool()` 남용 | 요청 폭증 시 스레드가 무한 생성 → OOM | `newFixedThreadPool` 또는 직접 `ThreadPoolExecutor` 생성 |
 
+### 거부 정책 (RejectedExecutionHandler)
+
+스레드 풀의 스레드가 전부 바쁘고, 대기 큐까지 꽉 찬 상태에서 새 작업이 들어오면 어떻게 할 것인가? 이것이 **거부 정책**이다.
+
+| 정책 | 동작 | 적합한 상황 |
+|------|------|-----------|
+| `AbortPolicy` (기본값) | `RejectedExecutionException` 예외 발생 | 작업 유실을 허용하지 않을 때 |
+| `CallerRunsPolicy` | 작업을 **제출한 스레드가 직접 실행** | 작업을 버리면 안 되고, 자연스럽게 속도를 늦추고 싶을 때 |
+| `DiscardPolicy` | 조용히 버림 (예외도 없음) | 로그 수집처럼 일부 유실이 괜찮을 때 |
+| `DiscardOldestPolicy` | 대기 큐에서 가장 오래된 작업을 버리고 새 작업 추가 | 최신 데이터가 더 중요할 때 |
+
+```java
+// 거부 정책 설정 예시
+ThreadPoolExecutor executor = new ThreadPoolExecutor(
+    3, 10, 60L, TimeUnit.SECONDS,
+    new LinkedBlockingQueue<>(50),
+    new ThreadPoolExecutor.CallerRunsPolicy() // 풀이 꽉 차면 호출 스레드가 직접 실행
+);
+```
+
+> `CallerRunsPolicy`는 실무에서 가장 많이 쓰이는 정책이다. 풀이 과부하되면 호출 스레드(보통 요청 스레드)가 직접 작업을 처리하게 되면서 자연스럽게 **배압(backpressure)**이 걸린다 — 새 요청 자체가 느려지므로 시스템이 무한정 밀리지 않는다.
+
 ### Spring Boot에서는?
 
 Spring Boot에서는 직접 `ExecutorService`를 생성하지 않는다. 대신 `ThreadPoolTaskExecutor`를 빈으로 등록하고, `@Async`로 비동기 실행을 위임한다.
@@ -79,7 +101,7 @@ public class ProductService {
 **왜 Spring 방식이 나은가?**
 - 스레드 풀 라이프사이클(shutdown)을 Spring이 관리 → `try-finally`로 직접 닫을 필요 없음
 - `application.yml`로 풀 크기를 외부에서 변경 가능
-- 거부 정책(`RejectedExecutionHandler`)을 선언적으로 설정
+- 거부 정책(`RejectedExecutionHandler`)을 선언적으로 설정 — 위에서 설명한 `CallerRunsPolicy` 등 순수 Java 클래스를 그대로 사용한다
 
 **그래도 원시 API가 필요한 경우:** 테스트 코드에서 정밀한 스레드 제어가 필요하거나, Spring 컨텍스트 밖에서 동작하는 배치 유틸리티를 작성할 때.
 
