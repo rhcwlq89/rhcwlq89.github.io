@@ -85,9 +85,19 @@ public class RedisDecrStockService {
 }
 ```
 
-### 2.4 문제: Race Condition
+> **왜 Lettuce가 아니라 Redisson인가?** Spring Boot의 기본 Redis 클라이언트는 Lettuce다. 단순 `GET`/`SET`/`INCR` 수준이라면 Lettuce로 충분하다. 하지만 이 시리즈에서는 **분산 락(`RLock`), 원자적 카운터(`RAtomicLong`), Lua 스크립트 실행** 등 고수준 기능이 필요하다. Redisson은 이런 기능을 Java 객체로 감싸서 제공하므로 코드가 간결해진다.
+>
+> | 항목 | Lettuce | Redisson |
+> |------|---------|----------|
+> | 레벨 | 저수준 (Redis 명령 직접 호출) | 고수준 (Java 객체로 추상화) |
+> | 분산 락 | 직접 `SET NX EX` + Lua로 구현 | `RLock` 제공 (watchdog 자동 갱신) |
+> | 원자적 카운터 | `RedisTemplate.opsForValue().increment()` | `RAtomicLong.decrementAndGet()` |
+> | Lua 스크립트 | `RedisTemplate.execute(RedisScript)` | `RScript` 또는 각 객체에 내장 |
+> | 적합한 상황 | 단순 캐시, pub/sub | 분산 락, 동시성 제어, 선착순 시스템 |
 
-DECR 방식에는 미묘한 문제가 있다.
+### 2.4 DECR 방식의 한계
+
+DECR 방식은 단순하고 빠르지만, 한 가지 한계가 있다.
 
 ```
 재고: 0
@@ -99,6 +109,8 @@ DECR 방식에는 미묘한 문제가 있다.
 **재고가 이미 0인 상태에서도 DECR이 계속 실행**된다. 값이 잠깐 음수가 되었다가 INCR로 복구되는 과정에서 불필요한 연산이 발생하고, 고트래픽 상황에서는 음수 값이 깊어질 수 있다.
 
 핵심 문제: **"확인"과 "차감"이 분리**되어 있다는 것이다. 이걸 하나의 원자적 연산으로 묶어야 한다.
+
+> **이 방식이 쓸모없는 건 아니다.** 재고가 넉넉하고 트래픽이 극단적이지 않은 상황에서는 DECR만으로도 충분히 동작한다. 음수 진입이 발생해도 INCR로 즉시 복구되고, 실제 주문은 `remaining >= 0` 체크를 통과한 경우에만 생성된다. 다만 **품절 직전 고트래픽 상황**에서 불필요한 DECR/INCR이 반복되는 것이 비효율적이므로, 이를 근본적으로 해결하기 위해 다음 절에서 Lua 스크립트를 도입한다.
 
 ---
 

@@ -81,9 +81,21 @@ public class RedisDecrStockService {
 }
 ```
 
-### 2.4 Problem: Race Condition
+> **Why Redisson over Lettuce?** Spring Boot's default Redis client is Lettuce. For simple `GET`/`SET`/`INCR` operations, Lettuce is perfectly fine. But this series requires **distributed locks (`RLock`), atomic counters (`RAtomicLong`), and Lua script execution** — high-level features that Redisson wraps into Java objects, keeping code concise.
+>
+> | Aspect | Lettuce | Redisson |
+> |--------|---------|----------|
+> | Level | Low-level (direct Redis commands) | High-level (Java object abstractions) |
+> | Distributed locks | Build yourself with `SET NX EX` + Lua | `RLock` with automatic watchdog renewal |
+> | Atomic counters | `RedisTemplate.opsForValue().increment()` | `RAtomicLong.decrementAndGet()` |
+> | Lua scripts | `RedisTemplate.execute(RedisScript)` | `RScript` or built into each object |
+> | Best for | Simple caching, pub/sub | Distributed locks, concurrency control, FCFS systems |
 
-The DECR approach has a subtle issue.
+### 2.4 DECR Approach Limitations
+
+The DECR approach is simple and fast, but has one limitation.
+
+
 
 ```
 Stock: 0
@@ -95,6 +107,8 @@ User C: DECR in between → -1 ... (repeats)
 **DECR keeps executing even when stock is already 0.** The value briefly goes negative before INCR restores it, causing unnecessary operations. Under high traffic, the negative value can go deep.
 
 The core problem: **"check" and "deduct" are separate operations**. We need to combine them into a single atomic operation.
+
+> **This approach isn't useless.** When stock is plentiful and traffic isn't extreme, DECR alone works just fine. Even if the value briefly goes negative, INCR restores it immediately, and actual orders are only created when `remaining >= 0`. However, under **high traffic near sold-out**, the repeated DECR/INCR cycle is inefficient. To fundamentally solve this, the next section introduces Lua scripts.
 
 ---
 
