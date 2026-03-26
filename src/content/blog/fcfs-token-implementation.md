@@ -206,22 +206,31 @@ public void initTokenQuota(Long productId, int quota) {
 
 ## 4. 토큰 검증과 구매
 
-### 4.1 토큰 검증 서비스
+토큰 검증을 Service에서 수동으로 호출하면 컨트롤러마다 검증 코드가 반복된다. **Spring Security Filter**로 분리하면 구매 API 진입 전에 자동으로 검증이 수행되고, 서비스 코드는 비즈니스 로직에만 집중할 수 있다.
+
+### 4.1 Spring Security 토큰 검증 필터
 
 ```java
-@Service
+@Component
 @RequiredArgsConstructor
-public class TokenVerificationService {
+public class PurchaseTokenAuthFilter extends OncePerRequestFilter {
     private final RedissonClient redissonClient;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    /**
-     * 토큰 검증 + 1회 사용 보장
-     */
-    public TokenVerifyResult verify(String token) {
-        // 1. JWT 서명 검증 + 만료 확인
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     FilterChain filterChain) throws ServletException, IOException {
+
+        String token = request.getHeader("X-Purchase-Token");
+        if (token == null) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "구매 토큰이 필요합니다");
+            return;
+        }
+
+        // 1. JWT 서명 + 만료 검증
         Claims claims;
         try {
             claims = Jwts.parserBuilder()
@@ -230,69 +239,148 @@ public class TokenVerificationService {
                 .parseClaimsJws(token)
                 .getBody();
         } catch (ExpiredJwtException e) {
-            return TokenVerifyResult.expired();
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "토큰이 만료되었습니다");
+            return;
         } catch (JwtException e) {
-            return TokenVerifyResult.invalid();
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "유효하지 않은 토큰입니다");
+            return;
         }
 
-        // 2. 이미 사용된 토큰인지 확인 (Redis 블랙리스트)
+        // 2. Redis 1회 사용 보장
         String tokenId = claims.getId();
-        String usedKey = "token-used:" + tokenId;
-        RBucket<String> used = redissonClient.getBucket(usedKey);
-
-        // setIfAbsent: 없으면 set하고 true, 있으면 false → 원자적 1회 사용 보장
+        RBucket<String> used = redissonClient.getBucket("token-used:" + tokenId);
         boolean firstUse = used.setIfAbsent("1", Duration.ofMinutes(10));
         if (!firstUse) {
-            return TokenVerifyResult.alreadyUsed();
+            response.sendError(HttpServletResponse.SC_CONFLICT, "이미 사용된 토큰입니다");
+            return;
         }
 
+        // 3. 인증 정보를 SecurityContext에 저장
         Long productId = claims.get("productId", Long.class);
         Long userId = Long.parseLong(claims.getSubject());
 
-        return TokenVerifyResult.valid(productId, userId);
+        PurchaseTokenAuth auth = new PurchaseTokenAuth(userId, productId);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // 구매 API에만 필터 적용
+        return !request.getRequestURI().startsWith("/api/purchase");
     }
 }
 ```
 
-**3단계 검증:**
-1. JWT 서명 + 만료 검증 — 위변조, 만료된 토큰 차단
-2. Redis 블랙리스트 — 이미 사용된 토큰 차단
-3. `setIfAbsent` — 동시에 같은 토큰으로 요청해도 1명만 통과 (원자적)
+### 4.2 인증 객체
 
-### 4.2 구매 서비스
+```java
+public class PurchaseTokenAuth extends AbstractAuthenticationToken {
+    private final Long userId;
+    private final Long productId;
+
+    public PurchaseTokenAuth(Long userId, Long productId) {
+        super(List.of());
+        this.userId = userId;
+        this.productId = productId;
+        setAuthenticated(true);
+    }
+
+    public Long getUserId() { return userId; }
+    public Long getProductId() { return productId; }
+
+    @Override public Object getCredentials() { return null; }
+    @Override public Object getPrincipal() { return userId; }
+}
+```
+
+### 4.3 Security 설정
+
+```java
+@Configuration
+@EnableWebSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+    private final PurchaseTokenAuthFilter purchaseTokenFilter;
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        return http
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/tokens/**").permitAll()   // 토큰 발급은 공개
+                .requestMatchers("/api/purchase/**").authenticated() // 구매는 토큰 필요
+                .anyRequest().permitAll()
+            )
+            .addFilterBefore(purchaseTokenFilter, UsernamePasswordAuthenticationFilter.class)
+            .build();
+    }
+}
+```
+
+### 4.4 구매 서비스
+
+필터에서 이미 토큰 검증이 완료되었으므로, 서비스는 **비즈니스 로직에만 집중**한다.
 
 ```java
 @Service
 @RequiredArgsConstructor
 public class TokenBasedOrderService {
-    private final TokenVerificationService tokenService;
     private final RedisLuaStockService stockService;
     private final OrderRepository orderRepository;
 
     @Transactional
-    public OrderResult purchase(String token) {
-        // 1. 토큰 검증
-        TokenVerifyResult verify = tokenService.verify(token);
-        if (!verify.isValid()) {
-            return OrderResult.fromTokenError(verify.status());
-        }
+    public OrderResult purchase(Long productId, Long userId) {
+        // 토큰 검증은 이미 Security Filter에서 완료됨
+        // → 여기에 도달했다면 유효한 토큰 보유자
 
-        // 2. Redis 재고 차감
-        PurchaseResult stockResult = stockService.tryPurchase(
-            verify.productId(), verify.userId()
-        );
+        // 1. Redis 재고 차감
+        PurchaseResult stockResult = stockService.tryPurchase(productId, userId);
         if (stockResult != PurchaseResult.SUCCESS) {
             return OrderResult.soldOut();
         }
 
-        // 3. DB 주문 저장
-        Order order = Order.create(verify.productId(), verify.userId(), 1);
+        // 2. DB 주문 저장
+        Order order = Order.create(productId, userId, 1);
         orderRepository.save(order);
 
         return OrderResult.success(order.getId());
     }
 }
 ```
+
+```java
+@RestController
+@RequiredArgsConstructor
+public class PurchaseController {
+    private final TokenBasedOrderService orderService;
+
+    @PostMapping("/api/purchase")
+    public ResponseEntity<OrderResult> purchase() {
+        PurchaseTokenAuth auth = (PurchaseTokenAuth)
+            SecurityContextHolder.getContext().getAuthentication();
+
+        OrderResult result = orderService.purchase(auth.getProductId(), auth.getUserId());
+        return ResponseEntity.ok(result);
+    }
+}
+```
+
+**왜 Spring Security Filter 방식이 나은가?**
+
+| 항목 | Service에서 수동 검증 | Security Filter |
+|------|---------------------|----------------|
+| 검증 누락 위험 | 컨트롤러마다 `verify()` 호출 필요 → 실수 가능 | 필터가 자동 적용 → **누락 불가** |
+| 관심사 분리 | 서비스가 토큰 검증 + 비즈니스 로직 혼합 | 검증은 필터, 서비스는 비즈니스만 |
+| 테스트 | 서비스 테스트에 토큰 생성 로직 필요 | `@WithMockUser` 등으로 분리 테스트 가능 |
+| 확장성 | 새 엔드포인트마다 검증 추가 | URL 패턴으로 일괄 적용 |
+
+**3단계 검증은 동일하다:**
+1. JWT 서명 + 만료 검증 — 위변조, 만료된 토큰 차단
+2. Redis 블랙리스트 — 이미 사용된 토큰 차단 (`setIfAbsent`로 원자적 1회 사용 보장)
+3. `SecurityContext`에 인증 정보 저장 — 이후 컨트롤러/서비스에서 바로 사용
 
 ---
 

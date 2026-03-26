@@ -202,21 +202,30 @@ public void initTokenQuota(Long productId, int quota) {
 
 ## 4. Token Verification and Purchase
 
-### 4.1 Token Verification Service
+Manually calling token verification in the Service means repeating verification code in every controller. Separating it into a **Spring Security Filter** runs verification automatically before the purchase API, letting service code focus purely on business logic.
+
+### 4.1 Spring Security Token Verification Filter
 
 ```java
-@Service
+@Component
 @RequiredArgsConstructor
-public class TokenVerificationService {
+public class PurchaseTokenAuthFilter extends OncePerRequestFilter {
     private final RedissonClient redissonClient;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    /**
-     * Verify token + ensure single use
-     */
-    public TokenVerifyResult verify(String token) {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     FilterChain filterChain) throws ServletException, IOException {
+
+        String token = request.getHeader("X-Purchase-Token");
+        if (token == null) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Purchase token required");
+            return;
+        }
+
         // 1. JWT signature + expiration check
         Claims claims;
         try {
@@ -226,69 +235,148 @@ public class TokenVerificationService {
                 .parseClaimsJws(token)
                 .getBody();
         } catch (ExpiredJwtException e) {
-            return TokenVerifyResult.expired();
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token expired");
+            return;
         } catch (JwtException e) {
-            return TokenVerifyResult.invalid();
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
+            return;
         }
 
-        // 2. Check if token already used (Redis blacklist)
+        // 2. Redis single-use guarantee
         String tokenId = claims.getId();
-        String usedKey = "token-used:" + tokenId;
-        RBucket<String> used = redissonClient.getBucket(usedKey);
-
-        // setIfAbsent: set if missing → true, exists → false (atomic single-use)
+        RBucket<String> used = redissonClient.getBucket("token-used:" + tokenId);
         boolean firstUse = used.setIfAbsent("1", Duration.ofMinutes(10));
         if (!firstUse) {
-            return TokenVerifyResult.alreadyUsed();
+            response.sendError(HttpServletResponse.SC_CONFLICT, "Token already used");
+            return;
         }
 
+        // 3. Store auth info in SecurityContext
         Long productId = claims.get("productId", Long.class);
         Long userId = Long.parseLong(claims.getSubject());
 
-        return TokenVerifyResult.valid(productId, userId);
+        PurchaseTokenAuth auth = new PurchaseTokenAuth(userId, productId);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Only apply filter to purchase API
+        return !request.getRequestURI().startsWith("/api/purchase");
     }
 }
 ```
 
-**Three-stage verification:**
-1. JWT signature + expiration — blocks tampered and expired tokens
-2. Redis blacklist — blocks already-used tokens
-3. `setIfAbsent` — even simultaneous requests with the same token, only one passes (atomic)
+### 4.2 Authentication Object
 
-### 4.2 Purchase Service
+```java
+public class PurchaseTokenAuth extends AbstractAuthenticationToken {
+    private final Long userId;
+    private final Long productId;
+
+    public PurchaseTokenAuth(Long userId, Long productId) {
+        super(List.of());
+        this.userId = userId;
+        this.productId = productId;
+        setAuthenticated(true);
+    }
+
+    public Long getUserId() { return userId; }
+    public Long getProductId() { return productId; }
+
+    @Override public Object getCredentials() { return null; }
+    @Override public Object getPrincipal() { return userId; }
+}
+```
+
+### 4.3 Security Configuration
+
+```java
+@Configuration
+@EnableWebSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+    private final PurchaseTokenAuthFilter purchaseTokenFilter;
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        return http
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/tokens/**").permitAll()      // Token issuance is public
+                .requestMatchers("/api/purchase/**").authenticated() // Purchase requires token
+                .anyRequest().permitAll()
+            )
+            .addFilterBefore(purchaseTokenFilter, UsernamePasswordAuthenticationFilter.class)
+            .build();
+    }
+}
+```
+
+### 4.4 Purchase Service
+
+Since the filter already completed token verification, the service **focuses only on business logic**.
 
 ```java
 @Service
 @RequiredArgsConstructor
 public class TokenBasedOrderService {
-    private final TokenVerificationService tokenService;
     private final RedisLuaStockService stockService;
     private final OrderRepository orderRepository;
 
     @Transactional
-    public OrderResult purchase(String token) {
-        // 1. Verify token
-        TokenVerifyResult verify = tokenService.verify(token);
-        if (!verify.isValid()) {
-            return OrderResult.fromTokenError(verify.status());
-        }
+    public OrderResult purchase(Long productId, Long userId) {
+        // Token verification already done in Security Filter
+        // → reaching here means valid token holder
 
-        // 2. Redis stock deduction
-        PurchaseResult stockResult = stockService.tryPurchase(
-            verify.productId(), verify.userId()
-        );
+        // 1. Redis stock deduction
+        PurchaseResult stockResult = stockService.tryPurchase(productId, userId);
         if (stockResult != PurchaseResult.SUCCESS) {
             return OrderResult.soldOut();
         }
 
-        // 3. Save order to DB
-        Order order = Order.create(verify.productId(), verify.userId(), 1);
+        // 2. Save order to DB
+        Order order = Order.create(productId, userId, 1);
         orderRepository.save(order);
 
         return OrderResult.success(order.getId());
     }
 }
 ```
+
+```java
+@RestController
+@RequiredArgsConstructor
+public class PurchaseController {
+    private final TokenBasedOrderService orderService;
+
+    @PostMapping("/api/purchase")
+    public ResponseEntity<OrderResult> purchase() {
+        PurchaseTokenAuth auth = (PurchaseTokenAuth)
+            SecurityContextHolder.getContext().getAuthentication();
+
+        OrderResult result = orderService.purchase(auth.getProductId(), auth.getUserId());
+        return ResponseEntity.ok(result);
+    }
+}
+```
+
+**Why is the Spring Security Filter approach better?**
+
+| Aspect | Manual verification in Service | Security Filter |
+|--------|-------------------------------|----------------|
+| Missed verification risk | Must call `verify()` in every controller → error-prone | Filter auto-applies → **impossible to miss** |
+| Separation of concerns | Service mixes token verification + business logic | Filter handles verification, service handles business only |
+| Testing | Service tests need token generation logic | Isolated testing with `@WithMockUser` etc. |
+| Scalability | Add verification to every new endpoint | Apply to URL patterns in bulk |
+
+**The three-stage verification is the same:**
+1. JWT signature + expiration — blocks tampered and expired tokens
+2. Redis blacklist — blocks already-used tokens (`setIfAbsent` for atomic single-use guarantee)
+3. Store auth info in `SecurityContext` — immediately available in controllers/services
 
 ---
 
