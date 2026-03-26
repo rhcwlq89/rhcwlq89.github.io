@@ -356,7 +356,29 @@ public void purchase(Long productId, Long userId) {
 | Complex validation | Can validate beyond stock count | Only conditions in WHERE clause |
 | Performance | Wait time grows with traffic | Faster (shorter lock window) |
 
-For **simple stock deduction**, Atomic UPDATE is more efficient. But when you need to **"read stock → run complex business logic → then deduct"**, FOR UPDATE is necessary.
+### Is Atomic UPDATE Production-Ready?
+
+Absolutely. But **suitability depends on the situation.**
+
+**Good fit:**
+- Operations where **"check condition + change a number" is all there is** — stock deduction, like count increment, coupon quota decrement
+- No business logic needed before the deduction (no tier checks, no external API calls)
+- High traffic where FOR UPDATE's lock duration becomes a bottleneck
+
+**Not a good fit:**
+- When you need to read the current stock value and branch on it (e.g., send alert if stock drops below 5)
+- When validation spans multiple tables (e.g., check user tier → apply discount → deduct stock)
+- When you need to distinguish failure reasons — Atomic UPDATE only returns `updated == 0`, so you can't tell "out of stock" from "product is OFF_SALE"
+
+**Practical decision guide:**
+
+| Complexity | Approach |
+|------------|----------|
+| Just decrementing a number | **Atomic UPDATE** |
+| Business logic before/after deduction | **FOR UPDATE** |
+| Thousands+ concurrent users | **Redis DECR** or **Redis + Lua** |
+
+> If Atomic UPDATE can handle it, use Atomic UPDATE. If it can't, use FOR UPDATE — that's the natural production guideline.
 
 ---
 
