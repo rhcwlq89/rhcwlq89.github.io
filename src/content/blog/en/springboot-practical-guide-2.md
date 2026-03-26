@@ -577,6 +577,35 @@ fun popularProductsCache(): LoadingCache<String, List<ProductResponse>> {
 }
 ```
 
+### 6.5 Eviction Policies
+
+Cache memory is finite. When `maximumSize` is reached, the **eviction policy** determines which entries to remove.
+
+| Policy | Behavior | Best For |
+|--------|----------|----------|
+| **LRU** (Least Recently Used) | Removes the **least recently accessed** entry | Most cases (most common) |
+| **LFU** (Least Frequently Used) | Removes the **least frequently accessed** entry | When popular vs. unpopular data is clearly separated |
+| **FIFO** (First In First Out) | Removes the **oldest** entry | When access patterns are uniform |
+| **TTL-based** | Removes entries whose **expiry time** has passed | Time-sensitive data (sessions, tokens, etc.) |
+
+**Caffeine uses W-TinyLFU, a hybrid of LRU + LFU.** It considers both recency and frequency of access, resulting in higher hit rates than pure LRU.
+
+```kotlin
+Caffeine.newBuilder()
+    .maximumSize(1_000)             // Max 1000 entries — W-TinyLFU eviction when exceeded
+    .expireAfterWrite(Duration.ofMinutes(10))  // TTL 10 min — time-based eviction
+    .expireAfterAccess(Duration.ofMinutes(5))  // Evict if unused for 5 min
+    .build()
+```
+
+| Setting | Role | Tradeoff |
+|---------|------|----------|
+| `maximumSize` | Memory usage cap | Too small → low hit rate, too large → memory waste |
+| `expireAfterWrite` | Expires N min after write | Shorter → fresher data / lower hit rate |
+| `expireAfterAccess` | Expires N min after last access | Frequently used data stays cached longer |
+
+> **Redis eviction policies:** Redis determines its eviction policy via the `maxmemory-policy` setting. The default is `noeviction` (returns error when memory is full), so when using Redis as a cache, you must change it to `allkeys-lru` or `volatile-lru`.
+
 ---
 
 ## 7. Cache Invalidation Strategies

@@ -575,6 +575,35 @@ fun popularProductsCache(): LoadingCache<String, List<ProductResponse>> {
 }
 ```
 
+### 6.5 퇴거 정책 (Eviction Policy)
+
+캐시 메모리는 유한하다. `maximumSize`에 도달했을 때 **어떤 항목을 제거할지** 결정하는 것이 퇴거 정책이다.
+
+| 정책 | 동작 | 적합한 상황 |
+|------|------|-----------|
+| **LRU** (Least Recently Used) | 가장 **오래 전에 사용된** 항목 제거 | 대부분의 경우 (가장 보편적) |
+| **LFU** (Least Frequently Used) | **사용 빈도가 가장 낮은** 항목 제거 | 인기 데이터와 비인기 데이터가 명확히 구분될 때 |
+| **FIFO** (First In First Out) | **먼저 들어온** 항목 제거 | 데이터 접근 패턴이 균일할 때 |
+| **TTL 기반** | **만료 시간**이 지난 항목 제거 | 시간에 민감한 데이터 (세션, 토큰 등) |
+
+**Caffeine은 LRU + LFU를 혼합한 W-TinyLFU 알고리즘**을 사용한다. 최근 접근 빈도와 사용 시점을 모두 고려하기 때문에 단순 LRU보다 캐시 적중률이 높다.
+
+```kotlin
+Caffeine.newBuilder()
+    .maximumSize(1_000)             // 최대 1000개 — 초과 시 W-TinyLFU로 퇴거
+    .expireAfterWrite(Duration.ofMinutes(10))  // TTL 10분 — 시간 기반 퇴거
+    .expireAfterAccess(Duration.ofMinutes(5))  // 5분간 미사용 시 퇴거
+    .build()
+```
+
+| 설정 | 역할 | 트레이드오프 |
+|------|------|-----------|
+| `maximumSize` | 메모리 사용량 상한 | 너무 작으면 적중률 ↓, 너무 크면 메모리 낭비 |
+| `expireAfterWrite` | 작성 후 N분 뒤 만료 | 짧으면 최신성 ↑ / 적중률 ↓ |
+| `expireAfterAccess` | 마지막 접근 후 N분 뒤 만료 | 자주 쓰는 데이터는 오래 유지됨 |
+
+> **Redis의 퇴거 정책:** Redis는 `maxmemory-policy` 설정으로 퇴거 정책을 결정한다. 기본값은 `noeviction`(메모리 초과 시 에러 반환)이므로, 캐시 용도로 쓸 때는 반드시 `allkeys-lru` 또는 `volatile-lru`로 변경해야 한다.
+
 ---
 
 ## 7. 캐시 무효화 전략
