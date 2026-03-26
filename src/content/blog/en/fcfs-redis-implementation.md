@@ -149,36 +149,58 @@ return stock - 1  -- return remaining stock
 
 ### 3.3 Spring Boot Implementation
 
+You can write Lua scripts as inline Java strings, but readability suffers badly. **Separating into `.lua` files** is the production standard.
+
+**Step 1: Separate Lua file** — `src/main/resources/scripts/purchase.lua`
+
+```lua
+-- KEYS[1]: stock:product:{id}
+-- KEYS[2]: purchased:product:{id}
+-- ARGV[1]: userId
+
+if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then
+    return -2
+end
+
+local stock = tonumber(redis.call('GET', KEYS[1]))
+if stock == nil or stock <= 0 then
+    return -1
+end
+
+redis.call('DECR', KEYS[1])
+redis.call('SADD', KEYS[2], ARGV[1])
+return stock - 1
+```
+
+**Step 2: Load the file in Spring**
+
+```java
+@Configuration
+public class RedisScriptConfig {
+
+    @Bean
+    public RedisScript<Long> purchaseScript() {
+        return RedisScript.of(new ClassPathResource("scripts/purchase.lua"), Long.class);
+    }
+}
+```
+
+**Step 3: Use in Service**
+
 ```java
 @Service
 @RequiredArgsConstructor
 public class RedisLuaStockService {
-    private final RedissonClient redissonClient;
-
-    private static final String PURCHASE_SCRIPT =
-        "if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then " +
-        "    return -2 " +
-        "end " +
-        "local stock = tonumber(redis.call('GET', KEYS[1])) " +
-        "if stock == nil or stock <= 0 then " +
-        "    return -1 " +
-        "end " +
-        "redis.call('DECR', KEYS[1]) " +
-        "redis.call('SADD', KEYS[2], ARGV[1]) " +
-        "return stock - 1";
+    private final StringRedisTemplate redisTemplate;
+    private final RedisScript<Long> purchaseScript;
 
     public void initStock(Long productId, int quantity) {
-        RAtomicLong stock = redissonClient.getAtomicLong(stockKey(productId));
-        stock.set(quantity);
+        redisTemplate.opsForValue().set(stockKey(productId), String.valueOf(quantity));
     }
 
     public PurchaseResult tryPurchase(Long productId, Long userId) {
-        RScript script = redissonClient.getScript();
-
-        Long result = script.eval(
-            RScript.Mode.READ_WRITE,
-            PURCHASE_SCRIPT,
-            RScript.ReturnType.INTEGER,
+        Long result = redisTemplate.execute(
+            purchaseScript,
             List.of(stockKey(productId), purchasedKey(productId)),
             userId.toString()
         );
@@ -199,6 +221,12 @@ public class RedisLuaStockService {
     }
 }
 ```
+
+**Benefits of file separation:**
+- Lua syntax highlighting and linting in IDE
+- Manage as `.lua` files → escape Java string concatenation hell
+- Script-only changes show clearly in diffs
+- `RedisScript.of()` internally SHA1-hashes the script and uses `EVALSHA` — avoids sending the full script text every time, improving network efficiency
 
 ```java
 public enum PurchaseResult {

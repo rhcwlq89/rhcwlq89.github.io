@@ -151,36 +151,58 @@ return stock - 1  -- 남은 재고 반환
 
 ### 3.3 Spring Boot 구현
 
+Lua 스크립트를 Java 코드 안에 문자열로 작성할 수도 있지만, 가독성이 매우 떨어진다. **`.lua` 파일로 분리**하는 것이 실무 표준이다.
+
+**1단계: Lua 파일 분리** — `src/main/resources/scripts/purchase.lua`
+
+```lua
+-- KEYS[1]: stock:product:{id}
+-- KEYS[2]: purchased:product:{id}
+-- ARGV[1]: userId
+
+if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then
+    return -2
+end
+
+local stock = tonumber(redis.call('GET', KEYS[1]))
+if stock == nil or stock <= 0 then
+    return -1
+end
+
+redis.call('DECR', KEYS[1])
+redis.call('SADD', KEYS[2], ARGV[1])
+return stock - 1
+```
+
+**2단계: Spring에서 파일 로드**
+
+```java
+@Configuration
+public class RedisScriptConfig {
+
+    @Bean
+    public RedisScript<Long> purchaseScript() {
+        return RedisScript.of(new ClassPathResource("scripts/purchase.lua"), Long.class);
+    }
+}
+```
+
+**3단계: Service에서 사용**
+
 ```java
 @Service
 @RequiredArgsConstructor
 public class RedisLuaStockService {
-    private final RedissonClient redissonClient;
-
-    private static final String PURCHASE_SCRIPT =
-        "if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then " +
-        "    return -2 " +
-        "end " +
-        "local stock = tonumber(redis.call('GET', KEYS[1])) " +
-        "if stock == nil or stock <= 0 then " +
-        "    return -1 " +
-        "end " +
-        "redis.call('DECR', KEYS[1]) " +
-        "redis.call('SADD', KEYS[2], ARGV[1]) " +
-        "return stock - 1";
+    private final StringRedisTemplate redisTemplate;
+    private final RedisScript<Long> purchaseScript;
 
     public void initStock(Long productId, int quantity) {
-        RAtomicLong stock = redissonClient.getAtomicLong(stockKey(productId));
-        stock.set(quantity);
+        redisTemplate.opsForValue().set(stockKey(productId), String.valueOf(quantity));
     }
 
     public PurchaseResult tryPurchase(Long productId, Long userId) {
-        RScript script = redissonClient.getScript();
-
-        Long result = script.eval(
-            RScript.Mode.READ_WRITE,
-            PURCHASE_SCRIPT,
-            RScript.ReturnType.INTEGER,
+        Long result = redisTemplate.execute(
+            purchaseScript,
             List.of(stockKey(productId), purchasedKey(productId)),
             userId.toString()
         );
@@ -201,6 +223,12 @@ public class RedisLuaStockService {
     }
 }
 ```
+
+**파일 분리의 장점:**
+- Lua 문법 하이라이팅, 린트 적용 가능
+- IDE에서 `.lua` 파일로 관리 → Java 문자열 연결 지옥 탈출
+- 스크립트만 수정해도 변경 내역이 명확하게 diff에 표시됨
+- `RedisScript.of()`는 내부적으로 스크립트를 SHA1 해싱하여 `EVALSHA`로 실행 → 매번 스크립트 전문을 전송하지 않아 네트워크 효율적
 
 ```java
 public enum PurchaseResult {
