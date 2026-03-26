@@ -67,6 +67,50 @@ ThreadPoolExecutor executor = new ThreadPoolExecutor(
 
 > `CallerRunsPolicy` is the most commonly used policy in production. When the pool is overloaded, the calling thread (usually the request thread) runs the task directly, creating natural **backpressure** — incoming requests slow down, preventing the system from spiraling out of control.
 
+### How to Size the Pool
+
+There's no magic formula, but the widely accepted guideline depends on the **type of work**.
+
+| Type | Characteristics | corePoolSize Guideline |
+|------|----------------|----------------------|
+| **CPU-bound** | Computation, encryption, compression — CPU stays busy | `core count` or `core count + 1` |
+| **I/O-bound** | DB queries, API calls, file reads — mostly waiting | `core count × 2` ~ `core count × 4` |
+
+Why the difference?
+- **CPU-bound** tasks keep the CPU occupied → more threads than cores just adds context-switching overhead
+- **I/O-bound** tasks release the CPU while waiting → more threads can take turns using the CPU
+
+Most Spring Boot apps are **I/O-bound** (DB queries, external API calls), so use this as a starting point:
+
+```java
+int cpuCores = Runtime.getRuntime().availableProcessors(); // e.g., 4
+
+ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+executor.setCorePoolSize(cpuCores * 2);    // 8  — threads maintained at steady state
+executor.setMaxPoolSize(cpuCores * 4);     // 16 — max threads during traffic spikes
+executor.setQueueCapacity(100);            // work queue size
+```
+
+> These values are a **starting point, not the answer.** In production, tune them through load testing (nGrinder, k6, etc.).
+
+### How corePoolSize, maxPoolSize, and queueCapacity Interact
+
+Understanding the order in which these three values kick in is critical.
+
+```
+New task arrives
+  ↓
+Core thread available? → YES → core thread handles it
+  ↓ NO
+Room in the queue?     → YES → enqueue and wait
+  ↓ NO
+Below max pool size?   → YES → create new thread to handle it
+  ↓ NO
+Rejection policy fires (CallerRunsPolicy, etc.)
+```
+
+> **Watch out:** When core threads are busy, the pool doesn't immediately scale up to max — **the queue fills first.** Max threads are only created after the queue is completely full. Misunderstanding this order leads to "I increased maxPoolSize but no new threads are being created" confusion.
+
 ### In Spring Boot?
 
 In Spring Boot, you don't create `ExecutorService` directly. Instead, register a `ThreadPoolTaskExecutor` as a bean and delegate async execution with `@Async`.

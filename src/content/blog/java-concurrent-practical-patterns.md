@@ -66,6 +66,50 @@ ThreadPoolExecutor executor = new ThreadPoolExecutor(
 
 > `CallerRunsPolicy`는 실무에서 가장 많이 쓰이는 정책이다. 풀이 과부하되면 호출 스레드(보통 요청 스레드)가 직접 작업을 처리하게 되면서 자연스럽게 **배압(backpressure)**이 걸린다 — 새 요청 자체가 느려지므로 시스템이 무한정 밀리지 않는다.
 
+### 풀 사이즈는 어떻게 정하는가?
+
+정해진 공식은 없지만, 널리 쓰이는 가이드라인은 **작업의 유형**에 따라 나뉜다.
+
+| 유형 | 특징 | corePoolSize 가이드 |
+|------|------|-------------------|
+| **CPU 바운드** | 계산, 암호화, 압축 등 CPU를 계속 쓰는 작업 | `코어 수` 또는 `코어 수 + 1` |
+| **I/O 바운드** | DB 쿼리, API 호출, 파일 읽기 등 대기 시간이 긴 작업 | `코어 수 × 2` ~ `코어 수 × 4` |
+
+왜 이런 차이가 나는가?
+- **CPU 바운드**는 스레드가 CPU를 계속 점유한다 → 코어 수 이상 만들면 컨텍스트 스위칭만 늘어남
+- **I/O 바운드**는 스레드가 대기(waiting) 상태로 CPU를 놓는다 → 더 많은 스레드가 교대로 CPU를 활용 가능
+
+대부분의 Spring Boot 앱은 DB 조회, 외부 API 호출 등 **I/O 바운드 작업**이 대부분이므로, 다음을 출발점으로 삼는다.
+
+```java
+int cpuCores = Runtime.getRuntime().availableProcessors(); // 예: 4
+
+ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+executor.setCorePoolSize(cpuCores * 2);    // 8  — 평상시 유지되는 스레드 수
+executor.setMaxPoolSize(cpuCores * 4);     // 16 — 트래픽 급증 시 최대 스레드 수
+executor.setQueueCapacity(100);            // 대기 큐 크기
+```
+
+> 이 값은 **출발점이지 정답이 아니다.** 실제 운영에서는 부하 테스트(nGrinder, k6 등)로 조정해야 한다.
+
+### corePoolSize, maxPoolSize, queueCapacity의 동작 순서
+
+이 세 값이 어떤 순서로 작동하는지 이해하는 것이 중요하다.
+
+```
+새 작업 도착
+  ↓
+core 스레드에 여유 있음? → YES → core 스레드가 처리
+  ↓ NO
+대기 큐에 자리 있음?     → YES → 큐에 넣고 대기
+  ↓ NO
+max 스레드까지 여유 있음? → YES → 새 스레드 생성해서 처리
+  ↓ NO
+거부 정책 발동 (CallerRunsPolicy 등)
+```
+
+> **주의:** core 스레드가 바쁘면 바로 max까지 늘어나는 게 아니라, **큐가 먼저 찬다.** max 스레드는 큐까지 꽉 찬 후에야 생성된다. 이 순서를 모르면 "maxPoolSize를 늘렸는데 왜 스레드가 안 늘어나지?"라는 혼란에 빠진다.
+
 ### Spring Boot에서는?
 
 Spring Boot에서는 직접 `ExecutorService`를 생성하지 않는다. 대신 `ThreadPoolTaskExecutor`를 빈으로 등록하고, `@Async`로 비동기 실행을 위임한다.
