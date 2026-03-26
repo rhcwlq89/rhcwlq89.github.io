@@ -390,40 +390,29 @@ public class PurchaseController {
 
 ### 5.1 Rate Limiting
 
-IP/사용자 단위로 요청 횟수를 제한한다.
+Rate Limiting은 직접 구현하기보다 **검증된 도구를 사용하는 것이 실무 표준**이다.
 
-```java
-@Component
-@RequiredArgsConstructor
-public class RateLimiter {
-    private final RedissonClient redissonClient;
+| 계층 | 도구 | 특징 | 적합한 상황 |
+|------|------|------|-----------|
+| **CDN/Edge** | Cloudflare, AWS WAF | 앱 서버 도달 전에 차단 | DDoS, 봇 대량 공격 |
+| **API Gateway** | Spring Cloud Gateway, Kong | 라우팅 + Rate Limiting 통합 | MSA 환경, 서비스 앞단 |
+| **애플리케이션** | Resilience4j `@RateLimiter` | 코드 레벨 선언적 제어 | 특정 API 단위 세밀한 제어 |
 
-    /**
-     * 슬라이딩 윈도우 방식: 10초 내 3회까지 허용
-     */
-    public boolean isAllowed(String key, int maxRequests, Duration window) {
-        String rateLimitKey = "rate:" + key;
-        RScoredSortedSet<String> requests = redissonClient
-            .getScoredSortedSet(rateLimitKey);
+**실무에서는 이들을 조합**한다. Cloudflare가 IP 기반 대량 공격을 막고, 애플리케이션에서 사용자 단위의 세밀한 제어를 수행한다.
 
-        long now = System.currentTimeMillis();
-        long windowStart = now - window.toMillis();
+#### Resilience4j @RateLimiter
 
-        // 윈도우 밖의 요청 제거
-        requests.removeRangeByScore(0, true, windowStart, true);
+이 시리즈에서 이미 사용 중인 Resilience4j로 Rate Limiting도 처리할 수 있다.
 
-        // 현재 윈도우 내 요청 수 확인
-        if (requests.size() >= maxRequests) {
-            return false;
-        }
-
-        // 현재 요청 기록
-        requests.add(now, UUID.randomUUID().toString());
-        requests.expire(window.plusSeconds(1));
-
-        return true;
-    }
-}
+```yaml
+# application.yml
+resilience4j:
+  ratelimiter:
+    instances:
+      tokenIssue:
+        limitForPeriod: 3           # 주기당 허용 요청 수
+        limitRefreshPeriod: 10s     # 주기 (10초마다 3회 리셋)
+        timeoutDuration: 0s         # 대기 없이 즉시 거부
 ```
 
 ```java
@@ -431,28 +420,28 @@ public class RateLimiter {
 @RequiredArgsConstructor
 public class TokenController {
     private final PurchaseTokenService tokenService;
-    private final RateLimiter rateLimiter;
 
     @PostMapping("/api/tokens/issue")
+    @RateLimiter(name = "tokenIssue", fallbackMethod = "rateLimitFallback")
     public ResponseEntity<?> issueToken(
             @RequestParam Long productId,
-            @AuthenticationPrincipal UserDetails user,
-            HttpServletRequest request) {
-
-        // IP + 사용자 ID 기반 Rate Limiting
-        String rateLimitKey = request.getRemoteAddr() + ":" + user.getUsername();
-        if (!rateLimiter.isAllowed(rateLimitKey, 3, Duration.ofSeconds(10))) {
-            return ResponseEntity.status(429)
-                .body("요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
-        }
+            @AuthenticationPrincipal UserDetails user) {
 
         TokenIssueResult result = tokenService.issueToken(
             productId, Long.parseLong(user.getUsername())
         );
         return ResponseEntity.ok(result);
     }
+
+    private ResponseEntity<?> rateLimitFallback(Long productId,
+            UserDetails user, RequestNotPermitted ex) {
+        return ResponseEntity.status(429)
+            .body("요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
+    }
 }
 ```
+
+> **주의:** Resilience4j `@RateLimiter`는 기본적으로 **인스턴스(JVM) 단위**로 동작한다. Pod가 여러 개인 환경에서 사용자별 글로벌 Rate Limiting이 필요하면, Spring Cloud Gateway의 `RequestRateLimiter` + Redis 조합이나 Cloudflare 등 외부 도구를 사용해야 한다.
 
 ### 5.2 CAPTCHA 조합
 
@@ -487,11 +476,12 @@ public ResponseEntity<?> issueToken(
 
 | 계층 | 방어 수단 | 차단 대상 |
 |------|----------|----------|
-| 1 | CAPTCHA | 자동화 스크립트 |
-| 2 | Rate Limiting | 고속 반복 요청 |
-| 3 | 중복 발급 방지 (Lua) | 1인 다중 토큰 |
-| 4 | JWT 서명 | 토큰 위조 |
-| 5 | 1회 사용 (Redis) | 토큰 재사용 |
+| 1 | Cloudflare / WAF | DDoS, IP 기반 대량 공격 |
+| 2 | CAPTCHA | 자동화 스크립트 |
+| 3 | Rate Limiting (Resilience4j) | 고속 반복 요청 |
+| 4 | 중복 발급 방지 (Lua) | 1인 다중 토큰 |
+| 5 | JWT 서명 | 토큰 위조 |
+| 6 | 1회 사용 (Redis) | 토큰 재사용 |
 
 ---
 

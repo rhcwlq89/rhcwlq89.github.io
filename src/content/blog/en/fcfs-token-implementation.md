@@ -386,40 +386,29 @@ The biggest enemy of FCFS systems is **bots**. Automated scripts calling the tok
 
 ### 5.1 Rate Limiting
 
-Limit request frequency per IP/user.
+In practice, **use proven tools rather than building rate limiting from scratch**.
 
-```java
-@Component
-@RequiredArgsConstructor
-public class RateLimiter {
-    private final RedissonClient redissonClient;
+| Layer | Tool | Characteristics | Best For |
+|-------|------|----------------|----------|
+| **CDN/Edge** | Cloudflare, AWS WAF | Blocks before reaching app server | DDoS, mass bot attacks |
+| **API Gateway** | Spring Cloud Gateway, Kong | Routing + Rate Limiting integrated | MSA environments, service frontdoor |
+| **Application** | Resilience4j `@RateLimiter` | Code-level declarative control | Fine-grained per-API control |
 
-    /**
-     * Sliding window: max 3 requests per 10 seconds
-     */
-    public boolean isAllowed(String key, int maxRequests, Duration window) {
-        String rateLimitKey = "rate:" + key;
-        RScoredSortedSet<String> requests = redissonClient
-            .getScoredSortedSet(rateLimitKey);
+**In production, combine these layers.** Cloudflare handles IP-based mass attacks, while the application performs fine-grained per-user control.
 
-        long now = System.currentTimeMillis();
-        long windowStart = now - window.toMillis();
+#### Resilience4j @RateLimiter
 
-        // Remove requests outside the window
-        requests.removeRangeByScore(0, true, windowStart, true);
+Since this series already uses Resilience4j, it can handle Rate Limiting too.
 
-        // Check request count in current window
-        if (requests.size() >= maxRequests) {
-            return false;
-        }
-
-        // Record current request
-        requests.add(now, UUID.randomUUID().toString());
-        requests.expire(window.plusSeconds(1));
-
-        return true;
-    }
-}
+```yaml
+# application.yml
+resilience4j:
+  ratelimiter:
+    instances:
+      tokenIssue:
+        limitForPeriod: 3           # allowed requests per period
+        limitRefreshPeriod: 10s     # period (resets every 10 seconds)
+        timeoutDuration: 0s         # reject immediately, no waiting
 ```
 
 ```java
@@ -427,28 +416,28 @@ public class RateLimiter {
 @RequiredArgsConstructor
 public class TokenController {
     private final PurchaseTokenService tokenService;
-    private final RateLimiter rateLimiter;
 
     @PostMapping("/api/tokens/issue")
+    @RateLimiter(name = "tokenIssue", fallbackMethod = "rateLimitFallback")
     public ResponseEntity<?> issueToken(
             @RequestParam Long productId,
-            @AuthenticationPrincipal UserDetails user,
-            HttpServletRequest request) {
-
-        // Rate limit by IP + user ID
-        String rateLimitKey = request.getRemoteAddr() + ":" + user.getUsername();
-        if (!rateLimiter.isAllowed(rateLimitKey, 3, Duration.ofSeconds(10))) {
-            return ResponseEntity.status(429)
-                .body("Too many requests. Please try again shortly.");
-        }
+            @AuthenticationPrincipal UserDetails user) {
 
         TokenIssueResult result = tokenService.issueToken(
             productId, Long.parseLong(user.getUsername())
         );
         return ResponseEntity.ok(result);
     }
+
+    private ResponseEntity<?> rateLimitFallback(Long productId,
+            UserDetails user, RequestNotPermitted ex) {
+        return ResponseEntity.status(429)
+            .body("Too many requests. Please try again shortly.");
+    }
 }
 ```
+
+> **Note:** Resilience4j `@RateLimiter` operates at the **instance (JVM) level** by default. For per-user global Rate Limiting across multiple Pods, use Spring Cloud Gateway's `RequestRateLimiter` + Redis, or external tools like Cloudflare.
 
 ### 5.2 CAPTCHA Integration
 
@@ -483,11 +472,12 @@ public ResponseEntity<?> issueToken(
 
 | Layer | Defense | Blocks |
 |-------|---------|--------|
-| 1 | CAPTCHA | Automated scripts |
-| 2 | Rate Limiting | High-frequency repeated requests |
-| 3 | Duplicate prevention (Lua) | Multiple tokens per user |
-| 4 | JWT signature | Token forgery |
-| 5 | Single-use (Redis) | Token reuse |
+| 1 | Cloudflare / WAF | DDoS, IP-based mass attacks |
+| 2 | CAPTCHA | Automated scripts |
+| 3 | Rate Limiting (Resilience4j) | High-frequency repeated requests |
+| 4 | Duplicate prevention (Lua) | Multiple tokens per user |
+| 5 | JWT signature | Token forgery |
+| 6 | Single-use (Redis) | Token reuse |
 
 ---
 
