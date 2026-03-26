@@ -107,6 +107,19 @@ CompletableFuture
     });
 ```
 
+### Chaining Method Roles
+
+The methods above are distinguished by **whether they take input and produce output**.
+
+| Method | Input | Output | Role | In the example above |
+|--------|-------|--------|------|---------------------|
+| `supplyAsync` | None | Yes (`T`) | Starting point of the chain. Produces a value | Create order → returns `Order` |
+| `thenApplyAsync` | Yes (`T`) | Yes (`U`) | Receives previous result and **transforms** it | `Order` → payment → returns `Payment` |
+| `thenAcceptAsync` | Yes (`T`) | None (`void`) | Receives previous result and **consumes** it (no return) | `Payment` → send notification |
+| `thenRunAsync` | None | None (`void`) | **Runs** regardless of previous result | (e.g., logging, incrementing counters) |
+
+> **What the `Async` suffix means:** `thenApply` *may* run on the **same thread** as the previous stage, while `thenApplyAsync` is guaranteed to run on a **separate thread** (ForkJoinPool or a specified Executor). For tasks involving I/O, the `Async` variant is the safer choice.
+
 ### Running Multiple Tasks and Combining Results
 
 ```java
