@@ -484,6 +484,8 @@ public class ProductService {
 
 **When you still need `ConcurrentHashMap`:** In-request memoization, `private` methods where cache annotations don't work, or cache keys with complex dynamic structures.
 
+> If you need to share cache across multiple instances, or want more sophisticated TTL/eviction strategies, consider using **Redis as a distributed cache**. For practical strategies like the Cache-Aside pattern and cache stampede prevention, see [Spring Boot Practical Guide Part 2: Caching Strategies and Redis](/blog/en/springboot-practical-guide-2/).
+
 ---
 
 ## 5. BlockingQueue — Producer-Consumer Pattern

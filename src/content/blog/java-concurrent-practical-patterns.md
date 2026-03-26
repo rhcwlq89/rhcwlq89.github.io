@@ -483,6 +483,8 @@ public class ProductService {
 
 **그래도 `ConcurrentHashMap`이 필요한 경우:** 한 요청 안에서의 메모이제이션, 캐시 애노테이션이 동작하지 않는 `private` 메서드, 또는 캐시 키가 복잡한 동적 구조일 때.
 
+> 여러 인스턴스에서 캐시를 공유해야 하거나, TTL/퇴거 정책을 더 정교하게 관리하고 싶다면 **Redis를 분산 캐시**로 사용하는 방법도 있다. Cache-Aside 패턴, 캐시 스탬피드 방지 등 실무 전략은 [스프링부트 실무 가이드 2편: 캐싱 전략과 Redis 활용](/blog/springboot-practical-guide-2/)에서 자세히 다룬다.
+
 ---
 
 ## 5. BlockingQueue — 생산자-소비자 패턴
