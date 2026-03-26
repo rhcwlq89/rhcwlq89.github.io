@@ -45,7 +45,44 @@ List<Product> recommends = recommendFuture.get(3, TimeUnit.SECONDS);
 | Forgetting `executor.shutdown()` | Threads stay alive, app won't terminate | Always shutdown in `try-finally` |
 | Overusing `Executors.newCachedThreadPool()` | Traffic spike → unlimited thread creation → OOM | Use `newFixedThreadPool` or configure `ThreadPoolExecutor` directly |
 
-> In Spring Boot, it's more common to use `@Async` + a `TaskExecutor` bean rather than creating ExecutorService directly. But the underlying mechanism is the same.
+### In Spring Boot?
+
+In Spring Boot, you don't create `ExecutorService` directly. Instead, register a `ThreadPoolTaskExecutor` as a bean and delegate async execution with `@Async`.
+
+```java
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+
+    @Bean(name = "apiExecutor")
+    public TaskExecutor apiExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(3);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("api-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+}
+
+@Service
+public class ProductService {
+
+    @Async("apiExecutor")
+    public CompletableFuture<Product> getProduct(Long id) {
+        return CompletableFuture.completedFuture(productApi.getProduct(id));
+    }
+}
+```
+
+**Why is the Spring approach better?**
+- Spring manages thread pool lifecycle (shutdown) — no manual `try-finally` needed
+- Pool size configurable externally via `application.yml`
+- Rejection policy (`RejectedExecutionHandler`) set declaratively
+
+**When you still need the raw API:** In test code requiring fine-grained thread control, or batch utilities running outside the Spring context.
 
 ---
 
@@ -92,6 +129,28 @@ CompletableFuture<ProductDetail> detailCf = productCf
 | Error handling | Wrap in try-catch | `exceptionally()`, `handle()` |
 | Combining tasks | Manual implementation | `allOf()`, `anyOf()`, `thenCombine()` |
 
+### In Spring Boot?
+
+When the `@Async` methods from Section 1 return `CompletableFuture`, all chaining works identically to pure Java.
+
+```java
+@Service
+public class ProductFacade {
+
+    private final ProductService productService;
+    private final ReviewService reviewService;
+
+    public CompletableFuture<ProductDetail> getDetail(Long id) {
+        CompletableFuture<Product> productCf = productService.getProduct(id);   // @Async
+        CompletableFuture<List<Review>> reviewCf = reviewService.getReviews(id); // @Async
+
+        return productCf.thenCombine(reviewCf, ProductDetail::new);
+    }
+}
+```
+
+**Key insight:** `@Async` only determines *which thread pool* executes the method — Spring handles that part. The returned `CompletableFuture`'s chaining API (`thenApply`, `thenCombine`, `exceptionally`) is pure Java. **The composition patterns from Section 2 apply identically in Spring Boot.**
+
 ---
 
 ## 3. CountDownLatch — Simultaneous Start / Completion Wait
@@ -135,6 +194,51 @@ assertThat(product.getStock()).isEqualTo(0);
 - `countDown()` decrements the count by 1. When it hits 0, all threads blocked on `await()` wake up.
 - **It's a one-shot tool.** Once the count reaches 0, it can't be reused. Use `CyclicBarrier` if you need reusability.
 
+### In Spring Boot?
+
+There is no Spring wrapper for CountDownLatch. In `@SpringBootTest`, **using it directly is the standard approach**.
+
+```java
+@SpringBootTest
+class PurchaseConcurrencyTest {
+
+    @Autowired
+    private PurchaseService purchaseService;
+
+    @Test
+    void concurrent_100_purchases() throws InterruptedException {
+        int threadCount = 100;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            final long userId = i;
+            executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                try {
+                    purchaseService.buy(productId, userId);
+                } finally {
+                    done.countDown();
+                }
+                return null;
+            });
+        }
+
+        ready.await();
+        start.countDown();
+        done.await();
+
+        assertThat(product.getStock()).isEqualTo(0);
+        executor.shutdown();
+    }
+}
+```
+
+**The point:** The `CountDownLatch` + `ExecutorService` combo is used as-is in Spring Boot tests. This pattern is effectively the only way to simulate "N concurrent requests hitting at the same time."
+
 ---
 
 ## 4. ConcurrentHashMap — Thread-Safe Cache
@@ -174,6 +278,46 @@ map.computeIfAbsent(key, k -> createValue(k));
 ```
 
 > Another thread can slip in between `containsKey()` and `put()`. Use ConcurrentHashMap's atomic methods (`putIfAbsent`, `computeIfAbsent`, `merge`) for true thread safety.
+
+### In Spring Boot?
+
+For local caching, Spring Cache + Caffeine is the standard approach.
+
+```java
+// build.gradle
+// implementation 'org.springframework.boot:spring-boot-starter-cache'
+// implementation 'com.github.ben-manes.caffeine:caffeine'
+
+@Configuration
+@EnableCaching
+public class CacheConfig {
+
+    @Bean
+    public CacheManager cacheManager() {
+        CaffeineCacheManager manager = new CaffeineCacheManager("products");
+        manager.setCaffeine(Caffeine.newBuilder()
+            .maximumSize(1_000)
+            .expireAfterWrite(Duration.ofMinutes(10)));
+        return manager;
+    }
+}
+
+@Service
+public class ProductService {
+
+    @Cacheable(value = "products", key = "#id")
+    public Product getProduct(String id) {
+        return productApi.fetch(id); // called only on cache miss
+    }
+}
+```
+
+**Why is Spring Cache better?**
+- TTL, max size, and eviction policies configured declaratively
+- `@CacheEvict` separates invalidation logic
+- Caffeine is built on `ConcurrentHashMap` internally, so concurrency is guaranteed
+
+**When you still need `ConcurrentHashMap`:** In-request memoization, `private` methods where cache annotations don't work, or cache keys with complex dynamic structures.
 
 ---
 
@@ -223,6 +367,48 @@ public void startConsumer() {
 | `PriorityBlockingQueue` | Priority-sorted | Processing urgent tasks first |
 | `SynchronousQueue` | No buffer, direct handoff | Used internally by `Executors.newCachedThreadPool()` |
 
+### In Spring Boot?
+
+The producer-consumer pattern can be replaced with Spring's event system.
+
+```java
+// Event definition
+public record OrderCreatedEvent(Long orderId, String userId) {}
+
+// Producer: publish event
+@Service
+public class OrderService {
+
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Transactional
+    public Order create(OrderRequest request) {
+        Order order = orderRepository.save(new Order(request));
+        eventPublisher.publishEvent(new OrderCreatedEvent(order.getId(), request.getUserId()));
+        return order;
+    }
+}
+
+// Consumer: async event listener
+@Component
+public class OrderEventListener {
+
+    @Async("apiExecutor")
+    @EventListener
+    public void handleOrderCreated(OrderCreatedEvent event) {
+        notificationService.send(event.orderId());
+        analyticsService.track(event);
+    }
+}
+```
+
+**Why is the Spring event system better?**
+- Producers and consumers don't know each other → low coupling
+- Adding `@Async` runs the handler on a separate thread → async processing
+- `@TransactionalEventListener` can execute only after transaction commit
+
+**When you still need `BlockingQueue`:** Batch processing (accumulate and flush), backpressure control, or library code that must work without a Spring context.
+
 ---
 
 ## 6. Semaphore — Limiting Concurrent Access
@@ -270,6 +456,44 @@ if (apiLimit.tryAcquire(3, TimeUnit.SECONDS)) {
 | Example | "Only 10 calls at once" | "Only 100 calls per second" |
 | Slot return | On task completion via `release()` | Auto-refills over time |
 
+### In Spring Boot?
+
+Resilience4j's `@Bulkhead` provides declarative concurrency limiting.
+
+```java
+// build.gradle
+// implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+
+// application.yml
+// resilience4j:
+//   bulkhead:
+//     instances:
+//       paymentApi:
+//         maxConcurrentCalls: 10
+//         maxWaitDuration: 3s
+
+@Service
+public class PaymentService {
+
+    @Bulkhead(name = "paymentApi", fallbackMethod = "payFallback")
+    public PaymentResult pay(PaymentRequest request) {
+        return paymentApi.call(request);
+    }
+
+    private PaymentResult payFallback(PaymentRequest request, BulkheadFullException ex) {
+        throw new ServiceUnavailableException("Payment service is temporarily overloaded");
+    }
+}
+```
+
+**Why is Resilience4j better?**
+- Configuration externalized to `application.yml` → change without redeployment
+- Fallback methods for graceful degradation
+- Actuator integration for automatic metrics (concurrent calls, waiting count)
+- Composable with Circuit Breaker, Retry, and other patterns
+
+**When you still need `Semaphore`:** Simple utilities where Resilience4j is overkill, or library code that must run without framework dependencies.
+
 ---
 
 ## 7. ReentrantLock — synchronized on Steroids
@@ -315,6 +539,48 @@ public void transferMoney(Account from, Account to, long amount) {
 
 > If you just need a simple critical section, `synchronized` is enough. Only reach for `ReentrantLock` when you need `tryLock`, fairness, or multiple conditions.
 
+### In Spring Boot?
+
+A single-instance `ReentrantLock` is almost never sufficient in production. The moment you have multiple Pods, the lock becomes meaningless. You need a **distributed lock**.
+
+```java
+// build.gradle
+// implementation 'org.redisson:redisson-spring-boot-starter'
+
+@Service
+public class StockService {
+
+    private final RedissonClient redissonClient;
+
+    public void decrease(Long productId, int quantity) {
+        RLock lock = redissonClient.getLock("stock:" + productId);
+
+        try {
+            if (lock.tryLock(5, 3, TimeUnit.SECONDS)) { // wait 5s, auto-release 3s
+                try {
+                    Stock stock = stockRepository.findByProductId(productId);
+                    stock.decrease(quantity);
+                    stockRepository.save(stock);
+                } finally {
+                    lock.unlock();
+                }
+            } else {
+                throw new RuntimeException("Failed to acquire stock lock");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+```
+
+**Why distributed locks?**
+- Spring Boot apps typically run on 2+ Pods
+- JVM-level `ReentrantLock` only controls threads within the same process
+- Redis-based Redisson locks are **shared across all Pods**
+
+**When you still need `ReentrantLock`:** Batch servers guaranteed to be single-instance, or protecting JVM-internal resources (file writes, connection pool initialization).
+
 ---
 
 ## Summary: When to Use What?
@@ -330,3 +596,21 @@ public void transferMoney(Account from, Account to, long amount) {
 | Lock with timeout / fairness | `ReentrantLock` |
 
 > The core principle: **don't create `Thread` objects directly, and don't write `wait()`/`notify()` yourself.** `java.util.concurrent` provides battle-tested tools. Don't reinvent the wheel.
+
+---
+
+## Spring Boot Wraps j.u.c — It Doesn't Replace It
+
+The 7 classes covered in this post don't disappear in Spring Boot. Spring **wraps them to make them easier to use**.
+
+| Pure Java | Spring Boot Wrapper |
+|-----------|-------------------|
+| `ExecutorService` | `@Async` + `ThreadPoolTaskExecutor` |
+| `CompletableFuture` | Used directly as `@Async` return type |
+| `CountDownLatch` | No wrapper — used as-is in tests |
+| `ConcurrentHashMap` | `@Cacheable` + Caffeine |
+| `BlockingQueue` | `ApplicationEventPublisher` + `@EventListener` |
+| `Semaphore` | Resilience4j `@Bulkhead` |
+| `ReentrantLock` | Redisson distributed locks |
+
+**You need to understand the primitives to use the wrappers properly.** Debugging why `@Async` isn't working requires understanding `ExecutorService`. Knowing how Caffeine guarantees concurrency requires understanding `ConcurrentHashMap`. Work on top of abstractions, but understand the layer beneath.

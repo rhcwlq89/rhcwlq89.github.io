@@ -44,7 +44,44 @@ List<Product> recommends = recommendFuture.get(3, TimeUnit.SECONDS);
 | `executor.shutdown()`을 안 호출 | 스레드가 안 죽어서 앱이 종료 안 됨 | `try-finally`로 반드시 shutdown |
 | `Executors.newCachedThreadPool()` 남용 | 요청 폭증 시 스레드가 무한 생성 → OOM | `newFixedThreadPool` 또는 직접 `ThreadPoolExecutor` 생성 |
 
-> Spring Boot에서는 직접 ExecutorService를 만들기보다 `@Async` + `TaskExecutor` 빈을 사용하는 것이 일반적이다. 하지만 내부 동작 원리는 동일하다.
+### Spring Boot에서는?
+
+Spring Boot에서는 직접 `ExecutorService`를 생성하지 않는다. 대신 `ThreadPoolTaskExecutor`를 빈으로 등록하고, `@Async`로 비동기 실행을 위임한다.
+
+```java
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+
+    @Bean(name = "apiExecutor")
+    public TaskExecutor apiExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(3);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("api-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+}
+
+@Service
+public class ProductService {
+
+    @Async("apiExecutor")
+    public CompletableFuture<Product> getProduct(Long id) {
+        return CompletableFuture.completedFuture(productApi.getProduct(id));
+    }
+}
+```
+
+**왜 Spring 방식이 나은가?**
+- 스레드 풀 라이프사이클(shutdown)을 Spring이 관리 → `try-finally`로 직접 닫을 필요 없음
+- `application.yml`로 풀 크기를 외부에서 변경 가능
+- 거부 정책(`RejectedExecutionHandler`)을 선언적으로 설정
+
+**그래도 원시 API가 필요한 경우:** 테스트 코드에서 정밀한 스레드 제어가 필요하거나, Spring 컨텍스트 밖에서 동작하는 배치 유틸리티를 작성할 때.
 
 ---
 
@@ -91,6 +128,28 @@ CompletableFuture<ProductDetail> detailCf = productCf
 | 예외 처리 | try-catch로 감싸야 함 | `exceptionally()`, `handle()` |
 | 여러 작업 합치기 | 직접 구현 | `allOf()`, `anyOf()`, `thenCombine()` |
 
+### Spring Boot에서는?
+
+1절에서 등록한 `@Async` 메서드가 `CompletableFuture`를 반환하면, 이후 체이닝은 순수 Java와 동일하다.
+
+```java
+@Service
+public class ProductFacade {
+
+    private final ProductService productService;
+    private final ReviewService reviewService;
+
+    public CompletableFuture<ProductDetail> getDetail(Long id) {
+        CompletableFuture<Product> productCf = productService.getProduct(id);   // @Async
+        CompletableFuture<List<Review>> reviewCf = reviewService.getReviews(id); // @Async
+
+        return productCf.thenCombine(reviewCf, ProductDetail::new);
+    }
+}
+```
+
+**핵심:** `@Async`는 "어떤 스레드 풀에서 실행할지"를 Spring이 결정해주는 것이고, 반환된 `CompletableFuture`의 체이닝 API(`thenApply`, `thenCombine`, `exceptionally`)는 순수 Java 그대로다. 즉 **2절의 조합 패턴은 Spring Boot에서도 동일하게 적용**된다.
+
 ---
 
 ## 3. CountDownLatch — 동시 출발 / 완료 대기
@@ -134,6 +193,51 @@ assertThat(product.getStock()).isEqualTo(0);
 - `countDown()`은 카운트를 1 줄인다. 0이 되면 `await()` 중인 스레드가 깨어난다.
 - **한 번 쓰고 버리는 도구**다. 카운트가 0이 되면 재사용할 수 없다. 재사용이 필요하면 `CyclicBarrier`를 쓴다.
 
+### Spring Boot에서는?
+
+CountDownLatch는 Spring이 감싸주는 래퍼가 없다. `@SpringBootTest`에서 동시성 테스트를 작성할 때 **그대로 사용하는 것이 정석**이다.
+
+```java
+@SpringBootTest
+class PurchaseConcurrencyTest {
+
+    @Autowired
+    private PurchaseService purchaseService;
+
+    @Test
+    void 선착순_100명_동시_구매() throws InterruptedException {
+        int threadCount = 100;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            final long userId = i;
+            executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                try {
+                    purchaseService.buy(productId, userId);
+                } finally {
+                    done.countDown();
+                }
+                return null;
+            });
+        }
+
+        ready.await();
+        start.countDown();
+        done.await();
+
+        assertThat(product.getStock()).isEqualTo(0);
+        executor.shutdown();
+    }
+}
+```
+
+**포인트:** Spring Boot 테스트에서도 `CountDownLatch` + `ExecutorService` 조합은 그대로 쓴다. 이 패턴은 "동시에 N개 요청이 들어오는 상황"을 시뮬레이션하는 사실상 유일한 방법이다.
+
 ---
 
 ## 4. ConcurrentHashMap — 스레드 안전한 캐시
@@ -173,6 +277,46 @@ map.computeIfAbsent(key, k -> createValue(k));
 ```
 
 > `containsKey()` → `put()` 사이에 다른 스레드가 끼어들 수 있다. ConcurrentHashMap의 원자적 메서드(`putIfAbsent`, `computeIfAbsent`, `merge`)를 사용해야 진짜 스레드 안전하다.
+
+### Spring Boot에서는?
+
+로컬 캐시가 필요하다면 Spring Cache + Caffeine이 일반적이다.
+
+```java
+// build.gradle
+// implementation 'org.springframework.boot:spring-boot-starter-cache'
+// implementation 'com.github.ben-manes.caffeine:caffeine'
+
+@Configuration
+@EnableCaching
+public class CacheConfig {
+
+    @Bean
+    public CacheManager cacheManager() {
+        CaffeineCacheManager manager = new CaffeineCacheManager("products");
+        manager.setCaffeine(Caffeine.newBuilder()
+            .maximumSize(1_000)
+            .expireAfterWrite(Duration.ofMinutes(10)));
+        return manager;
+    }
+}
+
+@Service
+public class ProductService {
+
+    @Cacheable(value = "products", key = "#id")
+    public Product getProduct(String id) {
+        return productApi.fetch(id); // 캐시 미스일 때만 호출
+    }
+}
+```
+
+**왜 Spring Cache가 나은가?**
+- TTL, 최대 크기, 퇴거 정책을 선언적으로 설정
+- `@CacheEvict`로 무효화 로직 분리
+- Caffeine 내부는 `ConcurrentHashMap` 기반이므로 동시성은 보장됨
+
+**그래도 `ConcurrentHashMap`이 필요한 경우:** 한 요청 안에서의 메모이제이션, 캐시 애노테이션이 동작하지 않는 `private` 메서드, 또는 캐시 키가 복잡한 동적 구조일 때.
 
 ---
 
@@ -222,6 +366,48 @@ public void startConsumer() {
 | `PriorityBlockingQueue` | 우선순위 정렬 | 긴급 작업을 먼저 처리해야 할 때 |
 | `SynchronousQueue` | 버퍼 없음, 직접 전달 | `Executors.newCachedThreadPool()` 내부에서 사용 |
 
+### Spring Boot에서는?
+
+생산자-소비자 패턴은 Spring의 이벤트 시스템으로 대체할 수 있다.
+
+```java
+// 이벤트 정의
+public record OrderCreatedEvent(Long orderId, String userId) {}
+
+// 생산자: 이벤트 발행
+@Service
+public class OrderService {
+
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Transactional
+    public Order create(OrderRequest request) {
+        Order order = orderRepository.save(new Order(request));
+        eventPublisher.publishEvent(new OrderCreatedEvent(order.getId(), request.getUserId()));
+        return order;
+    }
+}
+
+// 소비자: 비동기 이벤트 리스너
+@Component
+public class OrderEventListener {
+
+    @Async("apiExecutor")
+    @EventListener
+    public void handleOrderCreated(OrderCreatedEvent event) {
+        notificationService.send(event.orderId());
+        analyticsService.track(event);
+    }
+}
+```
+
+**왜 Spring 이벤트가 나은가?**
+- 생산자와 소비자가 서로를 모름 → 결합도 낮음
+- `@Async`를 붙이면 별도 스레드에서 처리 → 비동기
+- `@TransactionalEventListener`를 쓰면 트랜잭션 커밋 후에만 실행 가능
+
+**그래도 `BlockingQueue`가 필요한 경우:** 배치 처리(큐에 모아서 한꺼번에 flush), 배압(backpressure) 제어가 필요할 때, 또는 Spring 컨텍스트 없이 동작해야 하는 라이브러리 코드.
+
 ---
 
 ## 6. Semaphore — 동시 접근 수 제한
@@ -269,6 +455,44 @@ if (apiLimit.tryAcquire(3, TimeUnit.SECONDS)) {
 | 예시 | "동시에 10개만 호출" | "초당 100개만 호출" |
 | 슬롯 반환 | 작업 완료 시 `release()` | 시간이 지나면 자동 충전 |
 
+### Spring Boot에서는?
+
+Resilience4j의 `@Bulkhead`를 사용하면 동시 접근 수 제한을 선언적으로 걸 수 있다.
+
+```java
+// build.gradle
+// implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+
+// application.yml
+// resilience4j:
+//   bulkhead:
+//     instances:
+//       paymentApi:
+//         maxConcurrentCalls: 10
+//         maxWaitDuration: 3s
+
+@Service
+public class PaymentService {
+
+    @Bulkhead(name = "paymentApi", fallbackMethod = "payFallback")
+    public PaymentResult pay(PaymentRequest request) {
+        return paymentApi.call(request);
+    }
+
+    private PaymentResult payFallback(PaymentRequest request, BulkheadFullException ex) {
+        throw new ServiceUnavailableException("결제 서비스가 일시적으로 혼잡합니다");
+    }
+}
+```
+
+**왜 Resilience4j가 나은가?**
+- 설정을 `application.yml`로 외부화 → 재배포 없이 변경 가능
+- fallback 메서드로 우아한 실패 처리
+- Actuator 연동으로 동시 호출 수, 대기 수 등 메트릭 자동 수집
+- Circuit Breaker, Retry 등 다른 패턴과 조합 가능
+
+**그래도 `Semaphore`가 필요한 경우:** Resilience4j를 도입하기에는 과한 단순한 유틸리티, 또는 프레임워크 의존 없이 동작해야 하는 라이브러리 코드.
+
 ---
 
 ## 7. ReentrantLock — synchronized의 확장판
@@ -314,6 +538,48 @@ public void transferMoney(Account from, Account to, long amount) {
 
 > 단순한 임계 영역 보호라면 `synchronized`로 충분하다. `tryLock`, 공정성, 다중 조건이 필요할 때만 `ReentrantLock`을 쓰자.
 
+### Spring Boot에서는?
+
+단일 인스턴스에서의 `ReentrantLock`은 프로덕션 환경에서 거의 불충분하다. Pod가 여러 개인 순간 락의 의미가 사라진다. **분산 락**이 필요하다.
+
+```java
+// build.gradle
+// implementation 'org.redisson:redisson-spring-boot-starter'
+
+@Service
+public class StockService {
+
+    private final RedissonClient redissonClient;
+
+    public void decrease(Long productId, int quantity) {
+        RLock lock = redissonClient.getLock("stock:" + productId);
+
+        try {
+            if (lock.tryLock(5, 3, TimeUnit.SECONDS)) { // 대기 5초, 자동 해제 3초
+                try {
+                    Stock stock = stockRepository.findByProductId(productId);
+                    stock.decrease(quantity);
+                    stockRepository.save(stock);
+                } finally {
+                    lock.unlock();
+                }
+            } else {
+                throw new RuntimeException("재고 차감 락 획득 실패");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+```
+
+**왜 분산 락인가?**
+- Spring Boot 앱은 보통 2개 이상의 Pod로 운영됨
+- JVM 내 `ReentrantLock`은 같은 프로세스의 스레드만 제어
+- Redis 기반 Redisson 락은 **모든 Pod에서 동일한 락을 공유**
+
+**그래도 `ReentrantLock`이 필요한 경우:** 단일 인스턴스가 보장되는 배치 서버, 또는 JVM 내부의 리소스(파일 쓰기, 커넥션 풀 초기화)를 보호할 때.
+
 ---
 
 ## 정리: 언제 뭘 쓸까?
@@ -329,3 +595,21 @@ public void transferMoney(Account from, Account to, long amount) {
 | 타임아웃 / 공정성이 필요한 락 | `ReentrantLock` |
 
 > 핵심은 **"직접 `Thread`를 만들지 말고, 직접 `wait()`/`notify()`를 쓰지 말라"**는 것이다. `java.util.concurrent`는 이미 검증된 도구들을 제공한다. 바퀴를 다시 발명하지 말자.
+
+---
+
+## Spring Boot는 j.u.c를 대체하는 게 아니라 감싼다
+
+이 글에서 다룬 7개 클래스는 Spring Boot 환경에서도 사라지지 않는다. Spring은 이들을 **더 쓰기 편하게 감싸줄 뿐**이다.
+
+| 순수 Java | Spring Boot 래퍼 |
+|-----------|-----------------|
+| `ExecutorService` | `@Async` + `ThreadPoolTaskExecutor` |
+| `CompletableFuture` | `@Async` 반환 타입으로 그대로 사용 |
+| `CountDownLatch` | 래퍼 없음 — 테스트에서 그대로 사용 |
+| `ConcurrentHashMap` | `@Cacheable` + Caffeine |
+| `BlockingQueue` | `ApplicationEventPublisher` + `@EventListener` |
+| `Semaphore` | Resilience4j `@Bulkhead` |
+| `ReentrantLock` | Redisson 분산 락 |
+
+**원리를 알아야 래퍼를 제대로 쓸 수 있다.** `@Async`가 왜 안 먹히는지 디버깅하려면 `ExecutorService`를 이해해야 하고, Caffeine 캐시의 동시성 보장이 어떻게 되는지 알려면 `ConcurrentHashMap`을 알아야 한다. 추상화 위에서 일하되, 한 계층 아래를 이해하자.
