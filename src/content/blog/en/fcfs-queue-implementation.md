@@ -31,9 +31,11 @@ The issue with Redis isn't **processing performance** — it's **user experience
 
 ### 1.2 Real-World Examples
 
-- **Naver Ticketing**: "Current queue: 3,421 people, estimated wait: 5 minutes"
-- **Coupang Rocket Wow**: Waiting queue for limited-quantity products
-- **Interpark Tickets**: Queue position + entry token for concert bookings
+The following are patterns observable from actual user-facing UX. Internal implementations are not publicly disclosed, so these are based on behavior visible on the user's screen.
+
+- **Naver Ticketing**: "Current queue: 3,421 people, estimated wait: 5 minutes" — displays queue position and estimated time
+- **Coupang Rocket Wow**: Waiting queue screen shown when accessing limited-quantity products
+- **Interpark Tickets**: Queue position + entry token flow for concert bookings
 
 Common pattern: **traffic is split into two phases.**
 1. **Queue entry** — absorbs all traffic (fast)
