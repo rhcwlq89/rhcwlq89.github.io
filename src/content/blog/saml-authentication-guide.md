@@ -174,9 +174,53 @@ sequenceDiagram
 
 > **주의**: IdP-Initiated SSO는 CSRF 공격에 취약할 수 있다. 가능하면 SP-Initiated를 우선 사용하라.
 
-### 2.3 SAML Binding 방식
+### 2.3 Passive SSO (IsPassive)
 
-SAML Binding이란 IdP와 SP 사이에서 SAML 메시지(AuthnRequest, SAMLResponse 등)를 **어떤 HTTP 방식으로 전달할지** 를 정의하는 규약이다. 같은 SAML 플로우라도 메시지를 실어 나르는 "교통수단"이 다를 수 있고, 그것을 Binding이라고 부른다.
+SP-Initiated SSO에는 **Passive** 옵션이 있다. AuthnRequest에 `IsPassive="true"`를 설정하면, IdP는 **사용자에게 로그인 화면을 보여주지 않고** 이미 로그인된 세션이 있을 때만 인증을 수행한다.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SP as SP (우리앱)
+    participant IdP as IdP (Entra ID)
+
+    User->>SP: 1. /dashboard 접근
+    SP-->>User: 2. 302 Redirect + SAMLRequest (IsPassive=true)
+    User->>IdP: 3. IdP로 이동
+
+    alt IdP에 기존 세션이 있음
+        IdP-->>User: 4a. SAMLResponse (성공) → SP의 ACS URL로 POST
+        User->>SP: SAMLResponse 전달
+        SP-->>User: 5a. 세션 생성 + /dashboard 접근 성공
+    else IdP에 세션 없음
+        IdP-->>User: 4b. SAMLResponse (실패 — NoPassive 상태 코드)
+        User->>SP: SAMLResponse 전달
+        SP-->>User: 5b. 비로그인 상태로 페이지 표시 (또는 로그인 버튼 노출)
+    end
+```
+
+#### 언제 쓰는가?
+
+| 시나리오 | 설명 |
+|---------|------|
+| **사일런트 로그인 체크** | 페이지 로드 시 로그인 여부를 확인하되, 로그인 화면으로 튕기지 않아야 할 때 |
+| **로그인/비로그인 공존 페이지** | 공개 페이지이지만, 로그인된 사용자에게는 개인화된 UI를 보여주고 싶을 때 |
+| **세션 갱신** | 기존 IdP 세션이 살아있으면 자동으로 SP 세션을 연장할 때 |
+
+#### SP-Initiated SSO vs Passive SSO
+
+| 항목 | SP-Initiated (일반) | Passive (IsPassive=true) |
+|------|-------------------|------------------------|
+| IdP 세션 있음 | 즉시 인증 완료 | 즉시 인증 완료 (동일) |
+| IdP 세션 없음 | **로그인 화면 표시** | **로그인 화면 없이 실패 응답** |
+| 사용자 경험 | 강제 리다이렉트 | 끊김 없는 UX |
+| 주 용도 | 보호된 리소스 접근 | 로그인 여부 사전 확인 |
+
+> **핵심**: Passive SSO는 "로그인되어 있으면 가져오고, 아니면 말고"라는 전략이다. 사용자를 로그인 화면으로 강제로 보내지 않기 때문에 UX가 부드럽다.
+
+### 2.4 SAML Binding 방식
+
+SAML Binding이란 IdP와 SP 사이에서 SAML 메시지(AuthnRequest, SAMLResponse 등)를 **어떤 HTTP 방식으로 전달할지**를 정의하는 규약이다. 같은 SAML 플로우라도 메시지를 실어 나르는 "교통수단"이 다를 수 있고, 그것을 Binding이라고 부른다.
 
 | Binding | 설명 | 용도 |
 |---------|------|------|

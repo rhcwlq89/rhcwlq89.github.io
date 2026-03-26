@@ -174,7 +174,51 @@ sequenceDiagram
 
 > **Note**: IdP-Initiated SSO can be vulnerable to CSRF attacks. Prefer SP-Initiated whenever possible.
 
-### 2.3 SAML Binding Methods
+### 2.3 Passive SSO (IsPassive)
+
+SP-Initiated SSO has a **Passive** option. When the AuthnRequest includes `IsPassive="true"`, the IdP **does not show a login screen** — it only authenticates if the user already has an active session.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SP as SP (Our App)
+    participant IdP as IdP (Entra ID)
+
+    User->>SP: 1. Access /dashboard
+    SP-->>User: 2. 302 Redirect + SAMLRequest (IsPassive=true)
+    User->>IdP: 3. Redirect to IdP
+
+    alt IdP has existing session
+        IdP-->>User: 4a. SAMLResponse (success) → POST to SP's ACS URL
+        User->>SP: SAMLResponse forwarded
+        SP-->>User: 5a. Session created + /dashboard access granted
+    else No IdP session
+        IdP-->>User: 4b. SAMLResponse (failure — NoPassive status code)
+        User->>SP: SAMLResponse forwarded
+        SP-->>User: 5b. Show page as unauthenticated (or display login button)
+    end
+```
+
+#### When to Use It?
+
+| Scenario | Description |
+|---------|-------------|
+| **Silent login check** | Check login status on page load without redirecting to a login screen |
+| **Mixed auth pages** | Public page that shows personalized UI for logged-in users |
+| **Session renewal** | Automatically extend the SP session if the IdP session is still alive |
+
+#### SP-Initiated SSO vs Passive SSO
+
+| Aspect | SP-Initiated (normal) | Passive (IsPassive=true) |
+|--------|---------------------|------------------------|
+| IdP session exists | Immediate auth success | Immediate auth success (same) |
+| No IdP session | **Shows login screen** | **Returns failure without login screen** |
+| User experience | Forced redirect | Seamless UX |
+| Primary use | Accessing protected resources | Pre-checking login status |
+
+> **Key point**: Passive SSO is a "fetch if logged in, skip if not" strategy. It never forces the user to a login screen, resulting in a smoother UX.
+
+### 2.4 SAML Binding Methods
 
 SAML Binding defines **how SAML messages (AuthnRequest, SAMLResponse, etc.) are transported over HTTP** between IdP and SP. Think of it as the "transport method" — the same SAML flow can use different bindings depending on the message type and size.
 
