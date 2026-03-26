@@ -201,9 +201,49 @@ done.await();    // 100개 스레드 모두 완료 대기
 assertThat(product.getStock()).isEqualTo(0);
 ```
 
-### 핵심 포인트
+### countDown()과 await() 동작 원리
 
-- `countDown()`은 카운트를 1 줄인다. 0이 되면 `await()` 중인 스레드가 깨어난다.
+`CountDownLatch`는 내부에 **카운트 숫자 하나**만 가지고 있다. 두 메서드가 이 숫자를 중심으로 동작한다.
+
+- **`countDown()`** — 카운트를 1 줄인다. 0 밑으로는 내려가지 않는다.
+- **`await()`** — 카운트가 0이 될 때까지 **현재 스레드를 멈추고 기다린다.** 이미 0이면 즉시 통과한다.
+
+위 코드의 흐름을 시간순으로 보면:
+
+```
+[Phase 1: 준비]
+워커 스레드 1  → ready.countDown()  → start.await()에서 멈춤
+워커 스레드 2  → ready.countDown()  → start.await()에서 멈춤
+  ...
+워커 스레드 100 → ready.countDown() → start.await()에서 멈춤
+                  ↓
+        ready 카운트가 0이 됨
+                  ↓
+[Phase 2: 동시 출발]
+메인 스레드    → ready.await() 통과 → start.countDown()
+                                       ↓
+                              start 카운트가 0이 됨
+                                       ↓
+                              100개 스레드가 동시에 깨어남
+                                       ↓
+[Phase 3: 완료 대기]
+워커 스레드들   → purchaseService.buy() 실행 → done.countDown()
+                                                ↓
+                                      done 카운트가 0이 됨
+                                                ↓
+메인 스레드    → done.await() 통과 → assertThat 실행
+```
+
+**왜 Latch가 3개인가?** 각각 역할이 다르다.
+
+| Latch | 초기값 | 누가 countDown | 누가 await | 역할 |
+|-------|--------|---------------|-----------|------|
+| `ready` | 100 | 워커 스레드 | 메인 스레드 | 모든 스레드가 생성 완료됐는지 확인 |
+| `start` | 1 | 메인 스레드 | 워커 스레드 | "출발!" 신호 — 동시에 깨우기 |
+| `done` | 100 | 워커 스레드 | 메인 스레드 | 모든 작업이 끝났는지 확인 |
+
+### 추가 포인트
+
 - **한 번 쓰고 버리는 도구**다. 카운트가 0이 되면 재사용할 수 없다. 재사용이 필요하면 `CyclicBarrier`를 쓴다.
 
 ### Spring Boot에서는?

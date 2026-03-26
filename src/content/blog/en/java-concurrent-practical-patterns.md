@@ -202,9 +202,49 @@ done.await();      // wait for all 100 threads to finish
 assertThat(product.getStock()).isEqualTo(0);
 ```
 
-### Key Points
+### How countDown() and await() Work
 
-- `countDown()` decrements the count by 1. When it hits 0, all threads blocked on `await()` wake up.
+`CountDownLatch` holds a single **count number** internally. The two methods operate around this number.
+
+- **`countDown()`** — Decrements the count by 1. It never goes below 0.
+- **`await()`** — **Blocks the current thread until the count reaches 0.** If already 0, it passes through immediately.
+
+Here's the flow of the code above in chronological order:
+
+```
+[Phase 1: Ready]
+Worker thread 1   → ready.countDown()  → blocks at start.await()
+Worker thread 2   → ready.countDown()  → blocks at start.await()
+  ...
+Worker thread 100 → ready.countDown()  → blocks at start.await()
+                     ↓
+           ready count reaches 0
+                     ↓
+[Phase 2: Simultaneous Start]
+Main thread       → ready.await() passes → start.countDown()
+                                             ↓
+                                   start count reaches 0
+                                             ↓
+                                   All 100 threads wake up simultaneously
+                                             ↓
+[Phase 3: Wait for Completion]
+Worker threads    → purchaseService.buy() runs → done.countDown()
+                                                   ↓
+                                         done count reaches 0
+                                                   ↓
+Main thread       → done.await() passes → assertThat runs
+```
+
+**Why 3 latches?** Each has a distinct role.
+
+| Latch | Initial Value | Who calls countDown | Who calls await | Purpose |
+|-------|--------------|-------------------|----------------|---------|
+| `ready` | 100 | Worker threads | Main thread | Confirm all threads are created and waiting |
+| `start` | 1 | Main thread | Worker threads | "GO!" signal — wake all at once |
+| `done` | 100 | Worker threads | Main thread | Confirm all tasks have finished |
+
+### Additional Points
+
 - **It's a one-shot tool.** Once the count reaches 0, it can't be reused. Use `CyclicBarrier` if you need reusability.
 
 ### In Spring Boot?
