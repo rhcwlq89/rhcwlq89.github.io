@@ -314,31 +314,47 @@ AND status = 'ON_SALE'
 
 ### Why Is This Safe?
 
-The DB internally acquires a row lock when executing an UPDATE statement. But this lock is held only for **the brief moment the single UPDATE runs** — not from SELECT all the way to COMMIT like FOR UPDATE.
+The DB internally acquires a row lock when executing an UPDATE statement. This lock is **acquired at UPDATE time and released at COMMIT**. The difference from FOR UPDATE is **when the lock starts**.
 
-So even if 100 users request simultaneously:
-- The DB acquires the row lock → checks `stock_quantity >= 1` → deducts → releases the lock, **all within one statement**
-- If the condition fails (stock is 0), zero rows are updated → sold out
+| Approach | Lock starts | Lock ends |
+|----------|-----------|----------|
+| FOR UPDATE | At `SELECT` | At `COMMIT` |
+| Atomic UPDATE | At `UPDATE` | At `COMMIT` |
+
+FOR UPDATE holds the lock from SELECT all the way to COMMIT, while Atomic UPDATE holds it only from UPDATE to COMMIT. **The lock starts later, so it's held for less time.**
+
+### Can Other Queries Share the Transaction?
+
+You don't need to run the UPDATE in isolation. Other queries in the same transaction are fine.
 
 ```java
 @Transactional
-public void decreaseStockAtomic(Long productId, int quantity) {
-    int updated = productRepository.decreaseStockAtomically(productId, quantity);
-    if (updated == 0) {
-        throw new RuntimeException("Insufficient stock or product not found");
-    }
+public void purchase(Long productId, Long userId) {
+    // 1. Deduct stock (products row lock starts here)
+    int updated = productRepository.decreaseStockAtomically(productId, 1);
+    if (updated == 0) throw new RuntimeException("Sold out");
+
+    // 2. Create order (INSERT into orders table → unrelated to products row lock)
+    orderRepository.save(new Order(productId, userId));
+
+    // 3. COMMIT (products row lock released here)
 }
 ```
+
+`INSERT INTO orders` has nothing to do with the products row lock. However, since **the lock is held from UPDATE until COMMIT**, long-running operations after the UPDATE (like external API calls) will extend the lock duration.
+
+> **Tip**: Place the Atomic UPDATE **as late as possible** in the transaction. Do all reads and validations first, then run the UPDATE right before COMMIT to minimize lock hold time.
 
 ### FOR UPDATE vs Atomic UPDATE
 
 | Aspect | FOR UPDATE | Atomic UPDATE |
 |--------|-----------|---------------|
-| Lock scope | SELECT to COMMIT (long) | Only during UPDATE execution (short) |
-| Concurrency | Serial (one at a time) | Less waiting due to shorter lock duration |
+| Lock starts | At SELECT (early) | At UPDATE (late) |
+| Lock ends | At COMMIT | At COMMIT |
+| Concurrency | Entire span is serialized | Less waiting due to shorter lock duration |
 | Stock reading | Reads latest value, enables business logic | No need to read current stock |
 | Complex validation | Can validate beyond stock count | Only conditions in WHERE clause |
-| Performance | Wait time grows with traffic | Faster (shorter lock hold time) |
+| Performance | Wait time grows with traffic | Faster (shorter lock window) |
 
 For **simple stock deduction**, Atomic UPDATE is more efficient. But when you need to **"read stock → run complex business logic → then deduct"**, FOR UPDATE is necessary.
 

@@ -313,31 +313,47 @@ AND status = 'ON_SALE'
 
 ### 왜 이게 안전한가?
 
-DB는 UPDATE 문을 실행할 때 내부적으로 해당 행에 락을 건다. 이 락은 **UPDATE 문 하나가 실행되는 찰나에만** 유지된다. FOR UPDATE처럼 SELECT부터 COMMIT까지 길게 잡는 것이 아니다.
+DB는 UPDATE 문을 실행할 때 내부적으로 해당 행에 락을 건다. 이 락은 **UPDATE 시점에 걸리고 COMMIT 시점에 해제**된다. FOR UPDATE와 다른 점은 락이 **시작되는 시점**이다.
 
-즉, 동시에 100명이 요청해도:
-- DB가 행 락을 잡고 → `stock_quantity >= 1` 확인 → 차감 → 락 해제를 **한 문장 안에서** 처리한다
-- 조건에 맞지 않으면 (재고 0이면) 업데이트된 행이 0개 → 품절 처리
+| 방식 | 락 시작 | 락 해제 |
+|------|--------|--------|
+| FOR UPDATE | `SELECT` 시점 | `COMMIT` 시점 |
+| Atomic UPDATE | `UPDATE` 시점 | `COMMIT` 시점 |
+
+FOR UPDATE는 SELECT부터 COMMIT까지 전 구간을 잡지만, Atomic UPDATE는 UPDATE부터 COMMIT까지만 잡는다. **락이 시작되는 시점이 늦으니 점유 시간이 짧다.**
+
+### 다른 쿼리와 함께 써도 되나?
+
+UPDATE 하나만 단독으로 실행할 필요는 없다. 같은 트랜잭션 안에 다른 쿼리가 있어도 된다.
 
 ```java
 @Transactional
-public void decreaseStockAtomic(Long productId, int quantity) {
-    int updated = productRepository.decreaseStockAtomically(productId, quantity);
-    if (updated == 0) {
-        throw new RuntimeException("재고 부족 또는 상품 없음");
-    }
+public void purchase(Long productId, Long userId) {
+    // 1. 재고 차감 (이 시점부터 products 행 락 시작)
+    int updated = productRepository.decreaseStockAtomically(productId, 1);
+    if (updated == 0) throw new RuntimeException("품절");
+
+    // 2. 주문 생성 (orders 테이블 INSERT → products 행 락과 무관)
+    orderRepository.save(new Order(productId, userId));
+
+    // 3. COMMIT (이 시점에 products 행 락 해제)
 }
 ```
+
+`INSERT INTO orders`는 products 테이블의 행 락과 무관하다. 다만 **UPDATE 이후 COMMIT까지 락이 유지**되므로, UPDATE 뒤에 외부 API 호출처럼 오래 걸리는 작업이 있으면 락 점유 시간이 길어진다.
+
+> **팁**: Atomic UPDATE는 트랜잭션 안에서 **가능한 늦게 실행**하자. UPDATE 전에 필요한 조회나 검증을 먼저 하고, UPDATE는 COMMIT 직전에 배치하면 락 점유 시간을 최소화할 수 있다.
 
 ### FOR UPDATE vs Atomic UPDATE
 
 | 항목 | FOR UPDATE | Atomic UPDATE |
 |------|-----------|---------------|
-| 락 범위 | SELECT부터 COMMIT까지 (길다) | UPDATE 문 실행 순간만 (짧다) |
-| 동시성 | 직렬 처리 (한 번에 하나) | 락 점유 시간이 짧아 대기가 적음 |
+| 락 시작 시점 | SELECT 시점 (빠름) | UPDATE 시점 (늦음) |
+| 락 해제 시점 | COMMIT | COMMIT |
+| 동시성 | 전 구간 직렬화 | 락 점유 시간이 짧아 대기가 적음 |
 | 재고 읽기 | 최신 값을 조회 후 비즈니스 로직 가능 | 현재 재고를 읽을 필요 없음 |
 | 복잡한 검증 | 재고 외에 추가 조건 검증 가능 | WHERE 절에 넣을 수 있는 조건만 |
-| 성능 | 트래픽 증가 시 대기 시간이 길어짐 | 더 빠름 (락 점유 시간이 짧으니까) |
+| 성능 | 트래픽 증가 시 대기 시간이 길어짐 | 더 빠름 (락 점유 구간이 짧으니까) |
 
 **단순 재고 차감**이라면 Atomic UPDATE가 더 효율적이다. 하지만 **"재고를 읽고 → 복잡한 비즈니스 로직을 수행한 뒤 → 차감"** 해야 하는 경우에는 FOR UPDATE가 필요하다.
 
