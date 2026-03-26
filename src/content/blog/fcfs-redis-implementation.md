@@ -642,6 +642,40 @@ public void initStock(Long productId, int quantity) {
 | Redis-DB 재고 불일치 수 | 정합성 모니터링 |
 | 서킷 브레이커 상태 | 폴백 발동 여부 |
 
+### 7.5 Grafana로 Redis 모니터링하기
+
+위 항목들을 실시간으로 확인하려면 **Grafana + Prometheus + redis_exporter** 조합을 사용한다.
+
+```
+Redis → redis_exporter → Prometheus → Grafana
+```
+
+**redis_exporter**는 Redis의 `INFO` 명령 결과를 Prometheus 메트릭으로 변환해주는 오픈소스 도구다.
+
+| 메트릭 | Prometheus 키 | 의미 |
+|--------|--------------|------|
+| 메모리 사용량 | `redis_memory_used_bytes` | OOM 임계치 알림 설정 |
+| 초당 명령 수 | `redis_instantaneous_ops_per_sec` | 트래픽 급증 감지 |
+| 연결 클라이언트 수 | `redis_connected_clients` | 커넥션 누수 감지 |
+| 캐시 적중률 | `redis_keyspace_hits_total / misses_total` | 캐시 효율 확인 |
+| 슬로우 쿼리 수 | `redis_slowlog_length` | Lua 스크립트 성능 문제 감지 |
+
+> **빠른 시작:** Grafana 공식 대시보드 **Redis Dashboard for Prometheus (ID: 763)**를 import하면 위 메트릭을 바로 시각화할 수 있다.
+
+Spring Boot 앱의 **Resilience4j 메트릭**도 Actuator + Micrometer를 통해 Prometheus로 내보낼 수 있다. 서킷 브레이커 상태(CLOSED/OPEN), 벌크헤드 동시 호출 수 등을 Redis 메트릭과 **같은 Grafana 대시보드**에서 함께 볼 수 있으므로, "Redis 응답 지연 → 서킷 오픈 → DB 폴백 발동"이라는 인과관계를 한 화면에서 추적할 수 있다.
+
+```yaml
+# application.yml — Resilience4j 메트릭 노출
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  metrics:
+    tags:
+      application: fcfs-service
+```
+
 ---
 
 ## 정리

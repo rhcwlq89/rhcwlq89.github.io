@@ -640,6 +640,40 @@ public void initStock(Long productId, int quantity) {
 | Redis-DB stock mismatch count | Consistency monitoring |
 | Circuit breaker state | Track fallback activation |
 
+### 7.5 Monitoring Redis with Grafana
+
+To view the above metrics in real time, use the **Grafana + Prometheus + redis_exporter** stack.
+
+```
+Redis → redis_exporter → Prometheus → Grafana
+```
+
+**redis_exporter** is an open-source tool that converts Redis `INFO` command output into Prometheus metrics.
+
+| Metric | Prometheus Key | Purpose |
+|--------|---------------|---------|
+| Memory usage | `redis_memory_used_bytes` | Set OOM threshold alerts |
+| Commands per second | `redis_instantaneous_ops_per_sec` | Detect traffic spikes |
+| Connected clients | `redis_connected_clients` | Detect connection leaks |
+| Cache hit rate | `redis_keyspace_hits_total / misses_total` | Check cache efficiency |
+| Slow query count | `redis_slowlog_length` | Detect Lua script performance issues |
+
+> **Quick start:** Import the official Grafana dashboard **Redis Dashboard for Prometheus (ID: 763)** to instantly visualize all the above metrics.
+
+Spring Boot app's **Resilience4j metrics** can also be exported to Prometheus via Actuator + Micrometer. Circuit breaker state (CLOSED/OPEN), bulkhead concurrent calls, etc. can be viewed on the **same Grafana dashboard** alongside Redis metrics — letting you trace the causality chain "Redis response delay → circuit opens → DB fallback activates" on a single screen.
+
+```yaml
+# application.yml — expose Resilience4j metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  metrics:
+    tags:
+      application: fcfs-service
+```
+
 ---
 
 ## Summary
