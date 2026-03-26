@@ -333,6 +333,30 @@ Main thread       → done.await() passes → assertThat runs
 
 ### Additional Points
 
+### 100 Threads but Only 4 CPU Cores — Is the Concurrency Test Valid?
+
+In Section 1, we said "I/O-bound: core count × 2–4." But here we're creating 100 threads. Only the number of CPU cores (e.g., 4) can physically run simultaneously. Is this test even valid?
+
+**Yes, it is.** The pool size from Section 1 and the thread count here serve **entirely different purposes**.
+
+| | Section 1 (Production Thread Pool) | Section 3 (Concurrency Test) |
+|--|-----------------------------------|----------------------------|
+| **Goal** | Optimize throughput | Reproduce "requests flooding in simultaneously" |
+| **Concern** | Using CPU efficiently | 100 requests **entering at the same instant** |
+| **What threads do** | API calls, computation | Mostly **waiting on DB locks** (I/O-bound) |
+
+`purchaseService.buy()` sends a query to the DB and **spends most of its time waiting** for a response. During that wait, the thread releases the CPU, and the OS hands it to another thread.
+
+```
+Threads 1–4:  Run on CPU → call buy() → wait on DB lock (release CPU)
+Threads 5–8:  Get CPU    → call buy() → wait on DB lock (release CPU)
+  ...
+Result: ~100 threads hit the same DB row nearly simultaneously
+        → This is exactly the scenario we want to test
+```
+
+If this were a pure CPU-bound operation, the story would be different — only 4 would run at a time while the other 96 wait, so the "simultaneous flood" wouldn't be reproduced. But concurrency tests almost always target **DB, cache, or external API** operations (I/O), making the 100-thread approach valid.
+
 - **It's a one-shot tool.** Once the count reaches 0, it can't be reused. Use `CyclicBarrier` if you need reusability.
 
 ### In Spring Boot?
