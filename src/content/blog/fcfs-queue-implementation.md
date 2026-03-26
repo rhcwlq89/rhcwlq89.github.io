@@ -378,6 +378,18 @@ public class OrderProducer {
 
 ### 5.4 Consumer
 
+Kafka에서 메시지를 소비하는 Consumer는 **Consumer Group**에 소속된다. `groupId`는 이 그룹의 이름이다.
+
+같은 `groupId`를 가진 Consumer가 여러 개 있으면, Kafka는 파티션을 Consumer들에게 **분배**한다. 즉 같은 그룹 내에서는 하나의 메시지를 **한 Consumer만** 처리한다 — 중복 처리가 방지된다.
+
+```
+파티션 0 → Consumer A (groupId: order-processor)
+파티션 1 → Consumer B (groupId: order-processor)
+파티션 2 → Consumer A (groupId: order-processor)
+```
+
+> Pod를 늘리면 같은 `groupId`의 Consumer가 추가되고, Kafka가 파티션을 자동으로 재분배한다. 이것이 Kafka Consumer의 **수평 확장** 방식이다.
+
 ```java
 @Component
 @RequiredArgsConstructor

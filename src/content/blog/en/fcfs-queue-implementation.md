@@ -381,6 +381,25 @@ public class OrderConsumer {
     private final RedisLuaStockService redisStockService;
     private final OrderRepository orderRepository;
 
+In Kafka, Consumers belong to a **Consumer Group**. The `groupId` is the name of that group.
+
+When multiple Consumers share the same `groupId`, Kafka **distributes** partitions among them. Within the same group, each message is processed by **only one Consumer** — preventing duplicate processing.
+
+```
+Partition 0 → Consumer A (groupId: order-processor)
+Partition 1 → Consumer B (groupId: order-processor)
+Partition 2 → Consumer A (groupId: order-processor)
+```
+
+> Scaling up Pods adds more Consumers with the same `groupId`, and Kafka automatically rebalances partitions. This is how Kafka Consumers **scale horizontally**.
+
+```java
+@Component
+@RequiredArgsConstructor
+public class OrderConsumer {
+    private final RedisLuaStockService redisStockService;
+    private final OrderRepository orderRepository;
+
     @KafkaListener(topics = "fcfs-orders", groupId = "order-processor")
     @Transactional
     public void processOrder(OrderEvent event) {
