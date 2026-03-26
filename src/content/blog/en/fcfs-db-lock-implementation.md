@@ -299,7 +299,9 @@ If a single order deducts stock for multiple products:
 
 ## 7. Alternative: Atomic UPDATE
 
-Instead of FOR UPDATE, you can use a **lock-free atomic UPDATE**.
+FOR UPDATE holds a row lock from `SELECT → business logic → UPDATE → COMMIT`. Other transactions wait the entire time.
+
+For simple stock deduction, this entire process can be **collapsed into a single UPDATE statement.**
 
 ```sql
 UPDATE products
@@ -310,7 +312,13 @@ AND stock_quantity >= 1
 AND status = 'ON_SALE'
 ```
 
-The `WHERE stock_quantity >= 1` condition prevents negatives. If zero rows are updated, it's sold out.
+### Why Is This Safe?
+
+The DB internally acquires a row lock when executing an UPDATE statement. But this lock is held only for **the brief moment the single UPDATE runs** — not from SELECT all the way to COMMIT like FOR UPDATE.
+
+So even if 100 users request simultaneously:
+- The DB acquires the row lock → checks `stock_quantity >= 1` → deducts → releases the lock, **all within one statement**
+- If the condition fails (stock is 0), zero rows are updated → sold out
 
 ```java
 @Transactional
@@ -326,11 +334,11 @@ public void decreaseStockAtomic(Long productId, int quantity) {
 
 | Aspect | FOR UPDATE | Atomic UPDATE |
 |--------|-----------|---------------|
-| Lock type | Row lock (exclusive) | No lock (atomic via WHERE clause) |
-| Concurrency | Serial (one at a time) | Multiple transactions can attempt simultaneously |
+| Lock scope | SELECT to COMMIT (long) | Only during UPDATE execution (short) |
+| Concurrency | Serial (one at a time) | Less waiting due to shorter lock duration |
 | Stock reading | Reads latest value, enables business logic | No need to read current stock |
 | Complex validation | Can validate beyond stock count | Only conditions in WHERE clause |
-| Performance | Wait time grows with traffic | Faster (no lock waiting) |
+| Performance | Wait time grows with traffic | Faster (shorter lock hold time) |
 
 For **simple stock deduction**, Atomic UPDATE is more efficient. But when you need to **"read stock → run complex business logic → then deduct"**, FOR UPDATE is necessary.
 
