@@ -409,7 +409,23 @@ Elapsed: 127ms
 | Elapsed time | 851ms | 127ms | **6.7x faster** |
 | Processing model | Row lock → serial waiting | Single thread → sequential |
 | Duplicate prevention | Separate implementation | Built into Lua |
-| DB connections used | 100 simultaneously | 0 (Redis only) |
+| DB connections used | 100 simultaneously | **0 during stock deduction** |
+
+> **"Redis is faster just because it's in-memory — isn't that obvious?"**
+>
+> True. But the key isn't simply "memory = fast." It's that **the DB connection bottleneck is eliminated**.
+>
+> With DB locks, all 100 requests **hold DB connections simultaneously and wait on locks**. If the connection pool has 20 connections, 80 requests wait just to get a connection.
+>
+> With Redis, stock deduction finishes in memory, so DB connections are only used **"for successful requests, when saving the order."** If 150 people request 100 items, only the successful 100 need DB connections — the rejected 50 never touch the DB at all.
+>
+> ```
+> [DB Lock]  150 requests → 150 DB connections needed (including lock waits)
+> [Redis]    150 requests → 50 rejected instantly by Redis
+>                         → DB connections needed for only 100 (no lock waits)
+> ```
+>
+> In other words, the test result above (127ms) **measures stock deduction only**. In production, DB writes for order persistence add to the total response time. But these DB writes are **simple INSERTs without locks** — incomparably lighter than `FOR UPDATE`'s serial waiting.
 
 ### 5.3 Over-Demand Test
 
@@ -425,7 +441,7 @@ Elapsed: 143ms
 =========================================
 ```
 
-Compared to DB lock's 816ms — **5.7x faster**. And zero DB connections used.
+Compared to DB lock's 816ms — **5.7x faster**. And the 50 rejected buyers used zero DB connections — keeping unnecessary requests from ever reaching the DB is the core advantage of the Redis approach.
 
 ### 5.4 Why So Fast?
 
