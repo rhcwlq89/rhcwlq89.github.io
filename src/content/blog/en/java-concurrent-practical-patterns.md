@@ -661,6 +661,42 @@ public class PaymentService {
 - Actuator integration for automatic metrics (concurrent calls, waiting count)
 - Composable with Circuit Breaker, Retry, and other patterns
 
+### How to Decide the Concurrency Limit
+
+Whether it's Semaphore's `permits` or Bulkhead's `maxConcurrentCalls`, the value is typically decided by one of three criteria.
+
+**Criterion 1: External System Limits**
+
+The most common case — only send as much as the other side allows.
+
+```
+Payment API SLA: "Max 50 concurrent requests"
+→ maxConcurrentCalls: 40–45 (keep 10–20% headroom)
+```
+
+**Criterion 2: Protecting Your Own Resources**
+
+If one API hogs all DB connections, other features die.
+
+```
+DB connection pool: 20
+Other features also need connections
+→ maxConcurrentCalls: 10 (limit to half or less of the total)
+```
+
+**Criterion 3: Load Test Results**
+
+When there's no clear baseline, find it through testing.
+
+```
+10 → Response normal, TPS sufficient
+20 → Response normal, TPS improved
+30 → Response time starts increasing
+→ maxConcurrentCalls: 20 (value just before degradation)
+```
+
+> Don't try to nail the exact number upfront — **start conservatively and adjust based on monitoring.** With Resilience4j + Actuator, you can see concurrent calls and waiting counts in real time, enabling data-driven tuning.
+
 **When you still need `Semaphore`:** Simple utilities where Resilience4j is overkill, or library code that must run without framework dependencies.
 
 ---
