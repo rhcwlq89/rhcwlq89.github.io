@@ -207,16 +207,20 @@ sequenceDiagram
 | **Mixed auth pages** | Public page that shows personalized UI for logged-in users |
 | **Session renewal** | Automatically extend the SP session if the IdP session is still alive |
 
-#### SP-Initiated SSO vs Passive SSO
+#### Active SSO vs Passive SSO
 
-| Aspect | SP-Initiated (normal) | Passive (IsPassive=true) |
-|--------|---------------------|------------------------|
-| IdP session exists | Immediate auth success | Immediate auth success (same) |
-| No IdP session | **Shows login screen** | **Returns failure without login screen** |
-| User experience | Forced redirect | Seamless UX |
-| Primary use | Accessing protected resources | Pre-checking login status |
+In SAML, SSO approaches are broadly divided into **Active** (default) and **Passive** (IsPassive=true).
 
-> **Key point**: Passive SSO is a "fetch if logged in, skip if not" strategy. It never forces the user to a login screen, resulting in a smoother UX.
+| Aspect | Active SSO | Passive SSO |
+|--------|-----------|-------------|
+| User interaction | Allowed (shows login UI if needed) | Forbidden (no UI allowed) |
+| No IdP session | Login screen → return to SP after auth | `NoPassive` error or SP handles it |
+| IdP session exists | Auto-processed (when ForceAuthn=false) | Auto-processed |
+| AuthnRequest attribute | `IsPassive="false"` (default) | `IsPassive="true"` |
+| Use scenario | SSO button click, protected resource access | Auto login attempt on page entry |
+| Failure handling | IdP shows login screen | SP must handle (e.g., show login button) |
+
+> **Key point**: Passive SSO is a "fetch if logged in, skip if not" strategy. It never forces the user to a login screen, resulting in a smoother UX. Active SSO is a "must guarantee authenticated state" strategy.
 
 ### 2.4 SAML Binding Methods
 
