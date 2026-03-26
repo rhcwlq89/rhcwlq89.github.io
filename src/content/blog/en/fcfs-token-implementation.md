@@ -388,13 +388,19 @@ The biggest enemy of FCFS systems is **bots**. Automated scripts calling the tok
 
 In practice, **use proven tools rather than building rate limiting from scratch**.
 
-| Layer | Tool | Characteristics | Best For |
-|-------|------|----------------|----------|
-| **CDN/Edge** | Cloudflare, AWS WAF | Blocks before reaching app server | DDoS, mass bot attacks |
-| **API Gateway** | Spring Cloud Gateway, Kong | Routing + Rate Limiting integrated | MSA environments, service frontdoor |
-| **Application** | Resilience4j `@RateLimiter` | Code-level declarative control | Fine-grained per-API control |
+| Layer | Tool | Configured At | Characteristics | Best For |
+|-------|------|--------------|----------------|----------|
+| **CDN/Edge** | Cloudflare, AWS WAF | **Domain DNS settings** (no Spring code changes) | Blocks before reaching app server | DDoS, mass bot attacks |
+| **API Gateway** | Spring Cloud Gateway, Kong | Gateway server config | Routing + Rate Limiting integrated | MSA environments, service frontdoor |
+| **Application** | Resilience4j `@RateLimiter` | Spring Boot code + yml | Code-level declarative control | Fine-grained per-API control |
 
-**In production, combine these layers.** Cloudflare handles IP-based mass attacks, while the application performs fine-grained per-user control.
+> **Cloudflare is not configured in Spring.** You point your domain's DNS to Cloudflare's nameservers, and all traffic passes through Cloudflare before reaching your server. Rate Limiting rules are set in the Cloudflare dashboard at the domain level. No changes needed in Spring code.
+
+```
+User → DNS → Cloudflare (IP-based bot/DDoS blocking) → Your Server (Spring Boot)
+```
+
+**In production, combine these layers.** Cloudflare blocks IP-based mass attacks before they reach your app server, while the application performs fine-grained per-user control.
 
 #### Resilience4j @RateLimiter
 

@@ -392,13 +392,19 @@ public class PurchaseController {
 
 Rate Limiting은 직접 구현하기보다 **검증된 도구를 사용하는 것이 실무 표준**이다.
 
-| 계층 | 도구 | 특징 | 적합한 상황 |
-|------|------|------|-----------|
-| **CDN/Edge** | Cloudflare, AWS WAF | 앱 서버 도달 전에 차단 | DDoS, 봇 대량 공격 |
-| **API Gateway** | Spring Cloud Gateway, Kong | 라우팅 + Rate Limiting 통합 | MSA 환경, 서비스 앞단 |
-| **애플리케이션** | Resilience4j `@RateLimiter` | 코드 레벨 선언적 제어 | 특정 API 단위 세밀한 제어 |
+| 계층 | 도구 | 설정 위치 | 특징 | 적합한 상황 |
+|------|------|----------|------|-----------|
+| **CDN/Edge** | Cloudflare, AWS WAF | **도메인 DNS 설정** (Spring 코드 변경 없음) | 앱 서버 도달 전에 차단 | DDoS, 봇 대량 공격 |
+| **API Gateway** | Spring Cloud Gateway, Kong | Gateway 서버 설정 | 라우팅 + Rate Limiting 통합 | MSA 환경, 서비스 앞단 |
+| **애플리케이션** | Resilience4j `@RateLimiter` | Spring Boot 코드 + yml | 코드 레벨 선언적 제어 | 특정 API 단위 세밀한 제어 |
 
-**실무에서는 이들을 조합**한다. Cloudflare가 IP 기반 대량 공격을 막고, 애플리케이션에서 사용자 단위의 세밀한 제어를 수행한다.
+> **Cloudflare는 Spring에서 설정하는 것이 아니다.** 도메인의 DNS를 Cloudflare 네임서버로 향하게 하면, 모든 트래픽이 Cloudflare를 먼저 거치고 나서 우리 서버에 도달한다. Rate Limiting 룰은 Cloudflare 대시보드에서 도메인 단위로 설정한다. Spring 코드에는 아무것도 추가할 필요 없다.
+
+```
+사용자 → DNS → Cloudflare (IP 기반 봇/DDoS 차단) → 우리 서버 (Spring Boot)
+```
+
+**실무에서는 이들을 조합**한다. Cloudflare가 IP 기반 대량 공격을 앱 서버 도달 전에 막고, 애플리케이션에서 사용자 단위의 세밀한 제어를 수행한다.
 
 #### Resilience4j @RateLimiter
 
