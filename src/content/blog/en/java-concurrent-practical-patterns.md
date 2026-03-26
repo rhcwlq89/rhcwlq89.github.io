@@ -142,7 +142,18 @@ The methods above are distinguished by **whether they take input and produce out
 
 > **What the `Async` suffix means:** `thenApply` *may* run on the **same thread** as the previous stage, while `thenApplyAsync` is guaranteed to run on a **separate thread** (ForkJoinPool or a specified Executor). For tasks involving I/O, the `Async` variant is the safer choice.
 
-### Running Multiple Tasks and Combining Results
+### Running Multiple Tasks and Combining Results — thenCombine
+
+`thenApply` above **transforms a single result**. But in practice, you often need to **run two independent tasks simultaneously and merge the results when both finish**. That's what `thenCombine` is for.
+
+```
+thenApply:    A result ──→ transform ──→ B
+thenCombine:  A result ─┐
+                         ├─→ merge ──→ C
+              B result ─┘
+```
+
+Example: fetching product info and reviews **simultaneously** on a product detail page, then combining them into a single DTO:
 
 ```java
 CompletableFuture<Product> productCf = CompletableFuture
@@ -154,6 +165,17 @@ CompletableFuture<List<Review>> reviewCf = CompletableFuture
 CompletableFuture<ProductDetail> detailCf = productCf
     .thenCombine(reviewCf, (product, reviews) -> new ProductDetail(product, reviews));
 ```
+
+**Without `thenCombine`?** You'd have to block with `get()`.
+
+```java
+// ❌ Blocking approach — calling thread is stuck
+Product product = productCf.get();
+List<Review> reviews = reviewCf.get();
+ProductDetail detail = new ProductDetail(product, reviews);
+```
+
+`thenCombine` **automatically merges results the moment both complete**, without blocking the calling thread.
 
 ### Future vs CompletableFuture
 

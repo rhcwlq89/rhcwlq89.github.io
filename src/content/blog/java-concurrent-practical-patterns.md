@@ -141,7 +141,18 @@ CompletableFuture
 
 > **`Async` 접미사의 의미:** `thenApply`는 이전 단계와 **같은 스레드**에서 실행될 수 있고, `thenApplyAsync`는 반드시 **별도 스레드(ForkJoinPool 또는 지정한 Executor)**에서 실행된다. I/O가 포함된 작업이라면 `Async` 버전을 쓰는 것이 안전하다.
 
-### 여러 작업을 동시에 실행하고 합치기
+### 여러 작업을 동시에 실행하고 합치기 — thenCombine
+
+위의 `thenApply`는 **하나의 결과를 변환**하는 것이다. 하지만 실무에서는 **두 개의 독립적인 작업을 동시에 실행하고, 둘 다 끝나면 결과를 합쳐야** 하는 경우가 많다. 이때 `thenCombine`을 쓴다.
+
+```
+thenApply:    A 결과 ──→ 변환 ──→ B
+thenCombine:  A 결과 ─┐
+                       ├─→ 합쳐서 ──→ C
+              B 결과 ─┘
+```
+
+상품 상세 페이지에서 상품 정보와 리뷰를 **동시에** 가져와서 하나의 DTO로 합치는 예시:
 
 ```java
 CompletableFuture<Product> productCf = CompletableFuture
@@ -153,6 +164,17 @@ CompletableFuture<List<Review>> reviewCf = CompletableFuture
 CompletableFuture<ProductDetail> detailCf = productCf
     .thenCombine(reviewCf, (product, reviews) -> new ProductDetail(product, reviews));
 ```
+
+**`thenCombine`이 없다면?** `get()`으로 블로킹해야 한다.
+
+```java
+// ❌ 블로킹 방식 — 호출 스레드가 멈춤
+Product product = productCf.get();
+List<Review> reviews = reviewCf.get();
+ProductDetail detail = new ProductDetail(product, reviews);
+```
+
+`thenCombine`은 **둘 다 끝나는 순간 자동으로 합쳐주므로** 호출 스레드를 블로킹하지 않는다.
 
 ### Future vs CompletableFuture
 
