@@ -490,7 +490,50 @@ public void warmUpStock() {
 }
 ```
 
-### 7.2 TTL 설정
+### 7.2 운영 중 Redis 도입 시 시퀀스 초기화
+
+신규 시스템이라면 Redis `INCR`이 1부터 시작해도 문제 없다. 하지만 **이미 운영 중인 시스템에 Redis를 도입**하면, 기존에 발급된 번호와 충돌할 수 있다.
+
+예를 들어 예약번호가 DB 시퀀스로 1523번까지 발급된 상태에서 Redis `INCR`을 도입하면 1부터 다시 시작한다 → **번호 충돌.**
+
+**해결: DB의 현재 최대값으로 Redis 초기화**
+
+```java
+@Component
+public class ReservationSeqInitializer implements ApplicationRunner {
+
+    private final StringRedisTemplate redisTemplate;
+    private final ReservationRepository reservationRepository;
+
+    private static final String SEQ_KEY = "reservation:seq";
+
+    @Override
+    public void run(ApplicationArguments args) {
+        // Redis에 키가 없을 때만 초기화 (이미 있으면 건드리지 않음)
+        Boolean wasSet = redisTemplate.opsForValue()
+            .setIfAbsent(SEQ_KEY, String.valueOf(getMaxSeqFromDB()));
+
+        if (Boolean.TRUE.equals(wasSet)) {
+            log.info("Redis 시퀀스 초기화 완료: {}", redisTemplate.opsForValue().get(SEQ_KEY));
+        }
+    }
+
+    private long getMaxSeqFromDB() {
+        return reservationRepository.findMaxReservationNo()
+            .orElse(999L); // DB에 데이터가 없으면 999 → INCR 시 1000부터 시작
+    }
+}
+```
+
+| 상황 | 문제 | 해결 |
+|------|------|------|
+| Redis 재시작 | 시퀀스가 날아가서 1부터 시작 → 번호 충돌 | `ApplicationRunner`로 앱 기동 시 DB 최대값 체크 후 복구 |
+| 여러 Pod 동시 기동 | 두 Pod가 동시에 초기화 → race condition | `setIfAbsent` (SETNX) 사용 — 먼저 쓴 Pod만 성공 |
+| DB에서 직접 INSERT 발생 | Redis와 DB 시퀀스가 어긋남 | Redis를 유일한 채번 소스로 통일하거나, DB 시퀀스와 범위를 분리 |
+
+> **핵심 원칙:** Redis를 중간에 도입할 때는 반드시 DB의 현재 최대값으로 초기화한다. `INCR`의 기본 시작값(0)을 그대로 쓰면 번호 충돌이 발생한다.
+
+### 7.3 TTL 설정
 
 이벤트가 끝난 후에도 Redis에 데이터가 남아있으면 메모리 낭비다:
 
@@ -502,7 +545,7 @@ public void initStock(Long productId, int quantity) {
 }
 ```
 
-### 7.3 모니터링 필수 항목
+### 7.4 모니터링 필수 항목
 
 | 항목 | 이유 |
 |------|------|

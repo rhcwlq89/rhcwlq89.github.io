@@ -486,7 +486,50 @@ public void warmUpStock() {
 }
 ```
 
-### 7.2 TTL Configuration
+### 7.2 Sequence Initialization When Introducing Redis Mid-Operation
+
+For a brand-new system, Redis `INCR` starting from 1 is fine. But when **introducing Redis to an already running system**, previously issued numbers can collide.
+
+For example, if reservation numbers have been issued up to 1523 via DB sequences, and you introduce Redis `INCR`, it starts from 1 → **number collision.**
+
+**Solution: Initialize Redis with the current max value from DB**
+
+```java
+@Component
+public class ReservationSeqInitializer implements ApplicationRunner {
+
+    private final StringRedisTemplate redisTemplate;
+    private final ReservationRepository reservationRepository;
+
+    private static final String SEQ_KEY = "reservation:seq";
+
+    @Override
+    public void run(ApplicationArguments args) {
+        // Only initialize if key doesn't exist (don't touch if already set)
+        Boolean wasSet = redisTemplate.opsForValue()
+            .setIfAbsent(SEQ_KEY, String.valueOf(getMaxSeqFromDB()));
+
+        if (Boolean.TRUE.equals(wasSet)) {
+            log.info("Redis sequence initialized: {}", redisTemplate.opsForValue().get(SEQ_KEY));
+        }
+    }
+
+    private long getMaxSeqFromDB() {
+        return reservationRepository.findMaxReservationNo()
+            .orElse(999L); // No data in DB → 999 → INCR starts from 1000
+    }
+}
+```
+
+| Scenario | Problem | Solution |
+|----------|---------|----------|
+| Redis restarts | Sequence resets to 1 → number collision | `ApplicationRunner` checks DB max value on startup and recovers |
+| Multiple Pods start simultaneously | Two Pods initialize at once → race condition | Use `setIfAbsent` (SETNX) — only the first Pod succeeds |
+| Direct INSERT into DB | Redis and DB sequences diverge | Unify Redis as the sole numbering source, or separate DB sequence ranges |
+
+> **Key principle:** When introducing Redis mid-operation, always initialize with the current max value from DB. Using `INCR`'s default starting value (0) will cause number collisions.
+
+### 7.3 TTL Configuration
 
 Data lingering in Redis after the event wastes memory:
 
@@ -498,7 +541,7 @@ public void initStock(Long productId, int quantity) {
 }
 ```
 
-### 7.3 Essential Monitoring
+### 7.4 Essential Monitoring
 
 | Metric | Why |
 |--------|-----|
