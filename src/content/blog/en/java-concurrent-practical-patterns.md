@@ -576,6 +576,8 @@ public class OrderEventListener {
 
 **When you still need `BlockingQueue`:** Batch processing (accumulate and flush), backpressure control, or library code that must work without a Spring context.
 
+> **What is backpressure?** A mechanism that naturally slows down producers when incoming requests exceed processing capacity. With `BlockingQueue`, when the queue is full, `put()` blocks — the producer pauses, giving consumers time to catch up. Without backpressure, requests pile up indefinitely, leading to out-of-memory (OOM) failures.
+
 ---
 
 ## 6. Semaphore — Limiting Concurrent Access

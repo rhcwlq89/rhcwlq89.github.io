@@ -575,6 +575,8 @@ public class OrderEventListener {
 
 **그래도 `BlockingQueue`가 필요한 경우:** 배치 처리(큐에 모아서 한꺼번에 flush), 배압(backpressure) 제어가 필요할 때, 또는 Spring 컨텍스트 없이 동작해야 하는 라이브러리 코드.
 
+> **배압(backpressure)이란?** 처리 능력을 초과하는 요청이 들어올 때, 생산자의 속도를 자연스럽게 늦추는 메커니즘이다. `BlockingQueue`에서는 큐가 가득 차면 `put()`이 블로킹되어 생산자가 멈추고, 소비자가 따라잡을 시간을 확보한다. 배압이 없으면 요청이 무한히 쌓여 메모리 초과(OOM)로 이어진다.
+
 ---
 
 ## 6. Semaphore — 동시 접근 수 제한
