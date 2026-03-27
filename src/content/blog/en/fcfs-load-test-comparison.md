@@ -267,8 +267,8 @@ k6 run -e VUS=100 -e ITERATIONS=100 test-db-lock.js
 | Total time | 1.2s | 0.6s | ~30s | 2.3s |
 | Avg response | 324ms | 487ms | ~16s (incl. polling) | 251ms |
 | P95 response | 544ms | 524ms | ~30s | 283ms |
-| Success | 100 | 100 | 99 | 100 |
-| Failed | 0 | 0 | 1 | 0 |
+| Success | 100 | 100 | 100 | 100 |
+| Failed | 0 | 0 | 0 | 0 |
 
 > The queue takes ~30s because the scheduler allows 10 users every 3 seconds. This isn't a performance problem — it's **intentional flow control**.
 
@@ -279,8 +279,8 @@ k6 run -e VUS=100 -e ITERATIONS=100 test-db-lock.js
 | Total time | 1.8s | 1.1s | ~31s | 1.2s |
 | Avg response | 1,513ms | 1,017ms | ~5.5s (incl. polling) | 937ms |
 | P95 response | 1,754ms | 1,068ms | ~25s | 1,099ms |
-| Success | 100 | 100 | 99 | 100 |
-| Failed (sold out) | 400 | 400 | 401 | 400 |
+| Success | 100 | 100 | 100 | 100 |
+| Failed (sold out) | 400 | 400 | 400 | 400 |
 | TPS | ~278 | ~455 | N/A | ~417 |
 
 At 500 users, DB lock P95 climbs to 1.7 seconds — noticeable, but not catastrophic. No HikariCP timeouts were observed. The gap between Redis and token is also smaller than expected at this scale.
