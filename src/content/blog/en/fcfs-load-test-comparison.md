@@ -33,9 +33,10 @@ We've said "fast" and "slow" in each post, but **never compared them under ident
 | Redis | Redis 7.x (Standalone) |
 | Kafka | Apache Kafka 3.x (1 broker, 3 partitions) |
 | Load test tool | k6 v1.5.0 |
-| HikariCP | maxPoolSize: 20, connectionTimeout: 30s |
+| HikariCP | maximumPoolSize: 10 (Spring Boot default) |
+| MySQL | max_connections: 151 (default) |
 
-> Infrastructure (MySQL, Redis, Kafka) ran via Docker Compose; the application ran locally.
+> Infrastructure (MySQL, Redis, Kafka) ran via Docker Compose; the application ran locally. HikariCP pool size was left at the Spring Boot default of 10. MySQL max_connections is 151, so the DB lock approach can hold at most 10 concurrent lock-waiting requests.
 
 ### 1.2 Test Scenarios
 

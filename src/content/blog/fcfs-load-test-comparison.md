@@ -37,9 +37,10 @@ heroImage: "../../assets/FcfsLoadTestComparison.png"
 | Redis | Redis 7.x (Standalone) |
 | Kafka | Apache Kafka 3.x (1 broker, 3 partitions) |
 | 부하 테스트 도구 | k6 v1.5.0 |
-| HikariCP | maxPoolSize: 20, connectionTimeout: 30s |
+| HikariCP | maximumPoolSize: 10 (Spring Boot 기본값) |
+| MySQL | max_connections: 151 (기본값) |
 
-> 인프라(MySQL, Redis, Kafka)는 Docker Compose로, 애플리케이션은 로컬에서 실행했다.
+> 인프라(MySQL, Redis, Kafka)는 Docker Compose로, 애플리케이션은 로컬에서 실행했다. HikariCP 풀 사이즈를 별도로 설정하지 않아 Spring Boot 기본값인 10이 적용되었다. MySQL의 최대 커넥션 수는 151이므로 DB 락 방식에서 동시에 락을 잡을 수 있는 요청은 최대 10개다.
 
 ### 1.2 테스트 시나리오
 
