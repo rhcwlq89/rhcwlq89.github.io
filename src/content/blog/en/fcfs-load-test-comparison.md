@@ -1,6 +1,6 @@
 ---
 title: "FCFS System Showdown: Load Testing All Approaches with k6"
-description: "Compares DB locks, Redis, queues, and tokens — four FCFS implementations tested with k6 under identical conditions (100 stock, 100/500/1000 concurrent users). Measures TPS, P95 latency, and failure rate, then provides a decision matrix for choosing the right approach."
+description: "DB Lock, Redis, Queue, Token — we load-tested all 4 FCFS strategies under identical conditions (100 stock, 100/500/1,000/2,000 concurrent users) with k6. Each scenario ran 10 times to get stable averages for TPS, P95/P99 response times, and we identify the optimal strategy for each situation."
 pubDate: "2026-03-24T22:00:00+09:00"
 tags: ["System Design", "First-Come-First-Served", "Load Testing", "k6", "Performance"]
 heroImage: "../../../assets/FcfsLoadTestComparison.png"
@@ -42,9 +42,10 @@ We've said "fast" and "slow" in each post, but **never compared them under ident
 Identical conditions for all approaches:
 
 - **Stock**: 100 items
-- **Concurrent users**: 100 / 500 / 1,000
+- **Concurrent users**: 100 / 500 / 1,000 / 2,000
 - **Request pattern**: All users attempt purchase simultaneously (no ramp-up)
-- **Metrics**: TPS, avg response time, P95 response time, success rate, failure rate
+- **Metrics**: TPS, avg response time, P95 response time, P99 response time, success rate, failure rate
+- Each scenario ran 10 times; all figures are the average across those runs.
 
 ### 1.3 Measurement Method
 
@@ -254,7 +255,7 @@ export default function () {
 
 ## 3. Test Results
 
-> **Measured data (2026.03.27)** — All figures are from actual test runs.
+> **Measured data (2026.03.27)** — All figures are averages across 10 runs per scenario.
 
 ### 3.1 100 Concurrent Users (100 Stock)
 
@@ -264,9 +265,9 @@ k6 run -e VUS=100 -e ITERATIONS=100 test-db-lock.js
 
 | Metric | DB Lock | Redis | Queue | Token |
 |--------|---------|-------|-------|-------|
-| Total time | 1.2s | 0.6s | ~30s | 2.3s |
-| Avg response | 324ms | 487ms | ~16s (incl. polling) | 251ms |
-| P95 response | 544ms | 524ms | ~30s | 283ms |
+| Avg response | 253ms | 98ms | ~16s (incl. polling) | 336ms |
+| P95 response | 397ms | 163ms | ~30s | 364ms |
+| P99 response | 409ms | 165ms | ~30s | 368ms |
 | Success | 100 | 100 | 100 | 100 |
 | Failed | 0 | 0 | 0 | 0 |
 
@@ -276,27 +277,42 @@ k6 run -e VUS=100 -e ITERATIONS=100 test-db-lock.js
 
 | Metric | DB Lock | Redis | Queue | Token |
 |--------|---------|-------|-------|-------|
-| Total time | 1.8s | 1.1s | ~31s | 1.2s |
-| Avg response | 1,513ms | 1,017ms | ~5.5s (incl. polling) | 937ms |
-| P95 response | 1,754ms | 1,068ms | ~25s | 1,099ms |
+| Avg response | 517ms | 210ms | ~51s (incl. polling) | 242ms |
+| P95 response | 689ms | 249ms | ~66s | 414ms |
+| P99 response | 702ms | 252ms | ~66s | 426ms |
 | Success | 100 | 100 | 100 | 100 |
 | Failed (sold out) | 400 | 400 | 400 | 400 |
-| TPS | ~278 | ~455 | N/A | ~417 |
+| TPS | ~679 | ~2,334 | N/A | ~1,783 |
 
-At 500 users, DB lock P95 climbs to 1.7 seconds — noticeable, but not catastrophic. No HikariCP timeouts were observed. The gap between Redis and token is also smaller than expected at this scale.
+At 500 users, the performance gap between approaches starts to show. Redis (2,334 TPS) is 3.4x faster than DB lock (679 TPS), and token (1,783 TPS) is 2.6x faster.
 
 ### 3.3 1,000 Concurrent Users (100 Stock)
 
 | Metric | DB Lock | Redis | Queue | Token |
 |--------|---------|-------|-------|-------|
-| Total time | 1.3s | 0.2s | ~56s | 0.3s |
-| Avg response | 826ms | 202ms | ~10s (incl. polling) | 117ms |
-| P95 response | 1,165ms | 302ms | ~41s | 197ms |
-| Success | 100 | 100 | 185* | 100 |
-| Failed (sold out) | 900 | 900 | 815 | 900 |
-| TPS | ~783 | ~2,008 | N/A | ~2,736 |
+| Avg response | 1,085ms | 413ms | ~61s (incl. polling) | 362ms |
+| P95 response | 1,631ms | 602ms | ~70s | 1,089ms |
+| P99 response | 1,688ms | 608ms | ~70s | 1,107ms |
+| Success | 100 | 100 | 100 | 100 |
+| Failed (sold out) | 900 | 900 | 900 | 900 |
+| TPS | ~647 | ~2,224 | N/A | ~2,230 |
 
-> \* The queue showing 185 successes instead of 100 is a known issue. The Kafka consumer continued marking queue entries as COMPLETED even after stock was exhausted, allowing those requests to reach the purchase API. Stock deduction itself was precisely capped at 100.
+At 1,000 users, DB lock P99 reaches 1.7 seconds. Redis and token both hit ~2,200 TPS, but Redis (602ms P95) is more stable than token (1,089ms P95) at this scale.
+
+### 3.4 2,000 Concurrent Users (100 Stock)
+
+| Metric | DB Lock | Redis | Queue | Token |
+|--------|---------|-------|-------|-------|
+| Avg response | 1,481ms | 1,114ms | ~59s (incl. polling) | 698ms |
+| P95 response | 3,167ms | 2,867ms | ~63s | 2,032ms |
+| P99 response | 3,393ms | 2,874ms | ~64s | 3,240ms |
+| Success | 100 | 100 | 203* | 100 |
+| Failed (sold out) | 1,900 | 1,900 | 1,797 | 1,900 |
+| TPS | ~676 | ~1,918 | N/A | ~1,137 |
+
+At 2,000 users, every approach's P99 exceeds 3 seconds. DB lock (3,393ms) and token (3,240ms) land at similar levels, with Redis (2,874ms) lowest. The standout finding is **token TPS collapsing to 1,137**. It matched Redis at 1,000 users (2,230 vs 2,224), but drops to just 60% of Redis (1,918) at 2,000. JWT signing/verification is CPU-bound, and it becomes a bottleneck as concurrency climbs.
+
+> \* The queue success count exceeding 100 is caused by the Kafka consumer's COMPLETED marking logic. Actual stock deduction is precisely capped at 100. See [Part 9](/blog/en/fcfs-load-test-behind-the-scenes) for a detailed analysis.
 
 ---
 
@@ -308,31 +324,41 @@ At 500 users, DB lock P95 climbs to 1.7 seconds — noticeable, but not catastro
 TPS (1,000 concurrent users)
 ──────────────────────────────────────────────
 
-DB Lock    ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░  783
-Redis      ████████████████████████████████████████  2,008
-Token      ████████████████████████████████████████████  2,736
+DB Lock    ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░  647
+Redis      ████████████████████████████████████████  2,224
+Token      ████████████████████████████████████████  2,230
 Queue      (flow control — not comparable by TPS)
 ```
 
-At 1,000 users, **token outperforms Redis** (2,736 vs 2,008 TPS). Token isn't just for bot prevention — it also delivers the highest raw throughput under load.
+At 1,000 users, **Redis and token are essentially tied** (2,224 vs 2,230 TPS). DB lock comes in at 647 TPS — about one-third the throughput.
 
 ### 4.2 P95 Latency Comparison
 
 ```
-P95 Response Time (1,000 concurrent)
+P95 Response Time (1,000 → 2,000 concurrent)
 ──────────────────────────────────────────────
 
-DB Lock    ██████░░░░░░░░░░░░░░░░░░░░░░░░░  1,165ms
-Redis      ██░░░░░░░░░░░░░░░░░░░░░░░░░░░░  302ms
-Token      █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  197ms
-Queue      Intentional wait (~41s)
+DB Lock    ██████ → █████████████  1,631ms → 3,167ms
+Redis      ███ → ████████████     602ms → 2,867ms
+Token      █████ → ████████████   1,089ms → 2,032ms
+Queue      Intentional wait (~70s)
+```
+
+```
+P99 Response Time (2,000 concurrent)
+──────────────────────────────────────────────
+
+DB Lock    █████████████████████████████████  3,393ms
+Redis      ████████████████████████████████   2,874ms
+Token      █████████████████████████████████  3,240ms
+Queue      Intentional wait (~64s)
 ```
 
 ### 4.3 DB Connection Behavior
 
 DB locks make **every request hold a DB connection while waiting for the lock**. This means even unrelated APIs (product listings, user pages) can't get connections, slowing down the **entire service**. Redis/token approaches don't use DB for stock deduction — one connection is enough.
 
-That said, DB lock performed better than expected. Even at 1,000 users, P95 was 1.2 seconds and no HikariCP timeouts appeared. Low network latency and fast DB response in the local environment likely contributed. Production systems sharing connections with other APIs could see worse results.
+At 2,000 users the gap between approaches narrows — all methods converge around ~3s P99. DB lock's real problem isn't just speed: TPS is nearly flat from 1,000 users (647) to 2,000 users (676), meaning the connection pool is already saturated and adding users doesn't increase throughput. Redis maintained 1,918 TPS under the same load.
 
 ---
 
@@ -349,14 +375,14 @@ That said, DB lock performed better than expected. Even at 1,000 users, P95 was 
 
 ### 5.2 TPS per Dollar
 
-| Approach | TPS | Monthly Cost | TPS/$ |
-|----------|-----|-------------|-------|
-| DB Lock | 783 | $50 | 15.66 |
-| Redis | 2,008 | $80 | 25.10 |
-| Token | 2,736 | $80 | 34.20 |
+| Approach | TPS (1,000 users) | Monthly Cost | TPS/$ |
+|----------|:-----------------:|-------------|-------|
+| DB Lock | 647 | $50 | 12.94 |
+| Redis | 2,224 | $80 | 27.80 |
+| Token | 2,230 | $80 | 27.88 |
 | Queue | N/A (flow control) | $200 | N/A |
 
-**Token leads on cost efficiency.** At $80, it delivers 2,736 TPS — 36% more throughput than Redis at the same price.
+At 1,000 users, Redis and token have virtually identical cost efficiency (27.80 vs 27.88 TPS/$). At 2,000 users, Redis (1,918 TPS → 23.98 TPS/$) pulls significantly ahead of token (1,137 TPS → 14.21 TPS/$).
 
 ---
 
@@ -381,7 +407,7 @@ That said, DB lock performed better than expected. Even at 1,000 users, P95 was 
 → **Redis Lua Script** — 2.5x performance for $30 more. Simple to implement.
 
 **"Sneaker drop, large-scale (~thousands to tens of thousands)"**
-→ **Token + Redis** — Fastest at high load (2,736 TPS), enables bot prevention, best cost efficiency.
+→ **Redis** — Most stable at 2,000+ users (1,918 TPS, P99 2,874ms). Add **Token + Redis** if bot prevention is also needed.
 
 **"Concert ticketing, massive-scale (~tens of thousands+)"**
 → **Queue + Token + Kafka** — Order guarantee + traffic absorption + stable processing.
@@ -423,6 +449,9 @@ k6 run -e VUS=500 -e ITERATIONS=500 test-db-lock.js
 
 # 1,000 users
 k6 run -e VUS=1000 -e ITERATIONS=1000 test-db-lock.js
+
+# 2,000 users
+k6 run -e VUS=2000 -e ITERATIONS=2000 test-db-lock.js
 ```
 
 ### 7.3 Generate Reports
@@ -444,19 +473,19 @@ For a walkthrough of how this test environment was built, see [Part 9](/blog/en/
 
 ## Summary
 
-| Approach | TPS (1,000) | P95 | Cost | Best For |
-|----------|:---:|:---:|:---:|----------|
-| **DB Lock** | 783 | 1,165ms | $50 | Internal events (~50) |
-| **Redis** | 2,008 | 302ms | $80 | Mid-scale FCFS (~thousands) |
-| **Token** | 2,736 | 197ms | $80 | Large-scale + bot prevention + max throughput |
-| **Queue** | Flow control | ~41s (intentional) | $200 | Massive-scale ticketing |
+| Approach | TPS (1,000) | P95 (1,000) | P99 (2,000) | Cost | Best For |
+|----------|:---:|:---:|:---:|:---:|----------|
+| **DB Lock** | 647 | 1,631ms | 3,393ms | $50 | Internal events (~100) |
+| **Redis** | 2,224 | 602ms | 2,874ms | $80 | Mid-scale FCFS (~thousands) |
+| **Token** | 2,230 | 1,089ms | 3,240ms | $80 | Large-scale + bot prevention |
+| **Queue** | Flow control | ~70s (intentional) | ~64s | $200 | Massive-scale ticketing |
 
 **Key Takeaways:**
 
-1. **DB lock performed better than expected.** P95 of 1.2s at 1,000 users, no HikariCP timeouts. Production results may differ when connections are shared with other APIs.
-2. **Token is the fastest at high concurrency.** 2,736 TPS beats Redis (2,008). It's not just for bot prevention — it's also the highest raw throughput.
-3. **Redis is still a great choice.** $30 more for 2.5x performance, and the implementation is straightforward.
-4. **Queue is about experience, not performance.** The ~30s response time is constant regardless of load — that's the point.
-5. **The real story: the gap narrows under load.** The difference between strategies was smaller than predicted, which is a useful reality check for capacity planning.
+1. **DB lock hits a wall at 2,000 users.** P99 reaches 3.4s and TPS is nearly identical at 1,000 (647) vs 2,000 users (676) — the connection pool is saturated.
+2. **Redis is the most stable under high load.** It maintains 1,918 TPS at 2,000 users with the lowest P99 at 2,874ms.
+3. **Token is best up to 1,000 users but drops sharply at 2,000.** JWT signing/verification is CPU-bound and becomes a bottleneck at high concurrency. If you don't need bot prevention, Redis is the safer choice.
+4. **Queue performance is independent of load.** Whether 100 or 2,000 users, it's ~60 seconds — that's the design intent.
+5. **Local environment results have limits.** All figures are relative comparisons on the same machine. Production adds network latency, shared connection pools, and other variables that will shift the numbers.
 
 This series covered **FCFS systems from fundamentals to production**. From transaction isolation levels in Part 1 to load testing in Part 8, we built each approach and measured the results. The goal was always the same: **make technology choices backed by evidence, not assumptions.**
