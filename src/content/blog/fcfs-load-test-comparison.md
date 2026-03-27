@@ -40,7 +40,9 @@ heroImage: "../../assets/FcfsLoadTestComparison.png"
 | HikariCP | maximumPoolSize: 10 (Spring Boot 기본값) |
 | MySQL | max_connections: 151 (기본값) |
 
-> 인프라(MySQL, Redis, Kafka)는 Docker Compose로, 애플리케이션은 로컬에서 실행했다. HikariCP 풀 사이즈를 별도로 설정하지 않아 Spring Boot 기본값인 10이 적용되었다. MySQL의 최대 커넥션 수는 151이므로 DB 락 방식에서 동시에 락을 잡을 수 있는 요청은 최대 10개다.
+> 인프라(MySQL, Redis, Kafka)는 Docker Compose로, 애플리케이션은 로컬에서 실행했다.
+>
+> **커넥션 설정:** HikariCP `maximumPoolSize`를 별도로 설정하지 않아 Spring Boot 기본값인 **10**이 적용되었다. MySQL의 `max_connections`는 기본값 **151**이다. 따라서 실제 병목은 MySQL 커넥션 한도(151)가 아니라 **앱 레벨의 HikariCP 풀(10)**이다. DB 락 방식에서 동시에 `SELECT FOR UPDATE` 락을 잡고 대기할 수 있는 요청은 최대 10개이고, 나머지 요청은 HikariCP에서 커넥션을 얻기 위해 대기한다.
 
 ### 1.2 테스트 시나리오
 

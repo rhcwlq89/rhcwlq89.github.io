@@ -36,7 +36,9 @@ We've said "fast" and "slow" in each post, but **never compared them under ident
 | HikariCP | maximumPoolSize: 10 (Spring Boot default) |
 | MySQL | max_connections: 151 (default) |
 
-> Infrastructure (MySQL, Redis, Kafka) ran via Docker Compose; the application ran locally. HikariCP pool size was left at the Spring Boot default of 10. MySQL max_connections is 151, so the DB lock approach can hold at most 10 concurrent lock-waiting requests.
+> Infrastructure (MySQL, Redis, Kafka) ran via Docker Compose; the application ran locally.
+>
+> **Connection settings:** HikariCP `maximumPoolSize` was left at the Spring Boot default of **10**. MySQL `max_connections` is the default **151**. The actual bottleneck is not the MySQL connection limit (151) but the **app-level HikariCP pool (10)**. With the DB lock approach, at most 10 requests can hold a `SELECT FOR UPDATE` lock simultaneously — the rest queue up in HikariCP waiting for a connection.
 
 ### 1.2 Test Scenarios
 
