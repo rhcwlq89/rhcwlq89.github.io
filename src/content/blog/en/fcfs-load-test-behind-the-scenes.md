@@ -1,29 +1,15 @@
 ---
-title: "Behind the FCFS Load Test: Actually Running What We Wrote About"
-description: "We admitted the load test numbers were estimates and actually built all 4 FCFS strategies to run k6 tests for real. From isolated package design to Rate Limiter conflicts and queue over-counting bugs — what actually happens when you run the tests."
+title: "Behind the FCFS Load Test: Pitfalls and Production Isolation Strategies"
+description: "Problems we hit while k6-testing 4 FCFS strategies — Rate Limiter conflicts, queue over-counting bugs. Plus 4 ways to isolate FCFS APIs from regular APIs in production: separate DataSource, Redis offloading, service separation, and Bulkhead pattern."
 pubDate: "2026-03-25T14:00:00+09:00"
 tags: ["System Design", "First-Come-First-Served", "Load Testing", "k6", "Spring Boot", "Behind the Scenes"]
 heroImage: "../../../assets/FcfsLoadTestComparison.png"
 lang: en
 ---
 
-## Introduction — Why This Post Exists
+## Introduction
 
-In [Part 8](/blog/en/fcfs-load-test-comparison), we presented performance comparison numbers for all four FCFS approaches — TPS, P99 latency, DB connection usage, neatly laid out in tables.
-
-Those numbers were not from actual test runs.
-
-To be honest:
-
-- The `marketplace` project had no `/api/orders/db-lock` endpoint
-- No k6 script files existed
-- Success was exactly 100, failure was exactly 400 — the numbers were suspiciously clean
-
-We wrote Part 8 based on what we reasoned would happen theoretically, without actually building and running the tests. The direction was probably right. The magnitudes could be wrong.
-
-So we went back and built all four strategies for real, wrote the k6 scripts, ran them, and updated Part 8 with actual measured data.
-
-This post is a record of **what we built, and what broke along the way.**
+In [Part 8](/blog/en/fcfs-load-test-comparison), we load-tested all four FCFS approaches with k6 and compared their performance. This post covers **what we built to make those tests work, what problems we ran into, and how production environments should handle things differently.**
 
 ---
 
@@ -146,25 +132,103 @@ After these fixes, the queue test reported exactly 100 successes.
 
 ---
 
-## 4. Issue 3 — Results That Didn't Match Predictions
+## 4. Production Concern — Isolating FCFS APIs from Regular APIs
 
-With both issues resolved, we ran the 1,000-user test again. Comparing Part 8's estimates against actual measurements:
+In the test environment, only FCFS APIs ran. In production, **product listings, user pages, and payments** all run simultaneously. If FCFS traffic spikes bring down regular APIs, the entire service is down.
 
-| Metric | Part 8 Estimate | Actual | Difference |
-|--------|----------------|--------|------------|
-| DB Lock P95 (1,000 users) | 12,500ms | 1,165ms | **10x faster** |
-| DB Lock TPS (1,000 users) | 79 | 783 | **10x higher** |
-| Redis TPS (1,000 users) | 1,724 | 2,008 | ~16% higher |
-| Token TPS (1,000 users) | 1,370 | 2,736 | **2x higher** |
-| Redis vs Token ranking | Redis > Token | **Token > Redis** | reversed |
+### 4.1 The Problem: Shared DB Connection Pool
 
-DB lock being 10x faster than predicted was surprising at first — but the reason makes sense.
+The core issue with DB locks: `SELECT FOR UPDATE` **holds a connection while waiting for the lock**. If 10 FCFS requests grab all 10 HikariCP connections, even a simple product listing query can't get a connection and times out.
 
-**Why DB lock was faster than expected**: The Part 8 estimates assumed a production-like environment — ~1ms network round-trip between RDS and the application server, hundreds of concurrent connections. In local testing, MySQL runs on the same machine. No network round-trip. HikariCP's pool of 20 connections returns fast on local hardware. The absolute numbers differ significantly, but **the gap would widen further in a real production environment.**
+```
+[10 FCFS requests] → Connection pool (10) fully occupied
+[Product listing]  → Waiting for connection → Timeout → 503 Error
+```
 
-**Why token outperformed Redis**: The token strategy's Redis operations are just `DECR` and `SISMEMBER`. The Redis Lua script bundles multiple commands together, introducing additional overhead. JWT signing and verification are CPU operations with no I/O wait. Locally, CPU-bound work completes faster than I/O-bound work.
+### 4.2 Solution 1: Separate DataSources
 
-**Why the numbers aren't round**: Real tests reflect JVM warmup state, OS scheduling, and GC timing. Some runs produced 97 successes instead of 100 (due to k6's `maxDuration` limit). Clean round numbers only exist in theory.
+The most reliable approach: **create a dedicated DataSource for FCFS**.
+
+```kotlin
+@Configuration
+class DataSourceConfig {
+
+    @Primary
+    @Bean
+    @ConfigurationProperties("spring.datasource.main")
+    fun mainDataSource(): DataSource = HikariDataSource()
+
+    @Bean
+    @ConfigurationProperties("spring.datasource.fcfs")
+    fun fcfsDataSource(): DataSource = HikariDataSource()
+}
+```
+
+```yaml
+spring:
+  datasource:
+    main:
+      maximum-pool-size: 20   # For regular APIs
+    fcfs:
+      maximum-pool-size: 10   # Dedicated to FCFS
+```
+
+Even if FCFS requests consume all 10 `fcfsDataSource` connections, regular APIs independently use the 20 `mainDataSource` connections.
+
+### 4.3 Solution 2: Redis Offloading (Recommended)
+
+Part 8's test results already showed the answer. **Moving stock deduction to Redis eliminates DB connection contention entirely.**
+
+```
+[FCFS request] → Redis (DECR) → Only on success: DB INSERT (1 connection, brief)
+[Regular API]  → DB connection pool (plenty of room)
+```
+
+Redis and token approaches don't use DB connections for stock deduction, so FCFS traffic and regular traffic **don't interfere at the DB level**.
+
+### 4.4 Solution 3: Service Separation (Large Scale)
+
+For high traffic, splitting the FCFS API into a **separate service** is the cleanest approach.
+
+```
+[Nginx / ALB]
+├── /api/orders/fcfs/** → FCFS Service (separate instances, separate DB pool)
+└── /api/**             → Main Service (existing instances)
+```
+
+- FCFS scaling is independent
+- FCFS failures don't cascade to the main service
+- Higher infra cost, but this isolation is essential at scale
+
+### 4.5 Solution 4: Bulkhead Pattern
+
+If service separation is overkill but you want connection pool isolation, **Resilience4j Bulkhead** limits concurrent execution.
+
+```kotlin
+@Bulkhead(name = "fcfsApi", fallbackMethod = "fcfsFallback")
+fun purchase(request: FcfsRequest): FcfsResponse {
+    // ...
+}
+```
+
+```yaml
+resilience4j:
+  bulkhead:
+    instances:
+      fcfsApi:
+        max-concurrent-calls: 10    # Max 10 concurrent FCFS requests
+        max-wait-duration: 500ms    # Excess waits 500ms then fails
+```
+
+This prevents FCFS APIs from holding more than 10 DB connections at any time.
+
+### 4.6 Summary: Recommendations by Scale
+
+| Scale | Recommended Isolation |
+|-------|----------------------|
+| **Small (~100 concurrent)** | Bulkhead to limit concurrency |
+| **Medium (~1,000 concurrent)** | Redis offloading + Bulkhead |
+| **Large (~10,000+ concurrent)** | Service separation + Redis + Queue |
 
 ---
 
@@ -185,19 +249,15 @@ The tests are still valid because **the comparison baseline is the same for all 
 
 ## Summary
 
-Three things this exercise produced:
+Key takeaways:
 
-1. **If you're putting numbers in a blog post, actually run them.** Estimates can point in the right direction but get the magnitude wrong. We predicted DB lock P95 at 12.5 seconds; actual was 1.2 seconds.
+1. **Existing protection mechanisms in the test environment will bite you.** One Rate Limiter caused the token strategy to show 0% success. When adding new endpoints, revisit the existing filter and interceptor list.
 
-2. **Existing protection mechanisms in the test environment will bite you.** One Rate Limiter caused the token strategy to show 0% success. When adding new endpoints, revisit the existing filter and interceptor list.
+2. **In async flows, define "success" explicitly in both server code and test scripts.** The queue's `COMPLETED` state needed to distinguish "purchase succeeded" from "request processed." When those definitions diverge, the measurement breaks.
 
-3. **In async flows, define "success" explicitly in both server code and test scripts.** The queue's `COMPLETED` state needed to distinguish "purchase succeeded" from "request processed." When those definitions diverge, the measurement breaks.
+3. **In production, isolation is everything.** When FCFS traffic spikes, regular APIs must not go down with it. Redis offloading, separate DataSources, Bulkhead, service separation — pick the isolation strategy that fits your scale.
 
-Part 8's numbers have been replaced with measured data. Some predictions were far off. One ranking reversed. That's what real tests are for.
+4. **Acknowledge the limits of local testing.** All numbers are relative comparisons on the same machine. No network latency, no connection pool sharing, no competing APIs. DB lock performance would be significantly worse in production.
 
 - Previous: [Part 8 — FCFS System Showdown: Load Testing All Approaches](/blog/en/fcfs-load-test-comparison)
 - Next: [7 Practical Patterns for java.util.concurrent](/blog/en/java-concurrent-practical-patterns)
-
----
-
-If you ever wondered whether the numbers in the blog were real — now they are.
