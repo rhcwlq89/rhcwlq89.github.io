@@ -73,6 +73,20 @@ State was reset between tests using `POST /api/fcfs/reset` to restore stock and 
 
 ### 2.1 DB Lock Test
 
+```mermaid
+sequenceDiagram
+    participant U as User (VU)
+    participant A as Spring Boot
+    participant DB as MySQL
+
+    U->>A: POST /api/orders/db-lock
+    A->>DB: SELECT FOR UPDATE (wait for lock)
+    DB-->>A: Lock acquired → deduct stock
+    A-->>U: 200 OK / 409 Sold Out
+```
+
+> Simplest flow — a single request completes the purchase. Bottleneck is DB lock wait time.
+
 ```javascript
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -91,7 +105,7 @@ export const options = {
             executor: 'shared-iterations',
             vus: __ENV.VUS ? parseInt(__ENV.VUS) : 100,
             iterations: __ENV.ITERATIONS ? parseInt(__ENV.ITERATIONS) : 100,
-            maxDuration: '120s',
+            maxDuration: '120s', // Force-stops the test if all requests aren't done within 2 minutes
         },
     },
 };
@@ -125,6 +139,20 @@ export default function () {
 ```
 
 ### 2.2 Redis Test
+
+```mermaid
+sequenceDiagram
+    participant U as User (VU)
+    participant A as Spring Boot
+    participant R as Redis
+
+    U->>A: POST /api/orders/redis
+    A->>R: Lua script (DECR stock)
+    R-->>A: Success / Out of stock
+    A-->>U: 200 OK / 409 Sold Out
+```
+
+> Bypasses the DB entirely — stock is atomically deducted in Redis. Single request completes the flow.
 
 ```javascript
 // Options and metric declarations are identical to 2.1 (omitted)
@@ -164,6 +192,35 @@ export default function () {
 ```
 
 ### 2.3 Queue Test
+
+```mermaid
+sequenceDiagram
+    participant U as User (VU)
+    participant A as Spring Boot
+    participant R as Redis
+    participant K as Kafka
+
+    U->>A: POST /api/queue/enter
+    A->>R: Register user in Sorted Set
+    R-->>A: Registered
+    A-->>U: Waiting
+
+    loop Poll every 1 second
+        U->>A: GET /api/queue/status
+        A->>R: Check position
+        R-->>A: WAITING / ALLOWED
+        A-->>U: Status response
+    end
+
+    Note over A,K: Scheduler allows 10 users every 3 seconds
+
+    U->>A: POST /api/orders
+    A->>K: Publish order event
+    K-->>A: Processed
+    A-->>U: 200 OK / 409 Sold Out
+```
+
+> 3-phase flow (enter → poll → purchase). The queue absorbs traffic spikes and keeps server load steady.
 
 ```javascript
 // Queue test has 3 phases (enter → poll → purchase)
@@ -223,6 +280,24 @@ export default function () {
 ```
 
 ### 2.4 Token Test
+
+```mermaid
+sequenceDiagram
+    participant U as User (VU)
+    participant A as Spring Boot
+    participant R as Redis
+
+    U->>A: POST /api/tokens/issue
+    A->>R: Check + deduct stock
+    R-->>A: Deduction success
+    A-->>U: Issue JWT token
+
+    U->>A: POST /api/orders/token (Authorization: Bearer JWT)
+    A->>A: Verify JWT signature
+    A-->>U: 200 OK / 409 Sold Out
+```
+
+> 2-phase flow (token issuance → purchase). The JWT proves purchase authorization — useful for bot prevention.
 
 ```javascript
 // Token test has 2 phases (issue → purchase)

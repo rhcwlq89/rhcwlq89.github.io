@@ -77,6 +77,20 @@ heroImage: "../../assets/FcfsLoadTestComparison.png"
 
 ### 2.1 DB 락 테스트
 
+```mermaid
+sequenceDiagram
+    participant U as 사용자 (VU)
+    participant A as Spring Boot
+    participant DB as MySQL
+
+    U->>A: POST /api/orders/db-lock
+    A->>DB: SELECT FOR UPDATE (락 획득 대기)
+    DB-->>A: 락 획득 → 재고 차감
+    A-->>U: 200 OK / 409 품절
+```
+
+> 단일 요청으로 완결되는 가장 단순한 흐름이다. 병목은 DB 락 대기 시간.
+
 ```javascript
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -95,7 +109,7 @@ export const options = {
             executor: 'shared-iterations',
             vus: __ENV.VUS ? parseInt(__ENV.VUS) : 100,
             iterations: __ENV.ITERATIONS ? parseInt(__ENV.ITERATIONS) : 100,
-            maxDuration: '120s',
+            maxDuration: '120s', // 2분 안에 모든 요청이 끝나지 않으면 테스트를 강제 종료한다
         },
     },
 };
@@ -129,6 +143,20 @@ export default function () {
 ```
 
 ### 2.2 Redis 테스트
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자 (VU)
+    participant A as Spring Boot
+    participant R as Redis
+
+    U->>A: POST /api/orders/redis
+    A->>R: Lua 스크립트 (DECR 재고)
+    R-->>A: 차감 성공 / 재고 부족
+    A-->>U: 200 OK / 409 품절
+```
+
+> DB를 거치지 않고 Redis에서 원자적으로 재고를 차감한다. 단일 요청으로 완결.
 
 ```javascript
 // 옵션과 메트릭 선언은 2.1과 동일 (생략)
@@ -168,6 +196,35 @@ export default function () {
 ```
 
 ### 2.3 대기열 테스트
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자 (VU)
+    participant A as Spring Boot
+    participant R as Redis
+    participant K as Kafka
+
+    U->>A: POST /api/queue/enter
+    A->>R: Sorted Set에 사용자 등록
+    R-->>A: 등록 완료
+    A-->>U: 대기 중
+
+    loop 1초 간격 폴링
+        U->>A: GET /api/queue/status
+        A->>R: 순번 확인
+        R-->>A: WAITING / ALLOWED
+        A-->>U: 상태 응답
+    end
+
+    Note over A,K: 스케줄러가 3초마다 10명씩 진입 허용
+
+    U->>A: POST /api/orders
+    A->>K: 주문 이벤트 발행
+    K-->>A: 처리 완료
+    A-->>U: 200 OK / 409 품절
+```
+
+> 3단계 흐름(진입 → 폴링 → 구매)으로, 대기열이 트래픽을 흡수해 서버 부하를 일정하게 유지한다.
 
 ```javascript
 // 대기열은 3단계(진입 → 폴링 → 구매)로 구성된다
@@ -227,6 +284,24 @@ export default function () {
 ```
 
 ### 2.4 토큰 테스트
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자 (VU)
+    participant A as Spring Boot
+    participant R as Redis
+
+    U->>A: POST /api/tokens/issue
+    A->>R: 재고 확인 + 차감
+    R-->>A: 차감 성공
+    A-->>U: JWT 토큰 발급
+
+    U->>A: POST /api/orders/token (Authorization: Bearer JWT)
+    A->>A: JWT 서명 검증
+    A-->>U: 200 OK / 409 품절
+```
+
+> 2단계 흐름(토큰 발급 → 구매)으로, JWT가 구매 권한을 증명한다. 봇 방지에 유리.
 
 ```javascript
 // 토큰은 2단계(발급 → 구매)로 구성된다
