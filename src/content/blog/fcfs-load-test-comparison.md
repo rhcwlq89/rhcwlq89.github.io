@@ -208,6 +208,7 @@ sequenceDiagram
     participant A as Spring Boot
     participant R as Redis
     participant K as Kafka
+    participant DB as MySQL
 
     U->>A: POST /api/queue/enter
     A->>R: Sorted Set에 사용자 등록
@@ -221,15 +222,19 @@ sequenceDiagram
         A-->>U: 상태 응답
     end
 
-    Note over A,K: 스케줄러가 3초마다 10명씩 진입 허용
+    Note over A,R: 스케줄러가 3초마다 10명씩<br/>Sorted Set → Allowed Set 이동
 
-    U->>A: POST /api/orders
-    A->>K: 주문 이벤트 발행
-    K-->>A: 처리 완료
-    A-->>U: 200 OK / 409 품절
+    A->>K: 허용된 사용자 주문 이벤트 발행
+    K-->>A: Kafka Consumer 수신
+    A->>DB: 재고 차감 (atomic UPDATE) + 주문 저장
+    DB-->>A: 처리 완료
+    A->>R: COMPLETED 마킹
+
+    U->>A: GET /api/queue/status
+    A-->>U: COMPLETED / SOLD_OUT
 ```
 
-> 3단계 흐름(진입 → 폴링 → 구매)으로, 대기열이 트래픽을 흡수해 서버 부하를 일정하게 유지한다.
+> 3단계 흐름(진입 → 폴링 → 구매)으로, 대기열이 트래픽을 흡수한다. 실제 재고 차감은 Kafka Consumer가 DB에서 처리하며, 사용자는 폴링으로 결과를 확인한다.
 
 ```javascript
 // 대기열은 3단계(진입 → 폴링 → 구매)로 구성된다
@@ -295,18 +300,23 @@ sequenceDiagram
     participant U as 사용자 (VU)
     participant A as Spring Boot
     participant R as Redis
+    participant DB as MySQL
 
     U->>A: POST /api/tokens/issue
-    A->>R: 재고 확인 + 차감
-    R-->>A: 차감 성공
-    A-->>U: JWT 토큰 발급
+    A->>R: 쿼터 차감 (DECR) + 발급 기록 (SADD)
+    R-->>A: 차감 성공 / 재고 부족
+    A-->>U: JWT 토큰 발급 / 409 품절
 
     U->>A: POST /api/orders/token (Authorization: Bearer JWT)
-    A->>A: JWT 서명 검증
-    A-->>U: 200 OK / 409 품절
+    A->>A: JWT 서명 검증 + 클레임 추출
+    A->>R: 토큰 사용 여부 확인 (SISMEMBER)
+    R-->>A: 미사용 확인
+    A->>DB: 주문 기록 저장 (INSERT)
+    DB-->>A: 저장 완료
+    A-->>U: 200 OK / 409 중복 사용
 ```
 
-> 2단계 흐름(토큰 발급 → 구매)으로, JWT가 구매 권한을 증명한다. 봇 방지에 유리.
+> 2단계 흐름(토큰 발급 → 구매)으로, Phase 1에서 Redis로 쿼터를 관리하고 Phase 2에서 JWT 검증 후 DB에 주문을 저장한다. 봇 방지에 유리.
 
 ```javascript
 // 토큰은 2단계(발급 → 구매)로 구성된다

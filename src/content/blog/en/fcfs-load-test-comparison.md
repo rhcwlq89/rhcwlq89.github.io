@@ -204,6 +204,7 @@ sequenceDiagram
     participant A as Spring Boot
     participant R as Redis
     participant K as Kafka
+    participant DB as MySQL
 
     U->>A: POST /api/queue/enter
     A->>R: Register user in Sorted Set
@@ -217,15 +218,19 @@ sequenceDiagram
         A-->>U: Status response
     end
 
-    Note over A,K: Scheduler allows 10 users every 3 seconds
+    Note over A,R: Scheduler moves 10 users every 3s<br/>from Sorted Set → Allowed Set
 
-    U->>A: POST /api/orders
-    A->>K: Publish order event
-    K-->>A: Processed
-    A-->>U: 200 OK / 409 Sold Out
+    A->>K: Publish order event for allowed users
+    K-->>A: Kafka Consumer receives
+    A->>DB: Deduct stock (atomic UPDATE) + save order
+    DB-->>A: Done
+    A->>R: Mark COMPLETED
+
+    U->>A: GET /api/queue/status
+    A-->>U: COMPLETED / SOLD_OUT
 ```
 
-> 3-phase flow (enter → poll → purchase). The queue absorbs traffic spikes and keeps server load steady.
+> 3-phase flow (enter → poll → purchase). The queue absorbs traffic spikes. Actual stock deduction happens in the DB via Kafka Consumer, and users check the result by polling.
 
 ```javascript
 // Queue test has 3 phases (enter → poll → purchase)
@@ -291,18 +296,23 @@ sequenceDiagram
     participant U as User (VU)
     participant A as Spring Boot
     participant R as Redis
+    participant DB as MySQL
 
     U->>A: POST /api/tokens/issue
-    A->>R: Check + deduct stock
-    R-->>A: Deduction success
-    A-->>U: Issue JWT token
+    A->>R: Deduct quota (DECR) + record issuance (SADD)
+    R-->>A: Success / Out of stock
+    A-->>U: Issue JWT token / 409 Sold Out
 
     U->>A: POST /api/orders/token (Authorization: Bearer JWT)
-    A->>A: Verify JWT signature
-    A-->>U: 200 OK / 409 Sold Out
+    A->>A: Verify JWT signature + extract claims
+    A->>R: Check token usage (SISMEMBER)
+    R-->>A: Not yet used
+    A->>DB: Save order record (INSERT)
+    DB-->>A: Saved
+    A-->>U: 200 OK / 409 Already Used
 ```
 
-> 2-phase flow (token issuance → purchase). The JWT proves purchase authorization — useful for bot prevention.
+> 2-phase flow (token issuance → purchase). Phase 1 manages quota in Redis; Phase 2 verifies the JWT and saves the order to the DB. Useful for bot prevention.
 
 ```javascript
 // Token test has 2 phases (issue → purchase)
