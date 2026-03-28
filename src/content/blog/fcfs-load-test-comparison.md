@@ -149,14 +149,19 @@ sequenceDiagram
     participant U as 사용자 (VU)
     participant A as Spring Boot
     participant R as Redis
+    participant DB as MySQL
 
     U->>A: POST /api/orders/redis
-    A->>R: Lua 스크립트 (DECR 재고)
+    A->>R: Lua 스크립트 (중복 체크 + DECR 재고)
     R-->>A: 차감 성공 / 재고 부족
+    alt 차감 성공
+        A->>DB: 주문 기록 저장 (INSERT)
+        DB-->>A: 저장 완료
+    end
     A-->>U: 200 OK / 409 품절
 ```
 
-> DB를 거치지 않고 Redis에서 원자적으로 재고를 차감한다. 단일 요청으로 완결.
+> 구매 판단(재고 확인 + 차감)은 Redis Lua 스크립트로 원자적 처리하고, 성공한 경우에만 DB에 주문 기록을 남긴다. 락 경합이 인메모리에서 끝나므로 DB 락 방식보다 빠르다.
 
 ```javascript
 // 옵션과 메트릭 선언은 2.1과 동일 (생략)

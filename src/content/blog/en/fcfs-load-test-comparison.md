@@ -145,14 +145,19 @@ sequenceDiagram
     participant U as User (VU)
     participant A as Spring Boot
     participant R as Redis
+    participant DB as MySQL
 
     U->>A: POST /api/orders/redis
-    A->>R: Lua script (DECR stock)
+    A->>R: Lua script (duplicate check + DECR stock)
     R-->>A: Success / Out of stock
+    alt Deduction success
+        A->>DB: Save order record (INSERT)
+        DB-->>A: Saved
+    end
     A-->>U: 200 OK / 409 Sold Out
 ```
 
-> Bypasses the DB entirely — stock is atomically deducted in Redis. Single request completes the flow.
+> The purchase decision (stock check + deduction) is handled atomically by a Redis Lua script. Only successful purchases write to the DB for record-keeping. Lock contention stays in-memory, making it faster than the DB lock approach.
 
 ```javascript
 // Options and metric declarations are identical to 2.1 (omitted)
