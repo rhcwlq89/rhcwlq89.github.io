@@ -36,6 +36,8 @@ We've said "fast" and "slow" in each post, but **never compared them under ident
 | HikariCP | maximumPoolSize: 10 (Spring Boot default) |
 | MySQL | max_connections: 151 (default) |
 
+> Full source code is available on [GitHub](https://github.com/rhcwlq89/marketplace).
+>
 > Infrastructure (MySQL, Redis, Kafka) ran via Docker Compose; the application ran locally.
 >
 > **Connection settings:** HikariCP `maximumPoolSize` was left at the Spring Boot default of **10**. MySQL `max_connections` is the default **151**. The actual bottleneck is not the MySQL connection limit (151) but the **app-level HikariCP pool (10)**. With the DB lock approach, at most 10 requests can hold a `SELECT FOR UPDATE` lock simultaneously — the rest queue up in HikariCP waiting for a connection.
@@ -46,7 +48,7 @@ Identical conditions for all approaches:
 
 - **Stock**: 100 items
 - **Concurrent users**: 100 / 500 / 1,000 / 2,000
-- **Request pattern**: All users attempt purchase simultaneously (no ramp-up)
+- **Request pattern**: All users attempt purchase simultaneously (no ramp-up — instead of gradually increasing users, all fire requests at the same instant)
 - **Metrics**: TPS, avg response time, P95 response time, P99 response time, success rate, failure rate
 - Each scenario ran 10 times; all figures are the average across those runs.
 
@@ -76,6 +78,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 
+// Custom metrics: track success/fail counts and response time distribution separately
 const successCount = new Counter('success_count');
 const failCount = new Counter('fail_count');
 const purchaseTime = new Trend('purchase_time');
@@ -83,6 +86,8 @@ const purchaseTime = new Trend('purchase_time');
 export const options = {
     scenarios: {
         spike: {
+            // shared-iterations: all VUs share the total iterations
+            // e.g., VUS=500, ITERATIONS=500 → each VU fires exactly 1 request
             executor: 'shared-iterations',
             vus: __ENV.VUS ? parseInt(__ENV.VUS) : 100,
             iterations: __ENV.ITERATIONS ? parseInt(__ENV.ITERATIONS) : 100,
@@ -93,8 +98,9 @@ export const options = {
 
 export default function () {
     const productId = 1;
-    const userId = __VU;
+    const userId = __VU; // Each VU (Virtual User) gets a unique ID, used as userId
 
+    // Measure response time manually (tracks only the purchase flow, separate from k6 built-in metrics)
     const start = Date.now();
     const res = http.post(
         `http://localhost:8080/api/orders/db-lock`,
@@ -111,6 +117,7 @@ export default function () {
         failCount.add(1);
     }
 
+    // Any response other than 200 (success) or 409 (sold out / duplicate) indicates a server error
     check(res, {
         'status is 200 or 409': (r) => r.status === 200 || r.status === 409,
     });
@@ -120,6 +127,7 @@ export default function () {
 ### 2.2 Redis Test
 
 ```javascript
+// Options and metric declarations are identical to 2.1 (omitted)
 export const options = {
     scenarios: {
         spike: {
@@ -136,6 +144,7 @@ export default function () {
     const userId = __VU;
 
     const start = Date.now();
+    // Calls the endpoint that deducts stock via Redis Lua script
     const res = http.post(
         `http://localhost:8080/api/orders/redis`,
         JSON.stringify({ productId, userId, quantity: 1 }),
@@ -150,25 +159,29 @@ export default function () {
     } else {
         failCount.add(1);
     }
+    // No check() needed — Redis approach has simpler failure modes than DB lock
 }
 ```
 
 ### 2.3 Queue Test
 
 ```javascript
+// Queue test has 3 phases (enter → poll → purchase)
+// start is declared at the top to measure total elapsed time across all phases
 export default function () {
     const productId = 1;
     const userId = __VU;
     const start = Date.now();
 
-    // Phase 1: Enter queue
+    // Phase 1: Enter queue — registers the user in a Redis Sorted Set
     const enterRes = http.post(
         `http://localhost:8080/api/queue/enter`,
         JSON.stringify({ productId, userId }),
         { headers: { 'Content-Type': 'application/json' } }
     );
 
-    // Phase 2: Poll until allowed
+    // Phase 2: Poll — checks status every 1 second until the scheduler grants entry
+    // Times out after 60 attempts (60 seconds)
     let allowed = false;
     for (let i = 0; i < 60; i++) {
         const statusRes = http.get(
@@ -181,12 +194,12 @@ export default function () {
             break;
         }
         if (body.status === 'NOT_IN_QUEUE') {
-            break;
+            break; // Already processed
         }
         sleep(1);
     }
 
-    // Phase 3: Purchase
+    // Phase 3: Purchase — only users granted entry call the actual order API
     if (allowed) {
         const orderRes = http.post(
             `http://localhost:8080/api/orders`,
@@ -203,6 +216,7 @@ export default function () {
         failCount.add(1);
     }
 
+    // Records total time from queue entry to purchase completion (or failure)
     const elapsed = Date.now() - start;
     purchaseTime.add(elapsed);
 }
@@ -211,18 +225,21 @@ export default function () {
 ### 2.4 Token Test
 
 ```javascript
+// Token test has 2 phases (issue → purchase)
+// Early-returns on token failure to avoid unnecessary purchase requests
 export default function () {
     const productId = 1;
     const userId = __VU;
     const start = Date.now();
 
-    // Phase 1: Get token
+    // Phase 1: Issue JWT token — checks stock in Redis and issues a purchase authorization token
     const tokenRes = http.post(
         `http://localhost:8080/api/tokens/issue`,
         JSON.stringify({ productId, userId }),
         { headers: { 'Content-Type': 'application/json' } }
     );
 
+    // Skip purchase phase if token issuance fails (e.g., sold out)
     if (tokenRes.status !== 200) {
         failCount.add(1);
         purchaseTime.add(Date.now() - start);
@@ -231,7 +248,7 @@ export default function () {
 
     const token = JSON.parse(tokenRes.body).token;
 
-    // Phase 2: Purchase with token
+    // Phase 2: Purchase with token — sends JWT in Authorization header to the order API
     const orderRes = http.post(
         `http://localhost:8080/api/orders/token`,
         JSON.stringify({ quantity: 1 }),
@@ -243,6 +260,7 @@ export default function () {
         }
     );
 
+    // Records total time across token issuance + purchase
     const elapsed = Date.now() - start;
     purchaseTime.add(elapsed);
 
@@ -362,6 +380,48 @@ Queue      Intentional wait (~64s)
 DB locks make **every request hold a DB connection while waiting for the lock**. This means even unrelated APIs (product listings, user pages) can't get connections, slowing down the **entire service**. Redis/token approaches don't use DB for stock deduction — one connection is enough.
 
 At 2,000 users the gap between approaches narrows — all methods converge around ~3s P99. DB lock's real problem isn't just speed: TPS is nearly flat from 1,000 users (647) to 2,000 users (676), meaning the connection pool is already saturated and adding users doesn't increase throughput. Redis maintained 1,918 TPS under the same load.
+
+### 4.4 Reference: Production Connection Sizing Guide
+
+This test used default values — HikariCP 10, MySQL 151. How should you size these in production?
+
+**HikariCP `maximumPoolSize` Formula**
+
+The HikariCP wiki suggests this formula:
+
+```
+connections = (CPU cores × 2) + effective_spindle_count
+```
+
+- `effective_spindle_count`: concurrent I/O requests the disk can handle (usually 1 for SSD)
+- For a 4-core server: `(4 × 2) + 1 = 9–10` connections
+- **Counter-intuitively, a larger pool does NOT mean better performance.** More connections increase context switching, lock contention, and cache misses — making things slower.
+
+> HikariCP's team has shared a case where reducing a pool from 2,048 → 96 connections under 600 concurrent users dropped average response time from 100ms → 2ms.
+
+**Recommended Ranges**
+
+| Scenario | `maximumPoolSize` | Notes |
+|----------|:-----------------:|-------|
+| Typical web service (4–8 cores) | 10–20 | Start with defaults, tune after monitoring |
+| Batch / bulk processing | 20–50 | Longer I/O waits justify more connections |
+| FCFS / high-burst APIs | 10–30 | Redis offloading matters more than pool size |
+
+**MySQL `max_connections` Sizing**
+
+```
+max_connections ≥ (app instances × maximumPoolSize) + headroom (monitoring, migrations, etc.)
+```
+
+- 3 app servers × HikariCP 20 = 60 → set `max_connections` to at least 80–100
+- The default 151 is fine for small setups, but **must be adjusted as instances scale**
+- Each MySQL connection costs ~10MB of memory. `max_connections = 1000` means ~10GB of RAM for connections alone
+
+**Key Principles**
+
+1. **Start small** with HikariCP pool size and scale up based on `connectionTimeout` log monitoring
+2. Set MySQL `max_connections` **20–30% above** the total pool size across all app instances
+3. For burst-heavy APIs like FCFS, **designing away from DB connections** (Redis offloading) is more effective than tuning pool size
 
 ---
 

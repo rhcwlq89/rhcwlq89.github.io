@@ -40,6 +40,8 @@ heroImage: "../../assets/FcfsLoadTestComparison.png"
 | HikariCP | maximumPoolSize: 10 (Spring Boot 기본값) |
 | MySQL | max_connections: 151 (기본값) |
 
+> 전체 소스 코드는 [GitHub](https://github.com/rhcwlq89/marketplace)에서 확인할 수 있다.
+>
 > 인프라(MySQL, Redis, Kafka)는 Docker Compose로, 애플리케이션은 로컬에서 실행했다.
 >
 > **커넥션 설정:** HikariCP `maximumPoolSize`를 별도로 설정하지 않아 Spring Boot 기본값인 **10**이 적용되었다. MySQL의 `max_connections`는 기본값 **151**이다. 따라서 실제 병목은 MySQL 커넥션 한도(151)가 아니라 **앱 레벨의 HikariCP 풀(10)**이다. DB 락 방식에서 동시에 `SELECT FOR UPDATE` 락을 잡고 대기할 수 있는 요청은 최대 10개이고, 나머지 요청은 HikariCP에서 커넥션을 얻기 위해 대기한다.
@@ -50,7 +52,7 @@ heroImage: "../../assets/FcfsLoadTestComparison.png"
 
 - **재고**: 100개
 - **동시 사용자**: 100명 / 500명 / 1,000명 / 2,000명
-- **요청 패턴**: 모든 사용자가 동시에 구매 시도 (ramp-up 없음)
+- **요청 패턴**: 모든 사용자가 동시에 구매 시도 (ramp-up 없음 — 사용자를 점진적으로 늘리지 않고 전원이 동시에 요청을 보낸다)
 - **측정 항목**: TPS, 평균 응답 시간, P95 응답 시간, P99 응답 시간, 성공률, 실패율
 - 각 시나리오를 10회 반복 실행하여 평균값을 사용한다.
 
@@ -80,6 +82,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 
+// 커스텀 메트릭: 성공/실패 건수와 응답 시간 분포를 별도로 추적한다
 const successCount = new Counter('success_count');
 const failCount = new Counter('fail_count');
 const purchaseTime = new Trend('purchase_time');
@@ -87,6 +90,8 @@ const purchaseTime = new Trend('purchase_time');
 export const options = {
     scenarios: {
         spike: {
+            // shared-iterations: 전체 VU가 iterations를 나눠서 실행한다
+            // 예) VUS=500, ITERATIONS=500 → 각 VU가 1번씩 요청
             executor: 'shared-iterations',
             vus: __ENV.VUS ? parseInt(__ENV.VUS) : 100,
             iterations: __ENV.ITERATIONS ? parseInt(__ENV.ITERATIONS) : 100,
@@ -97,8 +102,9 @@ export const options = {
 
 export default function () {
     const productId = 1;
-    const userId = __VU;
+    const userId = __VU; // 각 VU(Virtual User)의 고유 번호를 userId로 사용
 
+    // 응답 시간 직접 측정 (k6 내장 메트릭과 별도로 구매 흐름만 추적)
     const start = Date.now();
     const res = http.post(
         `http://localhost:8080/api/orders/db-lock`,
@@ -115,6 +121,7 @@ export default function () {
         failCount.add(1);
     }
 
+    // 200(성공) 또는 409(품절/중복) 외의 응답은 서버 오류로 간주
     check(res, {
         'status is 200 or 409': (r) => r.status === 200 || r.status === 409,
     });
@@ -124,6 +131,7 @@ export default function () {
 ### 2.2 Redis 테스트
 
 ```javascript
+// 옵션과 메트릭 선언은 2.1과 동일 (생략)
 export const options = {
     scenarios: {
         spike: {
@@ -140,6 +148,7 @@ export default function () {
     const userId = __VU;
 
     const start = Date.now();
+    // Redis Lua 스크립트로 재고를 차감하는 엔드포인트 호출
     const res = http.post(
         `http://localhost:8080/api/orders/redis`,
         JSON.stringify({ productId, userId, quantity: 1 }),
@@ -154,25 +163,29 @@ export default function () {
     } else {
         failCount.add(1);
     }
+    // DB 락과 달리 check()를 생략 — Redis 방식은 409 외에 실패 케이스가 단순하다
 }
 ```
 
 ### 2.3 대기열 테스트
 
 ```javascript
+// 대기열은 3단계(진입 → 폴링 → 구매)로 구성된다
+// 전체 흐름의 소요 시간을 측정하기 위해 start를 최상단에 선언한다
 export default function () {
     const productId = 1;
     const userId = __VU;
     const start = Date.now();
 
-    // Phase 1: 대기열 진입
+    // Phase 1: 대기열 진입 — Redis Sorted Set에 사용자를 등록한다
     const enterRes = http.post(
         `http://localhost:8080/api/queue/enter`,
         JSON.stringify({ productId, userId }),
         { headers: { 'Content-Type': 'application/json' } }
     );
 
-    // Phase 2: 폴링 (진입 허용 대기)
+    // Phase 2: 폴링 — 스케줄러가 순번을 허용할 때까지 1초 간격으로 상태를 확인한다
+    // 최대 60회(60초) 대기 후 타임아웃 처리
     let allowed = false;
     for (let i = 0; i < 60; i++) {
         const statusRes = http.get(
@@ -185,12 +198,12 @@ export default function () {
             break;
         }
         if (body.status === 'NOT_IN_QUEUE') {
-            break; // 이미 처리됨
+            break; // 이미 처리 완료된 경우
         }
         sleep(1);
     }
 
-    // Phase 3: 구매
+    // Phase 3: 구매 — 순번이 허용된 사용자만 실제 주문 API를 호출한다
     if (allowed) {
         const orderRes = http.post(
             `http://localhost:8080/api/orders`,
@@ -207,6 +220,7 @@ export default function () {
         failCount.add(1);
     }
 
+    // 진입부터 구매 완료(또는 실패)까지의 전체 소요 시간을 기록한다
     const elapsed = Date.now() - start;
     purchaseTime.add(elapsed);
 }
@@ -215,18 +229,21 @@ export default function () {
 ### 2.4 토큰 테스트
 
 ```javascript
+// 토큰은 2단계(발급 → 구매)로 구성된다
+// 토큰 발급 실패 시 즉시 리턴하여 불필요한 구매 요청을 방지한다
 export default function () {
     const productId = 1;
     const userId = __VU;
     const start = Date.now();
 
-    // Phase 1: 토큰 발급
+    // Phase 1: JWT 토큰 발급 — Redis에서 재고를 확인하고 구매 권한 토큰을 발급한다
     const tokenRes = http.post(
         `http://localhost:8080/api/tokens/issue`,
         JSON.stringify({ productId, userId }),
         { headers: { 'Content-Type': 'application/json' } }
     );
 
+    // 토큰 발급 실패(품절 등) 시 구매 단계를 건너뛴다
     if (tokenRes.status !== 200) {
         failCount.add(1);
         purchaseTime.add(Date.now() - start);
@@ -235,7 +252,7 @@ export default function () {
 
     const token = JSON.parse(tokenRes.body).token;
 
-    // Phase 2: 토큰으로 구매
+    // Phase 2: 토큰으로 구매 — JWT를 Authorization 헤더에 담아 주문 API를 호출한다
     const orderRes = http.post(
         `http://localhost:8080/api/orders/token`,
         JSON.stringify({ quantity: 1 }),
@@ -247,6 +264,7 @@ export default function () {
         }
     );
 
+    // 토큰 발급 + 구매까지의 전체 소요 시간을 기록한다
     const elapsed = Date.now() - start;
     purchaseTime.add(elapsed);
 
@@ -366,6 +384,48 @@ Redis      ███████████████████████
 DB 락은 **모든 요청이 DB 커넥션을 물고 대기**하기 때문에, 선착순과 무관한 일반 API(상품 목록, 마이페이지)도 커넥션을 얻지 못해 느려진다. Redis/토큰 방식은 재고 차감에 DB를 쓰지 않으므로 커넥션 1개면 충분하다.
 
 2,000명에서 방식 간 격차가 좁아진다. 모든 방식의 P99가 ~3초에 수렴했다. DB 락의 진짜 문제는 속도만이 아니다 — TPS가 1,000명(647)과 2,000명(676)에서 거의 동일하다는 점이다. 커넥션 풀이 이미 포화 상태라 사용자가 늘어도 처리량이 늘지 않는다. Redis는 같은 조건에서 1,918 TPS를 유지했다.
+
+### 4.4 참고: 실무 커넥션 설정 가이드
+
+이 테스트에서는 HikariCP 10개, MySQL 151개를 기본값 그대로 사용했다. 실무에서는 어떻게 잡을까?
+
+**HikariCP `maximumPoolSize` 공식**
+
+HikariCP 공식 위키에서 제안하는 공식이 있다:
+
+```
+connections = (CPU 코어 수 × 2) + effective_spindle_count
+```
+
+- `effective_spindle_count`: 디스크가 동시에 처리할 수 있는 I/O 요청 수 (SSD는 보통 1)
+- 4코어 서버 기준: `(4 × 2) + 1 = 9~10`개
+- **직관과 반대로, 풀 사이즈를 늘린다고 성능이 좋아지지 않는다.** 커넥션이 많아지면 컨텍스트 스위칭, 락 경합, 캐시 미스가 증가해 오히려 느려진다.
+
+> HikariCP 팀은 600명 동시 사용자 환경에서 커넥션 풀을 2,048개 → 96개로 줄이자 평균 응답 시간이 100ms → 2ms로 단축된 사례를 공유한 바 있다.
+
+**실무 권장 범위**
+
+| 상황 | `maximumPoolSize` | 비고 |
+|------|:-----------------:|------|
+| 일반 웹 서비스 (4~8코어) | 10~20 | 기본값으로 시작, 모니터링 후 조정 |
+| 배치/대량 처리 | 20~50 | I/O 대기가 길어 코어 대비 여유 필요 |
+| 선착순/고부하 API | 10~30 | 커넥션 수보다 Redis 오프로드가 핵심 |
+
+**MySQL `max_connections` 설정**
+
+```
+max_connections ≥ (앱 인스턴스 수 × maximumPoolSize) + 여유분(모니터링, 마이그레이션 등)
+```
+
+- 앱 서버 3대 × HikariCP 20 = 60 → `max_connections`는 최소 80~100
+- 기본값 151은 소규모 환경에서 충분하지만, **인스턴스가 늘어나면 반드시 조정**해야 한다
+- MySQL의 커넥션 1개당 메모리는 ~10MB. `max_connections = 1000`이면 메모리만 ~10GB를 잡아먹는다
+
+**핵심 원칙**
+
+1. HikariCP 풀은 **작게 시작**하고, `connectionTimeout` 로그를 모니터링하며 올린다
+2. MySQL `max_connections`는 전체 앱 인스턴스의 합산 풀 사이즈보다 **20~30% 여유**를 둔다
+3. 선착순처럼 순간 부하가 집중되는 API는 **DB 커넥션을 줄이는 설계**(Redis 오프로드)가 풀 사이즈 튜닝보다 효과적이다
 
 ---
 
