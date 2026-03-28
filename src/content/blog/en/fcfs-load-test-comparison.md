@@ -366,6 +366,30 @@ export default function () {
 
 ## 3. Test Results
 
+### Limitations of Local Testing — Read This First
+
+Before looking at the numbers, keep this in mind: **every component runs on the same machine.** Compared to production, this setup disproportionately favors the DB lock approach.
+
+| Factor | Local Environment | Production Environment |
+|--------|-------------------|----------------------|
+| **Network latency** | 0ms (localhost) | 1–5ms (same AZ), 10–50ms (cross-AZ) |
+| **DB connection round-trip** | In-memory communication | Network round-trip on every query |
+| **Lock holding time** | Pure processing time only | Processing + network round-trip × 2 |
+| **Connection pool contention** | Minimal contention | Shared pool with other APIs |
+| **CPU / Memory** | App + DB + Redis share the same resources | Each has dedicated resources |
+
+**Why does DB lock look good locally?**
+
+The DB lock approach holds a connection from `SELECT FOR UPDATE` → stock deduction → commit. Locally, this entire cycle completes with 0ms network overhead. In production, every step adds a network round-trip.
+
+For example, with 2ms DB round-trip latency, the lock holding time per transaction becomes:
+- **Local**: ~5ms (pure processing)
+- **Production**: ~5ms + 2ms (SELECT FOR UPDATE) + 2ms (UPDATE) + 2ms (COMMIT) ≈ **~11ms**
+
+When lock holding time doubles, the TPS achievable with the same pool (10 connections) is halved. Redis, on the other hand, completes stock deduction in a single network round-trip — so **the gap widens in production.**
+
+> The numbers below are meant for **relative comparison** between approaches. Absolute TPS and response times will differ in production.
+
 > **Measured data (2026.03.27)** — All figures are averages across 10 runs per scenario.
 
 ### 3.1 100 Concurrent Users (100 Stock)
