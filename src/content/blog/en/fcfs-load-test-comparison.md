@@ -449,6 +449,30 @@ At 2,000 users, every approach's P99 exceeds 3 seconds. DB lock (3,393ms) and to
 
 > \* The queue success count exceeding 100 is caused by the Kafka consumer's COMPLETED marking logic. Actual stock deduction is precisely capped at 100. See [Part 9](/blog/en/fcfs-load-test-behind-the-scenes) for a detailed analysis.
 
+### 3.5 Reference: Same Test with PostgreSQL (DB Lock)
+
+We swapped the database from MySQL 8.0 to **PostgreSQL 16** and ran the DB lock approach under identical conditions (HikariCP 10, local environment, same k6 script, 10 runs averaged).
+
+| Metric | MySQL | PostgreSQL | Difference |
+|--------|:-----:|:----------:|:----------:|
+| **100 users** avg response | 253ms | 369ms | PG +46% |
+| **100 users** P95 | 397ms | 547ms | PG +38% |
+| **500 users** avg response | 517ms | 560ms | PG +8% |
+| **500 users** TPS | ~679 | ~565 | PG -17% |
+| **1,000 users** avg response | 1,085ms | 1,080ms | Nearly identical |
+| **1,000 users** P95 | 1,631ms | 1,827ms | PG +12% |
+| **1,000 users** TPS | ~647 | ~541 | PG -16% |
+| **2,000 users** avg response | 1,481ms | 1,480ms | Nearly identical |
+| **2,000 users** P95 | 3,167ms | 3,570ms | PG +13% |
+| **2,000 users** TPS | ~676 | ~629 | PG -7% |
+
+**Interpretation:**
+
+- At low concurrency (100 users), PostgreSQL is noticeably slower. MySQL's InnoDB row locks (`SELECT FOR UPDATE`) appear to have lighter overhead at low contention.
+- At high concurrency (1,000–2,000 users), **average response times converge to nearly identical values**. Both are bottlenecked by the connection pool (10), not the DB engine.
+- MySQL has a slight TPS edge across all levels, but the gap is modest. The DB lock approach is fundamentally constrained by pool size, so **pool size determines performance more than the DB engine**.
+- **Conclusion: Switching from MySQL to PostgreSQL has minimal impact on DB lock performance.** The bottleneck is the connection pool, not the database engine. Choose your database based on team expertise and ecosystem, not lock-based FCFS performance.
+
 ---
 
 ## 4. Analysis
