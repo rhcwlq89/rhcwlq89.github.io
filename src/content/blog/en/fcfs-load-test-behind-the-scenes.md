@@ -1,5 +1,5 @@
 ---
-title: "Behind the FCFS Load Test: Pitfalls and Production Isolation Strategies"
+title: "FCFS Load Test Retrospective: Things Easy to Miss in Practice"
 description: "Problems we hit while k6-testing 4 FCFS strategies — Rate Limiter conflicts, queue over-counting bugs. Plus 4 ways to isolate FCFS APIs from regular APIs in production: separate DataSource, Redis offloading, service separation, and Bulkhead pattern."
 pubDate: "2026-03-25T14:00:00+09:00"
 tags: ["System Design", "First-Come-First-Served", "Load Testing", "k6", "Spring Boot", "Behind the Scenes"]
