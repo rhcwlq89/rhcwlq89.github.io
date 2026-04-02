@@ -91,7 +91,7 @@ const jsonLd = type === 'article' ? {
 	rel="alternate"
 	type="application/rss+xml"
 	title={SITE_TITLE}
-	href={new URL('rss.xml', Astro.site)}
+	href={new URL(lang === 'en' ? 'en/rss.xml' : 'rss.xml', Astro.site)}
 />
 <meta name="generator" content={Astro.generator} />
 

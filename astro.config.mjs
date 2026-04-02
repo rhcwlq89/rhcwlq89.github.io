@@ -8,7 +8,18 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
 	site: 'https://rhcwlq89.github.io',
 	trailingSlash: 'always',
-	integrations: [mdx(), sitemap()],
+	integrations: [
+		mdx(),
+		sitemap({
+			i18n: {
+				defaultLocale: 'ko',
+				locales: {
+					ko: 'ko',
+					en: 'en',
+				},
+			},
+		}),
+	],
 	i18n: {
 		defaultLocale: 'ko',
 		locales: ['ko', 'en'],
