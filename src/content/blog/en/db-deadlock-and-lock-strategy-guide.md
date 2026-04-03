@@ -30,9 +30,81 @@ Two transactions waiting for each other's locks, **stuck forever**.
 
 ---
 
-## 2. Deadlock Cases by Isolation Level
+## 2. Lock Types: Shared Locks vs Exclusive Locks
 
-### 2.1 Deadlocks in Read Committed
+To understand deadlocks, you first need to know the **two fundamental lock types** that databases use.
+
+### 2.1 Shared Lock (S Lock / Read Lock)
+
+**"I'm reading this, so others can read too. But no modifications allowed."**
+
+```sql
+-- MySQL: explicit shared lock
+SELECT * FROM accounts WHERE id = 1 FOR SHARE;
+
+-- PostgreSQL: same syntax
+SELECT * FROM accounts WHERE id = 1 FOR SHARE;
+```
+
+```java
+// Spring Boot
+@Lock(LockModeType.PESSIMISTIC_READ)
+@Query("SELECT a FROM Account a WHERE a.id = :id")
+Account findByIdForShare(@Param("id") Long id);
+```
+
+Multiple transactions can **hold shared locks simultaneously**. However, no transaction can acquire an **exclusive lock** on a row that has shared locks on it.
+
+### 2.2 Exclusive Lock (X Lock / Write Lock)
+
+**"I'm modifying this. Nobody reads or writes until I'm done."**
+
+```sql
+-- MySQL/PostgreSQL: explicit exclusive lock
+SELECT * FROM accounts WHERE id = 1 FOR UPDATE;
+
+-- UPDATE/DELETE automatically acquire exclusive locks
+UPDATE accounts SET balance = 0 WHERE id = 1;
+```
+
+```java
+// Spring Boot
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+@Query("SELECT a FROM Account a WHERE a.id = :id")
+Account findByIdForUpdate(@Param("id") Long id);
+```
+
+Only **one transaction** can hold an exclusive lock. All others must wait — whether they want to read or write.
+
+### 2.3 Compatibility Matrix
+
+| | S Lock Requested | X Lock Requested |
+|---|:---:|:---:|
+| **S Lock Held** | ✅ Compatible | ❌ Wait |
+| **X Lock Held** | ❌ Wait | ❌ Wait |
+
+- **S + S = OK**: Multiple transactions can read concurrently
+- **S + X = Wait**: If someone is reading, modifications must wait
+- **X + X = Wait**: If someone is modifying, other modifications must wait
+
+This compatibility is the root cause of deadlocks. For example, if two transactions both hold shared locks on the same row and both try to upgrade to exclusive locks — **they deadlock waiting for each other's shared locks** (this exact pattern occurs in the Serializable isolation level).
+
+### 2.4 SQL Reference
+
+| SQL | Lock Type | Purpose |
+|-----|-----------|---------|
+| `SELECT ... FOR SHARE` | Shared (S) | Read protection — block modifications while I'm reading |
+| `SELECT ... FOR UPDATE` | Exclusive (X) | Modification reservation — lock now because I'll modify after reading |
+| `UPDATE ...` | Exclusive (X, auto) | Automatically acquired on modification |
+| `DELETE ...` | Exclusive (X, auto) | Automatically acquired on deletion |
+
+> `FOR SHARE` was introduced in MySQL 8.0+. Earlier versions use `LOCK IN SHARE MODE`. PostgreSQL has supported `FOR SHARE` from the start.
+
+---
+
+## 3. Deadlock Cases by Isolation Level
+
+### 3.1 Deadlocks in Read Committed
 
 Read Committed is relatively loose, yet deadlocks still occur. Why? **Reads don't lock, but writes (UPDATE/DELETE) still acquire row locks.**
 
@@ -64,7 +136,7 @@ UPDATE users SET updated_at = now() WHERE id = 1;
 
 > Tables with many FKs and frequent concurrent INSERTs and UPDATEs can produce unexpected deadlocks.
 
-### 2.2 Deadlocks in Repeatable Read
+### 3.2 Deadlocks in Repeatable Read
 
 Repeatable Read holds **more locks for longer** than Read Committed. In MySQL InnoDB, **Gap Locks** create additional deadlock risk.
 
@@ -126,7 +198,7 @@ Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan 
 
 Two transactions lock different gaps, then try to INSERT into each other's gaps. **This deadlock doesn't occur in Read Committed because Gap Locks don't exist there.**
 
-### 2.3 Deadlocks in Serializable
+### 3.3 Deadlocks in Serializable
 
 Serializable is the strictest and has the **most frequent deadlocks**.
 
@@ -251,11 +323,11 @@ SSI follows the **same philosophy as optimistic locking**. Let transactions run 
 
 ---
 
-## 3. Pessimistic vs Optimistic Locking
+## 4. Pessimistic vs Optimistic Locking
 
 Two philosophies for handling concurrency.
 
-### 3.1 Pessimistic Lock
+### 4.1 Pessimistic Lock
 
 **"Assume conflicts will happen. Lock first."**
 
@@ -282,7 +354,7 @@ Product findByIdForUpdate(@Param("id") Long id);
 
 **Best for**: Frequent conflicts (stock deduction, seat selection)
 
-### 3.2 Optimistic Lock
+### 4.2 Optimistic Lock
 
 **"Assume conflicts are rare. Proceed, then detect."**
 
@@ -333,7 +405,7 @@ public void deductStock(Long productId) {
 
 **Best for**: Rare conflicts (post editing, settings updates)
 
-### 3.3 Which One to Use?
+### 4.3 Which One to Use?
 
 ```mermaid
 graph TD
@@ -352,9 +424,9 @@ graph TD
 
 ---
 
-## 4. Deadlock Prevention Strategies
+## 5. Deadlock Prevention Strategies
 
-### 4.1 Consistent Lock Ordering
+### 5.1 Consistent Lock Ordering
 
 The root cause of deadlocks is **locking in different orders**. Always lock in the same order and cross-waiting never happens.
 
@@ -377,7 +449,7 @@ public void transfer(Long fromId, Long toId, int amount) {
 }
 ```
 
-### 4.2 Lock Timeouts
+### 5.2 Lock Timeouts
 
 Don't wait forever. Set a timeout.
 
@@ -437,7 +509,7 @@ Short timeout + more retries is usually better than long waits. Failing fast and
 
 > TL;DR: **FCFS systems: 1-3s, general services: 3-5s, batch jobs: 30-60s.**
 
-### 4.3 Retry Logic
+### 5.3 Retry Logic
 
 Deadlocks can't be completely prevented. When the DB detects one and rolls back a transaction, **the rolled-back side retries**.
 
@@ -457,7 +529,7 @@ public void deductStock(Long productId) {
 
 > **Note**: `@Retryable` must be on the outer layer, outside `@Transactional`. The transaction must be rolled back first, then retried with a new transaction. Same-class calls may not work due to proxy issues.
 
-### 4.4 Keep Transactions Short
+### 5.4 Keep Transactions Short
 
 Longer lock hold time = higher deadlock probability. Never put **external API calls, file I/O, or heavy computation** inside a transaction.
 
@@ -488,7 +560,7 @@ public void processOrder(Long productId) {
 
 ---
 
-## 5. Is REPEATABLE READ Enough for Stock Deduction?
+## 6. Is REPEATABLE READ Enough for Stock Deduction?
 
 Let's definitively answer this question from the previous post.
 
@@ -526,11 +598,11 @@ With `FOR UPDATE`, **Read Committed and Repeatable Read behave identically.** Th
 
 ---
 
-## 6. The Limits of FOR UPDATE
+## 7. The Limits of FOR UPDATE
 
 FOR UPDATE solves stock deduction, but **three bottlenecks emerge at high traffic**.
 
-### 6.1 Request Serialization
+### 7.1 Request Serialization
 
 ```
 100 concurrent users → FOR UPDATE → 1 processes, 99 wait → one at a time
@@ -540,11 +612,11 @@ TPS example:
   200ms per transaction × 1000 users = up to 200s wait 💀
 ```
 
-### 6.2 Deadlock Risk
+### 7.2 Deadlock Risk
 
 If a single order deducts stock + uses a coupon + deducts points, multiple rows get locked, increasing deadlock probability.
 
-### 6.3 Connection Pool Exhaustion
+### 7.3 Connection Pool Exhaustion
 
 Transactions waiting for locks **hold DB connections**. HikariCP default pool size is 10 — if all 10 are waiting for locks, new requests can't even get a connection.
 
