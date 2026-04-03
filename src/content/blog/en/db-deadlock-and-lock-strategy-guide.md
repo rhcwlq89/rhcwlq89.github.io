@@ -39,13 +39,13 @@ To understand deadlocks, you first need to know the **two fundamental lock types
 **"I'm reading this, so others can read too. But no modifications allowed."**
 
 ```sql
--- MySQL: explicit shared lock
+-- MySQL
 SELECT * FROM accounts WHERE id = 1 FOR SHARE;
 
--- PostgreSQL: same syntax
+-- PostgreSQL
 SELECT * FROM accounts WHERE id = 1 FOR SHARE;
 
--- SQL Server: shared lock via table hint
+-- SQL Server
 SELECT * FROM accounts WITH (HOLDLOCK) WHERE id = 1;
 ```
 
@@ -58,85 +58,15 @@ Account findByIdForShare(@Param("id") Long id);
 
 Multiple transactions can **hold shared locks simultaneously**. However, no transaction can acquire an **exclusive lock** on a row that has shared locks on it.
 
-#### Reference: Lock Scope Without a Unique Index
-
-The lock scope of `FOR SHARE` and `FOR UPDATE` — as well as **INSERT, UPDATE, and DELETE** — varies significantly depending on **the type of index used in the WHERE condition**.
-
-```sql
--- Unique index (including PK): locks only the exact matching row
-SELECT * FROM accounts WHERE id = 1 FOR SHARE;
--- → Record Lock on id=1 only
-
--- Non-unique index: locks matching rows + surrounding gaps (MySQL InnoDB, Repeatable Read)
-SELECT * FROM accounts WHERE status = 'ACTIVE' FOR SHARE;
--- → Record Lock on all rows where status='ACTIVE'
--- → + Gap Locks between those index records (prevents Phantom Reads)
-
--- No index: full table scan → locks all rows + all gaps 💀
-SELECT * FROM accounts WHERE memo = 'test' FOR SHARE;
--- → Effectively locks the entire table
-```
-
-| Index Type | Lock Scope (MySQL InnoDB, RR) | Impact |
-|-----------|------------------------------|--------|
-| Unique index (PK) | Single row only (Record Lock) | Minimal scope, high concurrency |
-| Non-unique index | Matching rows + gaps (Next-Key Lock) | Wider scope, may block INSERTs |
-| No index | Entire table (all rows + all gaps) | Effectively a table lock, worst concurrency |
-
-This rule **applies equally to INSERT**. During INSERT, the DB acquires locks for unique constraint validation and index updates — without an index, it scans the full table and locks a wide range.
-
-```sql
--- With index: locks only the target key position
-INSERT INTO user (id, name) VALUES (1, 'Alice');
--- → X Lock only at id=1 position
-
--- Without index: full scan for uniqueness check → wide-range lock
-INSERT INTO user (id, name) VALUES (1, 'Alice');
--- → Scans and locks across the table → concurrent INSERTs can deadlock 💀
-```
-
-A common real-world deadlock pattern:
-
-```
--- Session A and B execute simultaneously (table without index)
-BEGIN TRANSACTION
-IF NOT EXISTS (SELECT id FROM user WHERE id = @id)
-    INSERT INTO user (id, ...) VALUES (@id, ...)
-COMMIT
-
--- Both sessions INSERT with full scan → wide-range locks → mutual conflict → 💀 Deadlock
-```
-
-> **Practical tip**: Whether using `FOR SHARE`, `FOR UPDATE`, or `INSERT`, **always ensure the column has an index**. Locking without an index can inadvertently lock the entire table, causing all other transactions to wait. When using non-unique indexes, be aware that Gap Locks may lock a wider range than expected.
-
-#### Reference: SQL Server's WITH (NOLOCK)
-
-SQL Server offers a way to read without acquiring any S Lock at all.
-
-```sql
--- Read without S Lock (= READ UNCOMMITTED)
-SELECT * FROM accounts WITH (NOLOCK) WHERE id = 1;
-```
-
-`NOLOCK` skips S Locks entirely, so it **never conflicts with another transaction's X Lock**. No read-side waiting means great performance, but it can **read uncommitted data (Dirty Read)**.
-
-| Hint | S Lock | Dirty Read | Use Case |
-|------|:---:|:---:|----------|
-| (none, default RC) | Yes (released immediately) | No | Normal queries |
-| `WITH (NOLOCK)` | No | Possible | Monitoring, dashboards, approximate stats |
-| `WITH (HOLDLOCK)` | Yes (held until TX end) | No | Reads requiring consistency |
-
-> `NOLOCK` is effective for reducing lock contention, but **must not be used where accurate data matters**. For example, using `NOLOCK` to read a balance before a transfer could execute the transfer based on uncommitted data. It's only safe for **read-only queries where performance matters more than consistency** — monitoring dashboards, approximate statistics, etc.
-
 ### 2.2 Exclusive Lock (X Lock / Write Lock)
 
 **"I'm modifying this. Nobody reads or writes until I'm done."**
 
 ```sql
--- MySQL/PostgreSQL: explicit exclusive lock
+-- MySQL / PostgreSQL
 SELECT * FROM accounts WHERE id = 1 FOR UPDATE;
 
--- SQL Server: exclusive lock via table hint
+-- SQL Server
 SELECT * FROM accounts WITH (UPDLOCK, HOLDLOCK) WHERE id = 1;
 
 -- UPDATE/DELETE automatically acquire exclusive locks (all DBs)
@@ -163,9 +93,9 @@ Only **one transaction** can hold an exclusive lock. All others must wait — wh
 - **S + X = Wait**: If someone is reading, modifications must wait
 - **X + X = Wait**: If someone is modifying, other modifications must wait
 
-This compatibility is the root cause of deadlocks. For example, if two transactions both hold shared locks on the same row and both try to upgrade to exclusive locks — **they deadlock waiting for each other's shared locks** (this exact pattern occurs in the Serializable isolation level).
+This compatibility is the root cause of deadlocks. If two transactions both hold shared locks on the same row and both try to upgrade to exclusive locks — **they deadlock waiting for each other's shared locks** (this exact pattern occurs in the Serializable isolation level).
 
-### 2.4 SQL Reference
+### 2.4 SQL Reference by Database
 
 | Lock Type | MySQL / PostgreSQL | SQL Server |
 |-----------|-------------------|------------|
@@ -173,8 +103,70 @@ This compatibility is the root cause of deadlocks. For example, if two transacti
 | Exclusive (X) | `SELECT ... FOR UPDATE` | `SELECT ... WITH (UPDLOCK, HOLDLOCK)` |
 | Exclusive (auto) | `UPDATE ...` / `DELETE ...` | `UPDATE ...` / `DELETE ...` |
 
-> - `FOR SHARE` was introduced in MySQL 8.0+. Earlier versions use `LOCK IN SHARE MODE`. PostgreSQL has supported `FOR SHARE` from the start.
-> - SQL Server doesn't have `FOR UPDATE` / `FOR SHARE` syntax. Instead, it uses **table hints** `WITH (...)` to control locks. `HOLDLOCK` holds the lock until the transaction ends, and `UPDLOCK` acquires an update (exclusive) lock.
+> `FOR SHARE` was introduced in MySQL 8.0+. Earlier versions use `LOCK IN SHARE MODE`. PostgreSQL has supported `FOR SHARE` from the start.
+
+#### SQL Server Table Hints Reference
+
+SQL Server doesn't have `FOR UPDATE` / `FOR SHARE` syntax. Instead, it uses **table hints** `WITH (...)` to control locks.
+
+| Hint | Lock Type | Hold Duration | Use Case |
+|------|----------|--------------|----------|
+| `WITH (NOLOCK)` | No lock | - | Dirty Read allowed, monitoring/dashboards |
+| (none, default RC) | S Lock | Released immediately after read | Normal queries |
+| `WITH (HOLDLOCK)` | S Lock | Until transaction end | Read protection (equivalent to `FOR SHARE`) |
+| `WITH (UPDLOCK)` | U Lock | May release immediately in RC | Signal update intent |
+| `WITH (UPDLOCK, HOLDLOCK)` | U Lock | Until transaction end | Modification reservation (equivalent to `FOR UPDATE`) |
+
+> **`UPDLOCK` vs `UPDLOCK, HOLDLOCK`**: With `UPDLOCK` alone in RC isolation, **the lock may release immediately after reading the row.** In patterns like `IF NOT EXISTS (SELECT ...) → INSERT`, a gap between SELECT and INSERT lets other sessions slip in. Adding `HOLDLOCK` keeps the lock until the transaction ends — **always use `UPDLOCK, HOLDLOCK` together when a read is followed by a modification.**
+
+> **`NOLOCK` warning**: Skips S Locks entirely, eliminating lock contention, but **can read uncommitted data (Dirty Read)**. Never use it in logic requiring accuracy (e.g., reading a balance before a transfer). Only safe for **read-only queries where performance matters more than consistency** — monitoring dashboards, approximate statistics.
+
+### 2.5 Indexes and Lock Scope
+
+`SELECT ... FOR SHARE`, `FOR UPDATE`, `INSERT`, `UPDATE`, and `DELETE` all have **lock scopes that vary dramatically based on index type.**
+
+| Index Type | Lock Scope (MySQL InnoDB, RR) | Impact |
+|-----------|------------------------------|--------|
+| Unique index (PK) | Single row only (Record Lock) | Minimal scope, high concurrency |
+| Non-unique index | Matching rows + gaps (Next-Key Lock) | Wider scope, may block INSERTs |
+| No index | Entire table (all rows + all gaps) | Effectively a table lock, worst concurrency |
+
+```sql
+-- Unique index: locks only the matching row
+SELECT * FROM accounts WHERE id = 1 FOR SHARE;
+-- → Record Lock on id=1 only
+
+-- Non-unique index: matching rows + gap locks (prevents Phantom Reads)
+SELECT * FROM accounts WHERE status = 'ACTIVE' FOR SHARE;
+-- → Record Locks on matching rows + Gap Locks between them
+
+-- No index: full scan → entire table locked 💀
+SELECT * FROM accounts WHERE memo = 'test' FOR SHARE;
+```
+
+This rule **applies equally to INSERT**. During INSERT, the DB acquires locks for unique constraint validation and index updates — without an index, it scans the full table and locks a wide range.
+
+```sql
+-- With index: X Lock only at the target key position
+INSERT INTO user (id, name) VALUES (1, 'Alice');
+
+-- Without index: full scan → wide-range lock → concurrent INSERTs can deadlock 💀
+INSERT INTO user (id, name) VALUES (1, 'Alice');
+```
+
+A common real-world deadlock pattern:
+
+```sql
+-- Session A and B execute simultaneously (table without index)
+BEGIN TRANSACTION
+IF NOT EXISTS (SELECT id FROM user WHERE id = @id)
+    INSERT INTO user (id, ...) VALUES (@id, ...)
+COMMIT
+
+-- Both sessions INSERT with full scan → wide-range locks → mutual conflict → 💀 Deadlock
+```
+
+> **Practical tip**: Whether using `FOR SHARE`, `FOR UPDATE`, or `INSERT`, **always ensure the column has an index**. Locking without an index can inadvertently lock the entire table. Non-unique indexes may lock a wider range than expected due to Gap Locks.
 
 ---
 
