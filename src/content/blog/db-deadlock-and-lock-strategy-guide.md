@@ -59,7 +59,7 @@ Account findByIdForShare(@Param("id") Long id);
 
 #### 참고: 유니크 인덱스가 아닌 경우의 락 범위
 
-`FOR SHARE`나 `FOR UPDATE`의 락 범위는 **조건에 사용된 인덱스의 종류**에 따라 크게 달라진다.
+`FOR SHARE`나 `FOR UPDATE`뿐 아니라 **INSERT, UPDATE, DELETE**의 락 범위도 **조건에 사용된 인덱스의 종류**에 따라 크게 달라진다.
 
 ```sql
 -- 유니크 인덱스 (PK 포함): 정확히 해당 행 1건만 락
@@ -82,7 +82,50 @@ SELECT * FROM accounts WHERE memo = 'test' FOR SHARE;
 | 비유니크 인덱스 | 매칭 행 + gap (Next-Key Lock) | 범위가 넓어짐, INSERT 차단 가능 |
 | 인덱스 없음 | 테이블 전체 (모든 행 + 모든 gap) | 사실상 테이블 락, 동시성 최악 |
 
-> **실무 팁**: `FOR SHARE`든 `FOR UPDATE`든, **반드시 인덱스가 있는 컬럼**으로 조건을 걸어야 한다. 인덱스 없이 락을 걸면 의도치 않게 테이블 전체가 잠겨서 다른 트랜잭션이 모두 대기하게 된다. 비유니크 인덱스를 사용할 때는 Gap Lock으로 인해 예상보다 넓은 범위가 잠긴다는 점도 유의해야 한다.
+이 규칙은 **INSERT에도 동일하게 적용**된다. INSERT 시 DB는 유니크 제약 조건 검증, 인덱스 업데이트 등을 위해 락을 잡는데, 인덱스가 없으면 풀 스캔하며 넓은 범위에 락이 걸린다.
+
+```sql
+-- 인덱스가 있는 경우: 해당 키 위치만 락
+INSERT INTO user (id, name) VALUES (1, 'Alice');
+-- → id=1 위치에만 X Lock
+
+-- 인덱스가 없는 경우: 유니크 검증을 위해 풀 스캔 → 넓은 범위 락
+INSERT INTO user (id, name) VALUES (1, 'Alice');
+-- → 테이블 전체를 훑으며 락 → 동시 INSERT끼리 데드락 발생 가능 💀
+```
+
+실무에서 흔한 데드락 패턴:
+
+```
+-- 세션 A, 세션 B가 동시에 실행 (인덱스 없는 테이블)
+BEGIN TRANSACTION
+IF NOT EXISTS (SELECT id FROM user WHERE id = @id)
+    INSERT INTO user (id, ...) VALUES (@id, ...)
+COMMIT
+
+-- 두 세션 모두 INSERT 시 풀 스캔 → 넓은 범위 락 → 서로 충돌 → 💀 Deadlock
+```
+
+> **실무 팁**: `FOR SHARE`든 `FOR UPDATE`든 `INSERT`든, **반드시 인덱스가 있는 컬럼**으로 조건을 걸어야 한다. 인덱스 없이 락을 걸면 의도치 않게 테이블 전체가 잠겨서 다른 트랜잭션이 모두 대기하게 된다. 비유니크 인덱스를 사용할 때는 Gap Lock으로 인해 예상보다 넓은 범위가 잠긴다는 점도 유의해야 한다.
+
+#### 참고: SQL Server의 WITH (NOLOCK)
+
+SQL Server에서는 S Lock 자체를 잡지 않고 읽는 방법이 있다.
+
+```sql
+-- S Lock 없이 읽기 (= READ UNCOMMITTED)
+SELECT * FROM accounts WITH (NOLOCK) WHERE id = 1;
+```
+
+`NOLOCK`은 S Lock을 아예 잡지 않기 때문에 **다른 트랜잭션의 X Lock과 충돌하지 않는다.** 읽기로 인한 대기가 없어서 성능은 좋지만, **커밋되지 않은 데이터(Dirty Read)를 읽을 수 있다.**
+
+| 힌트 | S Lock | Dirty Read | 용도 |
+|------|:---:|:---:|------|
+| (없음, 기본 RC) | O (즉시 해제) | ❌ | 일반 조회 |
+| `WITH (NOLOCK)` | ❌ | ⚠️ 가능 | 모니터링, 대시보드, 대략적 통계 |
+| `WITH (HOLDLOCK)` | O (트랜잭션 끝까지) | ❌ | 정합성이 필요한 읽기 |
+
+> `NOLOCK`은 락 경합을 줄이는 데 효과적이지만, **정확한 데이터가 필요한 곳에서는 사용하면 안 된다.** 예를 들어 잔액 조회 후 이체하는 로직에 `NOLOCK`을 쓰면 커밋되지 않은 잔액을 기준으로 이체가 실행될 수 있다. 모니터링 대시보드, 대략적인 통계 조회 등 **정합성보다 성능이 중요한 읽기 전용 쿼리**에서만 사용하는 것이 안전하다.
 
 ### 2.2 배타 락 (Exclusive Lock, X Lock)
 

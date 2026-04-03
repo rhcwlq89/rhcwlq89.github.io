@@ -60,7 +60,7 @@ Multiple transactions can **hold shared locks simultaneously**. However, no tran
 
 #### Reference: Lock Scope Without a Unique Index
 
-The lock scope of `FOR SHARE` or `FOR UPDATE` varies significantly depending on **the type of index used in the WHERE condition**.
+The lock scope of `FOR SHARE` and `FOR UPDATE` — as well as **INSERT, UPDATE, and DELETE** — varies significantly depending on **the type of index used in the WHERE condition**.
 
 ```sql
 -- Unique index (including PK): locks only the exact matching row
@@ -83,7 +83,50 @@ SELECT * FROM accounts WHERE memo = 'test' FOR SHARE;
 | Non-unique index | Matching rows + gaps (Next-Key Lock) | Wider scope, may block INSERTs |
 | No index | Entire table (all rows + all gaps) | Effectively a table lock, worst concurrency |
 
-> **Practical tip**: Whether using `FOR SHARE` or `FOR UPDATE`, **always filter on an indexed column**. Locking without an index can inadvertently lock the entire table, causing all other transactions to wait. When using non-unique indexes, be aware that Gap Locks may lock a wider range than expected.
+This rule **applies equally to INSERT**. During INSERT, the DB acquires locks for unique constraint validation and index updates — without an index, it scans the full table and locks a wide range.
+
+```sql
+-- With index: locks only the target key position
+INSERT INTO user (id, name) VALUES (1, 'Alice');
+-- → X Lock only at id=1 position
+
+-- Without index: full scan for uniqueness check → wide-range lock
+INSERT INTO user (id, name) VALUES (1, 'Alice');
+-- → Scans and locks across the table → concurrent INSERTs can deadlock 💀
+```
+
+A common real-world deadlock pattern:
+
+```
+-- Session A and B execute simultaneously (table without index)
+BEGIN TRANSACTION
+IF NOT EXISTS (SELECT id FROM user WHERE id = @id)
+    INSERT INTO user (id, ...) VALUES (@id, ...)
+COMMIT
+
+-- Both sessions INSERT with full scan → wide-range locks → mutual conflict → 💀 Deadlock
+```
+
+> **Practical tip**: Whether using `FOR SHARE`, `FOR UPDATE`, or `INSERT`, **always ensure the column has an index**. Locking without an index can inadvertently lock the entire table, causing all other transactions to wait. When using non-unique indexes, be aware that Gap Locks may lock a wider range than expected.
+
+#### Reference: SQL Server's WITH (NOLOCK)
+
+SQL Server offers a way to read without acquiring any S Lock at all.
+
+```sql
+-- Read without S Lock (= READ UNCOMMITTED)
+SELECT * FROM accounts WITH (NOLOCK) WHERE id = 1;
+```
+
+`NOLOCK` skips S Locks entirely, so it **never conflicts with another transaction's X Lock**. No read-side waiting means great performance, but it can **read uncommitted data (Dirty Read)**.
+
+| Hint | S Lock | Dirty Read | Use Case |
+|------|:---:|:---:|----------|
+| (none, default RC) | Yes (released immediately) | No | Normal queries |
+| `WITH (NOLOCK)` | No | Possible | Monitoring, dashboards, approximate stats |
+| `WITH (HOLDLOCK)` | Yes (held until TX end) | No | Reads requiring consistency |
+
+> `NOLOCK` is effective for reducing lock contention, but **must not be used where accurate data matters**. For example, using `NOLOCK` to read a balance before a transfer could execute the transfer based on uncommitted data. It's only safe for **read-only queries where performance matters more than consistency** — monitoring dashboards, approximate statistics, etc.
 
 ### 2.2 Exclusive Lock (X Lock / Write Lock)
 
