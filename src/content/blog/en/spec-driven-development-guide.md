@@ -3,6 +3,7 @@ title: "SDD (Spec-Driven Development): The Spec-First Methodology for the AI Era
 description: "Beyond Vibe Coding — write the spec first, let AI generate the code. Covers SDD concepts, workflow, tools, and its realistic limitations."
 pubDate: "2026-04-03T22:00:00+09:00"
 tags: ["SDD", "Spec-Driven Development", "AI", "Software Engineering", "Development Methodology"]
+heroImage: "../../../assets/SpecDrivenDevelopmentGuide.png"
 lang: en
 ---
 
