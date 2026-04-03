@@ -57,6 +57,33 @@ Account findByIdForShare(@Param("id") Long id);
 
 여러 트랜잭션이 **동시에 공유 락을 획득**할 수 있다. 하지만 공유 락이 걸린 행에 **배타 락을 걸 수는 없다.**
 
+#### 참고: 유니크 인덱스가 아닌 경우의 락 범위
+
+`FOR SHARE`나 `FOR UPDATE`의 락 범위는 **조건에 사용된 인덱스의 종류**에 따라 크게 달라진다.
+
+```sql
+-- 유니크 인덱스 (PK 포함): 정확히 해당 행 1건만 락
+SELECT * FROM accounts WHERE id = 1 FOR SHARE;
+-- → id=1 행에만 레코드 락 (Record Lock)
+
+-- 비유니크 인덱스: 해당 행 + 주변 gap까지 락 (MySQL InnoDB, Repeatable Read)
+SELECT * FROM accounts WHERE status = 'ACTIVE' FOR SHARE;
+-- → status='ACTIVE'인 모든 행에 레코드 락
+-- → + 해당 인덱스 레코드 사이의 gap에 Gap Lock (Phantom Read 방지)
+
+-- 인덱스 없음: 풀 테이블 스캔 → 모든 행 + 모든 gap에 락 💀
+SELECT * FROM accounts WHERE memo = 'test' FOR SHARE;
+-- → 테이블 전체가 사실상 잠김
+```
+
+| 인덱스 종류 | 락 범위 (MySQL InnoDB, RR) | 영향 |
+|-----------|-------------------------|------|
+| 유니크 인덱스 (PK) | 해당 행 1건만 (Record Lock) | 최소 범위, 동시성 높음 |
+| 비유니크 인덱스 | 매칭 행 + gap (Next-Key Lock) | 범위가 넓어짐, INSERT 차단 가능 |
+| 인덱스 없음 | 테이블 전체 (모든 행 + 모든 gap) | 사실상 테이블 락, 동시성 최악 |
+
+> **실무 팁**: `FOR SHARE`든 `FOR UPDATE`든, **반드시 인덱스가 있는 컬럼**으로 조건을 걸어야 한다. 인덱스 없이 락을 걸면 의도치 않게 테이블 전체가 잠겨서 다른 트랜잭션이 모두 대기하게 된다. 비유니크 인덱스를 사용할 때는 Gap Lock으로 인해 예상보다 넓은 범위가 잠긴다는 점도 유의해야 한다.
+
 ### 2.2 배타 락 (Exclusive Lock, X Lock)
 
 **"나 수정 중이니까, 아무도 읽지도 쓰지도 마."**

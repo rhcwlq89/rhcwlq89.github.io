@@ -58,6 +58,33 @@ Account findByIdForShare(@Param("id") Long id);
 
 Multiple transactions can **hold shared locks simultaneously**. However, no transaction can acquire an **exclusive lock** on a row that has shared locks on it.
 
+#### Reference: Lock Scope Without a Unique Index
+
+The lock scope of `FOR SHARE` or `FOR UPDATE` varies significantly depending on **the type of index used in the WHERE condition**.
+
+```sql
+-- Unique index (including PK): locks only the exact matching row
+SELECT * FROM accounts WHERE id = 1 FOR SHARE;
+-- → Record Lock on id=1 only
+
+-- Non-unique index: locks matching rows + surrounding gaps (MySQL InnoDB, Repeatable Read)
+SELECT * FROM accounts WHERE status = 'ACTIVE' FOR SHARE;
+-- → Record Lock on all rows where status='ACTIVE'
+-- → + Gap Locks between those index records (prevents Phantom Reads)
+
+-- No index: full table scan → locks all rows + all gaps 💀
+SELECT * FROM accounts WHERE memo = 'test' FOR SHARE;
+-- → Effectively locks the entire table
+```
+
+| Index Type | Lock Scope (MySQL InnoDB, RR) | Impact |
+|-----------|------------------------------|--------|
+| Unique index (PK) | Single row only (Record Lock) | Minimal scope, high concurrency |
+| Non-unique index | Matching rows + gaps (Next-Key Lock) | Wider scope, may block INSERTs |
+| No index | Entire table (all rows + all gaps) | Effectively a table lock, worst concurrency |
+
+> **Practical tip**: Whether using `FOR SHARE` or `FOR UPDATE`, **always filter on an indexed column**. Locking without an index can inadvertently lock the entire table, causing all other transactions to wait. When using non-unique indexes, be aware that Gap Locks may lock a wider range than expected.
+
 ### 2.2 Exclusive Lock (X Lock / Write Lock)
 
 **"I'm modifying this. Nobody reads or writes until I'm done."**
