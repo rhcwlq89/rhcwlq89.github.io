@@ -44,6 +44,9 @@ SELECT * FROM accounts WHERE id = 1 FOR SHARE;
 
 -- PostgreSQL: same syntax
 SELECT * FROM accounts WHERE id = 1 FOR SHARE;
+
+-- SQL Server: shared lock via table hint
+SELECT * FROM accounts WITH (HOLDLOCK) WHERE id = 1;
 ```
 
 ```java
@@ -63,7 +66,10 @@ Multiple transactions can **hold shared locks simultaneously**. However, no tran
 -- MySQL/PostgreSQL: explicit exclusive lock
 SELECT * FROM accounts WHERE id = 1 FOR UPDATE;
 
--- UPDATE/DELETE automatically acquire exclusive locks
+-- SQL Server: exclusive lock via table hint
+SELECT * FROM accounts WITH (UPDLOCK, HOLDLOCK) WHERE id = 1;
+
+-- UPDATE/DELETE automatically acquire exclusive locks (all DBs)
 UPDATE accounts SET balance = 0 WHERE id = 1;
 ```
 
@@ -91,14 +97,14 @@ This compatibility is the root cause of deadlocks. For example, if two transacti
 
 ### 2.4 SQL Reference
 
-| SQL | Lock Type | Purpose |
-|-----|-----------|---------|
-| `SELECT ... FOR SHARE` | Shared (S) | Read protection — block modifications while I'm reading |
-| `SELECT ... FOR UPDATE` | Exclusive (X) | Modification reservation — lock now because I'll modify after reading |
-| `UPDATE ...` | Exclusive (X, auto) | Automatically acquired on modification |
-| `DELETE ...` | Exclusive (X, auto) | Automatically acquired on deletion |
+| Lock Type | MySQL / PostgreSQL | SQL Server |
+|-----------|-------------------|------------|
+| Shared (S) | `SELECT ... FOR SHARE` | `SELECT ... WITH (HOLDLOCK)` |
+| Exclusive (X) | `SELECT ... FOR UPDATE` | `SELECT ... WITH (UPDLOCK, HOLDLOCK)` |
+| Exclusive (auto) | `UPDATE ...` / `DELETE ...` | `UPDATE ...` / `DELETE ...` |
 
-> `FOR SHARE` was introduced in MySQL 8.0+. Earlier versions use `LOCK IN SHARE MODE`. PostgreSQL has supported `FOR SHARE` from the start.
+> - `FOR SHARE` was introduced in MySQL 8.0+. Earlier versions use `LOCK IN SHARE MODE`. PostgreSQL has supported `FOR SHARE` from the start.
+> - SQL Server doesn't have `FOR UPDATE` / `FOR SHARE` syntax. Instead, it uses **table hints** `WITH (...)` to control locks. `HOLDLOCK` holds the lock until the transaction ends, and `UPDLOCK` acquires an update (exclusive) lock.
 
 ---
 

@@ -43,6 +43,9 @@ SELECT * FROM accounts WHERE id = 1 FOR SHARE;
 
 -- PostgreSQL: 동일
 SELECT * FROM accounts WHERE id = 1 FOR SHARE;
+
+-- SQL Server: 테이블 힌트로 공유 락
+SELECT * FROM accounts WITH (HOLDLOCK) WHERE id = 1;
 ```
 
 ```java
@@ -62,7 +65,10 @@ Account findByIdForShare(@Param("id") Long id);
 -- MySQL/PostgreSQL: 명시적 배타 락
 SELECT * FROM accounts WHERE id = 1 FOR UPDATE;
 
--- UPDATE/DELETE는 자동으로 배타 락
+-- SQL Server: 테이블 힌트로 배타 락
+SELECT * FROM accounts WITH (UPDLOCK, HOLDLOCK) WHERE id = 1;
+
+-- UPDATE/DELETE는 자동으로 배타 락 (모든 DB 공통)
 UPDATE accounts SET balance = 0 WHERE id = 1;
 ```
 
@@ -90,14 +96,14 @@ Account findByIdForUpdate(@Param("id") Long id);
 
 ### 2.4 SQL 구문 정리
 
-| SQL | 락 종류 | 용도 |
-|-----|--------|------|
-| `SELECT ... FOR SHARE` | 공유 락 (S) | 읽기 보호 — 내가 읽는 동안 수정 차단 |
-| `SELECT ... FOR UPDATE` | 배타 락 (X) | 수정 예약 — 읽고 나서 수정할 거니까 미리 잠금 |
-| `UPDATE ...` | 배타 락 (X, 자동) | 수정 시 자동 획득 |
-| `DELETE ...` | 배타 락 (X, 자동) | 삭제 시 자동 획득 |
+| 락 종류 | MySQL / PostgreSQL | SQL Server |
+|--------|-------------------|------------|
+| 공유 락 (S) | `SELECT ... FOR SHARE` | `SELECT ... WITH (HOLDLOCK)` |
+| 배타 락 (X) | `SELECT ... FOR UPDATE` | `SELECT ... WITH (UPDLOCK, HOLDLOCK)` |
+| 배타 락 (자동) | `UPDATE ...` / `DELETE ...` | `UPDATE ...` / `DELETE ...` |
 
-> `FOR SHARE`는 MySQL 8.0+에서 도입됐다. 이전 버전에서는 `LOCK IN SHARE MODE`를 사용한다. PostgreSQL은 처음부터 `FOR SHARE`를 지원한다.
+> - `FOR SHARE`는 MySQL 8.0+에서 도입됐다. 이전 버전에서는 `LOCK IN SHARE MODE`를 사용한다. PostgreSQL은 처음부터 `FOR SHARE`를 지원한다.
+> - SQL Server는 `FOR UPDATE` / `FOR SHARE` 구문이 없고, 대신 **테이블 힌트** `WITH (...)` 로 락을 제어한다. `HOLDLOCK`은 트랜잭션 끝까지 락을 유지하고, `UPDLOCK`은 배타 락(업데이트 락)을 건다.
 
 ---
 
