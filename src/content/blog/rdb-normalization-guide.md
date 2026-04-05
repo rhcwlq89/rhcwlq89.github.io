@@ -242,7 +242,7 @@ CREATE TABLE employees (
 | `products.category_name` | 카테고리 이름 변경 | categories 테이블 분리 |
 | `employees.department_name` | 부서 이름 변경 | departments 테이블 분리 |
 
-### 2.4 BCNF — 3NF의 특수한 경우
+### 2.4 BCNF (Boyce-Codd Normal Form) — 3NF의 특수한 경우
 
 실무에서는 드물지만, 간략히 소개한다.
 

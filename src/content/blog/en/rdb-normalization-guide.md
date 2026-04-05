@@ -237,7 +237,7 @@ CREATE TABLE employees (
 | `products.category_name` | Category rename | Separate categories table |
 | `employees.department_name` | Department rename | Separate departments table |
 
-### 2.4 BCNF — A Special Case of 3NF
+### 2.4 BCNF (Boyce-Codd Normal Form) — A Special Case of 3NF
 
 Rare in practice, but worth a brief mention.
 
