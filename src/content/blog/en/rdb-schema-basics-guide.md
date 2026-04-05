@@ -562,7 +562,22 @@ CREATE TABLE orders (
 );
 ```
 
-> **PostgreSQL SERIAL vs IDENTITY**: `SERIAL` is PostgreSQL-specific syntax, while `GENERATED ALWAYS AS IDENTITY` is SQL:2003 standard. For new projects, `IDENTITY` is recommended. `SERIAL` has messy sequence ownership management and allows users to INSERT arbitrary values.
+> **Why BIGINT + IDENTITY instead of SERIAL?**
+>
+> This choice addresses two independent concerns: **syntax** and **size**.
+>
+> **Syntax: SERIAL vs IDENTITY**
+> - `SERIAL` is PostgreSQL-specific. Under the hood, it's just a **macro** that creates a sequence and sets `DEFAULT nextval(...)`.
+> - Problem 1: Sequence ownership is messy. `DROP TABLE` may leave orphaned sequences, and `pg_dump` ordering can break.
+> - Problem 2: Nothing stops `INSERT INTO orders(id) VALUES (999)` — **arbitrary values bypass the sequence.** When the sequence catches up to that value, you get duplicate key errors.
+> - `GENERATED ALWAYS AS IDENTITY` is SQL:2003 standard and blocks arbitrary value insertion by default. (Requires explicit `OVERRIDING SYSTEM VALUE` to bypass.)
+>
+> **Size: INT (SERIAL) vs BIGINT (BIGSERIAL)**
+> - `SERIAL` = `INTEGER` (4 bytes, max ~2.1 billion), `BIGSERIAL` = `BIGINT` (8 bytes)
+> - As covered in section 2.3, INT runs out faster than you'd expect. Saving 4 bytes per row isn't worth a 3 AM emergency migration.
+> - Switching INT→BIGINT means **changing the PK type + all FK column types + rebuilding every index.** On large tables, this can require hours of downtime.
+>
+> **Bottom line**: Use **`BIGINT GENERATED ALWAYS AS IDENTITY`** instead of `SERIAL` or `BIGSERIAL` — it solves both the syntax and size problems at once.
 
 | Pros | Cons |
 |------|------|

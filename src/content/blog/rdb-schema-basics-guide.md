@@ -566,7 +566,22 @@ CREATE TABLE orders (
 );
 ```
 
-> **PostgreSQL SERIAL vs IDENTITY**: `SERIAL`은 PostgreSQL 고유 문법이고, `GENERATED ALWAYS AS IDENTITY`는 SQL:2003 표준이다. 새 프로젝트에서는 `IDENTITY`를 쓰는 게 권장된다. `SERIAL`은 시퀀스 소유권 관리가 지저분하고, 사용자가 임의 값을 `INSERT`할 수 있는 문제가 있다.
+> **왜 SERIAL 대신 BIGINT + IDENTITY인가?**
+>
+> 이 선택에는 **문법**과 **크기**, 두 가지 독립적인 이유가 있다.
+>
+> **문법: SERIAL vs IDENTITY**
+> - `SERIAL`은 PostgreSQL 고유 문법이다. 내부적으로 시퀀스를 만들고 `DEFAULT nextval(...)`을 설정하는 **매크로**일 뿐이다.
+> - 문제 1: 시퀀스 소유권 관리가 지저분하다. 테이블을 `DROP`해도 시퀀스가 남거나, `pg_dump` 시 순서가 꼬일 수 있다.
+> - 문제 2: `INSERT INTO orders(id) VALUES (999)`처럼 **임의 값 삽입을 막지 못한다.** 시퀀스와 실제 데이터가 어긋나면 이후 INSERT에서 중복 키 에러가 난다.
+> - `GENERATED ALWAYS AS IDENTITY`는 SQL:2003 표준이며, 임의 값 삽입을 기본적으로 차단한다. (`OVERRIDING SYSTEM VALUE` 없이는 불가)
+>
+> **크기: INT(SERIAL) vs BIGINT(BIGSERIAL)**
+> - `SERIAL` = `INTEGER` (4바이트, 최대 21억), `BIGSERIAL` = `BIGINT` (8바이트)
+> - 2.3절에서 다뤘듯이, INT는 생각보다 빨리 한계에 도달한다. 행당 4바이트 절약으로 새벽 3시 긴급 마이그레이션을 맞는 건 나쁜 트레이드오프다.
+> - INT→BIGINT 전환은 **PK + 모든 FK 컬럼 타입 변경 + 인덱스 재생성**을 의미한다. 대형 테이블에서는 수 시간의 다운타임이 필요할 수 있다.
+>
+> **결론**: `SERIAL`이나 `BIGSERIAL` 대신 **`BIGINT GENERATED ALWAYS AS IDENTITY`**를 쓰면 문법과 크기 문제를 동시에 해결한다.
 
 | 장점 | 단점 |
 |------|------|
