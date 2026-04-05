@@ -315,17 +315,54 @@ CREATE TABLE orders (
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| **ENUM** | Storage efficient (1-2 bytes), value restriction | Adding/removing values requires `ALTER TABLE` (MySQL: table rebuild). PostgreSQL allows `ADD VALUE` but can't remove |
+| **ENUM** | Storage efficient (1-2 bytes), value restriction | Adding/removing values requires `ALTER TABLE` (MySQL: table rebuild). PostgreSQL allows `ADD VALUE` but **can't remove or rename — requires type recreation** |
 | **Lookup table** | Flexible add/remove, can hold extra attributes (description, sort order, active flag) | Requires JOIN, slightly more complex |
-| **VARCHAR** | Simple, freely extensible | Typo risk, larger storage |
+| **VARCHAR + CHECK** | Simple, more flexible than ENUM | Adding values requires `ALTER TABLE DROP/ADD CONSTRAINT` (DDL change). Typo risk, larger storage |
+
+#### The "It'll Never Change" Trap
+
+At first, `PENDING`, `PAID`, `CANCELLED` — 3 values seem enough. But in production:
+
+```
+v1.0: PENDING, PAID, CANCELLED                          — 3 values
+v1.3: + REFUNDED                                        — 4 values
+v2.0: + PARTIAL_REFUND, DISPUTED, PAYMENT_FAILED        — 7 values
+v2.5: CANCELLED -> CANCELLED_BY_USER, CANCELLED_BY_ADMIN — 8 values + rename
+```
+
+With ENUM or VARCHAR+CHECK, **every change requires a DDL modification**. On large tables, that can impact the live service.
+
+#### ENUM Pitfalls by Database
+
+| Issue | MySQL | PostgreSQL |
+|-------|-------|------------|
+| Adding values | `ALTER TABLE` -> table rebuild (minutes on large tables) | `ALTER TYPE ... ADD VALUE` -> fast, but can't run inside a transaction |
+| Removing/renaming values | `ALTER TABLE` -> table rebuild | **Not possible** — must create a new type and swap |
+| ORM sync | Java enum <-> DB ENUM mismatch = runtime error. DB must be updated before app deployment | Same |
+| Sorting | Sorts by internal index (declaration order) | Declaration order, not alphabetical — unexpected sort results |
+
+#### Lookup Tables Are Better
+
+```sql
+-- Adding a value: one INSERT. No DDL change. Zero service impact.
+INSERT INTO order_statuses (id, name) VALUES (5, 'REFUNDED');
+
+-- Freely add metadata later
+ALTER TABLE order_statuses ADD COLUMN display_name VARCHAR(50);
+ALTER TABLE order_statuses ADD COLUMN is_terminal BOOLEAN DEFAULT FALSE;
+```
+
+"But what about JOIN cost?" — Lookup tables typically have tens of rows. The **entire table is cached in memory**, so the measured performance difference is negligible. Application-level caching eliminates the JOIN entirely.
 
 #### Decision Guide
 
 ```
-3-5 values that rarely change          -> ENUM or VARCHAR + CHECK
-Values frequently added/changed        -> Lookup table
-Values need metadata (description, color) -> Lookup table
+Default choice                          -> Lookup table (most flexible and safe)
+Values that absolutely never change     -> ENUM or VARCHAR+CHECK (e.g., gender M/F/X, weekdays, ISO codes)
+No permission to create new tables      -> VARCHAR+CHECK (when lookup tables aren't an option)
 ```
+
+> **Practical tip**: Don't trust "this value will never change" at face value. When in doubt, a lookup table is the choice that **causes the least pain down the road**.
 
 ### 2.6 BOOLEAN Type
 

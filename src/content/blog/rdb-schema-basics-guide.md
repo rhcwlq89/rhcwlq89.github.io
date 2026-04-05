@@ -319,17 +319,54 @@ CREATE TABLE orders (
 
 | 방식 | 장점 | 단점 |
 |------|------|------|
-| **ENUM** | 저장 효율 (1~2바이트), 값 제한 | 값 추가/삭제에 `ALTER TABLE` 필요 (MySQL: 테이블 리빌드). PostgreSQL은 `ADD VALUE`로 간단하지만 삭제는 안 됨 |
+| **ENUM** | 저장 효율 (1~2바이트), 값 제한 | 값 추가/삭제에 `ALTER TABLE` 필요 (MySQL: 테이블 리빌드). PostgreSQL은 `ADD VALUE`로 간단하지만 **삭제/이름 변경은 타입 재생성 필요** |
 | **참조 테이블** | 유연한 추가/삭제, 추가 속성 가능 (설명, 정렬, 활성 여부) | JOIN 필요, 약간의 복잡도 |
-| **VARCHAR** | 단순, 추가/삭제 자유 | 오타 위험, 저장 공간 큼 |
+| **VARCHAR + CHECK** | 단순, ENUM보다 유연 | 값 추가 시 `ALTER TABLE DROP/ADD CONSTRAINT` 필요 (DDL 변경). 오타 위험, 저장 공간 큼 |
+
+#### "거의 안 바뀐다"의 함정
+
+처음엔 `PENDING`, `PAID`, `CANCELLED` — 3개면 충분해 보인다. 하지만 서비스가 운영되면:
+
+```
+v1.0: PENDING, PAID, CANCELLED                          — 3개
+v1.3: + REFUNDED                                        — 4개
+v2.0: + PARTIAL_REFUND, DISPUTED, PAYMENT_FAILED        — 7개
+v2.5: CANCELLED → CANCELLED_BY_USER, CANCELLED_BY_ADMIN — 8개 + 이름 변경
+```
+
+ENUM이나 VARCHAR+CHECK를 쓰고 있었다면, **매번 DDL 변경**이 필요하다. 대형 테이블이면 서비스 영향도 있다.
+
+#### ENUM의 DB별 실무 문제
+
+| 문제 | MySQL | PostgreSQL |
+|------|-------|------------|
+| 값 추가 | `ALTER TABLE` → 테이블 리빌드 (대형 테이블이면 분 단위) | `ALTER TYPE ... ADD VALUE` → 빠르지만 트랜잭션 안에서 불가 |
+| 값 삭제/이름 변경 | `ALTER TABLE` → 테이블 리빌드 | **불가** — 타입을 새로 만들어서 교체해야 함 |
+| ORM 동기화 | Java enum ↔ DB ENUM 불일치 시 런타임 에러. 앱 배포 전에 DB 먼저 변경해야 함 | 동일 |
+| 정렬 | 내부 인덱스 순서로 정렬 (선언 순서) | 알파벳 순이 아닌 선언 순서 — 의도치 않은 정렬 발생 |
+
+#### 참조 테이블이 낫다
+
+```sql
+-- 값 추가: INSERT 한 줄이면 끝. DDL 변경 없음. 서비스 영향 제로.
+INSERT INTO order_statuses (id, name) VALUES (5, 'REFUNDED');
+
+-- 부가 정보도 자유롭게 추가
+ALTER TABLE order_statuses ADD COLUMN display_name VARCHAR(50);
+ALTER TABLE order_statuses ADD COLUMN is_terminal BOOLEAN DEFAULT FALSE;
+```
+
+"JOIN 비용이 걱정되는데?" — 참조 테이블은 보통 수십 건이다. **전체가 메모리에 캐싱**되기 때문에 실측 성능 차이는 무시할 수 있는 수준이다. 애플리케이션 레벨에서 캐싱하면 JOIN 자체가 불필요해진다.
 
 #### 실무 판단 기준
 
 ```
-상태 값이 3~5개이고 거의 바뀌지 않는다  → ENUM 또는 VARCHAR + CHECK
-상태 값이 자주 추가/변경된다            → 참조 테이블
-상태에 부가 정보가 필요하다 (설명, 색상) → 참조 테이블
+기본 선택                               → 참조 테이블 (가장 유연하고 안전)
+값이 절대 변하지 않는 표준 코드          → ENUM 또는 VARCHAR+CHECK (예: 성별 M/F/X, 요일, ISO 코드)
+DB 스키마 변경 권한이 없는 환경          → VARCHAR+CHECK (참조 테이블 생성 불가 시)
 ```
+
+> **실무 팁**: "이 값은 절대 안 바뀔 것 같다"는 말을 100% 믿으면 안 된다. 확신이 없으면 참조 테이블을 쓰는 게 **나중에 가장 덜 고생하는 선택**이다.
 
 ### 2.6 BOOLEAN 타입
 
