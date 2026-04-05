@@ -51,12 +51,36 @@ CREATE TABLE TBL_USR_INF (
 
 | 규칙 | 좋은 예 | 나쁜 예 | 이유 |
 |------|---------|---------|------|
-| **snake_case** | `order_item` | `OrderItem`, `orderitem` | DB는 대소문자 처리가 OS마다 다름 (Linux MySQL은 대소문자 구분) |
+| **snake_case** | `order_item` | `OrderItem`, `orderitem` | DB마다 대소문자 처리가 다름 (아래 참고) |
 | **복수형** | `orders`, `users` | `order`, `user` | 테이블은 행의 집합. 복수형이 자연스러움 |
 | **접두어 금지** | `orders` | `tbl_orders`, `t_orders` | 접두어는 정보량 제로. 노이즈만 추가 |
 | **예약어 회피** | `user_accounts` | `user`, `order` | `user`는 PostgreSQL/MySQL 예약어. 매번 백틱/따옴표 필요 |
 
 > **단수 vs 복수 논쟁**: 솔직히 둘 다 쓰는 팀이 많다. 중요한 건 **하나로 통일하는 것**이다. 이 글에서는 복수형을 권장하지만, 팀 컨벤션이 단수라면 단수로 통일하면 된다.
+
+#### 대소문자 처리: MySQL vs PostgreSQL
+
+이건 많은 사람이 모르고 넘어가다가 운영 환경에서 터지는 문제다.
+
+```sql
+-- MySQL: lower_case_table_names 설정에 따라 다름
+-- 0 (Linux 기본값): 대소문자 구분 → OrderItems ≠ orderitems
+-- 1 (Windows/macOS 기본값): 소문자로 저장 → OrderItems = orderitems
+-- 2 (macOS): 소문자로 비교하지만 원본 이름 보존
+
+-- PostgreSQL: 따옴표 없으면 항상 소문자로 변환
+CREATE TABLE OrderItems (...);   -- 실제로는 "orderitems"로 생성됨
+SELECT * FROM OrderItems;        -- orderitems에서 조회
+SELECT * FROM "OrderItems";      -- 이렇게 해야 대문자 유지 (비추천)
+```
+
+| 특성 | MySQL | PostgreSQL |
+|------|-------|------------|
+| 대소문자 구분 | OS/설정에 따라 다름 (`lower_case_table_names`) | 따옴표 없으면 항상 소문자로 변환 |
+| `OrderItems` 접근 | 설정에 따라 성공 또는 실패 | `orderitems`로 접근 가능, `"OrderItems"`는 별개 |
+| **결론** | snake_case가 안전 | snake_case가 안전 |
+
+**어떤 DB를 쓰든 snake_case로 통일하면 이 문제를 아예 만날 일이 없다.**
 
 #### 예약어 함정
 
@@ -126,6 +150,8 @@ CREATE TABLE users (
 | **메모리 할당** | MySQL의 `MEMORY` 엔진, 임시 테이블은 VARCHAR를 **최대 길이로 고정 할당**함. `VARCHAR(255)` 10개 컬럼 = 행당 2,550바이트 |
 | **의도 전달** | `VARCHAR(20)`은 "이 필드는 짧은 값"이라는 문서 역할. 255는 "몰라서 그냥 넣었다"는 뜻 |
 
+> **PostgreSQL은 다르다**: PostgreSQL은 내부적으로 `VARCHAR(n)`과 `TEXT`를 **동일한 방식**으로 저장한다. 길이 제한은 CHECK 제약처럼 동작할 뿐이고, 메모리 할당이나 성능 차이가 없다. 그래서 PostgreSQL 커뮤니티에서는 "길이 제한이 필요 없으면 그냥 `TEXT`를 써라"라는 조언이 흔하다. 하지만 **MySQL과 혼용할 가능성이 있거나, 스키마 자체를 문서로 쓰고 싶다면** 적절한 VARCHAR 길이를 지정하는 게 여전히 좋다.
+
 #### 실무 권장 길이
 
 | 용도 | 길이 | 근거 |
@@ -155,7 +181,16 @@ CREATE TABLE users (
 
 **실무 규칙**: PK는 무조건 `BIGINT`로 시작해라. 4바이트 아끼려다 새벽에 마이그레이션하는 게 훨씬 비싸다.
 
-> MySQL 8.0 기준, `INT` → `BIGINT` 변경은 테이블 리빌드가 필요하다. 1억 행 테이블이면 **수십 분에서 수 시간** 걸린다. 그 동안 서비스 중단이 발생할 수 있다.
+#### INT → BIGINT 변경 비용: MySQL vs PostgreSQL
+
+| DB | INT → BIGINT 변경 시 | 영향 |
+|----|---------------------|------|
+| **MySQL (InnoDB)** | 테이블 리빌드 필요 (`ALGORITHM=COPY`) | 1억 행이면 수십 분~수 시간, 그동안 쓰기 차단 가능 |
+| **PostgreSQL** | 마찬가지로 테이블 리빌드 (`ALTER COLUMN TYPE`) | 전체 테이블 `ACCESS EXCLUSIVE` 락 → 읽기/쓰기 모두 차단 |
+
+두 DB 모두 **대형 테이블에서는 매우 비싼 작업**이다. 처음부터 BIGINT로 시작하는 게 정답이다.
+
+> **참고**: MySQL은 `pt-online-schema-change`나 `gh-ost` 같은 온라인 DDL 도구로 무중단 변경이 가능하고, PostgreSQL은 새 컬럼 추가 + 점진적 데이터 복사 + 컬럼 스왑 전략을 쓴다. 하지만 둘 다 복잡하고 위험하다.
 
 ### 2.3 돈(Money) — DECIMAL vs FLOAT
 
@@ -191,17 +226,19 @@ exchange_rate DECIMAL(12, 6)   -- 1,234.567890
 
 ### 2.4 날짜/시간 — DATETIME vs TIMESTAMP
 
-이건 생각보다 중요한 차이다:
+이건 생각보다 중요한 차이다. 그리고 **MySQL과 PostgreSQL에서 같은 이름의 타입이 다르게 동작**하기 때문에 반드시 구분해야 한다.
+
+#### MySQL의 날짜/시간 타입
 
 | 특성 | `DATETIME` | `TIMESTAMP` |
 |------|-----------|------------|
 | 저장 방식 | 그대로 저장 | **UTC로 변환** 후 저장 |
 | 범위 | `1000-01-01` ~ `9999-12-31` | `1970-01-01` ~ **`2038-01-19`** |
 | 타임존 | 영향 없음 | `time_zone` 설정에 따라 변환 |
-| 크기 (MySQL 8.0) | 5바이트 | 4바이트 |
+| 크기 | 5바이트 | 4바이트 |
 
 ```sql
--- 타임존 차이 시연
+-- MySQL: 타임존 차이 시연
 SET time_zone = '+09:00';
 INSERT INTO test (dt, ts) VALUES (NOW(), NOW());
 
@@ -211,24 +248,50 @@ SELECT dt, ts FROM test;
 -- ts: 2026-04-05 05:00:00  (UTC로 변환되어 출력)
 ```
 
+#### PostgreSQL의 날짜/시간 타입
+
+| 특성 | `TIMESTAMP` | `TIMESTAMPTZ` |
+|------|------------|--------------|
+| 저장 방식 | 그대로 저장 | **UTC로 변환** 후 저장 |
+| 범위 | `4713 BC` ~ `294276 AD` | `4713 BC` ~ `294276 AD` |
+| 타임존 | 영향 없음 | `timezone` 설정에 따라 변환 |
+| 크기 | 8바이트 | 8바이트 |
+
+```sql
+-- PostgreSQL: 타임존 차이 시연
+SET timezone = 'Asia/Seoul';
+INSERT INTO test (ts, tstz) VALUES (NOW(), NOW());
+
+SET timezone = 'UTC';
+SELECT ts, tstz FROM test;
+-- ts: 2026-04-05 14:00:00    (변하지 않음 — 입력한 그대로)
+-- tstz: 2026-04-05 05:00:00  (UTC로 변환되어 출력)
+```
+
+#### MySQL vs PostgreSQL 타입 대응표
+
+| 용도 | MySQL | PostgreSQL | 비고 |
+|------|-------|------------|------|
+| 타임존 인식 시간 | `TIMESTAMP` | `TIMESTAMPTZ` | 이름은 다르지만 역할은 같음 |
+| 타임존 무관 시간 | `DATETIME` | `TIMESTAMP` | **주의: 같은 이름인데 역할이 다름!** |
+| 날짜만 | `DATE` | `DATE` | 동일 |
+| 시간만 | `TIME` | `TIME` / `TIMETZ` | PostgreSQL은 타임존 버전도 있음 |
+
+> **혼동 포인트**: MySQL의 `TIMESTAMP`와 PostgreSQL의 `TIMESTAMP`는 이름만 같고 **동작이 다르다**. MySQL `TIMESTAMP`는 타임존을 인식하지만, PostgreSQL `TIMESTAMP`는 타임존을 무시한다. PostgreSQL에서 타임존을 인식하는 타입은 `TIMESTAMPTZ`다.
+
 #### 2038년 문제
 
-`TIMESTAMP`는 내부적으로 4바이트 정수(Unix timestamp)로 저장된다. 2038년 1월 19일에 오버플로가 발생한다.
+MySQL `TIMESTAMP`는 내부적으로 4바이트 정수(Unix timestamp)로 저장된다. 2038년 1월 19일에 오버플로가 발생한다. **PostgreSQL은 8바이트를 사용하므로 이 문제가 없다.**
 
-```
--- MySQL 8.0.28+에서는 8바이트로 확장 가능
--- 하지만 기존 데이터 마이그레이션이 필요할 수 있음
-```
+| 상황 | MySQL 권장 | PostgreSQL 권장 |
+|------|-----------|----------------|
+| 글로벌 서비스 | `TIMESTAMP` (2038 주의) | `TIMESTAMPTZ` |
+| 단일 리전 서비스 | `DATETIME` | `TIMESTAMPTZ` (여전히 권장) |
+| 생년월일 | `DATE` | `DATE` |
+| 이벤트 예약 시간 | `DATETIME` | `TIMESTAMP` |
+| `created_at`, `updated_at` | `TIMESTAMP` 또는 `DATETIME` | `TIMESTAMPTZ` |
 
-| 상황 | 권장 타입 | 이유 |
-|------|-----------|------|
-| 글로벌 서비스 | `TIMESTAMP` | 타임존 자동 변환 |
-| 한국 전용 서비스 | `DATETIME` | 타임존 변환 불필요, 2038 문제 없음 |
-| 생년월일 | `DATE` | 시간 불필요 |
-| 이벤트 예약 시간 | `DATETIME` | "한국 시간 오후 2시"처럼 절대 시간이 중요 |
-| `created_at`, `updated_at` | `TIMESTAMP` 또는 `DATETIME` | 팀 컨벤션에 따라 통일 |
-
-> **PostgreSQL은 다르다**: PostgreSQL의 `TIMESTAMPTZ`는 MySQL `TIMESTAMP`와 유사하지만 8바이트이고 2038 문제가 없다. PostgreSQL에서는 항상 `TIMESTAMPTZ`를 쓰는 게 정답이다.
+> **PostgreSQL 팁**: PostgreSQL 공식 문서에서도 **"거의 모든 경우에 `TIMESTAMPTZ`를 쓰라"** 고 권장한다. `TIMESTAMP`(타임존 없음)는 "한국 시간 오후 2시"처럼 특정 타임존의 절대 시간이 필요한 극히 드문 경우에만 사용한다.
 
 ### 2.5 ENUM vs 참조 테이블(Lookup Table)
 
@@ -298,7 +361,20 @@ ALTER TABLE users ADD CONSTRAINT chk_is_active CHECK (is_active IN (0, 1));
 | 기본값 | 설정 가능 | MySQL: 불가, PostgreSQL: 가능 |
 | 용도 | 길이 예측 가능한 짧은 문자열 | 게시글 본문, 설명, JSON 등 |
 
-**실무 규칙**: 길이를 합리적으로 예측할 수 있으면 `VARCHAR`, 없으면 `TEXT`.
+#### MySQL vs PostgreSQL 차이
+
+```
+MySQL:    VARCHAR(n) ≠ TEXT — 저장 방식, 인덱싱, 기본값 지원이 다름
+PostgreSQL: VARCHAR(n) ≈ TEXT — 내부 저장 방식이 동일. VARCHAR(n)은 길이 제한만 추가
+```
+
+| 차이점 | MySQL | PostgreSQL |
+|--------|-------|------------|
+| TEXT에 인덱스 | 접두어 인덱스만 (`INDEX(col(255))`) | 일반 인덱스 가능 (최대 ~2700바이트) |
+| TEXT에 DEFAULT | 불가 | 가능 |
+| VARCHAR vs TEXT 성능 | VARCHAR가 유리한 경우 있음 (임시 테이블) | 차이 없음 |
+
+**실무 규칙**: MySQL이면 길이 예측 가능한 건 `VARCHAR`, 나머지는 `TEXT`. PostgreSQL이면 길이 제한이 비즈니스 규칙인 경우만 `VARCHAR(n)`, 나머지는 `TEXT`로 통일해도 된다.
 
 ---
 
@@ -306,14 +382,29 @@ ALTER TABLE users ADD CONSTRAINT chk_is_active CHECK (is_active IN (0, 1));
 
 PK 선택은 단순한 "id를 뭘로 할까?"가 아니다. **인덱스 구조, INSERT 성능, 분산 환경 호환성**에 직결되는 아키텍처 결정이다.
 
-### 3.1 AUTO_INCREMENT (순차 정수)
+### 3.1 AUTO_INCREMENT / IDENTITY (순차 정수)
 
 ```sql
+-- MySQL
 CREATE TABLE orders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     ...
 );
+
+-- PostgreSQL (권장: IDENTITY — SQL 표준)
+CREATE TABLE orders (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ...
+);
+
+-- PostgreSQL (레거시: SERIAL — 시퀀스 기반)
+CREATE TABLE orders (
+    id BIGSERIAL PRIMARY KEY,   -- 내부적으로 시퀀스 + DEFAULT 조합
+    ...
+);
 ```
+
+> **PostgreSQL SERIAL vs IDENTITY**: `SERIAL`은 PostgreSQL 고유 문법이고, `GENERATED ALWAYS AS IDENTITY`는 SQL:2003 표준이다. 새 프로젝트에서는 `IDENTITY`를 쓰는 게 권장된다. `SERIAL`은 시퀀스 소유권 관리가 지저분하고, 사용자가 임의 값을 `INSERT`할 수 있는 문제가 있다.
 
 | 장점 | 단점 |
 |------|------|
@@ -325,6 +416,8 @@ CREATE TABLE orders (
 #### 클러스터드 인덱스란?
 
 InnoDB(MySQL)에서 **PK = 클러스터드 인덱스**다. 데이터가 PK 순서대로 물리적으로 정렬되어 저장된다.
+
+> **PostgreSQL은 다르다**: PostgreSQL은 기본적으로 **클러스터드 인덱스가 없다**. 테이블(heap)은 삽입 순서대로 저장되고, PK는 별도의 B-Tree 인덱스일 뿐이다. `CLUSTER` 명령으로 한 번 정렬할 수 있지만, 이후 INSERT에서는 다시 순서가 섞인다. 따라서 **UUID의 랜덤 삽입이 MySQL만큼 큰 문제가 되지 않는다** — 다만 인덱스 자체의 크기와 캐시 효율 문제는 여전히 있다.
 
 ```
 [AUTO_INCREMENT — 순차 삽입]
@@ -502,9 +595,18 @@ SELECT COUNT(score) FROM reviews;  -- NULL 제외 카운트
 SELECT COUNT(*) FROM reviews;      -- NULL 포함 전체 행 수
 
 -- 함정 3: UNIQUE 제약조건과 NULL
--- MySQL/PostgreSQL: NULL은 UNIQUE에서 중복 허용
+-- MySQL: NULL은 UNIQUE에서 중복 허용
 INSERT INTO users (email) VALUES (NULL);  -- 성공
 INSERT INTO users (email) VALUES (NULL);  -- 또 성공! (NULL != NULL이므로)
+
+-- PostgreSQL 14 이하: MySQL과 동일 (NULL 중복 허용)
+-- PostgreSQL 15+: NULLS NOT DISTINCT 옵션 추가
+CREATE TABLE users (
+    email VARCHAR(320),
+    CONSTRAINT uq_users_email UNIQUE NULLS NOT DISTINCT (email)
+);
+-- 이제 NULL도 한 번만 허용!
+
 -- SQL Server: NULL도 한 번만 허용 (기본 동작)
 ```
 

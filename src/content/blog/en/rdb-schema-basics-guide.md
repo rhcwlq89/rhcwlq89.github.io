@@ -47,12 +47,36 @@ Without abbreviation lookup tables, this schema is unreadable. It forces you to 
 
 | Rule | Good | Bad | Why |
 |------|------|-----|-----|
-| **snake_case** | `order_item` | `OrderItem`, `orderitem` | Case sensitivity varies by OS (Linux MySQL is case-sensitive) |
+| **snake_case** | `order_item` | `OrderItem`, `orderitem` | Case sensitivity varies by DB (see below) |
 | **Plural** | `orders`, `users` | `order`, `user` | A table is a collection of rows. Plural is natural |
 | **No prefixes** | `orders` | `tbl_orders`, `t_orders` | Prefixes carry zero information. Just noise |
 | **Avoid reserved words** | `user_accounts` | `user`, `order` | `user` is reserved in PostgreSQL/MySQL. Requires quoting every time |
 
 > **Singular vs plural debate**: Honestly, both conventions are common. What matters is **picking one and sticking to it**. This guide recommends plural, but if your team uses singular, stay consistent.
+
+#### Case Sensitivity: MySQL vs PostgreSQL
+
+This is a subtle issue that many people overlook until it breaks in production.
+
+```sql
+-- MySQL: depends on lower_case_table_names setting
+-- 0 (Linux default): case-sensitive -> OrderItems != orderitems
+-- 1 (Windows/macOS default): stored as lowercase -> OrderItems = orderitems
+-- 2 (macOS): compared as lowercase but original name preserved
+
+-- PostgreSQL: always folds to lowercase without quotes
+CREATE TABLE OrderItems (...);   -- Actually creates "orderitems"
+SELECT * FROM OrderItems;        -- Queries orderitems
+SELECT * FROM "OrderItems";      -- This preserves case (not recommended)
+```
+
+| Behavior | MySQL | PostgreSQL |
+|----------|-------|------------|
+| Case sensitivity | Depends on OS/setting (`lower_case_table_names`) | Always folds to lowercase without quotes |
+| Accessing `OrderItems` | Success or failure depending on setting | Accessible as `orderitems`, `"OrderItems"` is separate |
+| **Conclusion** | snake_case is safe | snake_case is safe |
+
+**Regardless of which DB you use, sticking to snake_case eliminates this problem entirely.**
 
 #### Reserved Word Pitfalls
 
@@ -122,6 +146,8 @@ CREATE TABLE users (
 | **Memory allocation** | MySQL's `MEMORY` engine and temp tables allocate VARCHAR at **max length**. Ten `VARCHAR(255)` columns = 2,550 bytes per row |
 | **Intent documentation** | `VARCHAR(20)` says "this field holds short values." 255 says "I didn't think about it" |
 
+> **PostgreSQL is different**: PostgreSQL stores `VARCHAR(n)` and `TEXT` **identically** under the hood. The length limit acts like a CHECK constraint — there's no performance or storage difference. That's why the PostgreSQL community often advises "just use `TEXT` if you don't need a length limit." However, **if you might use MySQL too, or want the schema itself to serve as documentation**, specifying appropriate VARCHAR lengths is still a good practice.
+
 #### Practical Length Guidelines
 
 | Use Case | Length | Rationale |
@@ -151,7 +177,16 @@ CREATE TABLE users (
 
 **Practical rule**: Always start PKs with `BIGINT`. Saving 4 bytes isn't worth an emergency migration at 3 AM.
 
-> In MySQL 8.0, changing `INT` to `BIGINT` requires a table rebuild. For a 100M row table, that's **tens of minutes to hours**. With potential service downtime.
+#### INT to BIGINT Migration Cost: MySQL vs PostgreSQL
+
+| DB | What INT -> BIGINT requires | Impact |
+|----|---------------------------|--------|
+| **MySQL (InnoDB)** | Table rebuild (`ALGORITHM=COPY`) | 100M rows = tens of minutes to hours, writes may be blocked |
+| **PostgreSQL** | Also table rebuild (`ALTER COLUMN TYPE`) | `ACCESS EXCLUSIVE` lock on entire table -> reads AND writes blocked |
+
+Both databases make this an **extremely expensive operation** on large tables. Start with BIGINT from the beginning.
+
+> **Note**: MySQL has online DDL tools like `pt-online-schema-change` or `gh-ost` for zero-downtime changes. PostgreSQL uses a new-column + gradual-copy + column-swap strategy. Both are complex and risky.
 
 ### 2.3 Money — DECIMAL vs FLOAT
 
@@ -187,17 +222,19 @@ exchange_rate DECIMAL(12, 6)   -- 1,234.567890
 
 ### 2.4 Date/Time — DATETIME vs TIMESTAMP
 
-This difference matters more than you'd think:
+This matters more than you'd think — and **the same type name behaves differently in MySQL vs PostgreSQL**, so you must understand both.
+
+#### MySQL Date/Time Types
 
 | Property | `DATETIME` | `TIMESTAMP` |
 |----------|-----------|------------|
 | Storage | Stored as-is | **Converted to UTC** before storage |
 | Range | `1000-01-01` ~ `9999-12-31` | `1970-01-01` ~ **`2038-01-19`** |
 | Timezone | Not affected | Converted based on `time_zone` setting |
-| Size (MySQL 8.0) | 5 bytes | 4 bytes |
+| Size | 5 bytes | 4 bytes |
 
 ```sql
--- Timezone difference demo
+-- MySQL: Timezone difference demo
 SET time_zone = '+09:00';
 INSERT INTO test (dt, ts) VALUES (NOW(), NOW());
 
@@ -207,19 +244,50 @@ SELECT dt, ts FROM test;
 -- ts: 2026-04-05 05:00:00  (converted to UTC)
 ```
 
+#### PostgreSQL Date/Time Types
+
+| Property | `TIMESTAMP` | `TIMESTAMPTZ` |
+|----------|------------|--------------|
+| Storage | Stored as-is | **Converted to UTC** before storage |
+| Range | `4713 BC` ~ `294276 AD` | `4713 BC` ~ `294276 AD` |
+| Timezone | Not affected | Converted based on `timezone` setting |
+| Size | 8 bytes | 8 bytes |
+
+```sql
+-- PostgreSQL: Timezone difference demo
+SET timezone = 'Asia/Seoul';
+INSERT INTO test (ts, tstz) VALUES (NOW(), NOW());
+
+SET timezone = 'UTC';
+SELECT ts, tstz FROM test;
+-- ts: 2026-04-05 14:00:00    (unchanged — stored exactly as entered)
+-- tstz: 2026-04-05 05:00:00  (converted to UTC for display)
+```
+
+#### MySQL vs PostgreSQL Type Mapping
+
+| Purpose | MySQL | PostgreSQL | Note |
+|---------|-------|------------|------|
+| Timezone-aware time | `TIMESTAMP` | `TIMESTAMPTZ` | Different names, same role |
+| Timezone-naive time | `DATETIME` | `TIMESTAMP` | **Caution: same name, different role!** |
+| Date only | `DATE` | `DATE` | Same |
+| Time only | `TIME` | `TIME` / `TIMETZ` | PostgreSQL has timezone variant |
+
+> **Confusion point**: MySQL's `TIMESTAMP` and PostgreSQL's `TIMESTAMP` share the same name but **behave differently**. MySQL `TIMESTAMP` is timezone-aware, while PostgreSQL `TIMESTAMP` is timezone-naive. PostgreSQL's timezone-aware type is `TIMESTAMPTZ`.
+
 #### The 2038 Problem
 
-`TIMESTAMP` is internally stored as a 4-byte integer (Unix timestamp). It overflows on January 19, 2038.
+MySQL's `TIMESTAMP` is internally stored as a 4-byte integer (Unix timestamp). It overflows on January 19, 2038. **PostgreSQL uses 8 bytes, so it doesn't have this problem.**
 
-| Scenario | Recommended Type | Why |
-|----------|-----------------|-----|
-| Global service | `TIMESTAMP` | Automatic timezone conversion |
-| Single-region service | `DATETIME` | No timezone conversion needed, no 2038 issue |
-| Birth date | `DATE` | No time component needed |
-| Event scheduling | `DATETIME` | Absolute time matters ("2 PM KST") |
-| `created_at`, `updated_at` | `TIMESTAMP` or `DATETIME` | Pick one, be consistent |
+| Scenario | MySQL | PostgreSQL |
+|----------|-------|------------|
+| Global service | `TIMESTAMP` (watch for 2038) | `TIMESTAMPTZ` |
+| Single-region service | `DATETIME` | `TIMESTAMPTZ` (still recommended) |
+| Birth date | `DATE` | `DATE` |
+| Event scheduling | `DATETIME` | `TIMESTAMP` |
+| `created_at`, `updated_at` | `TIMESTAMP` or `DATETIME` | `TIMESTAMPTZ` |
 
-> **PostgreSQL is different**: PostgreSQL's `TIMESTAMPTZ` is similar to MySQL's `TIMESTAMP` but uses 8 bytes and has no 2038 problem. In PostgreSQL, always use `TIMESTAMPTZ`.
+> **PostgreSQL tip**: The official PostgreSQL docs recommend **"use `TIMESTAMPTZ` for almost everything."** Plain `TIMESTAMP` (without timezone) is only for rare cases where you need an absolute time in a specific timezone, like "2 PM KST for an event."
 
 ### 2.5 ENUM vs Lookup Tables
 
@@ -289,7 +357,20 @@ ALTER TABLE users ADD CONSTRAINT chk_is_active CHECK (is_active IN (0, 1));
 | Default value | Supported | MySQL: not supported, PostgreSQL: supported |
 | Use case | Short strings with predictable length | Post bodies, descriptions, JSON, etc. |
 
-**Practical rule**: If you can reasonably predict the length, use `VARCHAR`. Otherwise, `TEXT`.
+#### MySQL vs PostgreSQL Differences
+
+```
+MySQL:      VARCHAR(n) != TEXT — different storage, indexing, and default value support
+PostgreSQL: VARCHAR(n) ≈ TEXT — identical internal storage. VARCHAR(n) just adds a length check
+```
+
+| Difference | MySQL | PostgreSQL |
+|------------|-------|------------|
+| INDEX on TEXT | Prefix index only (`INDEX(col(255))`) | Regular index possible (up to ~2700 bytes) |
+| DEFAULT on TEXT | Not supported | Supported |
+| VARCHAR vs TEXT performance | VARCHAR can be better (temp tables) | No difference |
+
+**Practical rule**: For MySQL, use `VARCHAR` when length is predictable, `TEXT` otherwise. For PostgreSQL, use `VARCHAR(n)` only when length limits are a business rule — otherwise `TEXT` is fine for everything.
 
 ---
 
@@ -297,14 +378,29 @@ ALTER TABLE users ADD CONSTRAINT chk_is_active CHECK (is_active IN (0, 1));
 
 Choosing a PK isn't just "what should the id be?" It's an architectural decision that directly affects **index structure, INSERT performance, and distributed system compatibility**.
 
-### 3.1 AUTO_INCREMENT (Sequential Integer)
+### 3.1 AUTO_INCREMENT / IDENTITY (Sequential Integer)
 
 ```sql
+-- MySQL
 CREATE TABLE orders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     ...
 );
+
+-- PostgreSQL (recommended: IDENTITY — SQL standard)
+CREATE TABLE orders (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ...
+);
+
+-- PostgreSQL (legacy: SERIAL — sequence-based)
+CREATE TABLE orders (
+    id BIGSERIAL PRIMARY KEY,   -- Internally: sequence + DEFAULT combo
+    ...
+);
 ```
+
+> **PostgreSQL SERIAL vs IDENTITY**: `SERIAL` is PostgreSQL-specific syntax, while `GENERATED ALWAYS AS IDENTITY` is SQL:2003 standard. For new projects, `IDENTITY` is recommended. `SERIAL` has messy sequence ownership management and allows users to INSERT arbitrary values.
 
 | Pros | Cons |
 |------|------|
@@ -316,6 +412,8 @@ CREATE TABLE orders (
 #### What Is a Clustered Index?
 
 In InnoDB (MySQL), **PK = clustered index**. Data is physically stored in PK order.
+
+> **PostgreSQL is different**: PostgreSQL has **no clustered index by default**. Tables (heaps) store data in insertion order, and the PK is just a separate B-Tree index. The `CLUSTER` command can sort data once, but subsequent INSERTs won't maintain order. This means **random UUID inserts aren't as devastating as in MySQL** — though index size and cache efficiency concerns still apply.
 
 ```
 [AUTO_INCREMENT — Sequential inserts]
@@ -493,9 +591,18 @@ SELECT COUNT(score) FROM reviews;  -- Excludes NULL
 SELECT COUNT(*) FROM reviews;      -- Includes all rows
 
 -- Trap 3: UNIQUE constraint and NULL
--- MySQL/PostgreSQL: NULL is allowed multiple times in UNIQUE columns
+-- MySQL: NULL is allowed multiple times in UNIQUE columns
 INSERT INTO users (email) VALUES (NULL);  -- OK
 INSERT INTO users (email) VALUES (NULL);  -- Also OK! (NULL != NULL)
+
+-- PostgreSQL 14 and below: same as MySQL (multiple NULLs allowed)
+-- PostgreSQL 15+: NULLS NOT DISTINCT option added
+CREATE TABLE users (
+    email VARCHAR(320),
+    CONSTRAINT uq_users_email UNIQUE NULLS NOT DISTINCT (email)
+);
+-- Now NULL is only allowed once!
+
 -- SQL Server: Only one NULL allowed (default behavior)
 ```
 
