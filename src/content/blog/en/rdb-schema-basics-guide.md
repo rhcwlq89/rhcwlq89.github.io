@@ -196,7 +196,95 @@ CREATE TABLE users (
 >
 > The recommended lengths in the table above are based on **RFCs and international standards** — they apply regardless of which database you use.
 
-### 2.2 Integer Types — INT vs BIGINT
+### 2.2 Charset & Collation — The Hidden Minefield of Strings
+
+Just as important as VARCHAR length — but far more often ignored — are **charset (character encoding)** and **collation (sorting/comparison rules)**.
+
+#### MySQL: utf8 ≠ UTF-8
+
+MySQL's most famous gotcha:
+
+```sql
+-- ❌ utf8 is only 3 bytes max → can't store emoji (💡)
+CREATE TABLE posts (
+    title VARCHAR(200)
+) CHARACTER SET utf8;
+
+-- ✅ utf8mb4 is real UTF-8 (up to 4 bytes)
+CREATE TABLE posts (
+    title VARCHAR(200)
+) CHARACTER SET utf8mb4;
+```
+
+Since MySQL 8.0, the **default charset is `utf8mb4`**, but if you're working with legacy databases, always verify.
+
+#### How Collation Affects Your Queries
+
+Collation determines **how strings are compared and sorted**. The same data can produce different results for WHERE and ORDER BY depending on the collation.
+
+| Collation | Behavior | Use Case |
+|-----------|----------|----------|
+| `utf8mb4_unicode_ci` | Case-insensitive, accent-insensitive | General text (names, emails) |
+| `utf8mb4_bin` | Exact byte-level comparison | Hashes, tokens, password hashes |
+| `utf8mb4_0900_ai_ci` | MySQL 8.0 default. Unicode 9.0-based, more accurate sorting | New projects on MySQL 8.0+ |
+
+```sql
+-- Results differ based on collation
+-- utf8mb4_unicode_ci: 'cafe' = 'café' = 'CAFE' (all equal)
+-- utf8mb4_bin:        'cafe' ≠ 'café' ≠ 'CAFE' (all different)
+
+-- Pro tip: you can set collation per column
+CREATE TABLE users (
+    email VARCHAR(320) COLLATE utf8mb4_unicode_ci,  -- case-insensitive search
+    api_key VARCHAR(64) COLLATE utf8mb4_bin          -- exact matching
+);
+```
+
+#### PostgreSQL: Encoding Is Simple, Collation Is Complex
+
+PostgreSQL sets encoding at database creation, and **UTF-8 is the de facto standard**. There's no charset trap like MySQL's.
+
+```sql
+-- Set at database level
+CREATE DATABASE myapp
+    ENCODING = 'UTF8'
+    LC_COLLATE = 'en_US.UTF-8';
+
+-- PostgreSQL 12+: ICU collation for finer control
+CREATE COLLATION korean (provider = icu, locale = 'ko-KR');
+
+ALTER TABLE users
+    ALTER COLUMN name TYPE VARCHAR(50) COLLATE "korean";
+```
+
+PostgreSQL collation comes in two flavors: the traditional **OS locale-dependent** approach and the **ICU provider**. For new projects, prefer ICU — it prevents the nasty surprise of sort order changing after an OS upgrade.
+
+#### SQL Server: NVARCHAR + Collation
+
+SQL Server sets the default collation at the **database level**, not per table or column.
+
+```sql
+-- Database default collation
+CREATE DATABASE MyApp COLLATE Korean_Wansung_CI_AS;
+
+-- CI = Case Insensitive, AS = Accent Sensitive
+-- Use Korean_Wansung family for Korean sorting
+```
+
+As mentioned in the DB-specific notes above, use `NVARCHAR` when handling non-ASCII characters like Korean or Japanese.
+
+#### Practical Rules
+
+| DB | Recommended Charset | Recommended Collation |
+|----|--------------------|-----------------------|
+| **MySQL 8.0+** | `utf8mb4` (default) | `utf8mb4_0900_ai_ci` (default) |
+| **MySQL 5.7** | `utf8mb4` (must specify!) | `utf8mb4_unicode_ci` |
+| **PostgreSQL** | `UTF8` | ICU provider-based (`ko-KR`, etc.) |
+| **SQL Server** | Use `NVARCHAR` | `Korean_Wansung_CI_AS` (for Korean services) |
+
+> **Key takeaway**: Charset and collation should be **decided once at project inception and kept consistent**. Changing them later requires a table rebuild + index recreation.
+
+### 2.3 Integer Types — INT vs BIGINT
 
 | Type | Bytes | Range (UNSIGNED) | When It Runs Out |
 |------|:---:|------|------|
@@ -225,7 +313,7 @@ Both databases make this an **extremely expensive operation** on large tables. S
 
 > **Note**: MySQL has online DDL tools like `pt-online-schema-change` or `gh-ost` for zero-downtime changes. PostgreSQL uses a new-column + gradual-copy + column-swap strategy. Both are complex and risky.
 
-### 2.3 Money — DECIMAL vs FLOAT
+### 2.4 Money — DECIMAL vs FLOAT
 
 ```sql
 -- FLOAT trap
@@ -257,7 +345,7 @@ exchange_rate DECIMAL(12, 6)   -- 1,234.567890
 
 **Rule: Never use FLOAT for money columns. No exceptions.**
 
-### 2.4 Date/Time — DATETIME vs TIMESTAMP
+### 2.5 Date/Time — DATETIME vs TIMESTAMP
 
 This matters more than you'd think — and **the same type name behaves differently in MySQL vs PostgreSQL**, so you must understand both.
 
@@ -326,7 +414,7 @@ MySQL's `TIMESTAMP` is internally stored as a 4-byte integer (Unix timestamp). I
 
 > **PostgreSQL tip**: The official PostgreSQL docs recommend **"use `TIMESTAMPTZ` for almost everything."** Plain `TIMESTAMP` (without timezone) is only for rare cases where you need an absolute time in a specific timezone, like "2 PM KST for an event."
 
-### 2.5 ENUM vs Lookup Tables
+### 2.6 ENUM vs Lookup Tables
 
 ```sql
 -- Option 1: ENUM
@@ -401,7 +489,7 @@ No permission to create new tables      -> VARCHAR+CHECK (when lookup tables are
 
 > **Practical tip**: Don't trust "this value will never change" at face value. When in doubt, a lookup table is the choice that **causes the least pain down the road**.
 
-### 2.6 BOOLEAN Type
+### 2.7 BOOLEAN Type
 
 ```sql
 -- MySQL: Actually an alias for TINYINT(1)
@@ -422,7 +510,7 @@ INSERT INTO users (is_active) VALUES (99);  -- Also fine!
 ALTER TABLE users ADD CONSTRAINT chk_is_active CHECK (is_active IN (0, 1));
 ```
 
-### 2.7 TEXT vs VARCHAR
+### 2.8 TEXT vs VARCHAR
 
 | Property | `VARCHAR(n)` | `TEXT` |
 |----------|-------------|--------|
@@ -760,7 +848,7 @@ FROM users;
 | Topic | Key Principle |
 |-------|--------------|
 | **Naming** | snake_case, plural tables, no abbreviations, avoid reserved words. **Consistency is what matters most** |
-| **Data types** | VARCHAR lengths with justification, DECIMAL for money, BIGINT for PKs, time types matched to service needs |
+| **Data types** | VARCHAR lengths with justification, charset/collation decided early and consistent, DECIMAL for money, BIGINT for PKs, time types matched to service needs |
 | **PK strategy** | AUTO_INCREMENT + BIGINT covers most cases. UUID v7 or ULID for external exposure or distributed systems |
 | **NULL** | Default to NOT NULL. When allowing NULL, you must be able to answer "what does the absence of this value mean?" |
 
