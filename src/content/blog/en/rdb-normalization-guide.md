@@ -494,14 +494,65 @@ CREATE TABLE users (
 | 5+ JOIN queries repeat often | | O |
 | Indexes and caching already maxed out | | O |
 
-### OLTP vs OLAP
+### OLTP vs OLAP — Why They Need Different Normalization Levels
 
-| | OLTP (Orders, Payments) | OLAP (Dashboards, Reports) |
-|---|:---:|:---:|
-| Normalization level | High (3NF) | Low (denormalized, star schema) |
-| Optimized for | Write speed, integrity | Read speed, aggregation |
+Databases serve two fundamentally different purposes.
 
-> **Running OLTP and OLAP in the same DB makes both slow.** If you need analytics, separate them into a Data Warehouse or use Materialized Views.
+**OLTP (Online Transaction Processing)** — "The DB handling orders right now"
+
+```
+- Users place orders, make payments, cancel, and update shipping status
+- Short transactions reading/writing 1-10 rows, hundreds to thousands per second
+- Priority: "This order data must be correct" -> integrity first
+- Higher normalization is better (no duplicates, always accurate)
+```
+
+**OLAP (Online Analytical Processing)** — "The DB showing yesterday's revenue"
+
+```
+- Admins view dashboards, analyze monthly trends, generate reports
+- Heavy queries scanning millions to billions of rows for aggregation
+- Priority: "Show results fast" -> read speed first
+- Denormalization is better (fewer JOINs, pre-aggregated data)
+```
+
+| Property | OLTP (Orders, Payments) | OLAP (Dashboards, Reports) |
+|----------|:---:|:---:|
+| **Typical queries** | `INSERT`, `UPDATE`, `SELECT ... WHERE id = ?` | `SELECT SUM/AVG/COUNT ... GROUP BY ... date range` |
+| **Data per query** | 1-10 rows | Tens of thousands to billions of rows |
+| **Normalization level** | High (3NF) | Low (denormalized, star schema) |
+| **Optimized for** | Write speed, integrity | Read speed, aggregation |
+| **Real-world examples** | Service DB (MySQL, PostgreSQL) | DW, BI (BigQuery, Redshift, ClickHouse) |
+
+#### Why You Shouldn't Do Both in the Same DB
+
+```
+Scenario: Running sales reports (OLAP) directly on the service DB (OLTP)
+
+1. SELECT SUM(total_amount) FROM orders WHERE order_date >= '2026-01-01'
+   -> Full-scans 1M rows, consuming table locks and IO
+
+2. Meanwhile, user order INSERTs start queuing up
+   -> "I can't place an order!" outage begins
+
+3. The report query also slows down due to transaction isolation
+   -> Both are slow. Nobody is happy.
+```
+
+#### How to Separate Them in Practice
+
+```
+[OLTP DB]  ->  Sync  ->  [OLAP DB / DW]
+(Service)     (CDC, ETL)    (Analytics)
+
+- CDC (Change Data Capture): Stream DB change logs to analytics DB in real-time
+  e.g., Debezium, AWS DMS
+- ETL (Extract-Transform-Load): Periodically extract, transform, and load data
+  e.g., Airflow, dbt
+- Simple cases: Materialized View (PostgreSQL) or Read Replica
+```
+
+> **Bottom line**: Keep your OLTP DB normalized. If you need analytics, separate it into a dedicated OLAP DB. **"Running report queries directly on the service DB"** is the classic mistake of mixing OLTP and OLAP.
 
 ---
 
