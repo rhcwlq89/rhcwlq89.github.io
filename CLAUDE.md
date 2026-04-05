@@ -56,5 +56,5 @@ When writing a hero image prompt for a blog post:
 - Line 2-3: Describe the main subject and its visual treatment (glow, color, position)
 - Line 4: Describe supporting elements and their arrangement around the main subject
 - Line 5+: Describe lighting, flow/movement, and any contextual details that convey the post's topic
-- Always end with: "Isometric 2.5D style, dark navy background, blue/cyan glow effects, no text."
+- Always end with: "Isometric 2.5D style, dark navy background, blue/cyan glow effects, no text. Aspect ratio 3:2 (1536x1024)."
 - Reference specific existing blog images if helpful (e.g., "similar composition to the SAML guide image")
