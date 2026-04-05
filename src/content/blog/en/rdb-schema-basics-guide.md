@@ -188,6 +188,14 @@ CREATE TABLE users (
 | URL | `VARCHAR(2048)` | Practical browser max |
 | Short code/status | `VARCHAR(30)` | `ACTIVE`, `PENDING_APPROVAL`, etc. |
 
+> **DB-Specific Notes**
+> - **MySQL (InnoDB)**: VARCHAR lengths of **255 or less use 1 byte** to store the length prefix; **256 or more use 2 bytes**. It's a small difference, but worth knowing that internal storage behavior changes at the 255 boundary.
+> - **Oracle**: Uses `VARCHAR2`, and you must explicitly choose between **character and byte semantics** — e.g., `VARCHAR2(50 CHAR)` vs `VARCHAR2(50 BYTE)`. When handling multibyte characters (Korean, Japanese, etc.), always specify `CHAR` semantics.
+> - **PostgreSQL**: As noted above, VARCHAR(n) and TEXT are stored identically, so the choice is less about length and more about **whether the limit represents a business rule**.
+> - **SQL Server**: `VARCHAR` is **byte-based**, while `NVARCHAR` is **character-based** (UTF-16, 2 bytes per character). For non-ASCII text (Korean, Japanese, etc.), use `NVARCHAR`. Note the max length difference: `VARCHAR(8000)` vs `NVARCHAR(4000)`.
+>
+> The recommended lengths in the table above are based on **RFCs and international standards** — they apply regardless of which database you use.
+
 ### 2.2 Integer Types — INT vs BIGINT
 
 | Type | Bytes | Range (UNSIGNED) | When It Runs Out |

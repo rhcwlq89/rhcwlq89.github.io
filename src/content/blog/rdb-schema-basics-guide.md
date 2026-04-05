@@ -192,6 +192,14 @@ CREATE TABLE users (
 | URL | `VARCHAR(2048)` | 브라우저 실질적 최대 길이 |
 | 짧은 코드/상태 | `VARCHAR(30)` | `ACTIVE`, `PENDING_APPROVAL` 등 |
 
+> **DB별 참고사항**
+> - **MySQL (InnoDB)**: VARCHAR 길이가 **255 이하면 길이 저장에 1바이트**, 256 이상이면 **2바이트**를 사용한다. 큰 차이는 아니지만, 255를 기준으로 내부 저장 방식이 달라진다는 점은 알아두자.
+> - **Oracle**: `VARCHAR2`를 사용하며, `VARCHAR2(50 CHAR)` vs `VARCHAR2(50 BYTE)`처럼 **문자 단위와 바이트 단위를 명시적으로 구분**한다. 멀티바이트 문자(한글 등)를 다룬다면 반드시 `CHAR` 단위를 지정해야 한다.
+> - **PostgreSQL**: 위에서 언급했듯이 VARCHAR(n)과 TEXT의 내부 저장 방식이 동일하므로, 길이 값 자체보다는 **비즈니스 규칙으로서의 제약**이 필요한지가 선택 기준이다.
+> - **SQL Server**: `VARCHAR`는 **바이트 단위**, `NVARCHAR`는 **문자 단위**(UTF-16, 문자당 2바이트)다. 한글 등 비ASCII 문자를 저장한다면 `NVARCHAR`를 써야 하며, 최대 길이도 `VARCHAR(8000)` vs `NVARCHAR(4000)`으로 다르다.
+>
+> 위 표의 권장 길이는 **RFC, 국제 표준 등 비즈니스 규칙 기반**이므로 DB 종류와 무관하게 적용할 수 있다.
+
 ### 2.2 정수 타입 — INT vs BIGINT
 
 | 타입 | 바이트 | 범위 (UNSIGNED) | 한계 도달 시나리오 |
