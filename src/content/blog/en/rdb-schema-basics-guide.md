@@ -43,11 +43,40 @@ CREATE TABLE TBL_USR_INF (
 
 Without abbreviation lookup tables, this schema is unreadable. It forces you to **open the ERD every time you write a query**.
 
-### 1.2 Table Names
+### 1.2 Why snake_case?
+
+There are clear reasons why snake_case is the default in the database world.
+
+| Reason | Explanation |
+|--------|-------------|
+| **Avoids case sensitivity traps** | MySQL behavior varies by OS, PostgreSQL folds to lowercase without quotes. `OrderItem` works in some environments, fails in others. snake_case is all lowercase, so it **behaves identically across every DB and OS** |
+| **Reads well with SQL** | SQL keywords are conventionally uppercase (`SELECT`, `FROM`, `WHERE`). Mixed-case identifiers blur the line between keywords and names. `SELECT OrderDate FROM OrderItems` vs `SELECT order_date FROM order_items` — the latter is immediately readable |
+| **ORM auto-mapping** | JPA/Hibernate automatically maps `camelCase` entity fields to `snake_case` columns (`ImplicitNamingStrategy`). If the DB uses snake_case, everything works without `@Column(name=...)` annotations |
+| **CLI/terminal convenience** | You can type identifiers directly in `psql`, `mysql` without quotes or backticks. Typing `SELECT * FROM "OrderItems"` with quotes every time is painful |
+| **Industry standard** | PostgreSQL official docs, MySQL official examples, and major frameworks (Rails, Django, Laravel) all default to snake_case |
+
+```sql
+-- What happens when you use camelCase
+CREATE TABLE "OrderItems" ("orderId" BIGINT, "productName" VARCHAR(100));
+
+-- 1. Every query needs quotes (PostgreSQL)
+SELECT "orderId", "productName" FROM "OrderItems";  -- every single time
+
+-- 2. Forget quotes? Error.
+SELECT orderId FROM OrderItems;  -- Looks for "orderitems"."orderid"
+
+-- 3. pg_dump and other tools may drop quotes -> restore fails
+
+-- With snake_case?
+CREATE TABLE order_items (order_id BIGINT, product_name VARCHAR(100));
+SELECT order_id, product_name FROM order_items;  -- clean, no quotes needed
+```
+
+### 1.3 Table Names
 
 | Rule | Good | Bad | Why |
 |------|------|-----|-----|
-| **snake_case** | `order_item` | `OrderItem`, `orderitem` | Case sensitivity varies by DB (see below) |
+| **snake_case** | `order_item` | `OrderItem`, `orderitem` | All the reasons explained above |
 | **Plural** | `orders`, `users` | `order`, `user` | A table is a collection of rows. Plural is natural |
 | **No prefixes** | `orders` | `tbl_orders`, `t_orders` | Prefixes carry zero information. Just noise |
 | **Avoid reserved words** | `user_accounts` | `user`, `order` | `user` is reserved in PostgreSQL/MySQL. Requires quoting every time |
@@ -92,7 +121,7 @@ SELECT * FROM `order`;       -- Works, but requires backticks every time
 SELECT * FROM orders;        -- Clean
 ```
 
-### 1.3 Column Names
+### 1.4 Column Names
 
 | Rule | Good | Bad | Why |
 |------|------|-----|-----|
@@ -102,7 +131,7 @@ SELECT * FROM orders;        -- Clean
 | **Timestamps: _at suffix** | `created_at`, `deleted_at` | `reg_date`, `crt_dtm` | Clearly indicates a timestamp |
 | **FK: referenced_table_id** | `user_id`, `order_id` | `usr_seq`, `fk_order` | Immediately obvious which table's PK is referenced |
 
-### 1.4 Index and Constraint Names
+### 1.5 Index and Constraint Names
 
 Without explicit names, the DB auto-generates names like `SYS_C007342`. When this shows up in production error logs, it's meaningless.
 

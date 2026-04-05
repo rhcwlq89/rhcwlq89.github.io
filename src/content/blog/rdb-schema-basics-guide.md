@@ -47,11 +47,40 @@ CREATE TABLE TBL_USR_INF (
 
 약어와 한글 주석 없이는 아무것도 알 수 없다. 이런 스키마는 **쿼리를 짤 때마다 ERD를 펼쳐야 하는** 고통을 준다.
 
-### 1.2 테이블 이름
+### 1.2 왜 snake_case인가?
+
+DB 세계에서 snake_case를 기본으로 쓰는 데는 명확한 이유가 있다.
+
+| 이유 | 설명 |
+|------|------|
+| **대소문자 함정 회피** | MySQL은 OS에 따라, PostgreSQL은 따옴표 유무에 따라 대소문자 처리가 달라진다. `OrderItem`이 어떤 환경에서는 되고 어떤 환경에서는 안 된다. snake_case는 전부 소문자이므로 **어떤 DB, 어떤 OS에서든 동일하게 동작**한다 |
+| **SQL과의 궁합** | SQL 키워드는 대문자 (`SELECT`, `FROM`, `WHERE`)로 쓰는 관례가 있다. 테이블/컬럼도 대문자가 섞이면 **키워드와 식별자의 구분이 흐려진다**. `SELECT OrderDate FROM OrderItems` vs `SELECT order_date FROM order_items` — 후자가 한눈에 읽힌다 |
+| **ORM 자동 매핑** | JPA/Hibernate는 `camelCase` 엔티티 필드를 자동으로 `snake_case` 컬럼으로 매핑한다 (`ImplicitNamingStrategy`). DB가 snake_case면 별도 `@Column(name=...)` 없이 그냥 동작한다 |
+| **CLI/터미널 편의성** | `psql`, `mysql` 클라이언트에서 따옴표/백틱 없이 바로 쓸 수 있다. `SELECT * FROM "OrderItems"` 매번 따옴표 치는 건 고통이다 |
+| **업계 표준** | PostgreSQL 공식 문서, MySQL 공식 예제, Rails/Django/Laravel 등 주요 프레임워크가 모두 snake_case를 기본으로 사용한다 |
+
+```sql
+-- camelCase를 쓰면 생기는 현실적인 문제
+CREATE TABLE "OrderItems" ("orderId" BIGINT, "productName" VARCHAR(100));
+
+-- 1. 모든 쿼리에 따옴표 필수 (PostgreSQL)
+SELECT "orderId", "productName" FROM "OrderItems";  -- 매번 이렇게
+
+-- 2. 따옴표 빼먹으면 에러
+SELECT orderId FROM OrderItems;  -- ❌ "orderitems"의 "orderid"를 찾음
+
+-- 3. pg_dump 등 도구에서 따옴표 누락 → 복원 실패
+
+-- snake_case면?
+CREATE TABLE order_items (order_id BIGINT, product_name VARCHAR(100));
+SELECT order_id, product_name FROM order_items;  -- 따옴표 없이 깔끔
+```
+
+### 1.3 테이블 이름
 
 | 규칙 | 좋은 예 | 나쁜 예 | 이유 |
 |------|---------|---------|------|
-| **snake_case** | `order_item` | `OrderItem`, `orderitem` | DB마다 대소문자 처리가 다름 (아래 참고) |
+| **snake_case** | `order_item` | `OrderItem`, `orderitem` | 위에서 설명한 모든 이유 |
 | **복수형** | `orders`, `users` | `order`, `user` | 테이블은 행의 집합. 복수형이 자연스러움 |
 | **접두어 금지** | `orders` | `tbl_orders`, `t_orders` | 접두어는 정보량 제로. 노이즈만 추가 |
 | **예약어 회피** | `user_accounts` | `user`, `order` | `user`는 PostgreSQL/MySQL 예약어. 매번 백틱/따옴표 필요 |
@@ -96,7 +125,7 @@ SELECT * FROM `order`;       -- ⭕ 매번 백틱 필요
 SELECT * FROM orders;        -- ⭕ 깔끔
 ```
 
-### 1.3 컬럼 이름
+### 1.4 컬럼 이름
 
 | 규칙 | 좋은 예 | 나쁜 예 | 이유 |
 |------|---------|---------|------|
@@ -106,7 +135,7 @@ SELECT * FROM orders;        -- ⭕ 깔끔
 | **날짜는 _at 접미어** | `created_at`, `deleted_at` | `reg_date`, `crt_dtm` | 타임스탬프임을 명확히 표시 |
 | **FK는 참조 테이블_id** | `user_id`, `order_id` | `usr_seq`, `fk_order` | 어떤 테이블의 PK를 참조하는지 바로 알 수 있음 |
 
-### 1.4 인덱스/제약조건 이름
+### 1.5 인덱스/제약조건 이름
 
 이름 없이 만들면 DB가 자동 생성하는데, `SYS_C007342` 같은 이름이 된다. 운영 중 에러 로그에서 이걸 보면 뭔지 알 수 없다.
 
