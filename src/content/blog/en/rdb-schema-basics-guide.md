@@ -700,7 +700,10 @@ Snowflake structure (64-bit):
 
 #### Natural Key vs Surrogate Key
 
-One more important decision: **Should you use a business value as the PK?**
+One more important decision: **Should the PK be a business value, or a meaningless artificial key?**
+
+- **Natural Key**: A unique value from the data itself used as PK (email, SSN, student ID, etc.)
+- **Surrogate Key**: A value with no business meaning used as PK (AUTO_INCREMENT id, UUID, etc.)
 
 ```sql
 -- Natural Key: business value = PK
@@ -719,10 +722,110 @@ CREATE TABLE countries (
 
 | Type | Pros | Cons |
 |------|------|------|
-| **Natural Key** | Meaningful without JOIN, built-in dedup | Business rule changes require PK changes -> cascading FK updates |
+| **Natural Key** | Meaningful without JOIN, built-in dedup | Business rule changes require PK changes → cascading FK updates |
 | **Surrogate Key** | PK never changes, easy FK management | Need JOIN to see meaning, separate UNIQUE constraint needed |
 
-**Practical rule**: Almost always use a **Surrogate Key as the PK**, and protect Natural Keys with `UNIQUE` constraints. Exceptions are only for codes that **never change** — like ISO country codes or currency codes.
+#### Why Natural Keys Are Dangerous — A Real-World Scenario
+
+Natural Keys cause problems when **the assumption "this value never changes" breaks**.
+
+**Scenario: Email as PK**
+
+```sql
+-- At design time: "Email is unique per user, let's make it the PK"
+CREATE TABLE users (
+    email VARCHAR(320) PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+CREATE TABLE orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_email VARCHAR(320) REFERENCES users(email),  -- FK
+    amount DECIMAL(10,2)
+);
+
+CREATE TABLE reviews (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_email VARCHAR(320) REFERENCES users(email),  -- FK
+    content TEXT
+);
+```
+
+Six months later, users request an **email change feature**. Here's what happens:
+
+```sql
+-- To change an email:
+-- 1. Update the PK in users table
+-- 2. Update the FK in orders table
+-- 3. Update the FK in reviews table
+-- 4. Every other table referencing user_email... all of them
+
+-- CASCADE handles this automatically, but
+-- on large tables → millions of rows updated → locks + downtime
+UPDATE users SET email = 'new@email.com' WHERE email = 'old@email.com';
+```
+
+**What if you'd used a Surrogate Key?**
+
+```sql
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(320) NOT NULL UNIQUE,  -- UNIQUE constraint, not PK
+    name VARCHAR(50)
+);
+
+CREATE TABLE orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id),  -- numeric FK
+    amount DECIMAL(10,2)
+);
+
+-- Change email? Just 1 row in users. No FK changes needed.
+UPDATE users SET email = 'new@email.com' WHERE id = 42;
+```
+
+#### Index Efficiency
+
+Natural Keys also impact **index size when used as FKs**.
+
+```
+-- FK as BIGINT (8 bytes)
+orders.user_id: 1M rows × 8 bytes = ~8MB index
+
+-- FK as VARCHAR(320) (up to 1280 bytes in utf8mb4)
+orders.user_email: 1M rows × ~30 bytes avg = ~30MB index
+-- The gap widens further with composite indexes
+```
+
+#### When Is a Natural Key Actually Safe?
+
+A Natural Key is safe when it meets **all three conditions**:
+
+1. **The value never changes** — ISO country codes (`KR`), currency codes (`USD`), etc.
+2. **Few FK references from other tables** — or the data volume is small even if referenced
+3. **The value is short and fixed-length** — `CHAR(2)`, `CHAR(3)` level. No index efficiency concerns.
+
+```sql
+-- ✅ Natural Key is appropriate
+CREATE TABLE currencies (
+    code CHAR(3) PRIMARY KEY,  -- 'USD', 'KRW', 'JPY' — ISO 4217, never changes
+    name VARCHAR(50),
+    symbol VARCHAR(5)
+);
+
+-- ❌ Natural Key is risky
+CREATE TABLE users (
+    email VARCHAR(320) PRIMARY KEY,     -- can change
+    ...
+);
+
+CREATE TABLE products (
+    sku VARCHAR(50) PRIMARY KEY,        -- SKU scheme can change with company policy
+    ...
+);
+```
+
+**Practical rule**: Almost always use a **Surrogate Key as the PK**, and protect Natural Keys with `UNIQUE` constraints. Even when you're sure "this value will never change," if the table is widely referenced via FKs, a Surrogate Key is the safer bet.
 
 ---
 

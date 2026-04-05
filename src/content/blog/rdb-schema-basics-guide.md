@@ -704,7 +704,10 @@ Snowflake 구조 (64비트):
 
 #### Natural Key vs Surrogate Key
 
-한 가지 더 중요한 결정이 있다: **비즈니스 값을 PK로 쓸 것인가?**
+한 가지 더 중요한 결정이 있다: **비즈니스 값을 PK로 쓸 것인가, 의미 없는 인조 키를 PK로 쓸 것인가?**
+
+- **Natural Key(자연키)**: 데이터 자체에서 나온 고유 값을 PK로 사용 (주민번호, 이메일, 학번 등)
+- **Surrogate Key(대리키/인조키)**: 비즈니스 의미 없는 값을 PK로 사용 (AUTO_INCREMENT id, UUID 등)
 
 ```sql
 -- Natural Key: 비즈니스 값 = PK
@@ -726,7 +729,107 @@ CREATE TABLE countries (
 | **Natural Key** | JOIN 없이 의미 파악, 중복 방지 자동 | 비즈니스 규칙 변경 시 PK 변경 필요 → 참조하는 모든 FK 연쇄 수정 |
 | **Surrogate Key** | PK 불변, FK 관리 쉬움 | JOIN해야 의미 파악, 별도 UNIQUE 제약 필요 |
 
-**실무 규칙**: 거의 모든 경우에 **Surrogate Key(인조 키)를 PK로** 쓰고, Natural Key는 `UNIQUE` 제약조건으로 보호한다. 예외는 ISO 국가 코드, 통화 코드처럼 **절대 바뀌지 않는** 표준 코드뿐이다.
+#### 왜 Natural Key가 위험한가? — 실무 시나리오
+
+Natural Key가 문제를 일으키는 건 **"이 값은 절대 안 바뀐다"는 가정이 깨질 때**다.
+
+**시나리오: 이메일을 PK로 쓴 경우**
+
+```sql
+-- 설계 시점: "이메일은 유저마다 고유하니까 PK로 쓰자"
+CREATE TABLE users (
+    email VARCHAR(320) PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+CREATE TABLE orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_email VARCHAR(320) REFERENCES users(email),  -- FK
+    amount DECIMAL(10,2)
+);
+
+CREATE TABLE reviews (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_email VARCHAR(320) REFERENCES users(email),  -- FK
+    content TEXT
+);
+```
+
+6개월 뒤, 유저가 **이메일 변경 기능**을 요청한다. 이때 벌어지는 일:
+
+```sql
+-- 이메일을 바꾸려면?
+-- 1. users 테이블의 PK 변경
+-- 2. orders 테이블의 FK도 변경
+-- 3. reviews 테이블의 FK도 변경
+-- 4. 이 외에 user_email을 참조하는 모든 테이블... 전부 수정
+
+-- CASCADE 옵션을 걸었다면 자동으로 되긴 하지만,
+-- 대형 테이블이면 수백만 행 UPDATE → 락 + 다운타임
+UPDATE users SET email = 'new@email.com' WHERE email = 'old@email.com';
+```
+
+**Surrogate Key를 썼다면?**
+
+```sql
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(320) NOT NULL UNIQUE,  -- PK가 아닌 UNIQUE 제약
+    name VARCHAR(50)
+);
+
+CREATE TABLE orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id),  -- 숫자 FK
+    amount DECIMAL(10,2)
+);
+
+-- 이메일 변경? users 테이블 1행만 UPDATE. FK는 건드릴 필요 없음.
+UPDATE users SET email = 'new@email.com' WHERE id = 42;
+```
+
+#### 인덱스 효율 측면
+
+Natural Key는 **FK로 사용될 때 인덱스 크기**에도 영향을 준다.
+
+```
+-- FK가 BIGINT(8바이트)인 경우
+orders.user_id: 100만 행 × 8바이트 = ~8MB 인덱스
+
+-- FK가 VARCHAR(320)(최대 1280바이트 in utf8mb4)인 경우
+orders.user_email: 100만 행 × 평균 30바이트 = ~30MB 인덱스
+-- 복합 인덱스까지 고려하면 차이는 더 벌어진다
+```
+
+#### 그래서 Natural Key는 언제 써도 되는가?
+
+Natural Key가 안전한 조건은 **세 가지를 모두 만족**할 때다:
+
+1. **값이 절대 변하지 않는다** — ISO 국가 코드(`KR`), 통화 코드(`USD`) 등 국제 표준
+2. **다른 테이블에서 FK로 참조할 일이 적다** — 또는 참조하더라도 데이터 규모가 작다
+3. **값이 짧고 고정 길이다** — `CHAR(2)`, `CHAR(3)` 수준. 인덱스 효율에 악영향이 없다
+
+```sql
+-- ✅ Natural Key가 적절한 경우
+CREATE TABLE currencies (
+    code CHAR(3) PRIMARY KEY,  -- 'USD', 'KRW', 'JPY' — ISO 4217, 절대 안 바뀜
+    name VARCHAR(50),
+    symbol VARCHAR(5)
+);
+
+-- ❌ Natural Key가 위험한 경우
+CREATE TABLE users (
+    email VARCHAR(320) PRIMARY KEY,     -- 바뀔 수 있음
+    ...
+);
+
+CREATE TABLE products (
+    sku VARCHAR(50) PRIMARY KEY,        -- 회사 정책 변경 시 SKU 체계 변경 가능
+    ...
+);
+```
+
+**실무 규칙**: 거의 모든 경우에 **Surrogate Key(인조 키)를 PK로** 쓰고, Natural Key는 `UNIQUE` 제약조건으로 보호한다. "이 값은 절대 안 바뀐다"라는 확신이 있어도, FK로 널리 참조되는 테이블이라면 Surrogate Key가 더 안전하다.
 
 ---
 
