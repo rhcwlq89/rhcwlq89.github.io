@@ -588,7 +588,7 @@ CREATE TABLE users (
 
 | 기능 | MySQL | PostgreSQL | 반정규화 대안으로의 가치 |
 |------|-------|------------|----------------------|
-| **Materialized View** | 없음 | 있음 (`REFRESH CONCURRENTLY` 지원) | PG에서는 반정규화 전에 MV를 먼저 검토 |
+| **Materialized View (MV)** | 없음 | 있음 (`REFRESH CONCURRENTLY` 지원) | PG에서는 반정규화 전에 MV를 먼저 검토 |
 | **부분 인덱스** | 없음 | `CREATE INDEX ... WHERE 조건` | 특정 조건 조회를 인덱스로 해결 → 반정규화 불필요 |
 | **Generated Column** | `VIRTUAL` + `STORED` | `STORED`만 | 같은 테이블 내 계산은 두 DB 모두 가능 |
 | **JSONB** | `JSON` (제한적 인덱싱) | `JSONB` + GIN (강력) | PG는 반정형 데이터를 정규화 없이 효율적 처리 |

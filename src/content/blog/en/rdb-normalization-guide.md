@@ -583,7 +583,7 @@ Scenario: Running sales reports (OLAP) directly on the service DB (OLTP)
 
 | Feature | MySQL | PostgreSQL | Value as Denormalization Alternative |
 |---------|-------|------------|-------------------------------------|
-| **Materialized View** | Not available | Available (`REFRESH CONCURRENTLY`) | In PG, check MV before denormalizing |
+| **Materialized View (MV)** | Not available | Available (`REFRESH CONCURRENTLY`) | In PG, check MV before denormalizing |
 | **Partial indexes** | Not available | `CREATE INDEX ... WHERE condition` | Specific queries solved by index -> no denormalization needed |
 | **Generated Column** | `VIRTUAL` + `STORED` | `STORED` only | Same-table calculations work in both |
 | **JSONB** | `JSON` (limited indexing) | `JSONB` + GIN (powerful) | PG handles semi-structured data without normalization |
