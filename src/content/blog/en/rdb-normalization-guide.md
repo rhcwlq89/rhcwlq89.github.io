@@ -490,7 +490,18 @@ CREATE TABLE users (
 **If you denormalize, you must**:
 - **Automate sync** with triggers or events (manual updates will be missed)
 - Write **inconsistency detection queries** (periodically verify original vs duplicate)
-- **Comment the reason** (`-- Denormalized: order list API 3s -> 0.2s improvement (2026-04)`)
+- **Comment the reason** — leave comments in DDL (table/column definitions) and related queries
+  ```sql
+  -- In the column definition
+  ALTER TABLE orders
+      ADD COLUMN total_amount DECIMAL(15, 0) NOT NULL DEFAULT 0;
+      -- Denormalized: order list API 3s -> 0.2s improvement (2026-04)
+      -- Source: SELECT SUM(price * quantity) FROM order_items
+
+  -- In the sync query as well
+  -- Denormalization sync: orders.total_amount <- order_items aggregation
+  UPDATE orders SET total_amount = (...) WHERE id = ?;
+  ```
 
 ---
 

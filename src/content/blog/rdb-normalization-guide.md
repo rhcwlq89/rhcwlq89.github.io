@@ -495,7 +495,18 @@ CREATE TABLE users (
 **반정규화를 했다면 반드시**:
 - 갱신 로직을 **트리거 또는 이벤트로 자동화** (수동은 반드시 누락됨)
 - 원본과 중복 데이터의 **불일치 감지 쿼리** 작성
-- 왜 반정규화했는지 **주석으로 기록** (`-- 반정규화: 주문 목록 API 3초 → 0.2초 개선 (2026-04)`)
+- 왜 반정규화했는지 **주석으로 기록** — DDL(테이블/컬럼 정의)과 관련 쿼리에 남긴다
+  ```sql
+  -- 컬럼 정의에 남기기
+  ALTER TABLE orders
+      ADD COLUMN total_amount DECIMAL(15, 0) NOT NULL DEFAULT 0;
+      -- 반정규화: 주문 목록 API 3초 → 0.2초 개선 (2026-04)
+      -- 원본: SELECT SUM(price * quantity) FROM order_items
+
+  -- 갱신 쿼리에도 남기기
+  -- 반정규화 동기화: orders.total_amount ← order_items 집계
+  UPDATE orders SET total_amount = (...) WHERE id = ?;
+  ```
 
 ---
 
