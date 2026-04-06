@@ -296,13 +296,24 @@ CREATE DATABASE MyApp COLLATE Korean_Wansung_CI_AS;
 -- Use Korean_Wansung family for Korean sorting
 ```
 
+**What the Collation Abbreviations Mean:**
+
+| Abbreviation | Meaning | Example |
+|------|------|------|
+| **CI** (Case Insensitive) | Treats upper/lowercase as equal | `'abc' = 'ABC'` → `true` |
+| **CS** (Case Sensitive) | Distinguishes upper/lowercase | `'abc' = 'ABC'` → `false` |
+| **AI** (Accent Insensitive) | Treats accented chars as equal | `'café' = 'cafe'` → `true` |
+| **AS** (Accent Sensitive) | Distinguishes accented chars | `'café' = 'cafe'` → `false` |
+
+**Why Accent Sensitivity matters in practice**: If your application handles European languages, whether `é`, `ë`, `è` match `e` directly affects search results. For Korean-only services, the `AS`/`AI` difference is rarely noticeable since Korean doesn't use accents — but for multilingual services, this is a must-consider setting.
+
 As mentioned in the DB-specific notes above, use `NVARCHAR` when handling non-ASCII characters like Korean or Japanese.
 
 #### Practical Rules
 
 | DB | Recommended Charset | Recommended Collation |
 |----|--------------------|-----------------------|
-| **MySQL 8.0+** | `utf8mb4` (default) | `utf8mb4_0900_ai_ci` (default) |
+| **MySQL 8.0+** | `utf8mb4` (default) | `utf8mb4_0900_ai_ci` (default, AI=Accent Insensitive, CI=Case Insensitive) |
 | **MySQL 5.7** | `utf8mb4` (must specify!) | `utf8mb4_unicode_ci` |
 | **PostgreSQL** | `UTF8` | ICU provider-based (`ko-KR`, etc.) |
 | **SQL Server** | Use `NVARCHAR` | `Korean_Wansung_CI_AS` (for Korean services) |

@@ -300,13 +300,24 @@ CREATE DATABASE MyApp COLLATE Korean_Wansung_CI_AS;
 -- 한글 정렬이 필요하면 Korean_Wansung 계열 사용
 ```
 
+**Collation 약어가 의미하는 것:**
+
+| 약어 | 의미 | 예시 |
+|------|------|------|
+| **CI** (Case Insensitive) | 대소문자를 같게 취급 | `'abc' = 'ABC'` → `true` |
+| **CS** (Case Sensitive) | 대소문자를 구분 | `'abc' = 'ABC'` → `false` |
+| **AI** (Accent Insensitive) | 악센트/발음 부호를 같게 취급 | `'café' = 'cafe'` → `true` |
+| **AS** (Accent Sensitive) | 악센트/발음 부호를 구분 | `'café' = 'cafe'` → `false` |
+
+**Accent Sensitive가 실무에서 중요한 이유**: 유럽어권 데이터를 다룬다면 `é`, `ë`, `è`를 `e`와 같게 볼지 다르게 볼지가 검색 결과에 직접 영향을 준다. 한글 서비스에서는 악센트가 거의 없으므로 `AS`/`AI` 차이가 체감되지 않지만, 다국어 서비스라면 반드시 고려해야 한다.
+
 앞서 DB별 참고사항에서 언급했듯이, 한글 등 비ASCII 문자를 다룬다면 `NVARCHAR`를 써야 한다.
 
 #### 실무 규칙
 
 | DB | charset 권장 | collation 권장 |
 |----|-------------|---------------|
-| **MySQL 8.0+** | `utf8mb4` (기본값) | `utf8mb4_0900_ai_ci` (기본값) |
+| **MySQL 8.0+** | `utf8mb4` (기본값) | `utf8mb4_0900_ai_ci` (기본값, AI=Accent Insensitive, CI=Case Insensitive) |
 | **MySQL 5.7** | `utf8mb4` (명시 필요!) | `utf8mb4_unicode_ci` |
 | **PostgreSQL** | `UTF8` | ICU provider 기반 (`ko-KR` 등) |
 | **SQL Server** | `NVARCHAR` 사용 | `Korean_Wansung_CI_AS` (한글 서비스) |
