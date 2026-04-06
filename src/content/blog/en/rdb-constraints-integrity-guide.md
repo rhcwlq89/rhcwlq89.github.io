@@ -1,0 +1,677 @@
+---
+title: "RDB Design Series Part 3: Constraints and Data Integrity — Preventing Bugs at the Schema Level"
+description: "CHECK, UNIQUE, FK, DEFAULT, Generated Columns — constraints aren't 'annoying overhead,' they're 'defense code baked into the schema.' This guide provides practical criteria for DB vs app validation, whether to use FKs or not, and defensive schema design patterns."
+pubDate: "2026-04-07T14:00:00+09:00"
+tags: ["Database", "RDB", "Schema Design", "Constraints", "MySQL", "PostgreSQL"]
+heroImage: "../../../assets/RdbConstraintsIntegrityGuide.png"
+lang: en
+---
+
+## Introduction
+
+In the [previous post](/blog/en/rdb-normalization-guide), we covered how to split and group tables — the judgment calls behind normalization and denormalization. This post goes one level deeper — **"How do you prevent bad data from entering in the first place?"**
+
+Many developers only validate data in **application code**. A `if (age < 0) throw ...` in the service layer. App-level validation is essential, of course. But **if you only rely on the app, it will eventually be bypassed.**
+
+```
+An admin runs INSERT directly in the DB → app validation bypassed
+Another service writes to the same DB → app validation bypassed
+A data migration script runs → app validation bypassed
+An ORM bug inserts the wrong value → app validation bypassed
+```
+
+**Constraints are the last line of defense.** Even when the app makes mistakes, the DB catches them.
+
+This post covers 5 types of constraints:
+
+1. CHECK — Enforcing value ranges/conditions
+2. UNIQUE — Preventing duplicates (partial/composite)
+3. FK — Referential integrity and its trade-offs
+4. DEFAULT / Generated Column — Auto-filling values
+5. Defensive schema design — Using the schema to prevent invalid states
+
+---
+
+## 1. CHECK Constraints — "This Value Must Be Within This Range"
+
+### 1.1 Basic Usage
+
+```sql
+-- Age must be non-negative
+ALTER TABLE users ADD CONSTRAINT chk_users_age CHECK (age >= 0);
+
+-- Price must be positive
+ALTER TABLE products ADD CONSTRAINT chk_products_price CHECK (price > 0);
+
+-- Status must be one of the allowed values
+ALTER TABLE orders ADD CONSTRAINT chk_orders_status
+    CHECK (status IN ('PENDING', 'PAID', 'SHIPPED', 'CANCELLED'));
+
+-- Start date must be before end date
+ALTER TABLE events ADD CONSTRAINT chk_events_date_range
+    CHECK (start_date <= end_date);
+```
+
+```sql
+-- When CHECK is violated
+INSERT INTO users (name, age) VALUES ('John', -5);
+-- ❌ ERROR: Check constraint 'chk_users_age' is violated.
+
+INSERT INTO orders (status) VALUES ('UNKNOWN');
+-- ❌ ERROR: Check constraint 'chk_orders_status' is violated.
+```
+
+### 1.2 MySQL vs PostgreSQL Differences
+
+| Feature | MySQL | PostgreSQL |
+|---------|-------|------------|
+| CHECK support since | **8.0.16** (2019) — earlier versions parsed but **ignored** it | Supported from the start |
+| Subqueries | Not allowed | Not allowed (no SELECT inside CHECK) |
+| Cross-table references | Not allowed | Not allowed (same-row columns only) |
+| Functions | Non-deterministic restricted (`NOW()` not allowed) | Only IMMUTABLE functions |
+
+> ⚠️ **If you're on MySQL 8.0.15 or earlier, CHECK doesn't work.** The `ALTER TABLE` succeeds without error, but no validation actually happens. Always verify your MySQL version.
+
+### 1.3 DB Validation vs App Validation — Where Should You Validate?
+
+**Both. They serve different roles.**
+
+| Aspect | App-level validation | DB CHECK constraint |
+|--------|---------------------|-------------------|
+| **Role** | User feedback (error messages, field highlights) | Last line of defense (data integrity) |
+| **Bypass risk** | High (direct SQL, migrations, other services) | None (DB rejects it) |
+| **Error messages** | User-friendly ("Age must be 0 or greater") | Technical (`Check constraint 'chk_users_age' is violated`) |
+| **Complex rules** | Possible (cross-table, external API calls) | Not possible (same-row columns only) |
+| **Performance impact** | None (validated before INSERT) | Minimal (evaluated per INSERT/UPDATE) |
+
+```
+App validation: "Show friendly errors to users"          → UX
+DB CHECK:       "Block bad data regardless of entry path" → Integrity
+```
+
+#### Practical Rules
+
+```
+1. Simple value ranges, allow-lists → DB CHECK + app validation both
+   e.g., age >= 0, status IN ('A', 'B', 'C'), price > 0
+
+2. Complex business rules → App validation only
+   e.g., "Must have stock to place order", "VIP-only discounts"
+
+3. Cross-table rules → App validation + FK constraint
+   e.g., "order.user_id must reference an existing user"
+```
+
+### 1.4 CHECK with ENUM Values vs Lookup Tables
+
+In [Part 1](/blog/en/rdb-schema-basics-guide), we covered ENUM vs lookup tables. Here's how CHECK fits in:
+
+| Approach | When adding values | Best when |
+|----------|-------------------|-----------|
+| **CHECK + VARCHAR** | `ALTER TABLE` (DDL change) | 3–5 values that rarely change |
+| **Lookup table + FK** | `INSERT` one row (DML) | 5+ values, or values that may change |
+
+If values are likely to change, a lookup table beats CHECK.
+
+---
+
+## 2. UNIQUE Constraints — "Only One of This Combination May Exist"
+
+### 2.1 Single-Column UNIQUE
+
+```sql
+-- Email must be unique
+ALTER TABLE users ADD CONSTRAINT uq_users_email UNIQUE (email);
+
+-- Violation
+INSERT INTO users (email) VALUES ('kim@email.com');
+INSERT INTO users (email) VALUES ('kim@email.com');
+-- ❌ ERROR: Duplicate entry 'kim@email.com' for key 'uq_users_email'
+```
+
+### 2.2 Composite UNIQUE
+
+```sql
+-- Same product can only appear once per order
+ALTER TABLE order_items
+    ADD CONSTRAINT uq_order_items_order_product
+    UNIQUE (order_id, product_id);
+
+-- user_id + provider must be unique (social login)
+ALTER TABLE social_accounts
+    ADD CONSTRAINT uq_social_provider
+    UNIQUE (user_id, provider);
+```
+
+Use composite UNIQUE when you need to ask: **"Should this combination exist only once from a business perspective?"**
+
+### 2.3 Partial UNIQUE (Conditional Uniqueness)
+
+"Email should be unique only among non-deleted users" — this comes up frequently in practice.
+
+```sql
+-- PostgreSQL: Partial index for conditional UNIQUE
+CREATE UNIQUE INDEX uq_users_email_active
+    ON users (email) WHERE deleted_at IS NULL;
+
+-- Deleted users can have duplicate emails
+-- Only active users enforce email uniqueness
+```
+
+MySQL doesn't support partial indexes. Workaround:
+
+```sql
+-- MySQL: Generated Column + UNIQUE workaround
+ALTER TABLE users
+    ADD COLUMN email_unique_key VARCHAR(320)
+    GENERATED ALWAYS AS (
+        CASE WHEN deleted_at IS NULL THEN email ELSE NULL END
+    ) STORED;
+
+ALTER TABLE users ADD CONSTRAINT uq_users_email_active UNIQUE (email_unique_key);
+-- NULL is allowed as duplicate in UNIQUE, so deleted users → NULL → duplicates OK
+-- Active users → email value → no duplicates
+```
+
+> **The MySQL Generated Column + UNIQUE workaround is admittedly hacky.** But "prevent email duplicates among active users" is an extremely common requirement in soft-delete systems. PostgreSQL handles it cleanly with a single partial index.
+
+### 2.4 UNIQUE and NULL
+
+As covered in [Part 1](/blog/en/rdb-schema-basics-guide), NULL behavior with UNIQUE varies by database.
+
+| DB | Allows multiple NULLs |
+|----|:---:|
+| MySQL | ✅ (multiple NULLs allowed) |
+| PostgreSQL 14 and below | ✅ |
+| PostgreSQL 15+ | Configurable (`NULLS NOT DISTINCT`) |
+| SQL Server | ❌ (only one NULL) |
+
+```sql
+-- PostgreSQL 15+: Allow only one NULL
+CREATE TABLE users (
+    email VARCHAR(320),
+    CONSTRAINT uq_users_email UNIQUE NULLS NOT DISTINCT (email)
+);
+```
+
+### 2.5 UNIQUE Index vs UNIQUE Constraint
+
+```sql
+-- Method 1: As a constraint
+ALTER TABLE users ADD CONSTRAINT uq_users_email UNIQUE (email);
+
+-- Method 2: As a unique index
+CREATE UNIQUE INDEX idx_users_email ON users (email);
+```
+
+Both create a unique index internally. The differences:
+
+| Aspect | UNIQUE Constraint | UNIQUE Index |
+|--------|:---:|:---:|
+| Can be referenced by FK | ✅ | Depends on DB |
+| `WHERE` condition (partial) | ❌ | ✅ (PostgreSQL) |
+| Semantic clarity | "Business rule" | "Performance optimization" |
+
+**Practical rule**: If it's a business rule, use a constraint (`CONSTRAINT`). For conditional uniqueness or performance, use an index.
+
+---
+
+## 3. FK (Foreign Key) — The Double-Edged Sword of Referential Integrity
+
+### 3.1 What FK Does
+
+```sql
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- What FK guarantees:
+-- 1. Any value in orders.user_id must exist in users.id
+-- 2. Deleting a row from users is blocked if orders references it (default behavior)
+```
+
+```sql
+-- Creating an order for a non-existent user
+INSERT INTO orders (id, user_id) VALUES (1, 9999);
+-- ❌ ERROR: foreign key constraint fails
+
+-- Deleting a user who has orders
+DELETE FROM users WHERE id = 1;
+-- ❌ ERROR: Cannot delete or update a parent row
+```
+
+### 3.2 CASCADE Options
+
+FK behavior is controlled by `ON DELETE` and `ON UPDATE`.
+
+| Option | On parent delete | Best for |
+|--------|-----------------|----------|
+| `RESTRICT` (default) | Error — delete refused | Most cases (safe default) |
+| `CASCADE` | Child rows deleted too | Parent-child sharing lifecycle (order → order items) |
+| `SET NULL` | Child FK set to NULL | When child is meaningful without parent |
+| `SET DEFAULT` | Child FK set to DEFAULT | Rarely used |
+| `NO ACTION` | Nearly identical to RESTRICT | Validated at transaction end (PostgreSQL difference) |
+
+```sql
+-- CASCADE: Deleting an order also deletes its items
+ALTER TABLE order_items
+    ADD CONSTRAINT fk_order_items_order
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+    ON DELETE CASCADE;
+
+-- SET NULL: Author leaves but posts remain
+ALTER TABLE posts
+    ADD CONSTRAINT fk_posts_author
+    FOREIGN KEY (author_id) REFERENCES users(id)
+    ON DELETE SET NULL;
+```
+
+> ⚠️ **CASCADE is convenient but dangerous.** A single `DELETE FROM users WHERE id = 1` could wipe out that user's orders, reviews, and comments. **In services using soft delete, CASCADE is almost never needed** — because you don't actually delete anything.
+
+#### RESTRICT vs NO ACTION — The Subtle Difference
+
+| Behavior | RESTRICT | NO ACTION |
+|----------|----------|-----------|
+| MySQL | Immediate check | Same as RESTRICT |
+| PostgreSQL | Immediate check | **Checked at transaction end** |
+
+In PostgreSQL, `NO ACTION` + `DEFERRABLE` allows flexible ordering within a transaction:
+
+```sql
+-- PostgreSQL: When you need flexible insertion order
+ALTER TABLE orders
+    ADD CONSTRAINT fk_orders_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    DEFERRABLE INITIALLY DEFERRED;
+
+-- Insert in any order within a transaction
+BEGIN;
+INSERT INTO orders (id, user_id) VALUES (1, 100);  -- user 100 doesn't exist yet, but OK
+INSERT INTO users (id, name) VALUES (100, 'John');   -- created here
+COMMIT;  -- FK validated at this point → passes!
+```
+
+### 3.3 Should You Use FKs or Not?
+
+This is one of the most debated topics in practice.
+
+#### When FKs are beneficial
+
+```
+✅ Domains where data integrity is critical (finance, healthcare, payments)
+✅ Single DB, monolithic architecture
+✅ Tables with stable reference relationships (users → orders)
+✅ Teams with many junior developers (prevents mistakes)
+```
+
+#### When skipping FKs makes sense
+
+```
+⚠️ MSA with separate DBs per service (cross-DB FK is impossible)
+⚠️ Tables with heavy INSERT/UPDATE traffic (FK validation = lookup on parent table every time)
+⚠️ Frequent data migrations/ETL (FK enforces insertion order)
+⚠️ Partitioned tables (MySQL doesn't allow FK on partitioned tables)
+```
+
+#### Performance Impact of FKs
+
+With FKs, every INSERT/UPDATE triggers a lookup on the parent table's index to verify referential integrity.
+
+```
+[INSERT flow with FK]
+1. Attempt INSERT into order_items
+2. Look up orders PK index to verify order_id exists ← additional lookup
+3. Look up products PK index to verify product_id exists ← additional lookup
+4. Validation passes → execute INSERT
+
+[Without FK]
+1. Execute INSERT into order_items → done
+```
+
+| Scenario | FK performance impact |
+|----------|:---:|
+| Single-row INSERT | Negligible |
+| Bulk INSERT (tens of thousands+) | **Noticeable** — longer transactions |
+| Very large parent table | Index lookup cost increases |
+| Thousands of writes per second | FK validation can become a bottleneck |
+
+```sql
+-- MySQL: Temporarily disable FK checks during bulk load
+SET FOREIGN_KEY_CHECKS = 0;
+LOAD DATA INFILE '/data/order_items.csv' INTO TABLE order_items ...;
+SET FOREIGN_KEY_CHECKS = 1;
+-- ⚠️ Must re-enable! And verify data consistency separately.
+```
+
+#### Maintaining Integrity Without FKs
+
+Not using FKs doesn't mean "anything goes."
+
+```
+1. Application-level validation
+   - Check parent existence before INSERT in the service layer
+   - Pros: Flexible, custom error messages
+   - Cons: Bypassable via direct SQL, migrations
+
+2. Consistency verification batches
+   - Periodically run queries to find orphaned data
+   - Integrate with monitoring + alerts
+
+3. CDC/event-based validation
+   - When a parent is deleted, handle child data via events
+```
+
+```sql
+-- Orphan detection query
+SELECT oi.id, oi.order_id
+FROM order_items oi
+LEFT JOIN orders o ON o.id = oi.order_id
+WHERE o.id IS NULL;
+-- If results appear → integrity is broken → alert!
+```
+
+#### Practical Decision Framework
+
+```
+Default choice           → Use FK (integrity is the baseline)
+High-write environment   → Benchmark first (compare with/without FK)
+MSA + separate DBs      → FK impossible → app validation + consistency batch
+Partitioning (MySQL)    → FK impossible → app validation + consistency batch
+```
+
+> **Key takeaway**: Dropping FKs isn't "giving up on integrity" — it's **"moving the integrity responsibility from DB to app."** Only drop them when you're ready to bear that responsibility.
+
+---
+
+## 4. DEFAULT and Generated Columns — Auto-Filling Values
+
+### 4.1 DEFAULT — Automatic Values for Omitted Fields
+
+```sql
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    retry_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Omitting status, retry_count, created_at applies DEFAULTs
+INSERT INTO orders (id) VALUES (1);
+-- status = 'PENDING', retry_count = 0, created_at = now
+```
+
+#### MySQL vs PostgreSQL DEFAULT Differences
+
+| Feature | MySQL | PostgreSQL |
+|---------|-------|------------|
+| Function DEFAULT | Limited (`CURRENT_TIMESTAMP` is typical) | Almost any function |
+| `ON UPDATE CURRENT_TIMESTAMP` | Supported (MySQL-specific) | Not supported → use trigger or app |
+| Expression DEFAULT | MySQL 8.0.13+ (limited) | Freely available |
+
+```sql
+-- MySQL: Auto-update updated_at
+CREATE TABLE orders (
+    ...
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- PostgreSQL: Handle via trigger
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_orders_updated_at
+    BEFORE UPDATE ON orders
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+```
+
+### 4.2 Generated Columns — Auto-Computed from Other Columns
+
+We briefly introduced these in [Part 2](/blog/en/rdb-normalization-guide)'s denormalization section. Here's a deeper look.
+
+```sql
+-- Auto-calculate order item subtotal
+CREATE TABLE order_items (
+    id BIGINT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    unit_price DECIMAL(15, 0) NOT NULL,
+    quantity INT NOT NULL,
+    subtotal DECIMAL(15, 0) GENERATED ALWAYS AS (unit_price * quantity) STORED
+);
+
+-- subtotal cannot be manually inserted/updated. The DB manages it.
+INSERT INTO order_items (id, order_id, product_id, unit_price, quantity)
+VALUES (1, 100, 200, 50000, 3);
+-- subtotal = 150000 (automatic)
+```
+
+#### VIRTUAL vs STORED
+
+| Type | Stored | Indexable | Performance |
+|------|:---:|:---:|------|
+| **VIRTUAL** | ❌ (computed on read) | MySQL: secondary indexes only | Saves storage, CPU on read |
+| **STORED** | ✅ (persisted to disk) | All indexes | CPU on write, fast reads |
+
+| DB | VIRTUAL | STORED |
+|----|:---:|:---:|
+| MySQL | ✅ | ✅ |
+| PostgreSQL | ❌ (planned for 17) | ✅ |
+
+```sql
+-- MySQL: VIRTUAL (saves disk, computed on read)
+ALTER TABLE order_items
+    ADD COLUMN subtotal DECIMAL(15, 0)
+    GENERATED ALWAYS AS (unit_price * quantity) VIRTUAL;
+
+-- MySQL: STORED (persisted, indexable)
+ALTER TABLE order_items
+    ADD COLUMN subtotal DECIMAL(15, 0)
+    GENERATED ALWAYS AS (unit_price * quantity) STORED;
+
+-- PostgreSQL: STORED only
+ALTER TABLE order_items
+    ADD COLUMN subtotal DECIMAL(15, 0)
+    GENERATED ALWAYS AS (unit_price * quantity) STORED;
+```
+
+#### When to Use Generated Columns
+
+| Situation | Generated Column | Compute in app |
+|-----------|:---:|:---:|
+| Combining columns from the same table | ✅ | |
+| Referencing values from other tables | | ✅ |
+| Indexed computed values | ✅ (STORED) | |
+| Simple display-only computations | ✅ (VIRTUAL, MySQL) | |
+| Complex business logic | | ✅ |
+
+**The biggest advantage of Generated Columns**: zero synchronization worries. When `unit_price` or `quantity` changes, `subtotal` updates automatically. Unlike denormalization, "forgetting to update" is impossible.
+
+---
+
+## 5. Defensive Schema Design — Using the Schema to Prevent Invalid States
+
+"We can validate in code, right?" is true, but **if the schema itself doesn't allow invalid states**, you eliminate bugs at the source.
+
+### 5.1 Enforce State Transitions via Schema
+
+```sql
+-- ❌ Bad design: Contradictory states are possible
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,
+    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+    is_shipped BOOLEAN NOT NULL DEFAULT FALSE,
+    is_cancelled BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- This data can exist:
+-- is_paid = TRUE, is_shipped = TRUE, is_cancelled = TRUE
+-- Paid, shipped, AND cancelled? What does that even mean?
+```
+
+```sql
+-- ✅ Good design: Single status column
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    CONSTRAINT chk_orders_status
+        CHECK (status IN ('PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'))
+);
+
+-- Status is always exactly one value. Contradictions impossible.
+```
+
+> Using multiple boolean flags for state management creates **2^n possible combinations**. With 3 flags, that's 8 combinations. With 4, it's 16. Only 4–5 are typically valid. The rest are all bugs. **A single status column is definitively better.**
+
+### 5.2 Protecting Active Data in Soft Delete
+
+```sql
+-- Email should be unique only among active users
+-- PostgreSQL
+CREATE UNIQUE INDEX uq_users_email_active
+    ON users (email) WHERE deleted_at IS NULL;
+
+-- MySQL (Generated Column workaround)
+ALTER TABLE users
+    ADD COLUMN active_email VARCHAR(320)
+    GENERATED ALWAYS AS (
+        CASE WHEN deleted_at IS NULL THEN email ELSE NULL END
+    ) STORED;
+
+ALTER TABLE users ADD CONSTRAINT uq_users_active_email UNIQUE (active_email);
+```
+
+### 5.3 Preventing Overlapping Ranges
+
+When event validity periods must not overlap:
+
+```sql
+-- PostgreSQL: EXCLUDE constraint (prevents range overlaps)
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE TABLE promotions (
+    id BIGINT PRIMARY KEY,
+    product_id BIGINT NOT NULL,
+    discount_rate DECIMAL(5, 2) NOT NULL,
+    valid_during TSTZRANGE NOT NULL,
+    CONSTRAINT no_overlapping_promotions
+        EXCLUDE USING GIST (product_id WITH =, valid_during WITH &&)
+);
+
+-- Inserting overlapping promotions for the same product fails
+INSERT INTO promotions VALUES (1, 100, 10.00, '[2026-04-01, 2026-04-30]');
+INSERT INTO promotions VALUES (2, 100, 20.00, '[2026-04-15, 2026-05-15]');
+-- ❌ ERROR: conflicting key value violates exclusion constraint
+```
+
+> MySQL doesn't have EXCLUDE constraints. You'll need app-level validation or triggers for this.
+
+### 5.4 Protecting Numeric Ranges via Schema
+
+```sql
+-- Discount rate must be 0–100%
+ALTER TABLE promotions
+    ADD CONSTRAINT chk_discount_rate
+    CHECK (discount_rate >= 0 AND discount_rate <= 100);
+
+-- Stock cannot be negative
+ALTER TABLE products
+    ADD CONSTRAINT chk_stock_non_negative
+    CHECK (stock >= 0);
+
+-- Order quantity must be at least 1
+ALTER TABLE order_items
+    ADD CONSTRAINT chk_quantity_positive
+    CHECK (quantity >= 1);
+```
+
+Without these CHECKs, data like **150% discount, -3 stock, quantity 0** can slip in. The app catches it, sure — but when someone modifies data via direct SQL, app validation is powerless.
+
+### 5.5 Using NOT NULL to Prevent "Empty" States
+
+```sql
+-- ❌ Nullable: An order with NULL amount? NULL customer?
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT,         -- NULL means we don't know whose order
+    total_amount DECIMAL,   -- NULL means we don't know the amount
+    status VARCHAR(20)      -- NULL means we don't know the status
+);
+
+-- ✅ NOT NULL enforced: Orders must have these values
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    total_amount DECIMAL(15, 0) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Principle**: When creating a column, always ask "Can a row exist without this value?" If the answer is "no," use `NOT NULL`.
+
+---
+
+## 6. Constraint Naming Conventions
+
+If you don't name constraints, the DB auto-generates names. The problem is auto-names like `SYS_C007234` are meaningless — when an error occurs, you can't tell which constraint was violated.
+
+| Constraint | Naming Pattern | Example |
+|-----------|---------------|---------|
+| PRIMARY KEY | `pk_table` | `pk_orders` |
+| FOREIGN KEY | `fk_child_parent` | `fk_orders_users` |
+| UNIQUE | `uq_table_column` | `uq_users_email` |
+| CHECK | `chk_table_description` | `chk_orders_status` |
+| DEFAULT | Usually unnamed | — |
+
+```sql
+-- ❌ Without a name
+ALTER TABLE orders ADD FOREIGN KEY (user_id) REFERENCES users(id);
+-- Error: Cannot delete or update a parent row: a foreign key constraint fails
+-- (`mydb`.`orders`, CONSTRAINT `orders_ibfk_1`, ...)  ← What is this?
+
+-- ✅ With a name
+ALTER TABLE orders ADD CONSTRAINT fk_orders_users
+    FOREIGN KEY (user_id) REFERENCES users(id);
+-- Error: ... CONSTRAINT `fk_orders_users` ...  ← Immediately clear
+```
+
+---
+
+## 7. MySQL vs PostgreSQL — Constraint Feature Comparison
+
+| Feature | MySQL | PostgreSQL |
+|---------|-------|------------|
+| **CHECK** | 8.0.16+ (ignored in earlier versions) | Supported from the start |
+| **Partial indexes** | Not available | `CREATE INDEX ... WHERE condition` |
+| **EXCLUDE constraints** | Not available | Range overlap prevention |
+| **DEFERRABLE FK** | Not supported | Supported (`INITIALLY DEFERRED`) |
+| **Generated Columns** | VIRTUAL + STORED | STORED only (VIRTUAL planned for 17) |
+| **NULLS NOT DISTINCT** | Not supported | 15+ |
+| **ON UPDATE CURRENT_TIMESTAMP** | Supported (MySQL-specific) | Not supported → trigger needed |
+| **FK + Partitioning** | FK not allowed on partitioned tables | Supported (12+) |
+
+> **PostgreSQL is clearly stronger on the constraints front.** Partial indexes, EXCLUDE constraints, DEFERRABLE FKs, NULLS NOT DISTINCT — many features MySQL lacks. If you're on MySQL, you'll need to compensate at the app level.
+
+---
+
+## Summary
+
+| Topic | Key Principle |
+|-------|--------------|
+| **CHECK** | Enforce simple value ranges with DB CHECK. Double up with app validation. Verify MySQL 8.0.16+ |
+| **UNIQUE** | Business uniqueness must be guaranteed at the DB level. Use partial UNIQUE for soft-delete environments |
+| **FK** | Default is "use it." Not using it means moving integrity responsibility to the app — be prepared |
+| **DEFAULT / Generated** | DEFAULTs for omitted values, Generated Columns for computed values. Zero sync worries |
+| **Defensive design** | Status columns over boolean flags, NOT NULL by default, make invalid states unrepresentable |
+
+**Constraints aren't overhead — they're "validation you don't have to code."** A single CHECK can replace 10 `if` statements. A single FK can replace an orphan-detection batch job. Spending 10 extra minutes upfront is 100x cheaper than cleaning up broken data integrity in production.
+
+Next up: **Relationship Design Patterns** — decision criteria for 1:1 / 1:N / N:M, self-referencing, and polymorphic relationships.
