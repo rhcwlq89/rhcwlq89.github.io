@@ -131,6 +131,31 @@ SELECT * FROM orders;        -- Clean
 | **Timestamps: _at suffix** | `created_at`, `deleted_at` | `reg_date`, `crt_dtm` | Clearly indicates a timestamp |
 | **FK: referenced_table_id** | `user_id`, `order_id` | `usr_seq`, `fk_order` | Immediately obvious which table's PK is referenced |
 
+**PK: `id` vs `table_name_id` — Which is Better?**
+
+| | `id` | `user_id` (includes table name) |
+|---|---|---|
+| **Pros** | Concise, ORM default (JPA `@Id`), reads naturally as `user.id` | Column name alone shows origin in JOINs, better SQL readability |
+| **Cons** | JOINs require table prefix: `users.id = orders.user_id` | `user.user_id` feels redundant, needs ORM mapping |
+| **Preferred by** | Rails, JPA/Hibernate, Django (ORM-centric) | PostgreSQL community, DBA-led teams, SQL-heavy environments |
+
+The most common pattern in practice is **`id` for the table's own PK, `referenced_table_id` for FKs**.
+
+```sql
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY,        -- Own table: id
+    name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,        -- Own table: id
+    user_id BIGINT NOT NULL,      -- FK: referenced_table_id
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+> Either approach works — what matters most is **consistency within your team**. This post uses the ORM-friendly `id` + `referenced_table_id` pattern.
+
 ### 1.5 Index and Constraint Names
 
 Without explicit names, the DB auto-generates names like `SYS_C007342`. When this shows up in production error logs, it's meaningless.

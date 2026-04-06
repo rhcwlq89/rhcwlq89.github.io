@@ -135,6 +135,31 @@ SELECT * FROM orders;        -- ⭕ 깔끔
 | **날짜는 _at 접미어** | `created_at`, `deleted_at` | `reg_date`, `crt_dtm` | 타임스탬프임을 명확히 표시 |
 | **FK는 참조 테이블_id** | `user_id`, `order_id` | `usr_seq`, `fk_order` | 어떤 테이블의 PK를 참조하는지 바로 알 수 있음 |
 
+**PK는 `id` vs `테이블명_id` — 어느 쪽이 맞나?**
+
+| | `id` | `user_id` (본 테이블명 포함) |
+|---|---|---|
+| **장점** | 간결, ORM 기본값 (JPA `@Id`), 코드에서 `user.id`로 자연스럽게 읽힘 | JOIN 시 컬럼명만으로 출처가 명확, SQL 가독성 좋음 |
+| **단점** | JOIN에서 `users.id = orders.user_id`처럼 항상 테이블명 필요 | `user.user_id`가 중복스러움, ORM 별도 매핑 필요 |
+| **선호하는 곳** | Rails, JPA/Hibernate, Django 등 ORM 중심 | PostgreSQL 커뮤니티, DBA 중심 팀, SQL 헤비 환경 |
+
+실무에서 가장 보편적인 패턴은 **본 테이블 PK는 `id`, FK는 `참조테이블_id`**다.
+
+```sql
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY,        -- 본 테이블: id
+    name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,        -- 본 테이블: id
+    user_id BIGINT NOT NULL,      -- FK: 참조테이블_id
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+> 어느 쪽이든 **팀 내에서 하나로 통일**하는 게 가장 중요하다. 이 포스트에서는 ORM 친화적인 `id` + `참조테이블_id` 패턴을 사용한다.
+
 ### 1.5 인덱스/제약조건 이름
 
 이름 없이 만들면 DB가 자동 생성하는데, `SYS_C007342` 같은 이름이 된다. 운영 중 에러 로그에서 이걸 보면 뭔지 알 수 없다.
