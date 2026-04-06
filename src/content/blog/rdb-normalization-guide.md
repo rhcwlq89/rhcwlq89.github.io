@@ -595,6 +595,85 @@ CREATE TABLE users (
 | **UPSERT** | `ON DUPLICATE KEY UPDATE` | `ON CONFLICT DO UPDATE` | 요약 테이블 갱신은 두 DB 모두 지원 |
 | **트리거** | `FOR EACH ROW`만 | `FOR EACH ROW` + `FOR EACH STATEMENT` | PG 트리거가 더 유연 |
 
+#### 용어 설명
+
+**Materialized View (MV)**
+
+쿼리 결과를 물리적으로 저장해두는 "캐싱된 뷰"다. 일반 View는 매번 쿼리를 다시 실행하지만, MV는 결과를 테이블처럼 저장하므로 조회가 빠르다.
+
+```sql
+-- 일별 매출을 MV로 캐싱 (PostgreSQL)
+CREATE MATERIALIZED VIEW daily_sales AS
+SELECT DATE(order_date) AS day, SUM(total_amount) AS revenue
+FROM orders GROUP BY DATE(order_date);
+
+-- 조회: 일반 테이블처럼 빠르게 읽는다
+SELECT * FROM daily_sales WHERE day = '2026-04-01';
+
+-- 데이터가 바뀌면 수동으로 갱신해야 한다
+REFRESH MATERIALIZED VIEW CONCURRENTLY daily_sales;
+```
+
+반정규화로 요약 테이블을 직접 만들고 UPSERT로 동기화하는 것과 같은 효과를 **DDL 한 줄**로 얻을 수 있다. MySQL에는 이 기능이 없어서 요약 테이블을 직접 관리해야 한다.
+
+**부분 인덱스 (Partial Index)**
+
+테이블 전체가 아닌 **조건에 맞는 행만** 인덱스를 건다. 인덱스 크기가 작아지고, 특정 조회가 빨라진다.
+
+```sql
+-- "미결제 주문만 자주 조회한다" → 전체 인덱스는 낭비
+-- PostgreSQL: 미결제 주문만 인덱스
+CREATE INDEX idx_orders_unpaid ON orders (created_at)
+WHERE status = 'UNPAID';
+
+-- 이 쿼리가 부분 인덱스를 탄다
+SELECT * FROM orders WHERE status = 'UNPAID' ORDER BY created_at;
+```
+
+MySQL에는 부분 인덱스가 없어서, 이런 경우 `status` 컬럼을 별도 테이블로 반정규화하거나 전체 인덱스를 걸어야 한다.
+
+**Generated Column (생성 열)**
+
+다른 컬럼의 값으로부터 **자동 계산되는 컬럼**이다. 직접 INSERT/UPDATE할 수 없고, DB가 알아서 관리한다.
+
+```sql
+-- MySQL: VIRTUAL(조회 시 계산) / STORED(디스크에 저장)
+ALTER TABLE order_items
+ADD COLUMN subtotal DECIMAL(15, 0)
+    GENERATED ALWAYS AS (price * quantity) STORED;
+
+-- PostgreSQL: STORED만 지원
+ALTER TABLE order_items
+ADD COLUMN subtotal DECIMAL(15, 0)
+    GENERATED ALWAYS AS (price * quantity) STORED;
+
+-- 이후 subtotal을 그냥 읽으면 된다
+SELECT * FROM order_items WHERE subtotal > 100000;
+```
+
+같은 테이블 내 계산이라면 반정규화 대신 Generated Column을 먼저 검토한다. 동기화 걱정이 없다.
+
+**JSONB**
+
+JSON 데이터를 **이진 형태로 저장**하고 인덱스까지 걸 수 있는 PostgreSQL 전용 타입이다. MySQL의 `JSON`과 달리 GIN 인덱스로 내부 키 검색이 빠르다.
+
+```sql
+-- PostgreSQL: JSONB + GIN 인덱스
+CREATE TABLE products (
+    id BIGINT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    attributes JSONB NOT NULL DEFAULT '{}'
+);
+
+-- JSONB 내부 키로 검색 가능
+CREATE INDEX idx_products_attrs ON products USING GIN (attributes);
+
+-- 색상이 "red"인 상품 조회 — 인덱스를 탄다
+SELECT * FROM products WHERE attributes @> '{"color": "red"}';
+```
+
+반정형(semi-structured) 데이터를 별도 테이블로 정규화하지 않고도 효율적으로 저장·검색할 수 있다. MySQL의 `JSON` 타입은 GIN 인덱스를 지원하지 않아 검색 성능이 제한적이다.
+
 > **PostgreSQL은 Materialized View, 부분 인덱스, JSONB 덕분에 MySQL보다 반정규화가 덜 필요한 경우가 많다.** MySQL에서 성능 때문에 반정규화했던 것이 PostgreSQL에서는 MV나 부분 인덱스로 해결되는 경우가 있다.
 
 ---

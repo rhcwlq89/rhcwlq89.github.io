@@ -590,6 +590,85 @@ Scenario: Running sales reports (OLAP) directly on the service DB (OLTP)
 | **UPSERT** | `ON DUPLICATE KEY UPDATE` | `ON CONFLICT DO UPDATE` | Summary table refresh works in both |
 | **Triggers** | `FOR EACH ROW` only | `FOR EACH ROW` + `FOR EACH STATEMENT` | PG triggers more flexible |
 
+#### Terminology Explained
+
+**Materialized View (MV)**
+
+A "cached view" that physically stores query results. A regular View re-executes the query every time, but an MV stores results like a table — reads are fast.
+
+```sql
+-- Cache daily revenue as an MV (PostgreSQL)
+CREATE MATERIALIZED VIEW daily_sales AS
+SELECT DATE(order_date) AS day, SUM(total_amount) AS revenue
+FROM orders GROUP BY DATE(order_date);
+
+-- Query: reads as fast as a regular table
+SELECT * FROM daily_sales WHERE day = '2026-04-01';
+
+-- Must refresh manually when data changes
+REFRESH MATERIALIZED VIEW CONCURRENTLY daily_sales;
+```
+
+You get the same effect as manually creating a summary table with UPSERT sync — in **a single DDL statement**. MySQL doesn't have this feature, so you must manage summary tables yourself.
+
+**Partial Index**
+
+An index on **only the rows matching a condition**, not the entire table. Smaller index size, faster targeted queries.
+
+```sql
+-- "We frequently query unpaid orders" -> full index is wasteful
+-- PostgreSQL: index only unpaid orders
+CREATE INDEX idx_orders_unpaid ON orders (created_at)
+WHERE status = 'UNPAID';
+
+-- This query uses the partial index
+SELECT * FROM orders WHERE status = 'UNPAID' ORDER BY created_at;
+```
+
+MySQL doesn't support partial indexes. In such cases, you'd need to denormalize the `status` column into a separate table or create a full index.
+
+**Generated Column**
+
+A column **automatically computed** from other columns. You can't INSERT or UPDATE it directly — the database manages it.
+
+```sql
+-- MySQL: VIRTUAL (computed on read) / STORED (persisted to disk)
+ALTER TABLE order_items
+ADD COLUMN subtotal DECIMAL(15, 0)
+    GENERATED ALWAYS AS (price * quantity) STORED;
+
+-- PostgreSQL: STORED only
+ALTER TABLE order_items
+ADD COLUMN subtotal DECIMAL(15, 0)
+    GENERATED ALWAYS AS (price * quantity) STORED;
+
+-- Just read subtotal directly
+SELECT * FROM order_items WHERE subtotal > 100000;
+```
+
+For same-table calculations, consider Generated Columns before denormalization. No sync concerns.
+
+**JSONB**
+
+A PostgreSQL-specific type that stores JSON in **binary format** with indexing support. Unlike MySQL's `JSON`, it supports GIN indexes for fast internal key searches.
+
+```sql
+-- PostgreSQL: JSONB + GIN index
+CREATE TABLE products (
+    id BIGINT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    attributes JSONB NOT NULL DEFAULT '{}'
+);
+
+-- Index for searching inside JSONB
+CREATE INDEX idx_products_attrs ON products USING GIN (attributes);
+
+-- Find products where color is "red" — uses the index
+SELECT * FROM products WHERE attributes @> '{"color": "red"}';
+```
+
+Semi-structured data can be stored and searched efficiently without normalizing into separate tables. MySQL's `JSON` type doesn't support GIN indexes, so search performance is limited.
+
 > **PostgreSQL often requires less denormalization than MySQL** thanks to Materialized Views, partial indexes, and JSONB. What you'd denormalize for performance in MySQL may be solvable with MVs or partial indexes in PostgreSQL.
 
 ---
