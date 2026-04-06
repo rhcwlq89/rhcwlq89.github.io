@@ -425,30 +425,57 @@ SELECT ts, tstz FROM test;
 -- tstz: 2026-04-05 05:00:00  (converted to UTC for display)
 ```
 
-#### MySQL vs PostgreSQL Type Mapping
+#### SQL Server Date/Time Types
 
-| Purpose | MySQL | PostgreSQL | Note |
-|---------|-------|------------|------|
-| Timezone-aware time | `TIMESTAMP` | `TIMESTAMPTZ` | Different names, same role |
-| Timezone-naive time | `DATETIME` | `TIMESTAMP` | **Caution: same name, different role!** |
-| Date only | `DATE` | `DATE` | Same |
-| Time only | `TIME` | `TIME` / `TIMETZ` | PostgreSQL has timezone variant |
+| Property | `DATETIME2` | `DATETIMEOFFSET` |
+|----------|------------|-----------------|
+| Storage | Stored as-is | Stored **with UTC offset** |
+| Range | `0001-01-01` ~ `9999-12-31` | `0001-01-01` ~ `9999-12-31` |
+| Timezone | Not affected | Includes offset info (`+09:00`, etc.) |
+| Size | 6-8 bytes (depends on precision) | 8-10 bytes |
+| Precision | Up to 100 nanoseconds (`DATETIME2(7)`) | Up to 100 nanoseconds |
 
-> **Confusion point**: MySQL's `TIMESTAMP` and PostgreSQL's `TIMESTAMP` share the same name but **behave differently**. MySQL `TIMESTAMP` is timezone-aware, while PostgreSQL `TIMESTAMP` is timezone-naive. PostgreSQL's timezone-aware type is `TIMESTAMPTZ`.
+```sql
+-- SQL Server: Timezone difference demo
+DECLARE @dt DATETIME2 = '2026-04-05 14:00:00';
+DECLARE @dto DATETIMEOFFSET = '2026-04-05 14:00:00 +09:00';
+
+SELECT @dt;   -- 2026-04-05 14:00:00.0000000 (no offset)
+SELECT @dto;  -- 2026-04-05 14:00:00.0000000 +09:00
+
+-- Convert to UTC
+SELECT SWITCHOFFSET(@dto, '+00:00');
+-- 2026-04-05 05:00:00.0000000 +00:00
+```
+
+> **`DATETIME` vs `DATETIME2`**: SQL Server also has a legacy `DATETIME` type, but its range (`1753~9999`) and precision (3.33ms) are limited. **Always use `DATETIME2` for new projects.**
+
+#### MySQL vs PostgreSQL vs SQL Server Type Mapping
+
+| Purpose | MySQL | PostgreSQL | SQL Server | Note |
+|---------|-------|------------|------------|------|
+| Timezone-aware time | `TIMESTAMP` | `TIMESTAMPTZ` | `DATETIMEOFFSET` | Different names, same role |
+| Timezone-naive time | `DATETIME` | `TIMESTAMP` | `DATETIME2` | **Caution: same name, different role!** |
+| Date only | `DATE` | `DATE` | `DATE` | Same |
+| Time only | `TIME` | `TIME` / `TIMETZ` | `TIME` | PostgreSQL has timezone variant |
+
+> **Confusion point**: MySQL's `TIMESTAMP` and PostgreSQL's `TIMESTAMP` share the same name but **behave differently**. MySQL `TIMESTAMP` is timezone-aware, while PostgreSQL `TIMESTAMP` is timezone-naive. PostgreSQL's timezone-aware type is `TIMESTAMPTZ`. SQL Server uses a distinct name `DATETIMEOFFSET`, which avoids this confusion.
 
 #### The 2038 Problem
 
-MySQL's `TIMESTAMP` is internally stored as a 4-byte integer (Unix timestamp). It overflows on January 19, 2038. **PostgreSQL uses 8 bytes, so it doesn't have this problem.**
+MySQL's `TIMESTAMP` is internally stored as a 4-byte integer (Unix timestamp). It overflows on January 19, 2038. **PostgreSQL uses 8 bytes and SQL Server's `DATETIME2` uses 6-8 bytes, so neither has this problem.**
 
-| Scenario | MySQL | PostgreSQL |
-|----------|-------|------------|
-| Global service | `TIMESTAMP` (watch for 2038) | `TIMESTAMPTZ` |
-| Single-region service | `DATETIME` | `TIMESTAMPTZ` (still recommended) |
-| Birth date | `DATE` | `DATE` |
-| Event scheduling | `DATETIME` | `TIMESTAMP` |
-| `created_at`, `updated_at` | `TIMESTAMP` or `DATETIME` | `TIMESTAMPTZ` |
+| Scenario | MySQL | PostgreSQL | SQL Server |
+|----------|-------|------------|------------|
+| Global service | `TIMESTAMP` (watch for 2038) | `TIMESTAMPTZ` | `DATETIMEOFFSET` |
+| Single-region service | `DATETIME` | `TIMESTAMPTZ` (still recommended) | `DATETIME2` |
+| Birth date | `DATE` | `DATE` | `DATE` |
+| Event scheduling | `DATETIME` | `TIMESTAMP` | `DATETIME2` |
+| `created_at`, `updated_at` | `TIMESTAMP` or `DATETIME` | `TIMESTAMPTZ` | `DATETIME2` or `DATETIMEOFFSET` |
 
 > **PostgreSQL tip**: The official PostgreSQL docs recommend **"use `TIMESTAMPTZ` for almost everything."** Plain `TIMESTAMP` (without timezone) is only for rare cases where you need an absolute time in a specific timezone, like "2 PM KST for an event."
+>
+> **SQL Server tip**: `DATETIMEOFFSET` stores the offset value (`+09:00`) alongside the time, preserving which timezone the data was entered in. Useful for global services. For single-region apps, `DATETIME2` is sufficient.
 
 ### 2.6 ENUM vs Lookup Tables
 

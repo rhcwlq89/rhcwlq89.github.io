@@ -429,30 +429,57 @@ SELECT ts, tstz FROM test;
 -- tstz: 2026-04-05 05:00:00  (UTC로 변환되어 출력)
 ```
 
-#### MySQL vs PostgreSQL 타입 대응표
+#### SQL Server의 날짜/시간 타입
 
-| 용도 | MySQL | PostgreSQL | 비고 |
-|------|-------|------------|------|
-| 타임존 인식 시간 | `TIMESTAMP` | `TIMESTAMPTZ` | 이름은 다르지만 역할은 같음 |
-| 타임존 무관 시간 | `DATETIME` | `TIMESTAMP` | **주의: 같은 이름인데 역할이 다름!** |
-| 날짜만 | `DATE` | `DATE` | 동일 |
-| 시간만 | `TIME` | `TIME` / `TIMETZ` | PostgreSQL은 타임존 버전도 있음 |
+| 특성 | `DATETIME2` | `DATETIMEOFFSET` |
+|------|------------|-----------------|
+| 저장 방식 | 그대로 저장 | **UTC 오프셋과 함께** 저장 |
+| 범위 | `0001-01-01` ~ `9999-12-31` | `0001-01-01` ~ `9999-12-31` |
+| 타임존 | 영향 없음 | 오프셋 정보 포함 (`+09:00` 등) |
+| 크기 | 6~8바이트 (정밀도에 따라) | 8~10바이트 |
+| 정밀도 | 최대 100나노초 (`DATETIME2(7)`) | 최대 100나노초 |
 
-> **혼동 포인트**: MySQL의 `TIMESTAMP`와 PostgreSQL의 `TIMESTAMP`는 이름만 같고 **동작이 다르다**. MySQL `TIMESTAMP`는 타임존을 인식하지만, PostgreSQL `TIMESTAMP`는 타임존을 무시한다. PostgreSQL에서 타임존을 인식하는 타입은 `TIMESTAMPTZ`다.
+```sql
+-- SQL Server: 타임존 차이 시연
+DECLARE @dt DATETIME2 = '2026-04-05 14:00:00';
+DECLARE @dto DATETIMEOFFSET = '2026-04-05 14:00:00 +09:00';
+
+SELECT @dt;   -- 2026-04-05 14:00:00.0000000 (오프셋 없음)
+SELECT @dto;  -- 2026-04-05 14:00:00.0000000 +09:00
+
+-- UTC로 변환
+SELECT SWITCHOFFSET(@dto, '+00:00');
+-- 2026-04-05 05:00:00.0000000 +00:00
+```
+
+> **`DATETIME` vs `DATETIME2`**: SQL Server에는 레거시 `DATETIME` 타입도 있지만, 범위(`1753~9999`)와 정밀도(3.33ms)가 제한적이다. **신규 프로젝트에서는 항상 `DATETIME2`를 사용**해야 한다.
+
+#### MySQL vs PostgreSQL vs SQL Server 타입 대응표
+
+| 용도 | MySQL | PostgreSQL | SQL Server | 비고 |
+|------|-------|------------|------------|------|
+| 타임존 인식 시간 | `TIMESTAMP` | `TIMESTAMPTZ` | `DATETIMEOFFSET` | 이름은 다르지만 역할은 같음 |
+| 타임존 무관 시간 | `DATETIME` | `TIMESTAMP` | `DATETIME2` | **주의: 같은 이름인데 역할이 다름!** |
+| 날짜만 | `DATE` | `DATE` | `DATE` | 동일 |
+| 시간만 | `TIME` | `TIME` / `TIMETZ` | `TIME` | PostgreSQL은 타임존 버전도 있음 |
+
+> **혼동 포인트**: MySQL의 `TIMESTAMP`와 PostgreSQL의 `TIMESTAMP`는 이름만 같고 **동작이 다르다**. MySQL `TIMESTAMP`는 타임존을 인식하지만, PostgreSQL `TIMESTAMP`는 타임존을 무시한다. PostgreSQL에서 타임존을 인식하는 타입은 `TIMESTAMPTZ`다. SQL Server는 `DATETIMEOFFSET`이라는 별도 이름이라 혼동이 적다.
 
 #### 2038년 문제
 
-MySQL `TIMESTAMP`는 내부적으로 4바이트 정수(Unix timestamp)로 저장된다. 2038년 1월 19일에 오버플로가 발생한다. **PostgreSQL은 8바이트를 사용하므로 이 문제가 없다.**
+MySQL `TIMESTAMP`는 내부적으로 4바이트 정수(Unix timestamp)로 저장된다. 2038년 1월 19일에 오버플로가 발생한다. **PostgreSQL은 8바이트, SQL Server의 `DATETIME2`는 6~8바이트를 사용하므로 이 문제가 없다.**
 
-| 상황 | MySQL 권장 | PostgreSQL 권장 |
-|------|-----------|----------------|
-| 글로벌 서비스 | `TIMESTAMP` (2038 주의) | `TIMESTAMPTZ` |
-| 단일 리전 서비스 | `DATETIME` | `TIMESTAMPTZ` (여전히 권장) |
-| 생년월일 | `DATE` | `DATE` |
-| 이벤트 예약 시간 | `DATETIME` | `TIMESTAMP` |
-| `created_at`, `updated_at` | `TIMESTAMP` 또는 `DATETIME` | `TIMESTAMPTZ` |
+| 상황 | MySQL 권장 | PostgreSQL 권장 | SQL Server 권장 |
+|------|-----------|----------------|----------------|
+| 글로벌 서비스 | `TIMESTAMP` (2038 주의) | `TIMESTAMPTZ` | `DATETIMEOFFSET` |
+| 단일 리전 서비스 | `DATETIME` | `TIMESTAMPTZ` (여전히 권장) | `DATETIME2` |
+| 생년월일 | `DATE` | `DATE` | `DATE` |
+| 이벤트 예약 시간 | `DATETIME` | `TIMESTAMP` | `DATETIME2` |
+| `created_at`, `updated_at` | `TIMESTAMP` 또는 `DATETIME` | `TIMESTAMPTZ` | `DATETIME2` 또는 `DATETIMEOFFSET` |
 
 > **PostgreSQL 팁**: PostgreSQL 공식 문서에서도 **"거의 모든 경우에 `TIMESTAMPTZ`를 쓰라"** 고 권장한다. `TIMESTAMP`(타임존 없음)는 "한국 시간 오후 2시"처럼 특정 타임존의 절대 시간이 필요한 극히 드문 경우에만 사용한다.
+>
+> **SQL Server 팁**: `DATETIMEOFFSET`은 오프셋 값(`+09:00`)을 함께 저장하므로, "이 데이터가 어느 타임존에서 입력됐는지"까지 보존된다. 글로벌 서비스에서 유용하다. 단일 리전이라면 `DATETIME2`로 충분하다.
 
 ### 2.6 ENUM vs 참조 테이블(Lookup Table)
 
