@@ -357,6 +357,11 @@ AFTER INSERT ON order_items
 FOR EACH ROW EXECUTE FUNCTION update_order_total();
 ```
 
+> ⚠️ **실무에서는 트리거보다 애플리케이션 레벨 동기화를 선호한다.**
+> 트리거는 "보이지 않는 코드"라서 장애 시 원인 추적이 어렵고, ORM 캐시와 충돌하며, 단위 테스트가 까다롭다.
+> 실무에서는 **Service 계층에서 같은 트랜잭션 안에서 직접 갱신**하거나, **CDC/이벤트 기반 비동기 갱신**(Debezium, Kafka 등)을 주로 사용한다.
+> 트리거가 적합한 드문 케이스: 감사 로그(audit log), 레거시 시스템 통합, CHECK 제약으로 표현 불가능한 복잡한 무결성 규칙.
+
 > **PostgreSQL이라면 Materialized View를 먼저 검토**하라. 테이블에 컬럼을 추가하지 않고도 집계 결과를 캐싱할 수 있다.
 > ```sql
 > CREATE MATERIALIZED VIEW order_totals AS

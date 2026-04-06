@@ -352,6 +352,11 @@ AFTER INSERT ON order_items
 FOR EACH ROW EXECUTE FUNCTION update_order_total();
 ```
 
+> ⚠️ **In practice, application-level sync is preferred over triggers.**
+> Triggers are "invisible code" — hard to debug during incidents, conflict with ORM caches, and difficult to unit test.
+> Most teams **update within the same transaction in the Service layer**, or use **CDC/event-driven async sync** (Debezium, Kafka, etc.).
+> Rare cases where triggers are appropriate: audit logs, legacy system integration, complex integrity rules that can't be expressed as CHECK constraints.
+
 > **If you're on PostgreSQL, consider a Materialized View first.** It caches aggregated results without adding columns to your table.
 > ```sql
 > CREATE MATERIALIZED VIEW order_totals AS
