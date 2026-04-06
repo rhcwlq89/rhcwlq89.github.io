@@ -409,6 +409,13 @@ ON CONFLICT (sale_date) DO UPDATE SET
     updated_at = CURRENT_TIMESTAMP;
 ```
 
+**What UPSERT does**: It attempts an INSERT, and if a row with the same key (`sale_date`) already exists, it executes an UPDATE instead.
+
+- **MySQL** — `ON DUPLICATE KEY UPDATE`: When the PRIMARY KEY or UNIQUE KEY conflicts, the UPDATE clause runs instead. `VALUES(total_orders)` references the value that was about to be inserted.
+- **PostgreSQL** — `ON CONFLICT (sale_date) DO UPDATE SET`: When a conflict occurs on the specified column (`sale_date`), it runs the UPDATE. `EXCLUDED` is a virtual table representing the row that was about to be inserted.
+
+This lets you handle "insert if new, update if exists" in **a single atomic query** — ideal for refreshing summary tables.
+
 > **Analogy**: Instead of counting every book in the library daily, you keep a "today's checkout summary" board. Not real-time, but fast enough.
 
 #### Pattern 3: Snapshots (This Isn't Actually Denormalization!)

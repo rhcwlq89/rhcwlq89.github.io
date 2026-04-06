@@ -414,6 +414,13 @@ ON CONFLICT (sale_date) DO UPDATE SET
     updated_at = CURRENT_TIMESTAMP;
 ```
 
+**UPSERT가 하는 일**: INSERT를 시도하고, 이미 같은 키(`sale_date`)가 존재하면 INSERT 대신 UPDATE를 실행한다.
+
+- **MySQL** — `ON DUPLICATE KEY UPDATE`: PRIMARY KEY 또는 UNIQUE KEY가 중복되면 뒤의 UPDATE 절을 실행한다. `VALUES(total_orders)`는 INSERT하려던 값을 참조한다.
+- **PostgreSQL** — `ON CONFLICT (sale_date) DO UPDATE SET`: 지정한 컬럼(`sale_date`)에 충돌이 발생하면 UPDATE를 실행한다. `EXCLUDED`는 INSERT하려던 행 전체를 가리키는 가상 테이블이다.
+
+이렇게 하면 "없으면 INSERT, 있으면 UPDATE"를 **하나의 원자적 쿼리**로 처리할 수 있어서, 요약 테이블 갱신에 적합하다.
+
 > **비유**: 매일 도서관의 모든 책을 세는 대신, "오늘의 대출 현황" 요약 보드를 따로 만들어두는 것이다. 실시간은 아니지만 충분히 빠르다.
 
 #### 패턴 3: 스냅샷 저장 (이건 사실 반정규화가 아니다!)
