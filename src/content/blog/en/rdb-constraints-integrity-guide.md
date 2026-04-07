@@ -212,6 +212,45 @@ Both create a unique index internally. The differences:
 | `WHERE` condition (partial) | ❌ | ✅ (PostgreSQL) |
 | Semantic clarity | "Business rule" | "Performance optimization" |
 
+#### FK Reference — Behavior Varies by DB
+
+Per the SQL standard, FK can reference either a PRIMARY KEY or a UNIQUE constraint. In practice, behavior differs:
+
+- **PostgreSQL / MySQL / SQL Server**: Allow FK references to unique indexes (lenient)
+- **Oracle**: Requires a UNIQUE constraint for FK references (strict)
+
+If a column will be referenced by FK, declaring it as a `CONSTRAINT` is safer for portability.
+
+#### Partial Uniqueness — The Biggest Practical Difference
+
+```sql
+-- UNIQUE constraint: cannot attach a condition
+ALTER TABLE users ADD CONSTRAINT uq_email UNIQUE (email);
+
+-- UNIQUE index + WHERE: conditional uniqueness (PostgreSQL)
+CREATE UNIQUE INDEX idx_users_active_email
+    ON users (email)
+    WHERE deleted_at IS NULL;
+-- Soft-deleted rows are excluded from the uniqueness check!
+```
+
+A classic use case is the **soft delete pattern**. When a user re-registers with the same email after deactivation, a UNIQUE constraint would cause a duplicate error due to the soft-deleted row. A partial unique index checks only rows where `deleted_at IS NULL`, allowing re-registration.
+
+> Supported in PostgreSQL. MySQL does not support partial indexes (requires a workaround with an extra column).
+
+#### Semantic Difference
+
+A CONSTRAINT declares "this column must not have duplicates as a **business rule**." An INDEX says "speed up lookups on this column as a **performance optimization**." When teammates read the schema, a CONSTRAINT immediately signals a business requirement.
+
+#### Practical Decision Guide
+
+| Scenario | Choice |
+|----------|--------|
+| Business uniqueness (email, SSN, etc.) | `UNIQUE CONSTRAINT` |
+| Column will be referenced by FK | `UNIQUE CONSTRAINT` |
+| Soft delete + conditional uniqueness | `UNIQUE INDEX + WHERE` |
+| Uniqueness with included columns | `UNIQUE INDEX` (with INCLUDE clause) |
+
 **Practical rule**: If it's a business rule, use a constraint (`CONSTRAINT`). For conditional uniqueness or performance, use an index.
 
 ---

@@ -217,6 +217,45 @@ CREATE UNIQUE INDEX idx_users_email ON users (email);
 | `WHERE` 조건 (부분) | ❌ | ✅ (PostgreSQL) |
 | 의미론적 명확성 | "비즈니스 규칙" | "성능 최적화" |
 
+#### FK 참조 가능 여부 — DB별 차이
+
+SQL 표준상 FK가 참조할 수 있는 대상은 PRIMARY KEY 또는 UNIQUE 제약조건이다. 하지만 실제 동작은 DB마다 다르다:
+
+- **PostgreSQL / MySQL / SQL Server**: 유니크 인덱스만 있어도 FK 참조 허용 (관대함)
+- **Oracle**: UNIQUE 제약조건이 있어야 FK 참조 가능 (엄격함)
+
+FK로 참조될 컬럼이라면 이식성을 위해 `CONSTRAINT`로 선언하는 게 안전하다.
+
+#### 부분(Partial) 유니크 — 실무에서 가장 큰 차이
+
+```sql
+-- UNIQUE 제약조건: 조건을 붙일 수 없다
+ALTER TABLE users ADD CONSTRAINT uq_email UNIQUE (email);
+
+-- UNIQUE 인덱스 + WHERE: 조건부 유니크 가능 (PostgreSQL)
+CREATE UNIQUE INDEX idx_users_active_email
+    ON users (email)
+    WHERE deleted_at IS NULL;
+-- soft delete된 행은 유니크 체크에서 제외!
+```
+
+대표적인 사례가 **Soft Delete 패턴**이다. 탈퇴한 사용자와 같은 이메일로 재가입할 때, UNIQUE 제약조건이면 탈퇴한 행 때문에 중복 에러가 발생한다. 부분 유니크 인덱스를 쓰면 `deleted_at IS NULL`인 행만 체크하므로 재가입이 가능하다.
+
+> PostgreSQL에서 지원하며, MySQL은 부분 인덱스를 지원하지 않는다 (별도 컬럼 트릭이 필요).
+
+#### 의미론적 차이
+
+CONSTRAINT는 "이 컬럼은 비즈니스적으로 중복되면 안 된다"는 **규칙 선언**이고, INDEX는 "이 컬럼의 조회를 빠르게 하겠다"는 **성능 최적화**다. 스키마를 읽는 팀원 입장에서 CONSTRAINT로 선언되어 있으면 비즈니스 요구사항임을 바로 알 수 있다.
+
+#### 실무 판단 기준
+
+| 상황 | 선택 |
+|------|------|
+| 이메일, 주민번호 등 비즈니스 유니크 | `UNIQUE CONSTRAINT` |
+| FK로 참조될 예정 | `UNIQUE CONSTRAINT` |
+| Soft Delete + 조건부 유니크 | `UNIQUE INDEX + WHERE` |
+| 유니크하면서 특정 포함 컬럼 필요 | `UNIQUE INDEX` (INCLUDE 절 활용) |
+
 **실무 규칙**: 비즈니스 규칙이면 제약조건(`CONSTRAINT`)으로, 조건부 유니크나 성능 목적이면 인덱스로.
 
 ---
