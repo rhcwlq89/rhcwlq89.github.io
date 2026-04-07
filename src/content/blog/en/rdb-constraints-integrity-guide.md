@@ -70,6 +70,65 @@ INSERT INTO orders (status) VALUES ('UNKNOWN');
 | Cross-table references | Not allowed | Not allowed (same-row columns only) |
 | Functions | Non-deterministic restricted (`NOW()` not allowed) | Only IMMUTABLE functions |
 
+Let's look at each item in more detail.
+
+#### Subqueries Not Allowed
+
+You cannot use a `SELECT` statement inside a CHECK constraint. Any kind of query — whether against another table or even the same table — is prohibited.
+
+```sql
+-- ❌ You'd want to do this, but it's not possible
+ALTER TABLE orders ADD CONSTRAINT chk_valid_product
+    CHECK (product_id IN (SELECT id FROM products));
+--                        ^^^^^^^^^^^^^^^^^^^^^^^^ No SELECT inside CHECK!
+
+-- ✅ Use a FK for this kind of validation instead
+ALTER TABLE orders ADD CONSTRAINT fk_orders_product
+    FOREIGN KEY (product_id) REFERENCES products(id);
+```
+
+CHECK is evaluated on every INSERT/UPDATE. If subqueries were allowed, each write would trigger queries against other tables, causing performance degradation and concurrency issues (lock contention). This is why the SQL standard prohibits it from the ground up.
+
+#### Cross-Table References Not Allowed
+
+CHECK can only reference **columns from the very row being inserted or updated**. It cannot reference other rows in the same table, nor columns from other tables.
+
+```sql
+-- ✅ Allowed: comparing columns within the same row
+ALTER TABLE events ADD CONSTRAINT chk_date_range
+    CHECK (end_date > start_date);
+--       ^^^^^^^^     ^^^^^^^^^^ Both are columns of the same row — OK
+
+-- ❌ Not allowed: referencing another table's columns
+ALTER TABLE orders ADD CONSTRAINT chk_enough_stock
+    CHECK (quantity <= (SELECT stock FROM products WHERE id = product_id));
+--                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Another table!
+```
+
+Cross-table rules like "ensure order quantity doesn't exceed product stock" cannot be implemented with CHECK. These cases require a **trigger** or **application-level validation**.
+
+#### Function Usage Restrictions
+
+You can use functions inside CHECK, but **functions whose results change on every call** are not allowed.
+
+```sql
+-- ❌ MySQL: NOW() is non-deterministic — returns different results each time
+ALTER TABLE events ADD CONSTRAINT chk_future_event
+    CHECK (event_date > NOW());
+-- Passes at INSERT time, but existing rows would violate the constraint as time passes
+-- The DB doesn't allow constraints that can become invalid over time
+
+-- ❌ PostgreSQL: non-IMMUTABLE functions are not allowed
+-- NOW() is a STABLE function, so it cannot be used in CHECK
+
+-- ✅ Allowed: deterministic/immutable functions like UPPER(), LENGTH()
+ALTER TABLE users ADD CONSTRAINT chk_email_format
+    CHECK (LENGTH(email) >= 5);
+-- Same input always produces the same result — safe to use
+```
+
+The key takeaway is that a CHECK constraint is a tool for **determining "is this row's data valid?" on a per-row, deterministic basis**. Subqueries, cross-table references, and non-deterministic functions are all restricted because they violate this principle.
+
 > ⚠️ **If you're on MySQL 8.0.15 or earlier, CHECK doesn't work.** The `ALTER TABLE` succeeds without error, but no validation actually happens. Always verify your MySQL version.
 
 ### 1.3 DB Validation vs App Validation — Where Should You Validate?

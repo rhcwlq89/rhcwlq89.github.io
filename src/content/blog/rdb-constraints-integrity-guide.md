@@ -75,6 +75,65 @@ INSERT INTO orders (status) VALUES ('UNKNOWN');
 | 다른 테이블 참조 | 불가 | 불가 (같은 행의 컬럼만 참조 가능) |
 | 함수 사용 | 비결정적 함수 제한 (`NOW()` 불가) | 불변(IMMUTABLE) 함수만 허용 |
 
+각 항목을 좀 더 자세히 살펴보자.
+
+#### 서브쿼리 불가
+
+CHECK 제약조건 안에서는 `SELECT` 문을 사용할 수 없다. 즉, 다른 테이블이든 같은 테이블이든 쿼리로 데이터를 조회하는 것 자체가 불가능하다.
+
+```sql
+-- ❌ 이렇게 하고 싶지만 불가능
+ALTER TABLE orders ADD CONSTRAINT chk_valid_product
+    CHECK (product_id IN (SELECT id FROM products));
+--                        ^^^^^^^^^^^^^^^^^^^^^^^^ CHECK 안에서 SELECT 불가!
+
+-- ✅ 이런 검증이 필요하다면 FK를 사용해야 한다
+ALTER TABLE orders ADD CONSTRAINT fk_orders_product
+    FOREIGN KEY (product_id) REFERENCES products(id);
+```
+
+CHECK는 매 INSERT/UPDATE마다 평가되는데, 만약 서브쿼리를 허용하면 매번 다른 테이블에 대한 조회가 발생해 성능 저하와 동시성 문제(락 충돌)가 생길 수 있다. SQL 표준에서부터 이를 금지한 이유다.
+
+#### 다른 테이블 참조 불가
+
+CHECK는 **현재 INSERT/UPDATE되는 바로 그 행의 컬럼**만 참조할 수 있다. 같은 테이블의 다른 행도, 다른 테이블의 컬럼도 참조할 수 없다.
+
+```sql
+-- ✅ 가능: 같은 행의 컬럼끼리 비교
+ALTER TABLE events ADD CONSTRAINT chk_date_range
+    CHECK (end_date > start_date);
+--       ^^^^^^^^     ^^^^^^^^^^ 둘 다 같은 행의 컬럼이므로 OK
+
+-- ❌ 불가능: 다른 테이블의 컬럼 참조
+ALTER TABLE orders ADD CONSTRAINT chk_enough_stock
+    CHECK (quantity <= (SELECT stock FROM products WHERE id = product_id));
+--                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 다른 테이블!
+```
+
+"주문 수량이 재고를 초과하지 않는지 검증" 같은 크로스 테이블 규칙은 CHECK로 구현할 수 없다. 이런 경우는 **트리거(Trigger)** 또는 **앱 레벨 검증**으로 처리해야 한다.
+
+#### 함수 사용 제한
+
+CHECK 안에서 함수를 쓸 수 있지만, **호출할 때마다 결과가 바뀌는 함수**는 사용할 수 없다.
+
+```sql
+-- ❌ MySQL: NOW()는 비결정적(non-deterministic) — 호출 시점마다 결과가 달라진다
+ALTER TABLE events ADD CONSTRAINT chk_future_event
+    CHECK (event_date > NOW());
+-- INSERT 시점에는 통과했지만, 시간이 지나면 기존 행이 제약을 위반하게 된다
+-- DB는 이런 "시간이 지나면 위반되는 제약"을 허용하지 않는다
+
+-- ❌ PostgreSQL: IMMUTABLE이 아닌 함수는 불가
+-- NOW()는 STABLE 함수이므로 CHECK에서 사용 불가
+
+-- ✅ 가능: UPPER(), LENGTH() 같은 결정적/불변 함수
+ALTER TABLE users ADD CONSTRAINT chk_email_format
+    CHECK (LENGTH(email) >= 5);
+-- 같은 입력에 항상 같은 결과를 반환하므로 안전하다
+```
+
+핵심은 CHECK 제약조건이 **"이 행의 데이터가 유효한가?"를 행 단위로, 결정적으로 판단하는 도구**라는 점이다. 서브쿼리, 다른 테이블, 비결정적 함수가 제한되는 이유는 모두 이 원칙에서 비롯된다.
+
 > ⚠️ **MySQL 8.0.15 이하를 쓰고 있다면 CHECK가 동작하지 않는다.** `ALTER TABLE` 실행해도 에러 없이 성공하지만, 실제로는 검증을 하지 않는다. 반드시 MySQL 버전을 확인해야 한다.
 
 ### 1.3 DB 검증 vs 앱 검증 — 어디서 할 것인가?
