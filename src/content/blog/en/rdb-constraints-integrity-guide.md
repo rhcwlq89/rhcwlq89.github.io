@@ -172,6 +172,22 @@ In [Part 1](/blog/en/rdb-schema-basics-guide), we covered ENUM vs lookup tables.
 
 If values are likely to change, a lookup table beats CHECK.
 
+#### CHECK in Practice — The Honest Reality
+
+CHECK constraints are great in theory, but **teams that actively use them are in the minority.** Here's why:
+
+1. **MySQL's late support**: CHECK only became functional in MySQL 8.0.16 (2019). For decades before that, the MySQL ecosystem treated CHECK as "doesn't exist," and that inertia persists. Proposing to add CHECK constraints to an existing project often fails to gain team consensus.
+2. **Poor ORM integration**: Most ORMs — Spring Data JPA, Django ORM, ActiveRecord — don't auto-generate CHECK constraints. You need to manage DDL manually or add them via migration tools (Flyway, Alembic, etc.), and this step is easy to skip.
+3. **Unfriendly error messages**: When CHECK is violated, you get technical errors like `Check constraint 'chk_users_age' is violated`. These can't be shown to users, so you end up writing app-level validation anyway, leading to "why not just do everything in the app?"
+
+**When you should use CHECK regardless**:
+
+- **When direct SQL data modifications are frequent**: During operational `UPDATE` queries against production, app validation doesn't run. CHECK is the last line of defense.
+- **When multiple services/batches write to the same table**: DB-level constraints are the most reliable way to ensure consistent validation across all entry points.
+- **Domains where data integrity is a legal requirement** (finance, healthcare): "Bad data got in due to an app bug" is unacceptable — CHECK is mandatory.
+
+> **Practical advice**: For new projects, add basic CHECKs like `price > 0`, `quantity >= 1`, `status IN (...)` from the start. Adding them later requires validating existing data first, which is far more cumbersome.
+
 ---
 
 ## 2. UNIQUE Constraints — "Only One of This Combination May Exist"
@@ -322,6 +338,28 @@ This distinction matters most six months later when a new team member reads the 
 | Uniqueness with included columns | `UNIQUE INDEX` (with INCLUDE) | INCLUDE is an index-only feature |
 
 **Practical rule**: If it's a business rule, use a constraint (`CONSTRAINT`). For conditional uniqueness or performance, use an index.
+
+#### UNIQUE in Practice — The Most Widely Used Constraint
+
+Unlike CHECK or FK, UNIQUE is **used in virtually 100% of production systems.** The reason is simple — without UNIQUE, you cannot fully prevent duplicate data at the app level alone.
+
+```sql
+-- App-level "email duplicate check" then INSERT flow:
+-- 1. SELECT * FROM users WHERE email = 'a@b.com'  → not found
+-- 2. INSERT INTO users (email) VALUES ('a@b.com')
+-- But what if another request INSERTs the same email between 1 and 2? → Duplicate!
+-- (Race Condition)
+```
+
+This **race condition** cannot be prevented by app-level validation alone. Another transaction can slip between the `SELECT` and `INSERT`. Only a DB UNIQUE constraint guarantees atomicity.
+
+Common patterns in practice:
+- **Email, login ID, phone number** → almost always UNIQUE
+- **Order number, payment transaction ID** → UNIQUE is essential to prevent duplicate payments
+- **API idempotency keys** → UNIQUE prevents duplicate request processing
+- **Soft delete environments** → teams that know about partial unique indexes (`WHERE deleted_at IS NULL`) use them actively, while teams that don't often struggle with email-mangling workarounds
+
+> **Practical advice**: If you ever think "this value shouldn't be duplicated," add a UNIQUE constraint without hesitation. No amount of app-level checks can withstand concurrency.
 
 ---
 
@@ -492,6 +530,27 @@ Partitioning (MySQL)    → FK impossible → app validation + consistency batch
 
 > **Key takeaway**: Dropping FKs isn't "giving up on integrity" — it's **"moving the integrity responsibility from DB to app."** Only drop them when you're ready to bear that responsibility.
 
+#### FK in Practice — The Most Divisive Constraint
+
+FK is the constraint where **adoption varies most dramatically by team and architecture.**
+
+**Environments that actively use FK**:
+- Monolithic architecture + single DB (traditional web services)
+- Domains where data consistency is a legal requirement (finance, healthcare, payments)
+- Organizations with DBAs — DBAs generally advocate strongly for FKs
+
+**Environments that don't (or can't) use FK**:
+- MSA with per-service databases — physically impossible to create cross-DB FKs
+- High-traffic services — FKs are often removed for write performance. Many large-scale internet companies' guidelines actually recommend against FKs
+- Sharded DB environments — cross-shard FKs are impossible
+
+**A pragmatic compromise**:
+- Early-stage startups or small services → use FKs. Debugging data consistency issues costs far more than FK's performance overhead.
+- When the service grows and FK becomes a bottleneck → benchmark and remove then. "Remove later" is much easier than "add later."
+- If you remove FKs → you must build orphan data detection batches and monitoring alongside. Without FK and without monitoring, data silently rots.
+
+> **Practical advice**: The answer to "should we use FKs?" is almost always **"yes, start with them."** If your scale is large enough for FK to cause performance problems, your team will likely be experienced enough to make this call on their own by then.
+
 ---
 
 ## 4. DEFAULT and Generated Columns — Auto-Filling Values
@@ -602,6 +661,24 @@ ALTER TABLE order_items
 | Complex business logic | | ✅ |
 
 **The biggest advantage of Generated Columns**: zero synchronization worries. When `unit_price` or `quantity` changes, `subtotal` updates automatically. Unlike denormalization, "forgetting to update" is impossible.
+
+#### DEFAULT and Generated Columns in Practice
+
+**DEFAULT is used in virtually every project.** Patterns like `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`, `status VARCHAR DEFAULT 'PENDING'`, `retry_count INT DEFAULT 0` are de facto standards. ORMs support DEFAULT well, and developers accept them without resistance. Not using DEFAULT is stranger than using it.
+
+**Generated Columns still have low awareness.** Many developers don't know they exist, and even those who do may hesitate for reasons like:
+
+- **ORM compatibility concerns**: Worries about JPA's `@Column` and Generated Columns working together. In practice, just setting `insertable = false, updatable = false` works fine, but it feels unfamiliar at first.
+- **PostgreSQL's lack of VIRTUAL**: MySQL offers VIRTUAL for disk savings, but PostgreSQL only supports STORED (VIRTUAL planned for 17). Some teams are uncomfortable with the additional disk usage.
+- **"We can compute it in the app"**: True, but when multiple services read the same table, every service must implement identical computation logic. Generated Columns let the DB guarantee consistency.
+
+**Particularly useful real-world cases**:
+- `subtotal = unit_price * quantity` — auto-computed order line subtotals
+- `full_name = first_name || ' ' || last_name` — auto-generated full name for search
+- `is_expired = (expire_date < CURRENT_DATE)` — auto expiry flag (MySQL VIRTUAL = zero disk space)
+- Soft delete `active_email` trick (MySQL workaround for partial uniqueness)
+
+> **Practical advice**: Always use DEFAULT. For Generated Columns, consider them whenever you have "a frequently queried value derived from columns in the same table." Especially if you're considering denormalization, check first whether a Generated Column can achieve the same effect without triggers or app logic.
 
 ---
 
@@ -726,6 +803,26 @@ CREATE TABLE orders (
 
 **Principle**: When creating a column, always ask "Can a row exist without this value?" If the answer is "no," use `NOT NULL`.
 
+#### Defensive Schema in Practice — The Gap Between Ideal and Reality
+
+Defensive schema design falls into the "nice to know, but few teams actually apply it" category in practice.
+
+**What gets adopted easily**:
+- `NOT NULL` — the most basic defense, and ORMs make it easy with `nullable = false`. The most widely and easily applied defensive pattern in practice.
+- `status VARCHAR + CHECK` — using a status column instead of boolean flags is standard in experienced teams. Though teams split on whether to add CHECK or validate only in the app.
+- Basic CHECKs like `price > 0`, `quantity >= 1` — nearly mandatory in finance/payment domains.
+
+**What rarely gets adopted**:
+- `EXCLUDE` constraints (range overlap prevention) — PostgreSQL-only, requires the `btree_gist` extension, and most developers don't know it exists. Incredibly powerful if you know it, but in practice, most teams handle this at the app level or with triggers.
+- Complex CHECKs (multi-column validation) — when business logic changes frequently, CHECK requires `ALTER TABLE` too, which adds burden. Rules that change often are more practical to handle in the app.
+
+**The key is to decide based on "what happens if we don't do this"**:
+- Without NOT NULL → NULLs sneak in and create NullPointerException landmines across the app → **must use**
+- Without stock CHECK → negative inventory breaks billing → in finance/e-commerce, **must use**
+- Without EXCLUDE → promotion period overlaps → adopt if business impact is high, otherwise handle in app
+
+> **Practical advice**: NOT NULL is baseline, simple CHECKs like `price > 0` should be added wherever possible, and advanced features like EXCLUDE should be introduced when you're convinced "without this, production incidents will happen."
+
 ---
 
 ## 6. Constraint Naming Conventions
@@ -782,5 +879,27 @@ ALTER TABLE orders ADD CONSTRAINT fk_orders_users
 | **Defensive design** | Status columns over boolean flags, NOT NULL by default, make invalid states unrepresentable |
 
 **Constraints aren't overhead — they're "validation you don't have to code."** A single CHECK can replace 10 `if` statements. A single FK can replace an orphan-detection batch job. Spending 10 extra minutes upfront is 100x cheaper than cleaning up broken data integrity in production.
+
+### Real-World Adoption — At a Glance
+
+| Constraint | Adoption | Reality |
+|-----------|:---:|--------|
+| **NOT NULL** | ★★★★★ | Used by virtually every team. Not using it is the anomaly |
+| **DEFAULT** | ★★★★★ | `created_at`, `status` defaults are de facto standard |
+| **UNIQUE** | ★★★★☆ | Essential for core columns. The only way to prevent race condition duplicates |
+| **FK** | ★★★☆☆ | Actively used in monolith/small-scale; often skipped in MSA/high-traffic |
+| **CHECK** | ★★☆☆☆ | Low awareness due to MySQL's late support + ORM gaps. Active in finance/payments |
+| **Generated Column** | ★★☆☆☆ | Many developers don't know it exists. Useful when known, but rare adoption |
+| **EXCLUDE** | ★☆☆☆☆ | PostgreSQL-only + extremely low awareness. Only used by teams in the know |
+
+**"Should I use all of them?" — A pragmatic answer**:
+
+```
+[Essential] NOT NULL + DEFAULT + UNIQUE   → Problems arise immediately without these
+[Recommended] FK + basic CHECK (price > 0) → Noticeably safer with these
+[Optional] Generated Column + EXCLUDE     → Powerful if you know them, but require team buy-in
+```
+
+Constraints are far easier to add at the beginning than later. Adding them later requires validating existing data first and migrating non-compliant records. **"Let's skip it for now and add later if needed" almost always means "never added."**
 
 Next up: **Relationship Design Patterns** — decision criteria for 1:1 / 1:N / N:M, self-referencing, and polymorphic relationships.
