@@ -214,42 +214,53 @@ Both create a unique index internally. The differences:
 
 #### FK Reference — Behavior Varies by DB
 
-Per the SQL standard, FK can reference either a PRIMARY KEY or a UNIQUE constraint. In practice, behavior differs:
+The SQL standard specifies that a FK can only reference a PRIMARY KEY or a UNIQUE **constraint** — not a unique index. However, real-world database engines interpret this rule differently:
 
-- **PostgreSQL / MySQL / SQL Server**: Allow FK references to unique indexes (lenient)
-- **Oracle**: Requires a UNIQUE constraint for FK references (strict)
+- **PostgreSQL / MySQL / SQL Server**: These engines allow FK references to unique indexes. Their stance is "if uniqueness is guaranteed, that's good enough," so whether the uniqueness comes from a constraint or an index doesn't matter — FK creation succeeds either way.
+- **Oracle**: Strictly requires a UNIQUE **constraint** to be declared. If only a unique index exists, you'll get `ORA-02270: no matching unique or primary key for this column-list`.
 
-If a column will be referenced by FK, declaring it as a `CONSTRAINT` is safer for portability.
+The bottom line: if a column might be referenced by a FK from another table, declare it as a `CONSTRAINT` rather than a unique index for portability and clarity. This prevents unexpected errors if you ever migrate databases or need to support multiple DB engines.
 
 #### Partial Uniqueness — The Biggest Practical Difference
 
+A UNIQUE constraint enforces uniqueness across **all rows** in the table. There's no way to attach a condition like "only check uniqueness among active rows." A UNIQUE index, on the other hand, supports a `WHERE` clause to implement **partial uniqueness**. This is where the two approaches diverge most in practice.
+
 ```sql
--- UNIQUE constraint: cannot attach a condition
+-- UNIQUE constraint: enforces uniqueness across ALL rows in the table
+-- No condition can be attached, so even deleted rows are checked
 ALTER TABLE users ADD CONSTRAINT uq_email UNIQUE (email);
 
--- UNIQUE index + WHERE: conditional uniqueness (PostgreSQL)
+-- UNIQUE index + WHERE: only rows matching the condition are checked (PostgreSQL)
+-- Only active rows (deleted_at IS NULL) are subject to the uniqueness check
 CREATE UNIQUE INDEX idx_users_active_email
     ON users (email)
     WHERE deleted_at IS NULL;
--- Soft-deleted rows are excluded from the uniqueness check!
 ```
 
-A classic use case is the **soft delete pattern**. When a user re-registers with the same email after deactivation, a UNIQUE constraint would cause a duplicate error due to the soft-deleted row. A partial unique index checks only rows where `deleted_at IS NULL`, allowing re-registration.
+The classic use case is the **soft delete pattern**. Many services don't physically delete user rows on account deactivation — instead, they record a `deleted_at` timestamp. Now consider what happens when a deactivated user tries to re-register with the same email:
 
-> Supported in PostgreSQL. MySQL does not support partial indexes (requires a workaround with an extra column).
+- **With only a UNIQUE constraint**: The deactivated row with `email = 'user@example.com'` still exists in the table, so inserting a new row with the same email triggers a duplicate error (`duplicate key value violates unique constraint`). To work around this, you'd need to mangle the email on deactivation (e.g., `user@example.com_deleted_1712345678`) — but this corrupts the original data.
+- **With a partial unique index**: Thanks to the `WHERE deleted_at IS NULL` condition, deactivated rows (`deleted_at IS NOT NULL`) are completely excluded from the uniqueness check. So a new row with the same email inserts successfully as long as there's no duplicate among active rows. No need to mangle email values, so data integrity is preserved.
 
-#### Semantic Difference
+> Partial indexes are supported in **PostgreSQL**. MySQL does not support them, so to achieve a similar effect you'd need workarounds like adding an `is_active` column and creating a composite unique on `(email, is_active)`.
 
-A CONSTRAINT declares "this column must not have duplicates as a **business rule**." An INDEX says "speed up lookups on this column as a **performance optimization**." When teammates read the schema, a CONSTRAINT immediately signals a business requirement.
+#### Semantic Difference — What the Schema Communicates
+
+Functionally, both guarantee uniqueness. But they communicate different **intent** to anyone reading the schema:
+
+- **CONSTRAINT**: Declares "this column's values must never be duplicated — it's a **business rule**." Appropriate for things like emails, order numbers, or tax IDs where the domain itself demands uniqueness. Another developer looking at the schema immediately understands "this is a business requirement."
+- **INDEX**: Reads as "I'm indexing this column to **optimize query performance**." When someone sees a unique index, it's not immediately clear whether it exists for a business rule or purely for performance.
+
+This distinction matters most six months later when a new team member reads the schema for the first time, or during code review. With a constraint, the question "can we drop this uniqueness?" is answered directly by the schema: "it's a business rule, so no." With only an index, making that judgment requires digging into documentation or commit history.
 
 #### Practical Decision Guide
 
-| Scenario | Choice |
-|----------|--------|
-| Business uniqueness (email, SSN, etc.) | `UNIQUE CONSTRAINT` |
-| Column will be referenced by FK | `UNIQUE CONSTRAINT` |
-| Soft delete + conditional uniqueness | `UNIQUE INDEX + WHERE` |
-| Uniqueness with included columns | `UNIQUE INDEX` (with INCLUDE clause) |
+| Scenario | Choice | Reason |
+|----------|--------|--------|
+| Business uniqueness (email, SSN, etc.) | `UNIQUE CONSTRAINT` | Explicitly marks a business rule in the schema |
+| Column will be referenced by FK | `UNIQUE CONSTRAINT` | Ensures DB portability (Oracle, etc.) |
+| Soft delete + conditional uniqueness | `UNIQUE INDEX + WHERE` | Constraints cannot have WHERE conditions |
+| Uniqueness with included columns | `UNIQUE INDEX` (with INCLUDE) | INCLUDE is an index-only feature |
 
 **Practical rule**: If it's a business rule, use a constraint (`CONSTRAINT`). For conditional uniqueness or performance, use an index.
 

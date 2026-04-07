@@ -219,42 +219,53 @@ CREATE UNIQUE INDEX idx_users_email ON users (email);
 
 #### FK 참조 가능 여부 — DB별 차이
 
-SQL 표준상 FK가 참조할 수 있는 대상은 PRIMARY KEY 또는 UNIQUE 제약조건이다. 하지만 실제 동작은 DB마다 다르다:
+SQL 표준에서는 FK가 참조할 수 있는 대상을 PRIMARY KEY 또는 UNIQUE **제약조건**으로 명시하고 있다. 즉, 표준만 놓고 보면 UNIQUE 인덱스는 FK의 참조 대상이 아니다. 하지만 현실의 DB 엔진들은 이 규칙을 각자 다르게 해석한다:
 
-- **PostgreSQL / MySQL / SQL Server**: 유니크 인덱스만 있어도 FK 참조 허용 (관대함)
-- **Oracle**: UNIQUE 제약조건이 있어야 FK 참조 가능 (엄격함)
+- **PostgreSQL / MySQL / SQL Server**: 유니크 인덱스만 존재해도 FK 참조를 허용한다. 이 DB들은 "유니크함이 보장되면 충분하다"는 입장이기 때문에, 제약조건이든 인덱스든 내부적으로 유니크 인덱스가 있으면 FK 생성이 가능하다.
+- **Oracle**: 반드시 UNIQUE **제약조건**이 선언되어 있어야 FK 참조가 가능하다. 유니크 인덱스만 있으면 `ORA-02270: no matching unique or primary key for this column-list` 에러가 발생한다.
 
-FK로 참조될 컬럼이라면 이식성을 위해 `CONSTRAINT`로 선언하는 게 안전하다.
+결론적으로, 특정 컬럼이 다른 테이블의 FK로 참조될 가능성이 있다면, DB 이식성과 명확성을 위해 유니크 인덱스가 아닌 `CONSTRAINT`로 선언하는 것이 안전하다. 나중에 DB를 마이그레이션하거나 멀티 DB를 지원할 때 예상치 못한 에러를 방지할 수 있다.
 
 #### 부분(Partial) 유니크 — 실무에서 가장 큰 차이
 
+UNIQUE 제약조건은 테이블 전체 행을 대상으로 유니크를 검증한다. 조건을 붙여서 "특정 행만 유니크하게" 만들 수 없다. 반면 UNIQUE 인덱스는 `WHERE` 절을 붙여서 **부분 유니크(Partial Unique)**를 구현할 수 있다. 이 차이가 실무에서 가장 크게 체감되는 부분이다.
+
 ```sql
--- UNIQUE 제약조건: 조건을 붙일 수 없다
+-- UNIQUE 제약조건: 테이블의 모든 행에 대해 유니크를 강제한다
+-- 조건을 붙일 수 없으므로, 삭제된 행도 유니크 검사 대상이 된다
 ALTER TABLE users ADD CONSTRAINT uq_email UNIQUE (email);
 
--- UNIQUE 인덱스 + WHERE: 조건부 유니크 가능 (PostgreSQL)
+-- UNIQUE 인덱스 + WHERE: 특정 조건을 만족하는 행만 유니크를 검사한다 (PostgreSQL)
+-- deleted_at이 NULL인 (= 활성 상태인) 행만 유니크 대상이 된다
 CREATE UNIQUE INDEX idx_users_active_email
     ON users (email)
     WHERE deleted_at IS NULL;
--- soft delete된 행은 유니크 체크에서 제외!
 ```
 
-대표적인 사례가 **Soft Delete 패턴**이다. 탈퇴한 사용자와 같은 이메일로 재가입할 때, UNIQUE 제약조건이면 탈퇴한 행 때문에 중복 에러가 발생한다. 부분 유니크 인덱스를 쓰면 `deleted_at IS NULL`인 행만 체크하므로 재가입이 가능하다.
+대표적인 사례가 **Soft Delete 패턴**이다. 많은 서비스에서 사용자 탈퇴 시 행을 물리적으로 삭제하지 않고 `deleted_at` 타임스탬프를 기록하는 방식을 쓴다. 이때 탈퇴한 사용자와 같은 이메일로 재가입하려는 상황을 생각해 보자:
 
-> PostgreSQL에서 지원하며, MySQL은 부분 인덱스를 지원하지 않는다 (별도 컬럼 트릭이 필요).
+- **UNIQUE 제약조건만 있는 경우**: 탈퇴한 행의 `email = 'user@example.com'`이 여전히 테이블에 남아 있으므로, 같은 이메일로 INSERT 시 중복 에러(`duplicate key value violates unique constraint`)가 발생한다. 이를 피하려면 탈퇴 시 이메일을 `user@example.com_deleted_1712345678` 같은 형태로 변조하는 우회 로직이 필요한데, 이는 데이터의 원래 값을 훼손시킨다.
+- **부분 유니크 인덱스를 쓰는 경우**: `WHERE deleted_at IS NULL` 조건 덕분에 탈퇴한 행(`deleted_at IS NOT NULL`)은 유니크 검사에서 완전히 제외된다. 따라서 같은 이메일로 새 행을 INSERT해도 활성 행 중에 중복이 없으면 정상적으로 들어간다. 이메일 값을 변조할 필요가 없으므로 데이터 무결성도 유지된다.
 
-#### 의미론적 차이
+> 부분 인덱스는 **PostgreSQL**에서 지원한다. MySQL은 부분 인덱스를 지원하지 않으므로, 유사한 효과를 내려면 `deleted_at` 대신 `is_active` 같은 컬럼을 만들고 `(email, is_active)` 복합 유니크를 거는 등의 별도 트릭이 필요하다.
 
-CONSTRAINT는 "이 컬럼은 비즈니스적으로 중복되면 안 된다"는 **규칙 선언**이고, INDEX는 "이 컬럼의 조회를 빠르게 하겠다"는 **성능 최적화**다. 스키마를 읽는 팀원 입장에서 CONSTRAINT로 선언되어 있으면 비즈니스 요구사항임을 바로 알 수 있다.
+#### 의미론적 차이 — 스키마가 전달하는 의도
+
+기능적으로는 둘 다 유니크를 보장하지만, 스키마를 읽는 사람에게 전달하는 **의도**가 다르다.
+
+- **CONSTRAINT**: "이 컬럼의 값은 비즈니스적으로 절대 중복되어서는 안 된다"는 **규칙 선언**이다. 이메일, 주문번호, 사업자등록번호처럼 도메인 규칙 자체가 유니크를 요구하는 경우에 적합하다. 다른 개발자가 스키마를 보면 "아, 이건 비즈니스 요구사항이구나"라고 즉시 파악할 수 있다.
+- **INDEX**: "이 컬럼에 인덱스를 걸어서 조회 성능을 높이겠다"는 **성능 최적화**로 읽힌다. 유니크 인덱스를 봤을 때 그것이 비즈니스 규칙인지 성능 목적인지 한눈에 구분하기 어렵다.
+
+이 차이는 6개월 뒤 스키마를 처음 보는 팀원, 혹은 코드 리뷰 시에 의미가 커진다. 제약조건으로 선언해 두면 "이 유니크를 제거해도 되나?"라는 질문에 "비즈니스 규칙이니 안 된다"는 답이 스키마에서 바로 나온다. 인덱스로만 되어 있으면 그 판단을 내리기 위해 별도의 문서나 히스토리를 찾아봐야 한다.
 
 #### 실무 판단 기준
 
-| 상황 | 선택 |
-|------|------|
-| 이메일, 주민번호 등 비즈니스 유니크 | `UNIQUE CONSTRAINT` |
-| FK로 참조될 예정 | `UNIQUE CONSTRAINT` |
-| Soft Delete + 조건부 유니크 | `UNIQUE INDEX + WHERE` |
-| 유니크하면서 특정 포함 컬럼 필요 | `UNIQUE INDEX` (INCLUDE 절 활용) |
+| 상황 | 선택 | 이유 |
+|------|------|------|
+| 이메일, 주민번호 등 비즈니스 유니크 | `UNIQUE CONSTRAINT` | 비즈니스 규칙임을 스키마에서 명시 |
+| FK로 참조될 예정인 컬럼 | `UNIQUE CONSTRAINT` | DB 이식성 보장 (Oracle 등) |
+| Soft Delete + 조건부 유니크 | `UNIQUE INDEX + WHERE` | 제약조건은 WHERE 조건 불가 |
+| 유니크하면서 특정 포함 컬럼 필요 | `UNIQUE INDEX` (INCLUDE 절) | INCLUDE는 인덱스 전용 기능 |
 
 **실무 규칙**: 비즈니스 규칙이면 제약조건(`CONSTRAINT`)으로, 조건부 유니크나 성능 목적이면 인덱스로.
 
