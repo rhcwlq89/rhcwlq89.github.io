@@ -21,11 +21,11 @@ The textbook order schema usually looks like this:
 orders ──1:N──→ order_items
 ```
 
-But in real e-commerce (Coupang, Naver, Amazon), this structure falls short badly. A single order splits into multiple deliveries, parts of it get cancelled or refunded, and the payment itself breaks down into card + points + coupon. How to express all of that in the schema is the subject of this post.
+This is fine for a simple shop. But once you need multiple deliveries within one order, partial cancellations and refunds, or split payments (card + points + coupon), this structure starts feeling cramped. Companies extend it in different ways depending on their scale and fulfillment complexity. This post maps out those options and then picks one (a 3-level structure with a delivery group layer) to design the order domain in depth.
 
 What we'll cover:
 
-1. **3-level hierarchy** — `orders → order_deliveries → order_items` and why delivery needs its own level
+1. **Order structure options** — 2-level, 3-level, sibling — when to use which, and the terminology mess around "order detail"
 2. **State machines** — separating order / delivery / item level states
 3. **Payment idempotency and split payments** — card + points + coupon in one order
 4. **Cancellations and refunds** — cancellation actors, audit trails, item-level refunds
@@ -35,9 +35,9 @@ Permission systems (RBAC) and the FCFS inventory schema retrospective will be co
 
 ---
 
-## 1. Why a 3-Level Hierarchy?
+## 1. How to Structure the Order Aggregate
 
-### 1.1 The Limits of the Textbook Structure
+### 1.1 Where 2 Levels Run Out
 
 The most common order schema is two levels:
 
@@ -46,7 +46,7 @@ orders (the whole order)
   └── order_items (line items)
 ```
 
-This structure cannot express the following situations:
+A small shop can run on this forever — single seller, simple fulfillment, no need to split anything. But once the following situations appear, two levels start falling short:
 
 - **Partial shipment**: item A ships today, item B ships tomorrow within the same order
 - **Split delivery within the same seller**: cold-chain vs ambient, domestic vs international
@@ -55,15 +55,72 @@ This structure cannot express the following situations:
 
 None of this fits into a single `status` column on orders. Forcing it either explodes the state enum (`PARTIALLY_SHIPPED_1_OF_3`) or makes the status drift out of sync with the actual data.
 
-### 1.2 The 3-Level Structure
+### 1.2 The Three Real-World Options
 
-What's used in practice:
+There isn't a single "correct" alternative. In practice there are three approaches.
+
+**A. 2 levels + external identifiers (Naver Pay / Smart Store style)**
 
 ```
-orders            ─── one order (payment unit)
-  └─ order_deliveries  ─── delivery group (physical box unit)
-       └─ order_items    ─── line items (products)
+orders ──1:N──→ order_items
+                (each item has its own externally exposed ID, separate from the order number)
 ```
+
+The table structure is still 2 levels, but each item gets its **own externally exposed identifier** so customer support, returns, and settlement can operate per-item. The structure stays simple while operations become item-granular. **Limitation**: it's awkward to store delivery-level info (tracking number, delivery status) — you either duplicate it on each item or add a parallel `shipments` table.
+
+**B. 3 levels — an intermediate grouping layer (this post's choice)**
+
+```
+orders ──1:N──→ order_groups ──1:N──→ order_items
+                (per-seller or per-delivery grouping)
+```
+
+Common in marketplaces like Coupang or similar sites. The meaning of the middle layer differs: it can be **"seller group"** (marketplace) or **"delivery group"** (single seller splitting cold-chain vs ambient). This post assumes a single-seller shop, so the middle layer is a **"delivery group"** and we call it `order_deliveries`.
+
+**C. Sibling aggregates + junction (Amazon / large fulfillment style)**
+
+```
+orders ──1:N──→ order_items              ← purchase contract (fixed at checkout)
+       └─1:N──→ shipments ──1:N──→ shipment_items ──N:1─→ order_items
+                                          ← fulfillment (created later by the warehouse)
+```
+
+Orders (purchase contract) and shipments (fulfillment) are separate aggregates. This naturally supports **split shipments** (one line shipped across multiple deliveries), deferred delivery planning (the warehouse decides how to pack later), and warehouse reassignment. **Limitation**: more tables, heavier invariants, and unavoidable discussion of DDD aggregate boundaries.
+
+### 1.3 When to Use Which
+
+| Company type | Recommended structure |
+|--------------|----------------------|
+| Small shop (single seller, simple fulfillment) | A — 2 levels |
+| Mid-size single-seller shop (split delivery, partial cancel/refund) | B — 3 levels |
+| Marketplace (must group by seller) | B — 3 levels (middle layer = seller group) |
+| Large fulfillment (multi-warehouse, split shipments) | C — sibling + junction |
+| Traditional SI / ERP (finance, B2B back office) | A or a C-variant |
+
+You cannot claim "most companies use structure X." It depends on scale and fulfillment complexity. Using C for a small shop is over-engineering; using A for a large marketplace is underbuilt.
+
+### 1.4 A Note on the "Order Detail" Terminology
+
+In Korean e-commerce practice, **"order detail" (주문상세)** means different things in different companies, so it's worth being careful when reading references:
+
+| Context | What "order detail" means | Actual structure |
+|---------|---------------------------|-------------------|
+| Traditional SI / ERP (SAP, etc.) | The DTL in `ORDER_MST + ORDER_DTL` — literally order_items | 2 levels (A) |
+| Naver Smart Store | Per-item external identifier ("product order number") | 2 levels + external ID (A) |
+| Coupang / 11st | Per-delivery or per-product grouping | Effectively 3 levels (B) |
+| B2B enterprise | Billing / contract header information | Sibling (variant of C) |
+
+A phrase like "order → order detail → order item" usually refers to B's 3-level grouping, while "order → order detail" alone is often A's MST-DTL naming convention. Western systems usually avoid the ambiguity by calling the middle layer "shipment", "fulfillment", or "package group".
+
+### 1.5 The Structure This Post Uses
+
+This post uses **B (3 levels)**. Reasons:
+
+1. Single-seller shops with split deliveries are the most common shape in mid-size e-commerce
+2. It expresses partial shipment, cancellation, and refund more naturally than 2 levels
+3. Going all the way to C (sibling + junction) forces a discussion of aggregate boundaries that would take this post outside the RDB series' scope
+
+If another pattern fits your situation better, adapt the design below. The middle layer's name also varies with context — `order_groups`, `order_shipments`, `order_details` are all reasonable depending on what the layer represents. This post focuses on **delivery splitting**, so the middle layer is named `order_deliveries`.
 
 Responsibilities:
 
@@ -73,9 +130,9 @@ Responsibilities:
 | **order_deliveries** | Delivery group, tracking number, delivery status, ship/deliver timestamps |
 | **order_items** | Line items, product/price/option snapshots, quantity, item status |
 
-This mirrors the reality: "one payment, multiple shipments, multiple items per shipment."
+The underlying assumption: "one payment, multiple shipments, multiple items per shipment."
 
-### 1.3 Overall ERD
+### 1.6 Overall ERD
 
 ```
 users
@@ -128,7 +185,8 @@ CREATE TABLE orders (
     CONSTRAINT uq_orders_order_number UNIQUE (order_number),
     CONSTRAINT chk_orders_status CHECK (
         status IN ('PENDING', 'PAID',
-                   'PARTIALLY_SHIPPED', 'SHIPPED', 'DELIVERED', 'COMPLETED',
+                   'PARTIALLY_SHIPPED', 'SHIPPED',
+                   'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED',
                    'PARTIALLY_CANCELLED', 'CANCELLED',
                    'PARTIALLY_REFUNDED', 'REFUNDED')
     ),
@@ -182,9 +240,7 @@ PENDING → PAID → SHIPPED → DELIVERED → COMPLETED
 3-level hierarchy status is richer:
 
 ```
-PENDING ──→ PAID ──┬──→ SHIPPED ──→ DELIVERED ──→ COMPLETED
-                   │
-                   └──→ PARTIALLY_SHIPPED ──→ SHIPPED ──→ ...
+PENDING ──→ PAID ──→ (PARTIALLY_)SHIPPED ──→ (PARTIALLY_)DELIVERED ──→ COMPLETED
 
 (at any stage)
   ──→ PARTIALLY_CANCELLED / CANCELLED
@@ -193,10 +249,16 @@ PENDING ──→ PAID ──┬──→ SHIPPED ──→ DELIVERED ──→ 
 
 Order status is fundamentally **an aggregate of delivery statuses**:
 
-- All deliveries `READY` → order is `PAID`
-- Some deliveries `SHIPPED` → order is `PARTIALLY_SHIPPED`
-- All deliveries `SHIPPED` → order is `SHIPPED`
-- All deliveries `DELIVERED` → order is `DELIVERED`
+| Delivery-level combination | Order-level status |
+|----------------------------|--------------------|
+| All deliveries `READY` | `PAID` |
+| Some `SHIPPED`, rest `READY` | `PARTIALLY_SHIPPED` |
+| All deliveries at `SHIPPED` or later (none `DELIVERED` yet) | `SHIPPED` |
+| Some `DELIVERED`, the rest still in transit | `PARTIALLY_DELIVERED` |
+| All deliveries `DELIVERED` | `DELIVERED` |
+| Customer confirmed the purchase | `COMPLETED` |
+
+Why `PARTIALLY_DELIVERED` is necessary: "one delivery arrived yesterday, the other arrives tomorrow" is an extremely common situation. If you collapse this into `SHIPPED`, you can't show "partially delivered" in the customer UI, and the status of an already-received item can't be distinguished from one that's still in transit when handling returns.
 
 This aggregation is **computed at application level**, or the order status is **synced whenever a delivery status changes**. CHECK constraints only enforce the allowed set of values — they can't enforce the aggregate consistency. That's an application-layer (or trigger) concern.
 
@@ -727,7 +789,7 @@ If any one of these applies, **item-level refunds are effectively mandatory**. U
 
 | Principle | Where |
 |-----------|-------|
-| **3-level hierarchy** | orders → order_deliveries → order_items |
+| **Structure choice** | Pick 2-level / 3-level / sibling based on context. This post uses 3 levels (orders → order_deliveries → order_items) |
 | **Address snapshot** | orders copies recipient/address (not an FK to user_addresses) |
 | **Product/option snapshot** | order_items copies product_name / unit_price / product_option |
 | **Idempotency** | payments.idempotency_key UNIQUE |
@@ -787,7 +849,8 @@ Use this when reviewing migration files in a PR.
 
 ### 10.5 Relationships ([Part 4](/blog/en/rdb-relationship-patterns-guide))
 
-- [ ] Is a 2-level structure sufficient, or is an intermediate level (delivery etc.) needed?
+- [ ] Is the chosen order structure (2-level / 3-level / sibling) justified?
+- [ ] Are the boundaries between order (purchase contract) and fulfillment (delivery) clear?
 - [ ] 1:N chain tables have indexes in both directions?
 - [ ] Polymorphic associations justified?
 
