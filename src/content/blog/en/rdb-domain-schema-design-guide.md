@@ -156,30 +156,30 @@ Let's design each table.
 
 ```sql
 CREATE TABLE orders (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id             BIGINT NOT NULL,
-    order_number        VARCHAR(30) NOT NULL,           -- externally exposed identifier
-    status              VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    id                      BIGINT AUTO_INCREMENT PRIMARY KEY,            -- internal PK (never exposed)
+    user_id                 BIGINT NOT NULL,                              -- the customer (users FK)
+    order_number            VARCHAR(30) NOT NULL,                         -- externally exposed identifier (e.g., ORD-20260408-00001)
+    status                  VARCHAR(20) NOT NULL DEFAULT 'PENDING',       -- order-level status (aggregated from delivery statuses)
 
     -- Amounts (all tax-included)
-    items_amount        DECIMAL(12, 2) NOT NULL,        -- sum of line items
-    shipping_fee        DECIMAL(8, 2)  NOT NULL DEFAULT 0,
-    discount_amount     DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    total_amount        DECIMAL(12, 2) NOT NULL,        -- final amount paid
+    items_amount            DECIMAL(12, 2) NOT NULL,                      -- sum of line items before discount
+    shipping_fee            DECIMAL(8, 2)  NOT NULL DEFAULT 0,            -- shipping cost
+    discount_amount         DECIMAL(10, 2) NOT NULL DEFAULT 0,            -- total of coupons/discounts
+    total_amount            DECIMAL(12, 2) NOT NULL,                      -- final amount paid (items - discount + shipping)
 
     -- Shipping address snapshot (frozen at order time)
-    recipient_name      VARCHAR(100) NOT NULL,
-    recipient_phone     VARCHAR(20)  NOT NULL,
-    shipping_zipcode        VARCHAR(10)  NOT NULL,
-    shipping_address        VARCHAR(200) NOT NULL,   -- main address (street/road)
-    shipping_address_detail VARCHAR(200),            -- detail (unit number, floor, etc.)
-    shipping_memo           VARCHAR(500),            -- delivery instructions
+    recipient_name          VARCHAR(100) NOT NULL,                        -- recipient name
+    recipient_phone         VARCHAR(20)  NOT NULL,                        -- recipient phone
+    shipping_zipcode        VARCHAR(10)  NOT NULL,                        -- postal code
+    shipping_address        VARCHAR(200) NOT NULL,                        -- main address (street/road)
+    shipping_address_detail VARCHAR(200),                                 -- detail (unit number, floor, etc.)
+    shipping_memo           VARCHAR(500),                                 -- delivery instructions
 
     -- Status timestamps (denormalized for frequent reads)
-    ordered_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    paid_at             TIMESTAMP,
-    completed_at        TIMESTAMP,
-    cancelled_at        TIMESTAMP,
+    ordered_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- order creation time
+    paid_at                 TIMESTAMP,                                    -- payment confirmation time
+    completed_at            TIMESTAMP,                                    -- purchase confirmation time
+    cancelled_at            TIMESTAMP,                                    -- cancellation time (whole-order cancel)
 
     CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT uq_orders_order_number UNIQUE (order_number),
@@ -282,20 +282,20 @@ This is the most important new concept in this post.
 
 ```sql
 CREATE TABLE order_deliveries (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    delivery_number     VARCHAR(30) NOT NULL,           -- external identifier (e.g., ORD-20260408-00001-D1)
-    sequence            SMALLINT    NOT NULL,           -- delivery order within the parent order
-    status              VARCHAR(20) NOT NULL DEFAULT 'READY',
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- internal PK
+    order_id            BIGINT      NOT NULL,                           -- parent order (orders FK)
+    delivery_number     VARCHAR(30) NOT NULL,                           -- external identifier (e.g., ORD-20260408-00001-D1)
+    sequence            SMALLINT    NOT NULL,                           -- delivery order within the parent order
+    status              VARCHAR(20) NOT NULL DEFAULT 'READY',           -- delivery status (READY → SHIPPED → DELIVERED)
 
-    -- Shipping metadata
-    carrier             VARCHAR(50),                    -- CJ, DHL, USPS, ...
-    tracking_number     VARCHAR(50),
+    -- Shipping metadata (NULL until shipment)
+    carrier             VARCHAR(50),                                    -- carrier name
+    tracking_number     VARCHAR(50),                                    -- tracking number
 
     -- Delivery-level timestamps
-    ready_at            TIMESTAMP,
-    shipped_at          TIMESTAMP,
-    delivered_at        TIMESTAMP,
+    ready_at            TIMESTAMP,                                      -- ready-to-ship time
+    shipped_at          TIMESTAMP,                                      -- handed to the carrier
+    delivered_at        TIMESTAMP,                                      -- received by the customer
 
     CONSTRAINT fk_deliveries_order
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
@@ -354,22 +354,22 @@ You could identify deliveries by `(order_number, sequence)`, but a single-column
 
 ```sql
 CREATE TABLE order_items (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT NOT NULL,                -- denormalized for direct lookup
-    order_delivery_id   BIGINT NOT NULL,
-    product_id          BIGINT NOT NULL,
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- internal PK
+    order_id            BIGINT NOT NULL,                                -- parent order (denormalized for direct lookup)
+    order_delivery_id   BIGINT NOT NULL,                                -- owning delivery group
+    product_id          BIGINT NOT NULL,                                -- product reference (products FK)
 
-    -- Snapshot at order time
-    product_name        VARCHAR(200)  NOT NULL,
-    product_option      VARCHAR(200),                   -- "color: black, size: M"
-    unit_price          DECIMAL(10, 2) NOT NULL,
-    quantity            INT            NOT NULL,
-    subtotal            DECIMAL(12, 2) NOT NULL,        -- unit_price * quantity
+    -- Snapshot at order time (frozen even if products changes later)
+    product_name        VARCHAR(200)  NOT NULL,                         -- product name snapshot
+    product_option      VARCHAR(200),                                   -- selected options (e.g., "color: black, size: M")
+    unit_price          DECIMAL(10, 2) NOT NULL,                        -- price per unit at order time
+    quantity            INT            NOT NULL,                        -- quantity ordered
+    subtotal            DECIMAL(12, 2) NOT NULL,                        -- subtotal (unit_price * quantity)
 
-    -- Item-level status and aggregates
-    status              VARCHAR(20) NOT NULL DEFAULT 'ORDERED',
-    cancelled_quantity  INT NOT NULL DEFAULT 0,
-    refunded_quantity   INT NOT NULL DEFAULT 0,
+    -- Item-level status and cancel/refund aggregates (denormalized)
+    status              VARCHAR(20) NOT NULL DEFAULT 'ORDERED',         -- item status (reflects cancel/refund)
+    cancelled_quantity  INT NOT NULL DEFAULT 0,                         -- cumulative cancelled quantity (pre-shipment)
+    refunded_quantity   INT NOT NULL DEFAULT 0,                         -- cumulative refunded quantity (post-shipment returns)
 
     CONSTRAINT fk_items_order
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
@@ -460,23 +460,23 @@ A payment must happen **exactly once**. Network retries, double-clicks on the pa
 
 ```sql
 CREATE TABLE payments (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    idempotency_key     VARCHAR(64) NOT NULL,
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- internal PK
+    order_id            BIGINT      NOT NULL,                           -- parent order
+    idempotency_key     VARCHAR(64) NOT NULL,                           -- idempotency key (prevents double charges)
 
-    payment_method      VARCHAR(20)    NOT NULL,        -- CARD, POINT, COUPON, KAKAO_PAY, ...
-    amount              DECIMAL(12, 2) NOT NULL,
-    status              VARCHAR(20)    NOT NULL DEFAULT 'PENDING',
+    payment_method      VARCHAR(20)    NOT NULL,                        -- payment method (CARD, POINT, COUPON, etc.)
+    amount              DECIMAL(12, 2) NOT NULL,                        -- amount for this payment row
+    status              VARCHAR(20)    NOT NULL DEFAULT 'PENDING',      -- payment status (PENDING → CONFIRMED / FAILED)
 
-    -- PSP details (NULL for POINT/COUPON)
-    pg_provider         VARCHAR(30),
-    pg_transaction_id   VARCHAR(100),
-    pg_response         JSON,
+    -- PSP details (NULL for internal assets like POINT/COUPON)
+    pg_provider         VARCHAR(30),                                    -- PSP identifier
+    pg_transaction_id   VARCHAR(100),                                   -- PSP transaction id
+    pg_response         JSON,                                           -- raw PSP response (for debugging/audit)
 
-    attempted_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    confirmed_at        TIMESTAMP,
-    failed_at           TIMESTAMP,
-    failure_reason      VARCHAR(500),
+    attempted_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,   -- payment attempt time
+    confirmed_at        TIMESTAMP,                                      -- authorization time
+    failed_at           TIMESTAMP,                                      -- failure time
+    failure_reason      VARCHAR(500),                                   -- failure reason (keep for CS, do not delete)
 
     CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT uq_payments_idempotency UNIQUE (idempotency_key),
@@ -554,14 +554,14 @@ Order-level, delivery-level, item-level status — where do we log history?
 
 ```sql
 CREATE TABLE order_status_histories (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    entity_type     VARCHAR(20) NOT NULL,           -- 'ORDER' or 'DELIVERY'
-    entity_id       BIGINT      NOT NULL,
-    from_status     VARCHAR(20),                    -- NULL for initial creation
-    to_status       VARCHAR(20) NOT NULL,
-    changed_by      VARCHAR(100) NOT NULL,          -- 'SYSTEM', 'ADMIN:kim', 'USER:123', 'WEBHOOK:CJ'
-    reason          VARCHAR(500),
-    changed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,                  -- internal PK
+    entity_type     VARCHAR(20) NOT NULL,                               -- target type ('ORDER' or 'DELIVERY')
+    entity_id       BIGINT      NOT NULL,                               -- target id (orders.id or order_deliveries.id, depending on type)
+    from_status     VARCHAR(20),                                        -- previous status (NULL for initial creation)
+    to_status       VARCHAR(20) NOT NULL,                               -- new status
+    changed_by      VARCHAR(100) NOT NULL,                              -- actor (e.g., 'SYSTEM', 'ADMIN:kim', 'USER:123', 'WEBHOOK:...')
+    reason          VARCHAR(500),                                       -- optional free-form reason
+    changed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,       -- change time
 
     CONSTRAINT chk_order_history_entity_type CHECK (
         entity_type IN ('ORDER', 'DELIVERY')
@@ -606,20 +606,20 @@ You could squeeze cancellation into `order_status_histories`, but it deserves it
 
 ```sql
 CREATE TABLE order_cancellations (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    order_delivery_id   BIGINT,                         -- NULL = whole order cancelled
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- internal PK
+    order_id            BIGINT      NOT NULL,                           -- parent order
+    order_delivery_id   BIGINT,                                         -- set for delivery-level cancel, NULL for whole-order
 
     -- Who and why
-    cancelled_by_type   VARCHAR(20) NOT NULL,           -- CUSTOMER, SELLER, ADMIN, SYSTEM
-    cancelled_by_id     VARCHAR(100),                   -- user_id/admin_id, NULL if SYSTEM
-    reason_code         VARCHAR(50) NOT NULL,           -- 'CUSTOMER_CHANGED_MIND', 'OUT_OF_STOCK', ...
-    reason_detail       VARCHAR(1000),
+    cancelled_by_type   VARCHAR(20) NOT NULL,                           -- actor type (CUSTOMER, SELLER, ADMIN, SYSTEM)
+    cancelled_by_id     VARCHAR(100),                                   -- actor id (user_id/admin_id; NULL for SYSTEM)
+    reason_code         VARCHAR(50) NOT NULL,                           -- cancel reason code (enum, for aggregation)
+    reason_detail       VARCHAR(1000),                                  -- free-form detail (for CS)
 
     -- Link to refund (when cancellation triggers an immediate refund)
-    refund_id           BIGINT,
+    refund_id           BIGINT,                                         -- linked refund (NULL if none)
 
-    cancelled_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cancelled_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,   -- cancellation time
 
     CONSTRAINT fk_cancellations_order
         FOREIGN KEY (order_id) REFERENCES orders(id),
@@ -674,15 +674,15 @@ To express all four cleanly, refunds also decompose into three tables.
 ```sql
 -- Refund request (one refund operation)
 CREATE TABLE refunds (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    refund_number       VARCHAR(30) NOT NULL,           -- external identifier
-    amount              DECIMAL(12, 2) NOT NULL,        -- sum over refund_items
-    status              VARCHAR(20)    NOT NULL DEFAULT 'REQUESTED',
-    reason_code         VARCHAR(50)    NOT NULL,
-    reason_detail       VARCHAR(1000),
-    requested_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    processed_at        TIMESTAMP,
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- internal PK
+    order_id            BIGINT      NOT NULL,                           -- parent order
+    refund_number       VARCHAR(30) NOT NULL,                           -- external identifier (e.g., REF-20260408-00001)
+    amount              DECIMAL(12, 2) NOT NULL,                        -- total for this refund (must match sum of refund_items)
+    status              VARCHAR(20)    NOT NULL DEFAULT 'REQUESTED',    -- refund status (REQUESTED → APPROVED → COMPLETED)
+    reason_code         VARCHAR(50)    NOT NULL,                        -- refund reason code (enum)
+    reason_detail       VARCHAR(1000),                                  -- free-form reason detail
+    requested_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP, -- refund request time
+    processed_at        TIMESTAMP,                                      -- refund completion time
 
     CONSTRAINT fk_refunds_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT uq_refunds_refund_number UNIQUE (refund_number),
@@ -694,11 +694,11 @@ CREATE TABLE refunds (
 
 -- Refund items (which line items, how many)
 CREATE TABLE refund_items (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    refund_id       BIGINT NOT NULL,
-    order_item_id   BIGINT NOT NULL,
-    quantity        INT            NOT NULL,
-    amount          DECIMAL(12, 2) NOT NULL,
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,                  -- internal PK
+    refund_id       BIGINT NOT NULL,                                    -- parent refund
+    order_item_id   BIGINT NOT NULL,                                    -- the order item being refunded
+    quantity        INT            NOT NULL,                            -- units refunded in this refund
+    amount          DECIMAL(12, 2) NOT NULL,                            -- refund amount for this item
 
     CONSTRAINT fk_refund_items_refund
         FOREIGN KEY (refund_id) REFERENCES refunds(id) ON DELETE CASCADE,
@@ -710,12 +710,12 @@ CREATE TABLE refund_items (
 
 -- Refund payment distribution (for split payments)
 CREATE TABLE refund_payments (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    refund_id       BIGINT NOT NULL,
-    payment_id      BIGINT NOT NULL,                    -- the original payment
-    amount          DECIMAL(12, 2) NOT NULL,
-    pg_refund_id    VARCHAR(100),                       -- PSP refund id
-    status          VARCHAR(20)    NOT NULL DEFAULT 'PENDING',
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,                  -- internal PK
+    refund_id       BIGINT NOT NULL,                                    -- parent refund
+    payment_id      BIGINT NOT NULL,                                    -- original payment to refund back to
+    amount          DECIMAL(12, 2) NOT NULL,                            -- amount returned to this payment method
+    pg_refund_id    VARCHAR(100),                                       -- PSP refund id (NULL for internal assets)
+    status          VARCHAR(20)    NOT NULL DEFAULT 'PENDING',          -- PSP refund-call status (PENDING → COMPLETED / FAILED)
 
     CONSTRAINT fk_refund_payments_refund
         FOREIGN KEY (refund_id) REFERENCES refunds(id) ON DELETE CASCADE,

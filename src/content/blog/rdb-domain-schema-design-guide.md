@@ -161,30 +161,30 @@ users
 
 ```sql
 CREATE TABLE orders (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id             BIGINT NOT NULL,
-    order_number        VARCHAR(30) NOT NULL,           -- 외부 노출용 주문번호
-    status              VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    id                      BIGINT AUTO_INCREMENT PRIMARY KEY,            -- 내부 PK (외부 노출 금지)
+    user_id                 BIGINT NOT NULL,                              -- 주문자 (users FK)
+    order_number            VARCHAR(30) NOT NULL,                         -- 외부 노출용 주문번호 (예: ORD-20260408-00001)
+    status                  VARCHAR(20) NOT NULL DEFAULT 'PENDING',       -- 주문 전체 상태 (배송 상태의 집계)
 
     -- 금액 (모두 원화 기준, 부가세 포함)
-    items_amount        DECIMAL(12, 2) NOT NULL,        -- 상품 금액 합
-    shipping_fee        DECIMAL(8, 2)  NOT NULL DEFAULT 0,
-    discount_amount     DECIMAL(10, 2) NOT NULL DEFAULT 0,
-    total_amount        DECIMAL(12, 2) NOT NULL,        -- 최종 결제 금액
+    items_amount            DECIMAL(12, 2) NOT NULL,                      -- 상품 금액 합계 (할인 전)
+    shipping_fee            DECIMAL(8, 2)  NOT NULL DEFAULT 0,            -- 배송비
+    discount_amount         DECIMAL(10, 2) NOT NULL DEFAULT 0,            -- 쿠폰/할인 합계
+    total_amount            DECIMAL(12, 2) NOT NULL,                      -- 최종 결제 금액 (items - discount + shipping)
 
     -- 배송지 스냅샷 (주문 시점의 값으로 고정)
-    recipient_name      VARCHAR(100) NOT NULL,
-    recipient_phone     VARCHAR(20)  NOT NULL,
-    shipping_zipcode        VARCHAR(10)  NOT NULL,
-    shipping_address        VARCHAR(200) NOT NULL,   -- 기본 주소 (도로명/지번)
-    shipping_address_detail VARCHAR(200),            -- 상세 주소 (동/호수, 층 등)
-    shipping_memo           VARCHAR(500),            -- 배송 요청사항
+    recipient_name          VARCHAR(100) NOT NULL,                        -- 수령인 이름
+    recipient_phone         VARCHAR(20)  NOT NULL,                        -- 수령인 연락처
+    shipping_zipcode        VARCHAR(10)  NOT NULL,                        -- 우편번호
+    shipping_address        VARCHAR(200) NOT NULL,                        -- 기본 주소 (도로명/지번)
+    shipping_address_detail VARCHAR(200),                                 -- 상세 주소 (동/호수, 층 등)
+    shipping_memo           VARCHAR(500),                                 -- 배송 요청사항
 
     -- 상태별 타임스탬프 (반정규화: 자주 조회되는 값)
-    ordered_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    paid_at             TIMESTAMP,
-    completed_at        TIMESTAMP,
-    cancelled_at        TIMESTAMP,
+    ordered_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 주문 생성 시각
+    paid_at                 TIMESTAMP,                                    -- 결제 완료 시각
+    completed_at            TIMESTAMP,                                    -- 구매 확정 시각
+    cancelled_at            TIMESTAMP,                                    -- 취소 시각 (전체 취소 시)
 
     CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT uq_orders_order_number UNIQUE (order_number),
@@ -287,20 +287,20 @@ PENDING ──→ PAID ──→ (PARTIALLY_)SHIPPED ──→ (PARTIALLY_)DELIV
 
 ```sql
 CREATE TABLE order_deliveries (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    delivery_number     VARCHAR(30) NOT NULL,           -- 외부 식별자 (예: ORD-20260408-00001-D1)
-    sequence            SMALLINT    NOT NULL,           -- 주문 내 배송 순번 (1, 2, 3...)
-    status              VARCHAR(20) NOT NULL DEFAULT 'READY',
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- 내부 PK
+    order_id            BIGINT      NOT NULL,                           -- 부모 주문 (orders FK)
+    delivery_number     VARCHAR(30) NOT NULL,                           -- 외부 식별자 (예: ORD-20260408-00001-D1)
+    sequence            SMALLINT    NOT NULL,                           -- 주문 내 배송 순번 (1, 2, 3...)
+    status              VARCHAR(20) NOT NULL DEFAULT 'READY',           -- 배송 상태 (READY → SHIPPED → DELIVERED)
 
-    -- 배송 정보
-    carrier             VARCHAR(50),                    -- 택배사 (CJ, 한진, 우체국, ...)
-    tracking_number     VARCHAR(50),                    -- 송장번호
+    -- 배송 정보 (출고 전에는 NULL)
+    carrier             VARCHAR(50),                                    -- 택배사명 (자사 배송/PUDO 포함 가능)
+    tracking_number     VARCHAR(50),                                    -- 송장번호
 
     -- 배송 단위 타임스탬프
-    ready_at            TIMESTAMP,
-    shipped_at          TIMESTAMP,
-    delivered_at        TIMESTAMP,
+    ready_at            TIMESTAMP,                                      -- 배송 준비 완료 시각
+    shipped_at          TIMESTAMP,                                      -- 출고 시각
+    delivered_at        TIMESTAMP,                                      -- 수령 완료 시각
 
     CONSTRAINT fk_deliveries_order
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
@@ -359,22 +359,22 @@ READY ──→ SHIPPED ──→ IN_TRANSIT ──→ DELIVERED
 
 ```sql
 CREATE TABLE order_items (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT NOT NULL,                -- 조회 편의상 중복 저장
-    order_delivery_id   BIGINT NOT NULL,
-    product_id          BIGINT NOT NULL,
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- 내부 PK
+    order_id            BIGINT NOT NULL,                                -- 부모 주문 (조회 편의상 중복 저장)
+    order_delivery_id   BIGINT NOT NULL,                                -- 소속 배송 묶음
+    product_id          BIGINT NOT NULL,                                -- 상품 참조 (products FK)
 
-    -- 주문 시점 스냅샷
-    product_name        VARCHAR(200)  NOT NULL,
-    product_option      VARCHAR(200),                   -- "색상: 블랙, 사이즈: M"
-    unit_price          DECIMAL(10, 2) NOT NULL,
-    quantity            INT            NOT NULL,
-    subtotal            DECIMAL(12, 2) NOT NULL,        -- unit_price * quantity
+    -- 주문 시점 스냅샷 (이후 products 변경과 무관하게 고정)
+    product_name        VARCHAR(200)  NOT NULL,                         -- 상품명 스냅샷
+    product_option      VARCHAR(200),                                   -- 선택 옵션 (예: "색상: 블랙, 사이즈: M")
+    unit_price          DECIMAL(10, 2) NOT NULL,                        -- 주문 시점 단가
+    quantity            INT            NOT NULL,                        -- 주문 수량
+    subtotal            DECIMAL(12, 2) NOT NULL,                        -- 소계 (unit_price * quantity)
 
-    -- 아이템 단위 상태와 집계
-    status              VARCHAR(20) NOT NULL DEFAULT 'ORDERED',
-    cancelled_quantity  INT NOT NULL DEFAULT 0,
-    refunded_quantity   INT NOT NULL DEFAULT 0,
+    -- 아이템 단위 상태와 취소/환불 집계 (반정규화)
+    status              VARCHAR(20) NOT NULL DEFAULT 'ORDERED',         -- 아이템 상태 (취소/환불 반영)
+    cancelled_quantity  INT NOT NULL DEFAULT 0,                         -- 누적 취소 수량 (배송 전 취소)
+    refunded_quantity   INT NOT NULL DEFAULT 0,                         -- 누적 환불 수량 (배송 후 반품)
 
     CONSTRAINT fk_items_order
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
@@ -465,23 +465,23 @@ CHECK 제약으로 `cancelled_quantity + refunded_quantity <= quantity`를 강�
 
 ```sql
 CREATE TABLE payments (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    idempotency_key     VARCHAR(64) NOT NULL,
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- 내부 PK
+    order_id            BIGINT      NOT NULL,                           -- 부모 주문
+    idempotency_key     VARCHAR(64) NOT NULL,                           -- 멱등성 키 (이중 결제 원천 차단)
 
-    payment_method      VARCHAR(20)    NOT NULL,        -- CARD, POINT, COUPON, KAKAO_PAY, ...
-    amount              DECIMAL(12, 2) NOT NULL,
-    status              VARCHAR(20)    NOT NULL DEFAULT 'PENDING',
+    payment_method      VARCHAR(20)    NOT NULL,                        -- 결제 수단 (CARD, POINT, COUPON, 간편결제 등)
+    amount              DECIMAL(12, 2) NOT NULL,                        -- 이 결제 건의 금액
+    status              VARCHAR(20)    NOT NULL DEFAULT 'PENDING',      -- 결제 상태 (PENDING → CONFIRMED / FAILED)
 
-    -- PG사 연동 정보 (POINT/COUPON이면 NULL)
-    pg_provider         VARCHAR(30),                    -- TOSS, KAKAO, NICE, ...
-    pg_transaction_id   VARCHAR(100),
-    pg_response         JSON,
+    -- PG사 연동 정보 (POINT/COUPON 같은 자사 자산은 NULL)
+    pg_provider         VARCHAR(30),                                    -- PG사 식별자
+    pg_transaction_id   VARCHAR(100),                                   -- PG사 거래 ID
+    pg_response         JSON,                                           -- PG사 원본 응답 (디버깅/감사용)
 
-    attempted_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    confirmed_at        TIMESTAMP,
-    failed_at           TIMESTAMP,
-    failure_reason      VARCHAR(500),
+    attempted_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,   -- 결제 시도 시각
+    confirmed_at        TIMESTAMP,                                      -- 승인 완료 시각
+    failed_at           TIMESTAMP,                                      -- 실패 시각
+    failure_reason      VARCHAR(500),                                   -- 실패 사유 (CS 대응용, 삭제 금지)
 
     CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT uq_payments_idempotency UNIQUE (idempotency_key),
@@ -559,14 +559,14 @@ CREATE INDEX idx_payments_pg_transaction ON payments(pg_transaction_id);
 
 ```sql
 CREATE TABLE order_status_histories (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    entity_type     VARCHAR(20) NOT NULL,           -- 'ORDER', 'DELIVERY'
-    entity_id       BIGINT      NOT NULL,
-    from_status     VARCHAR(20),                    -- NULL이면 최초 생성
-    to_status       VARCHAR(20) NOT NULL,
-    changed_by      VARCHAR(100) NOT NULL,          -- 'SYSTEM', 'ADMIN:kim', 'USER:123', 'WEBHOOK:CJ'
-    reason          VARCHAR(500),
-    changed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,                  -- 내부 PK
+    entity_type     VARCHAR(20) NOT NULL,                               -- 대상 타입 ('ORDER' 또는 'DELIVERY')
+    entity_id       BIGINT      NOT NULL,                               -- 대상 id (entity_type 기준 orders.id 또는 order_deliveries.id)
+    from_status     VARCHAR(20),                                        -- 이전 상태 (최초 생성이면 NULL)
+    to_status       VARCHAR(20) NOT NULL,                               -- 변경 후 상태
+    changed_by      VARCHAR(100) NOT NULL,                              -- 변경 주체 (예: 'SYSTEM', 'ADMIN:kim', 'USER:123', 'WEBHOOK:...')
+    reason          VARCHAR(500),                                       -- 변경 사유 메모 (선택)
+    changed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,       -- 변경 시각
 
     CONSTRAINT chk_order_history_entity_type CHECK (
         entity_type IN ('ORDER', 'DELIVERY')
@@ -611,20 +611,20 @@ CREATE INDEX idx_order_history_changed_at ON order_status_histories(changed_at);
 
 ```sql
 CREATE TABLE order_cancellations (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    order_delivery_id   BIGINT,                         -- NULL이면 주문 전체 취소
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- 내부 PK
+    order_id            BIGINT      NOT NULL,                           -- 부모 주문
+    order_delivery_id   BIGINT,                                         -- 배송 단위 취소면 참조, 주문 전체 취소면 NULL
 
     -- 누가, 왜
-    cancelled_by_type   VARCHAR(20) NOT NULL,           -- CUSTOMER, SELLER, ADMIN, SYSTEM
-    cancelled_by_id     VARCHAR(100),                   -- user_id/admin_id, NULL if SYSTEM
-    reason_code         VARCHAR(50) NOT NULL,           -- 'CUSTOMER_CHANGED_MIND', 'OUT_OF_STOCK', ...
-    reason_detail       VARCHAR(1000),
+    cancelled_by_type   VARCHAR(20) NOT NULL,                           -- 취소 주체 타입 (CUSTOMER, SELLER, ADMIN, SYSTEM)
+    cancelled_by_id     VARCHAR(100),                                   -- 주체 식별자 (user_id/admin_id; SYSTEM이면 NULL)
+    reason_code         VARCHAR(50) NOT NULL,                           -- 취소 사유 코드 (enum, 집계/통계용)
+    reason_detail       VARCHAR(1000),                                  -- 취소 사유 상세 (자유 텍스트, CS용)
 
-    -- 환불과의 연결 (취소 시 즉시 환불되는 경우)
-    refund_id           BIGINT,
+    -- 환불과의 연결 (취소 시 즉시 환불이 생성되는 경우)
+    refund_id           BIGINT,                                         -- 연결된 환불 건 (없으면 NULL)
 
-    cancelled_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cancelled_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,   -- 취소 시각
 
     CONSTRAINT fk_cancellations_order
         FOREIGN KEY (order_id) REFERENCES orders(id),
@@ -679,15 +679,15 @@ reason_detail = '공급사 재고 소진, 4월 15일 이후 입고 예정'
 ```sql
 -- 환불 한 건 (환불 요청 단위)
 CREATE TABLE refunds (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_id            BIGINT      NOT NULL,
-    refund_number       VARCHAR(30) NOT NULL,           -- 외부 식별자
-    amount              DECIMAL(12, 2) NOT NULL,        -- 이 환불 건 총액 (refund_items 합)
-    status              VARCHAR(20)    NOT NULL DEFAULT 'REQUESTED',
-    reason_code         VARCHAR(50)    NOT NULL,
-    reason_detail       VARCHAR(1000),
-    requested_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    processed_at        TIMESTAMP,
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,              -- 내부 PK
+    order_id            BIGINT      NOT NULL,                           -- 부모 주문
+    refund_number       VARCHAR(30) NOT NULL,                           -- 외부 식별자 (예: REF-20260408-00001)
+    amount              DECIMAL(12, 2) NOT NULL,                        -- 이 환불 건 총액 (refund_items 합과 일치)
+    status              VARCHAR(20)    NOT NULL DEFAULT 'REQUESTED',    -- 환불 상태 (REQUESTED → APPROVED → COMPLETED)
+    reason_code         VARCHAR(50)    NOT NULL,                        -- 환불 사유 코드 (enum)
+    reason_detail       VARCHAR(1000),                                  -- 환불 사유 상세 (자유 텍스트)
+    requested_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 환불 요청 시각
+    processed_at        TIMESTAMP,                                      -- 환불 처리 완료 시각
 
     CONSTRAINT fk_refunds_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT uq_refunds_refund_number UNIQUE (refund_number),
@@ -699,11 +699,11 @@ CREATE TABLE refunds (
 
 -- 환불 대상 아이템 (어느 상품을 몇 개 돌려받는가)
 CREATE TABLE refund_items (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    refund_id       BIGINT NOT NULL,
-    order_item_id   BIGINT NOT NULL,
-    quantity        INT            NOT NULL,
-    amount          DECIMAL(12, 2) NOT NULL,
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,                  -- 내부 PK
+    refund_id       BIGINT NOT NULL,                                    -- 부모 환불 건
+    order_item_id   BIGINT NOT NULL,                                    -- 환불 대상 주문 아이템
+    quantity        INT            NOT NULL,                            -- 이 환불에서 돌려받는 수량
+    amount          DECIMAL(12, 2) NOT NULL,                            -- 이 아이템의 환불 금액 (수량 × 단가 기준)
 
     CONSTRAINT fk_refund_items_refund
         FOREIGN KEY (refund_id) REFERENCES refunds(id) ON DELETE CASCADE,
@@ -715,12 +715,12 @@ CREATE TABLE refund_items (
 
 -- 환불 결제 수단별 분배 (복합 결제 대응)
 CREATE TABLE refund_payments (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    refund_id       BIGINT NOT NULL,
-    payment_id      BIGINT NOT NULL,                    -- 원 결제
-    amount          DECIMAL(12, 2) NOT NULL,
-    pg_refund_id    VARCHAR(100),                       -- PG사 환불 ID
-    status          VARCHAR(20)    NOT NULL DEFAULT 'PENDING',
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,                  -- 내부 PK
+    refund_id       BIGINT NOT NULL,                                    -- 부모 환불 건
+    payment_id      BIGINT NOT NULL,                                    -- 원 결제 건 (어느 수단으로 돌려줄지)
+    amount          DECIMAL(12, 2) NOT NULL,                            -- 이 결제 수단에서 돌려주는 금액
+    pg_refund_id    VARCHAR(100),                                       -- PG사 환불 ID (자사 자산이면 NULL)
+    status          VARCHAR(20)    NOT NULL DEFAULT 'PENDING',          -- PG 환불 호출 상태 (PENDING → COMPLETED/FAILED)
 
     CONSTRAINT fk_refund_payments_refund
         FOREIGN KEY (refund_id) REFERENCES refunds(id) ON DELETE CASCADE,
