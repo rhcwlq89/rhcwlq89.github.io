@@ -175,10 +175,10 @@ CREATE TABLE orders (
     -- 배송지 스냅샷 (주문 시점의 값으로 고정)
     recipient_name      VARCHAR(100) NOT NULL,
     recipient_phone     VARCHAR(20)  NOT NULL,
-    shipping_zipcode    VARCHAR(10)  NOT NULL,
-    shipping_address1   VARCHAR(200) NOT NULL,
-    shipping_address2   VARCHAR(200),
-    shipping_memo       VARCHAR(500),
+    shipping_zipcode        VARCHAR(10)  NOT NULL,
+    shipping_address        VARCHAR(200) NOT NULL,   -- 기본 주소 (도로명/지번)
+    shipping_address_detail VARCHAR(200),            -- 상세 주소 (동/호수, 층 등)
+    shipping_memo           VARCHAR(500),            -- 배송 요청사항
 
     -- 상태별 타임스탬프 (반정규화: 자주 조회되는 값)
     ordered_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

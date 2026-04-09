@@ -170,10 +170,10 @@ CREATE TABLE orders (
     -- Shipping address snapshot (frozen at order time)
     recipient_name      VARCHAR(100) NOT NULL,
     recipient_phone     VARCHAR(20)  NOT NULL,
-    shipping_zipcode    VARCHAR(10)  NOT NULL,
-    shipping_address1   VARCHAR(200) NOT NULL,
-    shipping_address2   VARCHAR(200),
-    shipping_memo       VARCHAR(500),
+    shipping_zipcode        VARCHAR(10)  NOT NULL,
+    shipping_address        VARCHAR(200) NOT NULL,   -- main address (street/road)
+    shipping_address_detail VARCHAR(200),            -- detail (unit number, floor, etc.)
+    shipping_memo           VARCHAR(500),            -- delivery instructions
 
     -- Status timestamps (denormalized for frequent reads)
     ordered_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
