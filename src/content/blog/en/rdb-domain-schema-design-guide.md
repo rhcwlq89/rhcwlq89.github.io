@@ -59,7 +59,7 @@ None of this fits into a single `status` column on orders. Forcing it either exp
 
 There isn't a single "correct" alternative. In practice there are three approaches.
 
-**A. 2 levels + external identifiers (Naver Pay / Smart Store style)**
+**A. 2 levels + per-item external identifiers**
 
 ```
 orders ──1:N──→ order_items
@@ -75,9 +75,9 @@ orders ──1:N──→ order_groups ──1:N──→ order_items
                 (per-seller or per-delivery grouping)
 ```
 
-Common in marketplaces like Coupang or similar sites. The meaning of the middle layer differs: it can be **"seller group"** (marketplace) or **"delivery group"** (single seller splitting cold-chain vs ambient). This post assumes a single-seller shop, so the middle layer is a **"delivery group"** and we call it `order_deliveries`.
+Common in marketplace platforms and shops that need seller- or delivery-level grouping. The meaning of the middle layer differs: it can be a **"seller group"** (marketplace) or a **"delivery group"** (single seller splitting cold-chain vs ambient). This post assumes a single-seller shop, so the middle layer is a **"delivery group"** and we call it `order_deliveries`.
 
-**C. Sibling aggregates + junction (Amazon / large fulfillment style)**
+**C. Sibling aggregates + junction (large fulfillment style)**
 
 ```
 orders ──1:N──→ order_items              ← purchase contract (fixed at checkout)
@@ -105,9 +105,9 @@ In Korean e-commerce practice, **"order detail" (주문상세)** means different
 
 | Context | What "order detail" means | Actual structure |
 |---------|---------------------------|-------------------|
-| Traditional SI / ERP (SAP, etc.) | The DTL in `ORDER_MST + ORDER_DTL` — literally order_items | 2 levels (A) |
-| Naver Smart Store | Per-item external identifier ("product order number") | 2 levels + external ID (A) |
-| Coupang / 11st | Per-delivery or per-product grouping | Effectively 3 levels (B) |
+| Traditional SI / ERP systems | The DTL in `ORDER_MST + ORDER_DTL` — literally order_items | 2 levels (A) |
+| Shops using per-item external IDs | Each item's external identifier (distinct from the order number) | 2 levels + external ID (A) |
+| Marketplaces / open marketplaces | Per-delivery, per-product, or per-seller grouping | Effectively 3 levels (B) |
 | B2B enterprise | Billing / contract header information | Sibling (variant of C) |
 
 A phrase like "order → order detail → order item" usually refers to B's 3-level grouping, while "order → order detail" alone is often A's MST-DTL naming convention. Western systems usually avoid the ambiguity by calling the middle layer "shipment", "fulfillment", or "package group".
