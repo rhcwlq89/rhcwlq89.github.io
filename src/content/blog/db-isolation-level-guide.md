@@ -68,7 +68,7 @@ COMMIT;
 
 ## 2.1 격리 수준을 구현하는 방법: MVCC
 
-격리 수준이 "어느 정도 격리할 것인가"라면, **MVCC(Multi-Version Concurrency Control)는 "어떻게 격리할 것인가"**에 대한 답이다.
+격리 수준이 "어느 정도 격리할 것인가"라면, <strong>MVCC(Multi-Version Concurrency Control)는 "어떻게 격리할 것인가"</strong>에 대한 답이다.
 
 MVCC의 핵심 아이디어는 단순하다: **데이터를 수정할 때 기존 버전을 지우지 않고 보관한다.** 그래서 읽는 쪽은 락 없이 이전 버전을 읽고, 쓰는 쪽은 새 버전을 만든다.
 
@@ -84,7 +84,7 @@ TX2: SELECT → v1을 읽음 (락 없음, 즉시 실행)
 → 읽기와 쓰기가 서로 차단하지 않음
 ```
 
-MySQL(InnoDB), PostgreSQL, Oracle 모두 MVCC를 사용한다. 덕분에 **"읽기는 쓰기를 차단하지 않고, 쓰기는 읽기를 차단하지 않는다"**는 원칙이 성립한다.
+MySQL(InnoDB), PostgreSQL, Oracle 모두 MVCC를 사용한다. 덕분에 <strong>"읽기는 쓰기를 차단하지 않고, 쓰기는 읽기를 차단하지 않는다"</strong>는 원칙이 성립한다.
 
 격리 수준에 따라 **어떤 버전을 읽을 것인가**가 달라진다:
 

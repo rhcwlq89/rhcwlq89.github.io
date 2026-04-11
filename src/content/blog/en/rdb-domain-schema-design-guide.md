@@ -214,7 +214,21 @@ GET /orders/42
 GET /orders/ORD-20260408-00001
 ```
 
-### 2.2 Address Snapshot — Why Not Reference `user_addresses`?
+### 2.2 `order_number` Generation Strategies
+
+`order_number` is generated at the application level. Common approaches:
+
+| Strategy | Example | Characteristics |
+|----------|---------|-----------------|
+| Date + Sequence | `ORD-20260408-00001` | Human-readable, daily reset possible. Requires concurrency control |
+| UUID v4 | `550e8400-e29b-41d4-a716-446655440000` | No collisions, great for distributed systems. Poor readability, index-unfriendly |
+| UUID v7 | `019654ab-3c4d-7def-8000-abcdef123456` | Time-sortable, fixes UUID v4's index issues |
+| Snowflake ID | `176432987654321` | Time + machine + sequence combo, distributed + sortable. Requires implementation or library |
+| Prefix + nanoid | `ORD_V1rRnXbaFN` | Short, URL-safe, prefix identifies domain. Collision probability must be managed |
+
+**Practical advice**: For small-to-medium e-commerce, **date + sequence** is the easiest for CS and log tracing. For distributed or microservice architectures, **UUID v7** or **Snowflake** is a better fit. Regardless of the approach, always enforce a `UNIQUE` constraint.
+
+### 2.3 Address Snapshot — Why Not Reference `user_addresses`?
 
 If you FK-reference a user's address book (`user_addresses`), this bug is waiting for you:
 
@@ -229,7 +243,7 @@ If you FK-reference a user's address book (`user_addresses`), this bug is waitin
 
 It's redundant from a normalization standpoint, but essential from a business standpoint. This is one of those mistakes that hurt when you catch it in production.
 
-### 2.3 State Machine Design
+### 2.4 State Machine Design
 
 Simple 2-level status:
 
@@ -262,7 +276,7 @@ Why `PARTIALLY_DELIVERED` is necessary: "one delivery arrived yesterday, the oth
 
 This aggregation is **computed at application level**, or the order status is **synced whenever a delivery status changes**. CHECK constraints only enforce the allowed set of values — they can't enforce the aggregate consistency. That's an application-layer (or trigger) concern.
 
-### 2.4 Status Timestamps — Why Store Them on orders?
+### 2.5 Status Timestamps — Why Store Them on orders?
 
 `paid_at` and `cancelled_at` sit on the orders table directly because:
 

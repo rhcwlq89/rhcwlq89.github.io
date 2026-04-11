@@ -143,7 +143,7 @@ SELECT * FROM orders;        -- ⭕ 깔끔
 | **단점** | JOIN에서 `users.id = orders.user_id`처럼 항상 테이블명 필요 | `user.user_id`가 중복스러움, ORM 별도 매핑 필요 |
 | **선호하는 곳** | Rails, JPA/Hibernate, Django 등 ORM 중심 | PostgreSQL 커뮤니티, DBA 중심 팀, SQL 헤비 환경 |
 
-실무에서 가장 보편적인 패턴은 **본 테이블 PK는 `id`, FK는 `참조테이블_id`**다.
+실무에서 가장 보편적인 패턴은 <strong>본 테이블 PK는 <code>id</code>, FK는 <code>참조테이블_id</code></strong>다.
 
 ```sql
 CREATE TABLE users (
@@ -227,7 +227,7 @@ CREATE TABLE users (
 
 ### 2.2 Charset & Collation — 문자열의 숨은 지뢰
 
-VARCHAR 길이만큼 중요하지만 훨씬 자주 무시되는 게 **charset(문자 인코딩)**과 **collation(정렬/비교 규칙)**이다.
+VARCHAR 길이만큼 중요하지만 훨씬 자주 무시되는 게 <strong>charset(문자 인코딩)</strong>과 <strong>collation(정렬/비교 규칙)</strong>이다.
 
 #### MySQL: utf8 ≠ UTF-8
 
@@ -245,7 +245,7 @@ CREATE TABLE posts (
 ) CHARACTER SET utf8mb4;
 ```
 
-MySQL 8.0부터 **기본 charset이 `utf8mb4`**로 바뀌었지만, 레거시 DB를 다룬다면 반드시 확인해야 한다.
+MySQL 8.0부터 <strong>기본 charset이 <code>utf8mb4</code></strong>로 바뀌었지만, 레거시 DB를 다룬다면 반드시 확인해야 한다.
 
 #### Collation이 쿼리에 미치는 영향
 
@@ -644,7 +644,7 @@ CREATE TABLE orders (
 > - 2.3절에서 다뤘듯이, INT는 생각보다 빨리 한계에 도달한다. 행당 4바이트 절약으로 새벽 3시 긴급 마이그레이션을 맞는 건 나쁜 트레이드오프다.
 > - INT→BIGINT 전환은 **PK + 모든 FK 컬럼 타입 변경 + 인덱스 재생성**을 의미한다. 대형 테이블에서는 수 시간의 다운타임이 필요할 수 있다.
 >
-> **결론**: `SERIAL`이나 `BIGSERIAL` 대신 **`BIGINT GENERATED ALWAYS AS IDENTITY`**를 쓰면 문법과 크기 문제를 동시에 해결한다.
+> **결론**: `SERIAL`이나 `BIGSERIAL` 대신 <strong><code>BIGINT GENERATED ALWAYS AS IDENTITY</code></strong>를 쓰면 문법과 크기 문제를 동시에 해결한다.
 
 | 장점 | 단점 |
 |------|------|

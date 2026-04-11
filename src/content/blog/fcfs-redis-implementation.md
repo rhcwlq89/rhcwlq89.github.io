@@ -660,7 +660,7 @@ Redis → redis_exporter → Prometheus → Grafana
 | 캐시 적중률 | `redis_keyspace_hits_total / misses_total` | 캐시 효율 확인 |
 | 슬로우 쿼리 수 | `redis_slowlog_length` | Lua 스크립트 성능 문제 감지 |
 
-> **빠른 시작:** Grafana 공식 대시보드 **Redis Dashboard for Prometheus (ID: 763)**를 import하면 위 메트릭을 바로 시각화할 수 있다.
+> **빠른 시작:** Grafana 공식 대시보드 <strong>Redis Dashboard for Prometheus (ID: 763)</strong>를 import하면 위 메트릭을 바로 시각화할 수 있다.
 
 Spring Boot 앱의 **Resilience4j 메트릭**도 Actuator + Micrometer를 통해 Prometheus로 내보낼 수 있다. 서킷 브레이커 상태(CLOSED/OPEN), 벌크헤드 동시 호출 수 등을 Redis 메트릭과 **같은 Grafana 대시보드**에서 함께 볼 수 있으므로, "Redis 응답 지연 → 서킷 오픈 → DB 폴백 발동"이라는 인과관계를 한 화면에서 추적할 수 있다.
 

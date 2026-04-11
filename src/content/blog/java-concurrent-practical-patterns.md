@@ -64,7 +64,7 @@ ThreadPoolExecutor executor = new ThreadPoolExecutor(
 );
 ```
 
-> `CallerRunsPolicy`는 실무에서 가장 많이 쓰이는 정책이다. 풀이 과부하되면 호출 스레드(보통 요청 스레드)가 직접 작업을 처리하게 되면서 자연스럽게 **배압(backpressure)**이 걸린다 — 새 요청 자체가 느려지므로 시스템이 무한정 밀리지 않는다.
+> `CallerRunsPolicy`는 실무에서 가장 많이 쓰이는 정책이다. 풀이 과부하되면 호출 스레드(보통 요청 스레드)가 직접 작업을 처리하게 되면서 자연스럽게 <strong>배압(backpressure)</strong>이 걸린다 — 새 요청 자체가 느려지므로 시스템이 무한정 밀리지 않는다.
 
 ### 풀 사이즈는 어떻게 정하는가?
 
@@ -183,7 +183,7 @@ CompletableFuture
 | `thenAcceptAsync` | 있음 (`T`) | 없음 (`void`) | 이전 결과를 받아 **소비**한다 (반환값 없음) | `Payment` → 알림 발송 |
 | `thenRunAsync` | 없음 | 없음 (`void`) | 이전 결과와 무관하게 **실행만** 한다 | (예: 로그 기록, 카운터 증가) |
 
-> **`Async` 접미사의 의미:** `thenApply`는 이전 단계와 **같은 스레드**에서 실행될 수 있고, `thenApplyAsync`는 반드시 **별도 스레드(ForkJoinPool 또는 지정한 Executor)**에서 실행된다. I/O가 포함된 작업이라면 `Async` 버전을 쓰는 것이 안전하다.
+> **`Async` 접미사의 의미:** `thenApply`는 이전 단계와 **같은 스레드**에서 실행될 수 있고, `thenApplyAsync`는 반드시 <strong>별도 스레드(ForkJoinPool 또는 지정한 Executor)</strong>에서 실행된다. I/O가 포함된 작업이라면 `Async` 버전을 쓰는 것이 안전하다.
 
 ### 여러 작업을 동시에 실행하고 합치기 — thenCombine
 
@@ -799,7 +799,7 @@ public class StockService {
 | 동시 접근 수 N개로 제한 | `Semaphore` |
 | 타임아웃 / 공정성이 필요한 락 | `ReentrantLock` |
 
-> 핵심은 **"직접 `Thread`를 만들지 말고, 직접 `wait()`/`notify()`를 쓰지 말라"**는 것이다. `java.util.concurrent`는 이미 검증된 도구들을 제공한다. 바퀴를 다시 발명하지 말자.
+> 핵심은 <strong>"직접 <code>Thread</code>를 만들지 말고, 직접 <code>wait()</code>/<code>notify()</code>를 쓰지 말라"</strong>는 것이다. `java.util.concurrent`는 이미 검증된 도구들을 제공한다. 바퀴를 다시 발명하지 말자.
 
 ---
 
