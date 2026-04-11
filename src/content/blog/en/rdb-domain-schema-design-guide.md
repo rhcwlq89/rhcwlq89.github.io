@@ -362,6 +362,18 @@ Yes. For customer support, "the second delivery of order ORD-20260408-00001" is 
 
 You could identify deliveries by `(order_number, sequence)`, but a single-column identifier is easier for lookups, logs, and URLs. Saving a few bytes of storage at the cost of query complexity is a bad trade.
 
+### 3.4 `delivery_number` Generation Strategies
+
+`delivery_number` is typically derived from the `order_number` with a delivery suffix. The link to the parent order should be immediately visible for efficient CS handling.
+
+| Strategy | Example | Characteristics |
+|----------|---------|-----------------|
+| Order number + suffix | `ORD-20260408-00001-D1` | Traceable from order number alone. Most practical |
+| Independent sequence | `DLV-20260408-00001` | Numbered independently. Useful when logistics is a separate system |
+| Order number + sequence column | `order_number` + `sequence = 1` | No extra column, identified by combination. Inconvenient for lookups/logs without a single identifier |
+
+**Practical advice**: For most e-commerce stores, <strong>order number + suffix</strong> is the most convenient. CS agents can pinpoint a delivery from the order number alone, and it's intuitive for customers too. If logistics runs on a separate system, use an independent sequence but store the order number as a reference column.
+
 ---
 
 ## 4. order_items — Snapshots and Item Status
