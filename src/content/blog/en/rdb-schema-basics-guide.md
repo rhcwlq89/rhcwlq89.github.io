@@ -653,7 +653,7 @@ CREATE TABLE orders (
 
 In InnoDB (MySQL), **PK = clustered index**. Data is physically stored in PK order.
 
-> **PostgreSQL is different**: PostgreSQL has **no clustered index by default**. Tables (heaps) store data in insertion order, and the PK is just a separate B-Tree index. The `CLUSTER` command can sort data once, but subsequent INSERTs won't maintain order. This means **random UUID inserts aren't as devastating as in MySQL** — though index size and cache efficiency concerns still apply.
+> **PostgreSQL is different**: PostgreSQL has **no clustered index by default**. Tables (heaps) store data in insertion order, and the PK is just a separate B+Tree index. The `CLUSTER` command can sort data once, but subsequent INSERTs won't maintain order. This means **random UUID inserts aren't as devastating as in MySQL** — though index size and cache efficiency concerns still apply.
 
 ```
 [AUTO_INCREMENT — Sequential inserts]

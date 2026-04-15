@@ -79,10 +79,10 @@ heroImage: "../../assets/PracticalGuideSeries.png"
 
 DB에서 status = 'ON_SALE' 찾을 때:
 ├── 인덱스 없이: 모든 행 스캔 (Full Table Scan)
-└── 인덱스 있으면: B-Tree 탐색 → 바로 찾음
+└── 인덱스 있으면: B+Tree 탐색 → 바로 찾음
 ```
 
-### 2.2 인덱스 구조 (B-Tree)
+### 2.2 인덱스 구조 (B+Tree)
 
 ```
 인덱스: idx_products_status

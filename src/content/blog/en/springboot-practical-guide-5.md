@@ -80,10 +80,10 @@ Finding "Kafka" in a book:
 
 Finding status = 'ON_SALE' in a DB:
 +-- Without index: Scan all rows (Full Table Scan)
-+-- With index: B-Tree search -> Found immediately
++-- With index: B+Tree search -> Found immediately
 ```
 
-### 2.2 Index Structure (B-Tree)
+### 2.2 Index Structure (B+Tree)
 
 ```
 Index: idx_products_status

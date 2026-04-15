@@ -21,9 +21,9 @@ heroImage: "../../assets/RdbIndexJoinStrategyGuide.png"
 
 테이블 설계가 건축의 도면이라면, 인덱스 설계는 건물의 엘리베이터 배치다. 도면이 아무리 좋아도 엘리베이터가 없으면 30층까지 계단으로 올라가야 한다. 반대로 엘리베이터를 아무 데나 마구 설치하면 유지비만 폭발한다.
 
-이 글은 인덱스 "기초"를 다루지 않는다. B-Tree가 뭔지, CREATE INDEX 문법이 뭔지는 이미 안다고 가정한다. 대신 **설계 판단**에 집중한다:
+이 글은 인덱스 "기초"를 다루지 않는다. B+Tree가 뭔지, CREATE INDEX 문법이 뭔지는 이미 안다고 가정한다. 대신 **설계 판단**에 집중한다:
 
-1. **인덱스 구조와 설계 원칙** — 왜 B-Tree가 기본이고, 언제 다른 걸 쓰는가
+1. **인덱스 구조와 설계 원칙** — 왜 B+Tree가 기본이고, 언제 다른 걸 쓰는가
 2. **설계 레벨 인덱스** — 커버링 인덱스, 부분 인덱스, Expression 인덱스, 카디널리티 분석
 3. **JOIN 알고리즘** — Nested Loop, Hash Join, Merge Join의 작동 원리와 선택 조건
 4. **EXPLAIN ANALYZE 읽기** — 실행 계획을 읽고, 옵티마이저의 판단을 이해하기
@@ -33,9 +33,9 @@ heroImage: "../../assets/RdbIndexJoinStrategyGuide.png"
 
 ## 1. 인덱스 구조와 설계 원칙
 
-### 1.1 B-Tree — 왜 기본인가
+### 1.1 B+Tree — 왜 기본인가
 
-MySQL(InnoDB)과 PostgreSQL 모두 기본 인덱스 구조는 **B+Tree**다. 이유는 단순하다:
+MySQL(InnoDB), PostgreSQL, SQL Server, Oracle 등 주요 RDBMS 모두 기본 인덱스 구조는 **B+Tree**다. 이유는 단순하다:
 
 | 연산 | B+Tree 시간복잡도 | Full Scan |
 |------|-------------------|-----------|
@@ -52,9 +52,9 @@ MySQL(InnoDB)과 PostgreSQL 모두 기본 인덱스 구조는 **B+Tree**다. 이
 - **높이가 3~4로 유지**되어 디스크 I/O가 예측 가능하다
 - **정렬 상태를 유지**하므로 ORDER BY에 추가 정렬 비용이 없다
 
-### 1.2 B-Tree 말고 다른 선택지
+### 1.2 B+Tree 말고 다른 선택지
 
-모든 상황에 B-Tree가 최선은 아니다. DBMS별로 다른 인덱스 구조를 지원한다.
+모든 상황에 B+Tree가 최선은 아니다. DBMS별로 다른 인덱스 구조를 지원한다.
 
 | 인덱스 타입 | 지원 DBMS | 적합한 상황 | 부적합한 상황 |
 |------------|-----------|------------|-------------|
@@ -183,7 +183,7 @@ WHERE status = 'PENDING'
 
 ### 2.2 복합 인덱스와 컬럼 순서
 
-복합 인덱스에서 **컬럼 순서가 성능을 결정**한다. B-Tree는 왼쪽부터 정렬하기 때문이다.
+복합 인덱스에서 **컬럼 순서가 성능을 결정**한다. B+Tree는 왼쪽부터 정렬하기 때문이다.
 
 ```sql
 CREATE INDEX idx_example ON orders (status, customer_id, created_at);

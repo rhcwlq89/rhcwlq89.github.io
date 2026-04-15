@@ -15,9 +15,9 @@ But does a well-designed schema automatically mean fast queries? **No.**
 
 If table design is the blueprint, index design is the elevator placement. No matter how good the blueprint is, without elevators you're climbing 30 floors by stairs. But installing elevators everywhere explodes maintenance costs.
 
-This post doesn't cover index "basics." We assume you already know what a B-Tree is and how to write CREATE INDEX. Instead, we focus on **design decisions**:
+This post doesn't cover index "basics." We assume you already know what a B+Tree is and how to write CREATE INDEX. Instead, we focus on **design decisions**:
 
-1. **Index structures and design principles** — why B-Tree is the default, and when to use something else
+1. **Index structures and design principles** — why B+Tree is the default, and when to use something else
 2. **Design-level indexes** — covering indexes, partial indexes, expression indexes, cardinality analysis
 3. **JOIN algorithms** — how Nested Loop, Hash Join, and Merge Join work and when each is chosen
 4. **Reading EXPLAIN ANALYZE** — understanding the optimizer's decisions
@@ -27,9 +27,9 @@ This post doesn't cover index "basics." We assume you already know what a B-Tree
 
 ## 1. Index Structures and Design Principles
 
-### 1.1 B-Tree — Why It's the Default
+### 1.1 B+Tree — Why It's the Default
 
-Both MySQL (InnoDB) and PostgreSQL use **B+Tree** as their default index structure. The reason is straightforward:
+All major RDBMS — MySQL (InnoDB), PostgreSQL, SQL Server, and Oracle — use **B+Tree** as their default index structure. The reason is straightforward:
 
 | Operation | B+Tree Complexity | Full Scan |
 |-----------|-------------------|-----------|
@@ -46,9 +46,9 @@ On a table with 1 million rows, an equality lookup takes about 20 page accesses 
 - **Height stays at 3-4 levels**, so disk I/O is predictable
 - **Maintains sorted order**, eliminating extra sort costs for ORDER BY
 
-### 1.2 Alternatives to B-Tree
+### 1.2 Alternatives to B+Tree
 
-B-Tree isn't optimal for every situation. Different DBMS support different index types.
+B+Tree isn't optimal for every situation. Different DBMS support different index types.
 
 | Index Type | Supported By | Good For | Bad For |
 |-----------|-------------|----------|---------|
@@ -179,7 +179,7 @@ WHERE status = 'PENDING'
 
 ### 2.2 Composite Index Column Order
 
-In composite indexes, **column order determines performance.** B-Tree sorts left to right.
+In composite indexes, **column order determines performance.** B+Tree sorts left to right.
 
 ```sql
 CREATE INDEX idx_example ON orders (status, customer_id, created_at);
