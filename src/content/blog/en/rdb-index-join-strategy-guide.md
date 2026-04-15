@@ -112,6 +112,12 @@ Heap Table
 | UUID PKs | Performance concerns | Relatively fine |
 | Secondary index lookup | Bookmark lookup cost | Single heap access |
 
+> **Why do sequential PK inserts matter?**
+>
+> InnoDB stores data physically sorted by PK. With AUTO_INCREMENT, PKs increase sequentially so new rows always append to the last page. But with random PKs like UUIDs, rows must be inserted between existing pages — and when a page is full, a **page split** occurs: extra disk I/O, wasted space, and degraded write performance.
+>
+> PostgreSQL uses a heap table, so data is simply appended in insertion order regardless of PK value. Whether PKs are random or sequential has no effect on table storage — hence "less critical."
+
 ### 1.4 Think Before You Index
 
 Indexes are **not free.** They speed up reads at the cost of writes.
