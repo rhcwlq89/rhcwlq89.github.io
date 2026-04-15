@@ -291,9 +291,21 @@ Unlike SELECT/UPDATE/DELETE, INSERT acquires **multiple types of locks in stages
 
 | Situation | Lock Acquired | Description |
 |-----------|--------------|-------------|
-| Normal INSERT | **Exclusive lock (X)** | Places an X lock on the newly inserted row |
+| Normal INSERT | **Exclusive lock (X)** | The row is inserted and X-locked at the same time. The lock is held until the transaction ends |
 | INSERT into a gap-locked range | **Insert Intention Lock** (wait) → **X lock** | If a Gap Lock already exists on the target gap, the INSERT waits. Once the gap is released, it acquires an Insert Intention Lock, inserts the row, and places an X lock |
 | UNIQUE duplicate detected | **Shared lock (S)** | If the same value already exists, places an S lock on the index record. If the existing row commits → duplicate error. If it rolls back → retries INSERT while still holding the S lock |
+
+**Normal INSERT lock flow:**
+
+It's not "lock first → then insert." The row is **inserted and locked at the same time** — you can't lock a row that doesn't exist yet. And the lock isn't released right after the INSERT — it's held **until the transaction ends**.
+
+```sql
+BEGIN;
+  INSERT INTO users (email) VALUES ('a@x.com');  -- X lock acquired on new row
+  -- ... other operations ...                     -- X lock still held
+  -- Other TXs must wait to read or write this row
+COMMIT;  -- X lock released here
+```
 
 > **Insert Intention Lock** has "Lock" in its name, but transactions inserting at **different positions within the same gap don't conflict** with each other. They can proceed concurrently. Insert Intention Locks conflict with Gap Locks, not with each other.
 

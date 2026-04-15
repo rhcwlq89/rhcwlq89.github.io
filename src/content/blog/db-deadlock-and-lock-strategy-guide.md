@@ -290,9 +290,21 @@ SELECT/UPDATE/DELETE와 달리, INSERT는 **여러 종류의 락이 단계적으
 
 | 상황 | 걸리는 락 | 설명 |
 |------|----------|------|
-| 일반 INSERT | **배타 락 (X)** | 새로 삽입한 행에 X락을 건다 |
+| 일반 INSERT | **배타 락 (X)** | 행을 삽입하면서 동시에 X락을 건다. 트랜잭션이 끝날 때까지 유지된다 |
 | Gap Lock이 있는 범위에 INSERT | **Insert Intention Lock** (대기) → **X락** | 해당 gap에 이미 Gap Lock이 있으면 대기한다. gap이 풀리면 Insert Intention Lock을 획득하고 행을 삽입한 뒤 X락을 건다 |
 | UNIQUE 중복 감지 | **공유 락 (S)** | 이미 같은 값이 존재하면 해당 인덱스 레코드에 S락을 건다. 기존 행이 커밋되면 duplicate error, 롤백되면 S락을 잡은 채 INSERT를 재시도한다 |
+
+**일반 INSERT의 락 흐름:**
+
+"미리 락을 걸고 → 삽입"이 아니라, **삽입하면서 동시에 락을 건다.** 아직 존재하지 않는 행에 미리 락을 걸 수는 없기 때문이다. 그리고 락은 INSERT 직후가 아니라 **트랜잭션이 끝날 때** 풀린다.
+
+```sql
+BEGIN;
+  INSERT INTO users (email) VALUES ('a@x.com');  -- 새 행에 X락 획득
+  -- ... 다른 작업 ...                             -- X락 유지 중
+  -- 다른 TX가 이 행을 읽거나 쓰려면 대기
+COMMIT;  -- 여기서 X락 해제
+```
 
 > **Insert Intention Lock**은 이름에 "Lock"이 들어가지만, 서로 다른 위치에 삽입하는 트랜잭션끼리는 **충돌하지 않는다.** 같은 gap 안이라도 삽입 위치가 다르면 동시에 진행할 수 있다. Gap Lock과 충돌하는 것이지, Insert Intention Lock끼리 충돌하는 것이 아니다.
 
