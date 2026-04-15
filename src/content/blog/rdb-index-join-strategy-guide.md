@@ -834,6 +834,9 @@ JOIN (SELECT * FROM customers WHERE country = 'KR') c
 
 현대 옵티마이저는 대부분 **predicate pushdown**을 자동으로 수행한다. 위 두 쿼리는 보통 같은 실행 계획을 만든다. 하지만 복잡한 쿼리에서는 옵티마이저가 실패할 수 있으므로 EXPLAIN으로 확인해야 한다.
 
+> **참고: CTE(Common Table Expression)로도 같은 패턴을 작성할 수 있다.**
+> 서브쿼리 대신 `WITH` 절을 사용하면 가독성이 좋아지고, 같은 결과를 여러 번 참조할 때 유리하다. 실행 계획은 대부분 동일하지만, **PostgreSQL 11 이하에서는 CTE가 항상 materialized되어 오히려 성능이 나빠질 수 있다** (12부터 인라인 처리 가능). MySQL 8.0+, SQL Server 2005+에서도 CTE를 지원한다.
+
 **2. 배치 처리:**
 
 ```sql

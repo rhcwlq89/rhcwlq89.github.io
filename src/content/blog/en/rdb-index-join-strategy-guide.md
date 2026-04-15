@@ -831,6 +831,9 @@ JOIN (SELECT * FROM customers WHERE country = 'KR') c
 
 Modern optimizers usually perform **predicate pushdown** automatically. The two queries above typically produce identical execution plans. But complex queries can trip up the optimizer, so always verify with EXPLAIN.
 
+> **Note: You can write the same pattern using CTEs (Common Table Expressions).**
+> Using a `WITH` clause instead of subqueries improves readability and is convenient when referencing the same result set multiple times. Execution plans are usually identical, but **in PostgreSQL 11 and earlier, CTEs are always materialized, which can hurt performance** (inlining is available from version 12). CTEs are also supported in MySQL 8.0+ and SQL Server 2005+.
+
 **2. Batch processing:**
 
 ```sql
