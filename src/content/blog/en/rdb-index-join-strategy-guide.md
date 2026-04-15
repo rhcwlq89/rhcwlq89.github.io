@@ -474,6 +474,7 @@ JOIN orders o ON o.customer_id = c.id;  -- inner: index lookup per customer
 - Outer table is **small** and inner table has an **index**
 - Joining **small numbers of rows** (most OLTP — real-time transactional workloads like order lookups or payment processing — queries)
 - MySQL InnoDB's **default join algorithm** — MySQL only supported NLJ before 8.0.18
+- PostgreSQL has no single default algorithm — the **optimizer chooses from NLJ, Hash Join, and Merge Join based on cost estimation.** The same query may use different join algorithms depending on data size, index availability, and statistics
 
 ### 3.2 Hash Join
 
@@ -562,6 +563,19 @@ MySQL doesn't support Merge Join. So:
 - Index exists -> NLJ
 - No index + equality join -> Hash Join (8.0.18+)
 - No index + range join -> NLJ (Full Scan) -> **slow. Create an index.**
+
+**What PostgreSQL users need to know:**
+
+PostgreSQL has supported all three algorithms — NLJ, Hash Join, and Merge Join — from the start. The optimizer automatically selects the best algorithm based on cost estimation, so the same query may use different join methods depending on data size and statistics.
+
+| Situation | PostgreSQL Choice | MySQL Choice |
+|-----------|------------------|--------------|
+| Small + index exists | NLJ | NLJ |
+| Large + equality + no index | Hash Join | Hash Join (8.0.18+) |
+| Large + already sorted | Merge Join | NLJ (no Merge Join support) |
+| Large + range + no index | Merge Join (with sort) | NLJ (Full Scan) -> slow |
+
+In short, MySQL has **higher index dependency** while PostgreSQL's **optimizer has more options to choose from.** With PostgreSQL, building the habit of checking which algorithm was selected via `EXPLAIN` is essential.
 
 ---
 
