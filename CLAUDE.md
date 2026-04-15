@@ -4,6 +4,7 @@
 
 - `pubDate` must always include the time (e.g., `2026-02-03T15:30:00+09:00`)
 - Every blog post must be written in both Korean and English versions
+- **NEVER remove bold (`**`) formatting** from blog content. If bold renders incorrectly (e.g., in markdown table cells), fix the structure — do NOT strip the bold. Keep bold consistent with the rest of the post.
 
 ## Hero Image Style Guide
 

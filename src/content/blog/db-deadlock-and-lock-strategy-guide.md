@@ -104,21 +104,7 @@ Account findByIdForUpdate(@Param("id") Long id);
 
 > `FOR SHARE`는 MySQL 8.0+에서 도입됐다. 이전 버전에서는 `LOCK IN SHARE MODE`를 사용한다. PostgreSQL은 처음부터 `FOR SHARE`를 지원한다.
 
-#### SQL Server 테이블 힌트 정리
-
-SQL Server는 `FOR UPDATE` / `FOR SHARE` 구문이 없고, **테이블 힌트** `WITH (...)` 로 락을 제어한다.
-
-| 힌트 | 락 종류 | 유지 시간 | 용도 |
-|------|--------|----------|------|
-| `WITH (NOLOCK)` | 락 없음 | - | Dirty Read 허용, 모니터링/대시보드용 |
-| (없음, 기본 RC) | S Lock | 행 읽는 즉시 해제 | 일반 조회 |
-| `WITH (HOLDLOCK)` | S Lock | 트랜잭션 끝까지 | 읽기 보호 (`FOR SHARE` 대응) |
-| `WITH (UPDLOCK)` | U Lock | RC에서는 즉시 해제 가능 | 업데이트 의도 표시 |
-| `WITH (UPDLOCK, HOLDLOCK)` | U Lock | 트랜잭션 끝까지 | 수정 예약 (`FOR UPDATE` 대응) |
-
-> **`UPDLOCK`과 `UPDLOCK, HOLDLOCK`의 차이**: `UPDLOCK`만 쓰면 RC 격리 수준에서 행을 읽은 후 **락이 즉시 해제될 수 있다.** `IF NOT EXISTS (SELECT ...) → INSERT` 같은 패턴에서는 SELECT와 INSERT 사이에 틈이 생겨서 다른 세션이 끼어들 수 있다. `HOLDLOCK`을 함께 써야 트랜잭션 끝까지 락이 유지되므로, **읽기 → 수정이 이어지는 패턴에서는 반드시 `UPDLOCK, HOLDLOCK`을 함께 사용**해야 한다.
-
-> **`NOLOCK` 주의사항**: S Lock을 아예 잡지 않으므로 락 경합은 없지만, **커밋되지 않은 데이터(Dirty Read)를 읽을 수 있다.** 잔액 조회 후 이체처럼 정확성이 중요한 로직에서는 절대 사용하면 안 된다. 모니터링 대시보드, 대략적 통계 등 **정합성보다 성능이 중요한 읽기 전용 쿼리**에서만 사용한다.
+> **SQL Server 참고**: SQL Server는 `FOR UPDATE` / `FOR SHARE` 구문이 없고, 테이블 힌트 `WITH (...)` 로 락을 제어한다. `WITH (HOLDLOCK)` = 공유 락, `WITH (UPDLOCK, HOLDLOCK)` = 배타 락에 대응한다. `UPDLOCK`만 쓰면 RC에서 락이 즉시 해제될 수 있으므로, **읽기 → 수정 패턴에서는 반드시 `HOLDLOCK`을 함께** 사용한다. `WITH (NOLOCK)`은 Dirty Read를 허용하므로 모니터링/대시보드 같은 **정합성보다 성능이 중요한 읽기 전용 쿼리**에서만 사용한다.
 
 ### 2.5 인덱스와 락 범위
 
@@ -175,7 +161,7 @@ COMMIT
 
 Read Committed는 가장 느슨한 편인데도 데드락이 발생한다. 왜? **읽기 시 락을 안 걸 뿐, 쓰기(UPDATE/DELETE)는 여전히 행 락을 잡기 때문이다.**
 
-#### 케이스 1: 교차 업데이트
+**케이스 1: 교차 업데이트**
 
 가장 흔한 패턴이다. 송금 시스템에서 A→B, B→A 이체가 동시에 일어나는 상황:
 
@@ -186,7 +172,7 @@ Read Committed는 가장 느슨한 편인데도 데드락이 발생한다. 왜? 
 | 3 | `UPDATE balance WHERE id='B'` → B 락 대기 ⏳ | | |
 | 4 | | `UPDATE balance WHERE id='A'` → A 락 대기 ⏳ | 💀 Deadlock! |
 
-#### 케이스 2: FK 제약 조건으로 인한 암묵적 락
+**케이스 2: FK 제약 조건으로 인한 암묵적 락**
 
 명시적으로 UPDATE하지 않아도 데드락이 발생할 수 있다. FK가 걸린 테이블에 INSERT하면 **부모 테이블에 공유 락**이 걸리기 때문이다:
 
@@ -203,15 +189,17 @@ UPDATE users SET updated_at = now() WHERE id = 1;
 
 > FK가 많은 테이블에서 INSERT와 UPDATE가 동시에 빈번한 경우, 생각지 못한 데드락이 발생할 수 있다.
 
+---
+
 ### 3.2 Repeatable Read에서의 데드락
 
 Repeatable Read는 Read Committed보다 **더 많은 락을 더 오래 잡는다.** MySQL InnoDB에서는 **Gap Lock**이라는 추가 락이 발생해서 데드락 위험이 높아진다.
 
-#### Gap Lock이란?
+**Gap Lock이란?**
 
 Gap Lock은 인덱스 레코드 **사이의 간격(gap)** 을 잠그는 락이다. Phantom Read를 방지하기 위해 InnoDB가 Repeatable Read에서 사용한다.
 
-#### Gap의 범위는 어떻게 결정되나?
+**Gap의 범위는 어떻게 결정되나?**
 
 Gap은 **테이블에 실제 존재하는 인덱스 값**을 기준으로 나뉜다. products 테이블에 id = 1, 5, 10이 존재한다면:
 
@@ -222,7 +210,7 @@ Gap은 **테이블에 실제 존재하는 인덱스 값**을 기준으로 나뉜
 
 테이블 데이터가 달라지면 gap도 달라진다. id = 1, 3, 10이 있었다면 gap은 (1,3), (3,10), ...이 된다. **인덱스가 없으면** 테이블 풀스캔이 되어 **전체 범위에 gap lock이 걸린다** — 최악의 상황이다.
 
-#### 예시: BETWEEN 조건의 락 범위
+**예시: BETWEEN 조건의 락 범위**
 
 ```sql
 -- products 테이블: id = 1, 5, 10이 존재
@@ -252,7 +240,7 @@ graph LR
 
 핵심: **존재하지 않는 행(id=3, 4, 6, 7)까지 잠기고, 스캔 경계인 id=10까지 잠길 수 있다.** 예상보다 넓은 범위가 잠기기 때문에 데드락 위험이 높아진다.
 
-#### 케이스: Gap Lock으로 인한 데드락
+**케이스: Gap Lock으로 인한 데드락**
 
 > products 테이블: id = 1, 5, 10이 존재
 
@@ -265,22 +253,22 @@ graph LR
 
 두 트랜잭션이 각각 다른 gap을 잠그고, 상대방의 gap에 INSERT하려다 데드락이 발생한다. **Read Committed에서는 Gap Lock이 없으므로 이 데드락은 발생하지 않는다.**
 
-#### 케이스: UNIQUE 인덱스 중복 INSERT 데드락
+**케이스: UNIQUE 인덱스 중복 INSERT 데드락**
 
 여러 트랜잭션이 동시에 같은 UNIQUE 값을 INSERT할 때 발생하는 데드락이다. MySQL InnoDB에서 특히 흔하다.
 
-> users 테이블: email에 UNIQUE 인덱스가 존재
+> users 테이블: email에 UNIQUE 인덱스가 존재, TX1/TX2/TX3가 동시에 같은 email을 INSERT
 
-| 단계 | TX1 | TX2 | TX3 | 상태 |
-|:---:|------|------|------|:----:|
-| 1 | `INSERT (email='a@x.com')` → 배타 락(X) 획득 | | | |
-| 2 | | `INSERT (email='a@x.com')` → 중복 감지, 공유 락(S) 대기 ⏳ | `INSERT (email='a@x.com')` → 중복 감지, 공유 락(S) 대기 ⏳ | |
-| 3 | `ROLLBACK` → 배타 락 해제 | 공유 락(S) 획득 | 공유 락(S) 획득 | |
-| 4 | | INSERT 재시도 → 배타 락(X) 필요, TX3의 S락 대기 ⏳ | INSERT 재시도 → 배타 락(X) 필요, TX2의 S락 대기 ⏳ | 💀 Deadlock! |
+| 단계 | TX1 | TX2 (TX3도 동일) |
+|:---:|------|------|
+| 1 | `INSERT (email='a@x.com')` — X락 획득 | |
+| 2 | | `INSERT (email='a@x.com')` — 중복 감지, S락 대기 |
+| 3 | `ROLLBACK` — X락 해제 | TX2, TX3 모두 S락 획득 |
+| 4 | | 둘 다 INSERT 재시도 — X락 필요하지만 상대의 S락 대기 💀 |
 
 **왜 이런 일이 발생하나?**
 
-InnoDB는 중복 키를 발견하면 해당 인덱스 레코드에 **공유 락(S)**을 건다. TX1이 롤백되면 대기 중이던 TX2, TX3가 동시에 S락을 획득한다. 이후 둘 다 INSERT를 진행하려면 **배타 락(X)**이 필요한데, 상대방의 S락 때문에 서로 대기하게 된다.
+InnoDB는 중복 키를 발견하면 해당 인덱스 레코드에 **공유 락(S)** 을 건다. TX1이 롤백되면 대기 중이던 TX2, TX3가 동시에 S락을 획득한다. 이후 둘 다 INSERT를 진행하려면 **배타 락(X)** 이 필요한데, 상대방의 S락 때문에 서로 대기하게 된다.
 
 **이 패턴이 흔한 이유:**
 
@@ -293,11 +281,13 @@ InnoDB는 중복 키를 발견하면 해당 인덱스 레코드에 **공유 락(
 - 애플리케이션에서 데드락 감지 후 **재시도 로직**을 구현한다 (섹션 5.3 참고)
 - PostgreSQL은 Gap Lock이 없으므로 이 패턴의 데드락이 발생하지 않는다. 대신 `ON CONFLICT` 구문으로 중복을 처리한다
 
+---
+
 ### 3.3 Serializable에서의 데드락
 
 Serializable은 가장 엄격하고 **가장 데드락이 빈번한** 격리 수준이다.
 
-#### MySQL: 모든 SELECT가 FOR SHARE로 변환
+**MySQL: 모든 SELECT가 FOR SHARE로 변환**
 
 ```sql
 -- Serializable에서는 이 쿼리가
@@ -318,7 +308,7 @@ SELECT balance FROM accounts WHERE id = 1 FOR SHARE;
 
 읽기-쓰기 패턴만으로도 데드락이 발생한다. **Serializable에서는 동시성이 극도로 낮아진다.**
 
-#### PostgreSQL: SSI는 다르다
+**PostgreSQL: SSI는 다르다**
 
 MySQL의 Serializable은 **모든 SELECT에 공유 락**을 걸어서 직렬성을 보장한다. 읽기만 해도 락이 걸리니 동시성이 극도로 낮아지고, 위 예시처럼 데드락이 빈번하다.
 
@@ -361,60 +351,13 @@ ERROR: could not serialize access due to concurrent update
 
 데드락은 아니지만 한쪽 트랜잭션이 롤백되므로, 재시도 로직이 반드시 필요하다.
 
-#### 참고: SSI의 충돌 감지는 어떻게 동작하나?
-
-SSI는 **rw-dependency(읽기-쓰기 의존성)** 를 추적한다. TX1이 읽은 데이터를 TX2가 수정하면 "TX1 → TX2" 의존성이 생기는데, 이걸 **rw-conflict**라고 한다.
-
-```sql
-TX1: SELECT * FROM accounts WHERE id = 1;  -- 잔액 100 읽음
-TX2: UPDATE accounts SET balance = 50 WHERE id = 1;  -- 잔액 수정
--- → rw-conflict: TX1이 읽은 걸 TX2가 바꿈 (TX1 → TX2)
-```
-
-rw-conflict가 하나뿐이면 괜찮다. **두 트랜잭션이 서로의 읽기를 수정하는 순환 구조**가 되면 롤백한다.
-
-```
-[안전 — 한 방향]
-TX1 읽기 → TX2 쓰기
-→ TX1이 먼저 실행된 것으로 간주하면 결과 동일 → OK
-
-[위험 — 순환 (rw-antidependency cycle)]
-TX1 읽기 → TX2 쓰기
-TX2 읽기 → TX1 쓰기
-→ TX1이 먼저? TX2가 먼저? 어떤 순서로도 같은 결과 불가능 → 롤백!
-```
-
-구체적 예시:
-
-```sql
--- accounts: Alice 잔액 100, Bob 잔액 100
-
--- TX1
-SELECT sum(balance) FROM accounts;  -- 200 읽음
-UPDATE accounts SET balance = 50 WHERE name = 'Alice';
-
--- TX2 (동시에)
-SELECT sum(balance) FROM accounts;  -- 200 읽음
-UPDATE accounts SET balance = 50 WHERE name = 'Bob';
-
--- TX1 COMMIT → OK
--- TX2 COMMIT → 직렬화 실패! 롤백!
-```
-
-왜 롤백인가?
-- TX1→TX2 순서였다면: TX1이 Alice를 50으로 바꾼 후 TX2가 sum = **150**을 읽었어야 한다
-- TX2→TX1 순서였다면: TX2가 Bob을 50으로 바꾼 후 TX1이 sum = **150**을 읽었어야 한다
-- 하지만 **둘 다 200을 읽었다** → 어떤 순서로든 재현 불가능 → 직렬화 위반
-
-PostgreSQL은 내부적으로 **SIRead Lock(predicate lock)** 이라는 가벼운 마커를 사용한다. 실제로 행을 잠그지 않고 **"이 트랜잭션이 이 범위를 읽었다"를 기록만** 한다.
-
-| 항목 | 일반 Lock | SIRead Lock |
-|------|----------|-------------|
-| 다른 TX 차단 | O (대기 발생) | **X (차단 안 함)** |
-| 역할 | 동시 접근 방지 | 읽기 범위 기록 |
-| 오버헤드 | 대기 시간 | 메모리 (추적 정보 저장) |
-
-SSI는 **낙관적 락과 비슷한 철학**이다. 일단 동시에 실행하고, 문제가 있으면 나중에 롤백한다.
+> **참고: SSI의 충돌 감지 원리**
+>
+> SSI는 **rw-dependency(읽기-쓰기 의존성)** 를 추적한다. TX1이 읽은 데이터를 TX2가 수정하면 rw-conflict가 생긴다. 한 방향이면 괜찮지만, **두 트랜잭션이 서로의 읽기를 수정하는 순환 구조**가 되면 롤백한다.
+>
+> 예: Alice 잔액 100, Bob 잔액 100인 상태에서 TX1과 TX2가 동시에 `SELECT sum(balance)` → 200을 읽고, 각각 Alice와 Bob의 잔액을 50으로 수정한다. 순서대로 실행했다면 두 번째 TX는 sum = 150을 읽었어야 하는데, **둘 다 200을 읽었으므로** 어떤 순서로든 재현 불가능 → 한쪽을 롤백한다.
+>
+> PostgreSQL은 내부적으로 **SIRead Lock(predicate lock)** 이라는 가벼운 마커로 "이 TX가 이 범위를 읽었다"를 기록만 하고, 실제 행을 잠그지 않는다. SSI는 **낙관적 락과 비슷한 철학** — 일단 동시에 실행하고, 문제가 있으면 나중에 롤백한다.
 
 ---
 
@@ -448,6 +391,8 @@ Product findByIdForUpdate(@Param("id") Long id);
 | | 커넥션 점유 시간 증가 |
 
 **적합한 경우**: 충돌이 자주 발생하는 경우 (재고 차감, 좌석 선택)
+
+---
 
 ### 4.2 낙관적 락 (Optimistic Lock)
 
@@ -564,7 +509,7 @@ SET lock_timeout = '3s';
 Product findByIdForUpdate(@Param("id") Long id);
 ```
 
-#### 타임아웃은 어떻게 결정하나?
+**타임아웃은 어떻게 결정하나?**
 
 DB 기본값은 대부분 너무 길다. MySQL은 50초, PostgreSQL은 무제한이다. **"정상 처리 시간의 2~3배"** 가 일반적인 기준이다.
 

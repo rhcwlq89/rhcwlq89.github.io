@@ -105,21 +105,7 @@ This compatibility is the root cause of deadlocks. If two transactions both hold
 
 > `FOR SHARE` was introduced in MySQL 8.0+. Earlier versions use `LOCK IN SHARE MODE`. PostgreSQL has supported `FOR SHARE` from the start.
 
-#### SQL Server Table Hints Reference
-
-SQL Server doesn't have `FOR UPDATE` / `FOR SHARE` syntax. Instead, it uses **table hints** `WITH (...)` to control locks.
-
-| Hint | Lock Type | Hold Duration | Use Case |
-|------|----------|--------------|----------|
-| `WITH (NOLOCK)` | No lock | - | Dirty Read allowed, monitoring/dashboards |
-| (none, default RC) | S Lock | Released immediately after read | Normal queries |
-| `WITH (HOLDLOCK)` | S Lock | Until transaction end | Read protection (equivalent to `FOR SHARE`) |
-| `WITH (UPDLOCK)` | U Lock | May release immediately in RC | Signal update intent |
-| `WITH (UPDLOCK, HOLDLOCK)` | U Lock | Until transaction end | Modification reservation (equivalent to `FOR UPDATE`) |
-
-> **`UPDLOCK` vs `UPDLOCK, HOLDLOCK`**: With `UPDLOCK` alone in RC isolation, **the lock may release immediately after reading the row.** In patterns like `IF NOT EXISTS (SELECT ...) → INSERT`, a gap between SELECT and INSERT lets other sessions slip in. Adding `HOLDLOCK` keeps the lock until the transaction ends — **always use `UPDLOCK, HOLDLOCK` together when a read is followed by a modification.**
-
-> **`NOLOCK` warning**: Skips S Locks entirely, eliminating lock contention, but **can read uncommitted data (Dirty Read)**. Never use it in logic requiring accuracy (e.g., reading a balance before a transfer). Only safe for **read-only queries where performance matters more than consistency** — monitoring dashboards, approximate statistics.
+> **SQL Server note**: SQL Server doesn't have `FOR UPDATE` / `FOR SHARE` syntax. It uses table hints `WITH (...)` instead. `WITH (HOLDLOCK)` = shared lock, `WITH (UPDLOCK, HOLDLOCK)` = exclusive lock equivalent. With `UPDLOCK` alone in RC, **the lock may release immediately** — **always use `UPDLOCK, HOLDLOCK` together when a read is followed by a modification.** `WITH (NOLOCK)` allows Dirty Reads and should only be used for **read-only queries where performance matters more than consistency** — monitoring dashboards, approximate statistics.
 
 ### 2.5 Indexes and Lock Scope
 
@@ -176,7 +162,7 @@ COMMIT
 
 Read Committed is relatively loose, yet deadlocks still occur. Why? **Reads don't lock, but writes (UPDATE/DELETE) still acquire row locks.**
 
-#### Case 1: Cross-Update
+**Case 1: Cross-Update**
 
 The most common pattern. Two simultaneous transfers: A→B and B→A:
 
@@ -187,7 +173,7 @@ The most common pattern. Two simultaneous transfers: A→B and B→A:
 | 3 | `UPDATE balance WHERE id='B'` → waiting for B ⏳ | | |
 | 4 | | `UPDATE balance WHERE id='A'` → waiting for A ⏳ | 💀 Deadlock! |
 
-#### Case 2: Implicit Locks from FK Constraints
+**Case 2: Implicit Locks from FK Constraints**
 
 Deadlocks can occur without explicit UPDATEs. Inserting into a table with FKs places **shared locks on the parent table**:
 
@@ -204,15 +190,17 @@ UPDATE users SET updated_at = now() WHERE id = 1;
 
 > Tables with many FKs and frequent concurrent INSERTs and UPDATEs can produce unexpected deadlocks.
 
+---
+
 ### 3.2 Deadlocks in Repeatable Read
 
 Repeatable Read holds **more locks for longer** than Read Committed. In MySQL InnoDB, **Gap Locks** create additional deadlock risk.
 
-#### What Are Gap Locks?
+**What Are Gap Locks?**
 
 Gap Locks lock the **gaps between index records**. InnoDB uses them in Repeatable Read to prevent Phantom Reads.
 
-#### How Is the Gap Range Determined?
+**How Is the Gap Range Determined?**
 
 Gaps are defined by **actual index values in the table**. If the products table has id = 1, 5, 10:
 
@@ -223,7 +211,7 @@ Gaps are defined by **actual index values in the table**. If the products table 
 
 Different data means different gaps. If id = 1, 3, 10 existed, gaps would be (1,3), (3,10), etc. **Without an index**, a full table scan occurs and **the entire range gets gap-locked** — the worst case scenario.
 
-#### Example: Lock Range with BETWEEN
+**Example: Lock Range with BETWEEN**
 
 ```sql
 -- products table: id = 1, 5, 10
@@ -253,7 +241,7 @@ graph LR
 
 Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan boundary id=10 may be locked.** A wider range than expected gets locked, increasing deadlock risk.
 
-#### Case: Gap Lock Deadlock
+**Case: Gap Lock Deadlock**
 
 > products table: id = 1, 5, 10
 
@@ -266,18 +254,18 @@ Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan 
 
 Two transactions lock different gaps, then try to INSERT into each other's gaps. **This deadlock doesn't occur in Read Committed because Gap Locks don't exist there.**
 
-#### Case: UNIQUE Index Duplicate INSERT Deadlock
+**Case: UNIQUE Index Duplicate INSERT Deadlock**
 
 A deadlock that occurs when multiple transactions simultaneously INSERT the same UNIQUE value. Particularly common in MySQL InnoDB.
 
-> users table: UNIQUE index on email
+> users table: UNIQUE index on email, TX1/TX2/TX3 all INSERT the same email concurrently
 
-| Step | TX1 | TX2 | TX3 | Status |
-|:---:|------|------|------|:----:|
-| 1 | `INSERT (email='a@x.com')` → exclusive lock (X) acquired | | | |
-| 2 | | `INSERT (email='a@x.com')` → duplicate detected, waiting for shared lock (S) ⏳ | `INSERT (email='a@x.com')` → duplicate detected, waiting for shared lock (S) ⏳ | |
-| 3 | `ROLLBACK` → exclusive lock released | shared lock (S) acquired | shared lock (S) acquired | |
-| 4 | | INSERT retry → needs exclusive lock (X), waiting for TX3's S lock ⏳ | INSERT retry → needs exclusive lock (X), waiting for TX2's S lock ⏳ | 💀 Deadlock! |
+| Step | TX1 | TX2 (TX3 behaves identically) |
+|:---:|------|------|
+| 1 | `INSERT (email='a@x.com')` — X lock acquired | |
+| 2 | | `INSERT (email='a@x.com')` — duplicate detected, waiting for S lock |
+| 3 | `ROLLBACK` — X lock released | TX2 and TX3 both acquire S locks |
+| 4 | | Both retry INSERT — need X lock but blocked by each other's S lock 💀 |
 
 **Why does this happen?**
 
@@ -294,11 +282,13 @@ When InnoDB detects a duplicate key, it places a **shared lock (S)** on the inde
 - Implement **retry logic** in the application after deadlock detection (see section 5.3)
 - PostgreSQL doesn't have Gap Locks, so this specific deadlock pattern doesn't occur. Use `ON CONFLICT` to handle duplicates instead
 
+---
+
 ### 3.3 Deadlocks in Serializable
 
 Serializable is the strictest and has the **most frequent deadlocks**.
 
-#### MySQL: Every SELECT Becomes FOR SHARE
+**MySQL: Every SELECT Becomes FOR SHARE**
 
 ```sql
 -- In Serializable, this query:
@@ -319,7 +309,7 @@ Even reads acquire **shared locks**, so upgrading to exclusive locks for UPDATE 
 
 A simple read-then-write pattern causes deadlocks. **Concurrency drops dramatically in Serializable.**
 
-#### PostgreSQL: SSI Is Different
+**PostgreSQL: SSI Is Different**
 
 MySQL's Serializable places **shared locks on every SELECT** to guarantee serializability. Even reads acquire locks, so concurrency drops drastically and deadlocks are frequent (as shown above).
 
@@ -362,60 +352,13 @@ ERROR: could not serialize access due to concurrent update
 
 Not a deadlock, but one transaction gets rolled back — retry logic is essential.
 
-#### Reference: How Does SSI Detect Conflicts?
-
-SSI tracks **rw-dependencies (read-write dependencies)**. When TX1 reads data that TX2 then modifies, a "TX1 → TX2" dependency forms — this is called an **rw-conflict**.
-
-```sql
-TX1: SELECT * FROM accounts WHERE id = 1;  -- reads balance 100
-TX2: UPDATE accounts SET balance = 50 WHERE id = 1;  -- modifies balance
--- → rw-conflict: TX2 modified what TX1 read (TX1 → TX2)
-```
-
-A single rw-conflict is fine. SSI triggers a rollback when **two transactions form a cycle by modifying each other's reads**.
-
-```
-[Safe — one direction]
-TX1 read → TX2 write
-→ Treat TX1 as running first → same result → OK
-
-[Dangerous — cycle (rw-antidependency cycle)]
-TX1 read → TX2 write
-TX2 read → TX1 write
-→ TX1 first? TX2 first? No ordering produces the same result → Rollback!
-```
-
-Concrete example:
-
-```sql
--- accounts: Alice balance 100, Bob balance 100
-
--- TX1
-SELECT sum(balance) FROM accounts;  -- reads 200
-UPDATE accounts SET balance = 50 WHERE name = 'Alice';
-
--- TX2 (concurrently)
-SELECT sum(balance) FROM accounts;  -- reads 200
-UPDATE accounts SET balance = 50 WHERE name = 'Bob';
-
--- TX1 COMMIT → OK
--- TX2 COMMIT → serialization failure! Rollback!
-```
-
-Why the rollback?
-- If TX1→TX2 order: after TX1 changes Alice to 50, TX2 should have read sum = **150**
-- If TX2→TX1 order: after TX2 changes Bob to 50, TX1 should have read sum = **150**
-- But **both read 200** → no sequential ordering reproduces this → serialization violation
-
-PostgreSQL internally uses **SIRead Locks (predicate locks)** — lightweight markers that don't actually block rows. They only **record "this transaction read this range."**
-
-| Aspect | Regular Lock | SIRead Lock |
-|--------|-------------|-------------|
-| Blocks other TX | Yes (causes waiting) | **No (no blocking)** |
-| Purpose | Prevent concurrent access | Record read ranges |
-| Overhead | Wait time | Memory (tracking info) |
-
-SSI follows the **same philosophy as optimistic locking**. Let transactions run concurrently, and roll back later if there's a problem.
+> **Reference: How SSI Detects Conflicts**
+>
+> SSI tracks **rw-dependencies (read-write dependencies)**. When TX1 reads data that TX2 modifies, an rw-conflict forms. A single conflict is fine. SSI triggers a rollback when **two transactions form a cycle by modifying each other's reads**.
+>
+> Example: Alice balance 100, Bob balance 100. TX1 and TX2 both run `SELECT sum(balance)` → read 200, then each update Alice and Bob to 50 respectively. If run sequentially, the second TX should have read sum = 150, but **both read 200** → no sequential ordering reproduces this → serialization violation → one gets rolled back.
+>
+> PostgreSQL internally uses **SIRead Locks (predicate locks)** — lightweight markers that don't block rows, only **record "this transaction read this range."** SSI follows the **same philosophy as optimistic locking** — let transactions run concurrently, roll back later if there's a problem.
 
 ---
 
@@ -449,6 +392,8 @@ Product findByIdForUpdate(@Param("id") Long id);
 | | Longer connection hold time |
 
 **Best for**: Frequent conflicts (stock deduction, seat selection)
+
+---
 
 ### 4.2 Optimistic Lock
 
@@ -565,7 +510,7 @@ SET lock_timeout = '3s';
 Product findByIdForUpdate(@Param("id") Long id);
 ```
 
-#### How to Determine the Timeout
+**How to Determine the Timeout**
 
 DB defaults are usually too long. MySQL is 50 seconds, PostgreSQL is unlimited. **"2-3x the normal processing time"** is the general guideline.
 
