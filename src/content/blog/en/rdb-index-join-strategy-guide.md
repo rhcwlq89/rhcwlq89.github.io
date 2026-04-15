@@ -401,6 +401,25 @@ ORDER BY object_name;
 
 > **Caution**: Statistics reset on server restart. Accumulate at least a month of production data before making decisions.
 
+**SQL Server — index usage statistics:**
+
+```sql
+SELECT
+    OBJECT_NAME(i.object_id) AS table_name,
+    i.name AS index_name,
+    s.user_seeks + s.user_scans + s.user_lookups AS reads,
+    s.user_updates AS writes
+FROM sys.indexes i
+LEFT JOIN sys.dm_db_index_usage_stats s
+    ON i.object_id = s.object_id AND i.index_id = s.index_id
+WHERE OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
+  AND (s.user_seeks + s.user_scans + s.user_lookups) = 0
+  AND s.user_updates > 0
+ORDER BY s.user_updates DESC;
+```
+
+Indexes with zero reads but ongoing writes — they're consuming write I/O for nothing and are deletion candidates.
+
 **Finding duplicate indexes:**
 
 ```sql

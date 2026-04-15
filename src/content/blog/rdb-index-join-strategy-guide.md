@@ -405,6 +405,25 @@ ORDER BY object_name;
 
 > **주의**: 통계는 서버 재시작 시 초기화된다. 최소 한 달 이상 운영 데이터를 축적한 뒤 판단해야 한다.
 
+**SQL Server — 인덱스 사용 통계:**
+
+```sql
+SELECT
+    OBJECT_NAME(i.object_id) AS table_name,
+    i.name AS index_name,
+    s.user_seeks + s.user_scans + s.user_lookups AS reads,
+    s.user_updates AS writes
+FROM sys.indexes i
+LEFT JOIN sys.dm_db_index_usage_stats s
+    ON i.object_id = s.object_id AND i.index_id = s.index_id
+WHERE OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
+  AND (s.user_seeks + s.user_scans + s.user_lookups) = 0
+  AND s.user_updates > 0
+ORDER BY s.user_updates DESC;
+```
+
+읽기는 0인데 쓰기만 발생하는 인덱스 — 쓰기 비용만 잡아먹고 있는 삭제 후보다.
+
 **중복 인덱스 찾기:**
 
 ```sql
