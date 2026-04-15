@@ -472,7 +472,7 @@ JOIN orders o ON o.customer_id = c.id;  -- inner: index lookup per customer
 **When NLJ is chosen:**
 
 - Outer table is **small** and inner table has an **index**
-- Joining **small numbers of rows** (most OLTP queries)
+- Joining **small numbers of rows** (most OLTP — real-time transactional workloads like order lookups or payment processing — queries)
 - MySQL InnoDB's **default join algorithm** — MySQL only supported NLJ before 8.0.18
 
 ### 3.2 Hash Join
