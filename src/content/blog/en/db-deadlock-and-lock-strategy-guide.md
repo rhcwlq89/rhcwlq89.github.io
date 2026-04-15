@@ -30,6 +30,23 @@ Two transactions waiting for each other's locks, **stuck forever**.
 
 ---
 
+## 1.5 Lock Classification
+
+This post covers shared locks, exclusive locks, pessimistic locks, optimistic locks, and more. These terms come from **different classification axes**, so let's map out how they relate before diving in.
+
+| Axis | Type | Description |
+|------|------|-------------|
+| **Strategy** (when to lock) | Pessimistic Lock | Assumes conflicts will happen — **locks upfront** (`FOR UPDATE`, `FOR SHARE`) |
+| | Optimistic Lock | Assumes no conflict — **validates at commit time** (`@Version`, CAS) |
+| **Mode** (pessimistic lock scope) | Shared Lock (S Lock) | Other transactions can **read**, but must wait to write |
+| | Exclusive Lock (X Lock) | Other transactions must **wait for both reads and writes** |
+| **Layer** | DB Lock | Managed by the DB engine at row/table level (this post's focus) |
+| | Application Lock | Code-level synchronization — mutex, semaphore (`synchronized`, `ReentrantLock`) |
+
+> **Summary**: Pessimistic/optimistic is a **"strategy"**, shared/exclusive is a **"mode"** within pessimistic locking, and mutex is a **"different layer"** entirely. This post focuses on DB-layer pessimistic locks (shared/exclusive), then compares with optimistic locking in Section 4.
+
+---
+
 ## 2. Lock Types: Shared Locks vs Exclusive Locks
 
 To understand deadlocks, you first need to know the **two fundamental lock types** that databases use.
