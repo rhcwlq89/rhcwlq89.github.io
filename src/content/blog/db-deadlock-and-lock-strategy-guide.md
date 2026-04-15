@@ -126,6 +126,8 @@ Account findByIdForUpdate(@Param("id") Long id);
 | 공유 락 (S) | `SELECT ... FOR SHARE` | `SELECT ... WITH (HOLDLOCK)` |
 | 배타 락 (X) | `SELECT ... FOR UPDATE` | `SELECT ... WITH (UPDLOCK, HOLDLOCK)` |
 | 배타 락 (자동) | `UPDATE ...` / `DELETE ...` | `UPDATE ...` / `DELETE ...` |
+| 배타 락 (INSERT) | `INSERT ...` → 새 행에 X락 | `INSERT ...` → 새 행에 X락 |
+| 공유 락 (INSERT 충돌) | UNIQUE 중복 시 기존 행에 S락 | UNIQUE 중복 시 기존 행에 S락 |
 
 > `FOR SHARE`는 MySQL 8.0+에서 도입됐다. 이전 버전에서는 `LOCK IN SHARE MODE`를 사용한다. PostgreSQL은 처음부터 `FOR SHARE`를 지원한다.
 

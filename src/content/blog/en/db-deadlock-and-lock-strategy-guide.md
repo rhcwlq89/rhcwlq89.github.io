@@ -127,6 +127,8 @@ This compatibility is the root cause of deadlocks. If two transactions both hold
 | Shared (S) | `SELECT ... FOR SHARE` | `SELECT ... WITH (HOLDLOCK)` |
 | Exclusive (X) | `SELECT ... FOR UPDATE` | `SELECT ... WITH (UPDLOCK, HOLDLOCK)` |
 | Exclusive (auto) | `UPDATE ...` / `DELETE ...` | `UPDATE ...` / `DELETE ...` |
+| Exclusive (INSERT) | `INSERT ...` → X lock on new row | `INSERT ...` → X lock on new row |
+| Shared (INSERT conflict) | S lock on existing row when UNIQUE duplicate detected | S lock on existing row when UNIQUE duplicate detected |
 
 > `FOR SHARE` was introduced in MySQL 8.0+. Earlier versions use `LOCK IN SHARE MODE`. PostgreSQL has supported `FOR SHARE` from the start.
 
