@@ -265,6 +265,34 @@ graph LR
 
 두 트랜잭션이 각각 다른 gap을 잠그고, 상대방의 gap에 INSERT하려다 데드락이 발생한다. **Read Committed에서는 Gap Lock이 없으므로 이 데드락은 발생하지 않는다.**
 
+#### 케이스: UNIQUE 인덱스 중복 INSERT 데드락
+
+여러 트랜잭션이 동시에 같은 UNIQUE 값을 INSERT할 때 발생하는 데드락이다. MySQL InnoDB에서 특히 흔하다.
+
+> users 테이블: email에 UNIQUE 인덱스가 존재
+
+| 단계 | TX1 | TX2 | TX3 | 상태 |
+|:---:|------|------|------|:----:|
+| 1 | `INSERT (email='a@x.com')` → 배타 락(X) 획득 | | | |
+| 2 | | `INSERT (email='a@x.com')` → 중복 감지, 공유 락(S) 대기 ⏳ | `INSERT (email='a@x.com')` → 중복 감지, 공유 락(S) 대기 ⏳ | |
+| 3 | `ROLLBACK` → 배타 락 해제 | 공유 락(S) 획득 | 공유 락(S) 획득 | |
+| 4 | | INSERT 재시도 → 배타 락(X) 필요, TX3의 S락 대기 ⏳ | INSERT 재시도 → 배타 락(X) 필요, TX2의 S락 대기 ⏳ | 💀 Deadlock! |
+
+**왜 이런 일이 발생하나?**
+
+InnoDB는 중복 키를 발견하면 해당 인덱스 레코드에 **공유 락(S)**을 건다. TX1이 롤백되면 대기 중이던 TX2, TX3가 동시에 S락을 획득한다. 이후 둘 다 INSERT를 진행하려면 **배타 락(X)**이 필요한데, 상대방의 S락 때문에 서로 대기하게 된다.
+
+**이 패턴이 흔한 이유:**
+
+- "이메일 중복이면 무시" 같은 로직에서 여러 요청이 동시에 같은 값을 INSERT할 때
+- 큐 워커나 배치 프로세스에서 중복 작업이 동시에 실행될 때
+
+**예방 방법:**
+
+- `INSERT ... ON DUPLICATE KEY UPDATE` 또는 `INSERT IGNORE`를 사용하면 S락 없이 처리된다
+- 애플리케이션에서 데드락 감지 후 **재시도 로직**을 구현한다 (섹션 5.3 참고)
+- PostgreSQL은 Gap Lock이 없으므로 이 패턴의 데드락이 발생하지 않는다. 대신 `ON CONFLICT` 구문으로 중복을 처리한다
+
 ### 3.3 Serializable에서의 데드락
 
 Serializable은 가장 엄격하고 **가장 데드락이 빈번한** 격리 수준이다.

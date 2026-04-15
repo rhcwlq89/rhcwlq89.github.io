@@ -266,6 +266,34 @@ Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan 
 
 Two transactions lock different gaps, then try to INSERT into each other's gaps. **This deadlock doesn't occur in Read Committed because Gap Locks don't exist there.**
 
+#### Case: UNIQUE Index Duplicate INSERT Deadlock
+
+A deadlock that occurs when multiple transactions simultaneously INSERT the same UNIQUE value. Particularly common in MySQL InnoDB.
+
+> users table: UNIQUE index on email
+
+| Step | TX1 | TX2 | TX3 | Status |
+|:---:|------|------|------|:----:|
+| 1 | `INSERT (email='a@x.com')` → exclusive lock (X) acquired | | | |
+| 2 | | `INSERT (email='a@x.com')` → duplicate detected, waiting for shared lock (S) ⏳ | `INSERT (email='a@x.com')` → duplicate detected, waiting for shared lock (S) ⏳ | |
+| 3 | `ROLLBACK` → exclusive lock released | shared lock (S) acquired | shared lock (S) acquired | |
+| 4 | | INSERT retry → needs exclusive lock (X), waiting for TX3's S lock ⏳ | INSERT retry → needs exclusive lock (X), waiting for TX2's S lock ⏳ | 💀 Deadlock! |
+
+**Why does this happen?**
+
+When InnoDB detects a duplicate key, it places a **shared lock (S)** on the index record. When TX1 rolls back, both TX2 and TX3 simultaneously acquire S locks. Then both try to proceed with INSERT, which requires an **exclusive lock (X)** — but each is blocked by the other's S lock.
+
+**Why this pattern is common:**
+
+- "Ignore if email already exists" logic where multiple requests INSERT the same value simultaneously
+- Queue workers or batch processes executing duplicate tasks concurrently
+
+**Prevention:**
+
+- Use `INSERT ... ON DUPLICATE KEY UPDATE` or `INSERT IGNORE` — these avoid the S lock step
+- Implement **retry logic** in the application after deadlock detection (see section 5.3)
+- PostgreSQL doesn't have Gap Locks, so this specific deadlock pattern doesn't occur. Use `ON CONFLICT` to handle duplicates instead
+
 ### 3.3 Deadlocks in Serializable
 
 Serializable is the strictest and has the **most frequent deadlocks**.
