@@ -219,7 +219,7 @@ UPDATE users SET updated_at = now() WHERE id = 1;
 
 ---
 
-### 3.2 Deadlocks in Repeatable Read
+### 3.2 Gap Locks and Next-Key Locks
 
 Repeatable Read holds **more locks for longer** than Read Committed. In MySQL InnoDB, **Gap Locks** create additional deadlock risk.
 
@@ -268,7 +268,9 @@ graph LR
 
 Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan boundary id=10 may be locked.** A wider range than expected gets locked, increasing deadlock risk.
 
-**Case: Gap Lock Deadlock**
+---
+
+### 3.3 Gap Lock Deadlock
 
 > products table: id = 1, 5, 10
 
@@ -281,7 +283,9 @@ Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan 
 
 Two transactions lock different gaps, then try to INSERT into each other's gaps. **This deadlock doesn't occur in Read Committed because Gap Locks don't exist there.**
 
-**How INSERT Locks Work Internally**
+---
+
+### 3.4 How INSERT Locks Work Internally
 
 Unlike SELECT/UPDATE/DELETE, INSERT acquires **multiple types of locks in stages.** Understanding this is essential before diving into the deadlock cases below.
 
@@ -293,7 +297,9 @@ Unlike SELECT/UPDATE/DELETE, INSERT acquires **multiple types of locks in stages
 
 > **Insert Intention Lock** has "Lock" in its name, but transactions inserting at **different positions within the same gap don't conflict** with each other. They can proceed concurrently. Insert Intention Locks conflict with Gap Locks, not with each other.
 
-**Case: UNIQUE Index Duplicate INSERT Deadlock**
+---
+
+### 3.5 UNIQUE Index Duplicate INSERT Deadlock
 
 A deadlock that occurs when multiple transactions simultaneously INSERT the same UNIQUE value. Particularly common in MySQL InnoDB.
 
@@ -323,7 +329,7 @@ When InnoDB detects a duplicate key, it places a **shared lock (S)** on the inde
 
 ---
 
-### 3.3 Deadlocks in Serializable
+### 3.6 Deadlocks in Serializable
 
 Serializable is the strictest and has the **most frequent deadlocks**.
 
@@ -348,7 +354,9 @@ Even reads acquire **shared locks**, so upgrading to exclusive locks for UPDATE 
 
 A simple read-then-write pattern causes deadlocks. **Concurrency drops dramatically in Serializable.**
 
-**PostgreSQL: SSI Is Different**
+---
+
+### 3.7 PostgreSQL SSI: Serialization Without Locks
 
 MySQL's Serializable places **shared locks on every SELECT** to guarantee serializability. Even reads acquire locks, so concurrency drops drastically and deadlocks are frequent (as shown above).
 

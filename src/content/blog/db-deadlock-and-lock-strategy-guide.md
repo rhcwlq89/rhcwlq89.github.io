@@ -218,7 +218,7 @@ UPDATE users SET updated_at = now() WHERE id = 1;
 
 ---
 
-### 3.2 Repeatable Read에서의 데드락
+### 3.2 Gap Lock과 Next-Key Lock
 
 Repeatable Read는 Read Committed보다 **더 많은 락을 더 오래 잡는다.** MySQL InnoDB에서는 **Gap Lock**이라는 추가 락이 발생해서 데드락 위험이 높아진다.
 
@@ -267,7 +267,9 @@ graph LR
 
 핵심: **존재하지 않는 행(id=3, 4, 6, 7)까지 잠기고, 스캔 경계인 id=10까지 잠길 수 있다.** 예상보다 넓은 범위가 잠기기 때문에 데드락 위험이 높아진다.
 
-**케이스: Gap Lock으로 인한 데드락**
+---
+
+### 3.3 Gap Lock 데드락
 
 > products 테이블: id = 1, 5, 10이 존재
 
@@ -280,7 +282,9 @@ graph LR
 
 두 트랜잭션이 각각 다른 gap을 잠그고, 상대방의 gap에 INSERT하려다 데드락이 발생한다. **Read Committed에서는 Gap Lock이 없으므로 이 데드락은 발생하지 않는다.**
 
-**INSERT 시 내부 락 동작**
+---
+
+### 3.4 INSERT의 내부 락 동작
 
 SELECT/UPDATE/DELETE와 달리, INSERT는 **여러 종류의 락이 단계적으로 걸린다.** 아래 데드락 케이스를 이해하려면 이 동작을 먼저 알아야 한다.
 
@@ -292,7 +296,9 @@ SELECT/UPDATE/DELETE와 달리, INSERT는 **여러 종류의 락이 단계적으
 
 > **Insert Intention Lock**은 이름에 "Lock"이 들어가지만, 서로 다른 위치에 삽입하는 트랜잭션끼리는 **충돌하지 않는다.** 같은 gap 안이라도 삽입 위치가 다르면 동시에 진행할 수 있다. Gap Lock과 충돌하는 것이지, Insert Intention Lock끼리 충돌하는 것이 아니다.
 
-**케이스: UNIQUE 인덱스 중복 INSERT 데드락**
+---
+
+### 3.5 UNIQUE 인덱스 중복 INSERT 데드락
 
 여러 트랜잭션이 동시에 같은 UNIQUE 값을 INSERT할 때 발생하는 데드락이다. MySQL InnoDB에서 특히 흔하다.
 
@@ -322,7 +328,7 @@ InnoDB는 중복 키를 발견하면 해당 인덱스 레코드에 **공유 락(
 
 ---
 
-### 3.3 Serializable에서의 데드락
+### 3.6 Serializable에서의 데드락
 
 Serializable은 가장 엄격하고 **가장 데드락이 빈번한** 격리 수준이다.
 
@@ -347,7 +353,9 @@ SELECT balance FROM accounts WHERE id = 1 FOR SHARE;
 
 읽기-쓰기 패턴만으로도 데드락이 발생한다. **Serializable에서는 동시성이 극도로 낮아진다.**
 
-**PostgreSQL: SSI는 다르다**
+---
+
+### 3.7 PostgreSQL SSI: 락 없는 직렬화
 
 MySQL의 Serializable은 **모든 SELECT에 공유 락**을 걸어서 직렬성을 보장한다. 읽기만 해도 락이 걸리니 동시성이 극도로 낮아지고, 위 예시처럼 데드락이 빈번하다.
 
