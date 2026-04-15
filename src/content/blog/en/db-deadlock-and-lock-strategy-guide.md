@@ -279,6 +279,18 @@ Key takeaway: **Non-existent rows (id=3, 4, 6, 7) get locked, and even the scan 
 
 Two transactions lock different gaps, then try to INSERT into each other's gaps. **This deadlock doesn't occur in Read Committed because Gap Locks don't exist there.**
 
+**How INSERT Locks Work Internally**
+
+Unlike SELECT/UPDATE/DELETE, INSERT acquires **multiple types of locks in stages.** Understanding this is essential before diving into the deadlock cases below.
+
+| Situation | Lock Acquired | Description |
+|-----------|--------------|-------------|
+| Normal INSERT | **Exclusive lock (X)** | Places an X lock on the newly inserted row |
+| INSERT into a gap-locked range | **Insert Intention Lock** (wait) → **X lock** | If a Gap Lock already exists on the target gap, the INSERT waits. Once the gap is released, it acquires an Insert Intention Lock, inserts the row, and places an X lock |
+| UNIQUE duplicate detected | **Shared lock (S)** | If the same value already exists, places an S lock on the index record. If the existing row commits → duplicate error. If it rolls back → retries INSERT while still holding the S lock |
+
+> **Insert Intention Lock** has "Lock" in its name, but transactions inserting at **different positions within the same gap don't conflict** with each other. They can proceed concurrently. Insert Intention Locks conflict with Gap Locks, not with each other.
+
 **Case: UNIQUE Index Duplicate INSERT Deadlock**
 
 A deadlock that occurs when multiple transactions simultaneously INSERT the same UNIQUE value. Particularly common in MySQL InnoDB.

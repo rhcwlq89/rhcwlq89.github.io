@@ -278,6 +278,18 @@ graph LR
 
 두 트랜잭션이 각각 다른 gap을 잠그고, 상대방의 gap에 INSERT하려다 데드락이 발생한다. **Read Committed에서는 Gap Lock이 없으므로 이 데드락은 발생하지 않는다.**
 
+**INSERT 시 내부 락 동작**
+
+SELECT/UPDATE/DELETE와 달리, INSERT는 **여러 종류의 락이 단계적으로 걸린다.** 아래 데드락 케이스를 이해하려면 이 동작을 먼저 알아야 한다.
+
+| 상황 | 걸리는 락 | 설명 |
+|------|----------|------|
+| 일반 INSERT | **배타 락 (X)** | 새로 삽입한 행에 X락을 건다 |
+| Gap Lock이 있는 범위에 INSERT | **Insert Intention Lock** (대기) → **X락** | 해당 gap에 이미 Gap Lock이 있으면 대기한다. gap이 풀리면 Insert Intention Lock을 획득하고 행을 삽입한 뒤 X락을 건다 |
+| UNIQUE 중복 감지 | **공유 락 (S)** | 이미 같은 값이 존재하면 해당 인덱스 레코드에 S락을 건다. 기존 행이 커밋되면 duplicate error, 롤백되면 S락을 잡은 채 INSERT를 재시도한다 |
+
+> **Insert Intention Lock**은 이름에 "Lock"이 들어가지만, 서로 다른 위치에 삽입하는 트랜잭션끼리는 **충돌하지 않는다.** 같은 gap 안이라도 삽입 위치가 다르면 동시에 진행할 수 있다. Gap Lock과 충돌하는 것이지, Insert Intention Lock끼리 충돌하는 것이 아니다.
+
 **케이스: UNIQUE 인덱스 중복 INSERT 데드락**
 
 여러 트랜잭션이 동시에 같은 UNIQUE 값을 INSERT할 때 발생하는 데드락이다. MySQL InnoDB에서 특히 흔하다.
