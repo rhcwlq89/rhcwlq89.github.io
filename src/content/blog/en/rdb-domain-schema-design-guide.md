@@ -922,4 +922,4 @@ This post drilled into a single domain — orders — as far as it goes. The key
 
 **"Knowing the theory" and "applying it in production" are different skills.** Even a single domain yields eight tables, dozens of constraints, and a handful of real trade-offs. Each additional domain brings roughly the same weight. Hopefully this post conveys at least some of that weight.
 
-Next up: **RBAC permission system schema design** — role/permission tables, caching strategy, role hierarchies, and resource-level permissions.
+Next up: **Index design and JOIN strategy** — covering indexes, partial indexes, JOIN algorithm selection criteria, and how to read EXPLAIN ANALYZE.
