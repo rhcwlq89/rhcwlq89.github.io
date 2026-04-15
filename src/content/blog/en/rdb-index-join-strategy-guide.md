@@ -17,7 +17,7 @@ If table design is the blueprint, index design is the elevator placement. No mat
 
 This post doesn't cover index "basics." We assume you already know what a B+Tree is and how to write CREATE INDEX. Instead, we focus on **design decisions**:
 
-1. **Index structures and design principles** — why B+Tree is the default, and when to use something else
+1. **What you need to know before designing indexes** — why B+Tree is the default, and when to use something else
 2. **Design-level indexes** — covering indexes, partial indexes, expression indexes, cardinality analysis
 3. **JOIN algorithms** — how Nested Loop, Hash Join, and Merge Join work and when each is chosen
 4. **Reading EXPLAIN ANALYZE** — understanding the optimizer's decisions
@@ -25,7 +25,7 @@ This post doesn't cover index "basics." We assume you already know what a B+Tree
 
 ---
 
-## 1. Index Structures and Design Principles
+## 1. What You Need to Know Before Designing Indexes
 
 ### 1.1 B+Tree — Why It's the Default
 

@@ -23,7 +23,7 @@ heroImage: "../../assets/RdbIndexJoinStrategyGuide.png"
 
 이 글은 인덱스 "기초"를 다루지 않는다. B+Tree가 뭔지, CREATE INDEX 문법이 뭔지는 이미 안다고 가정한다. 대신 **설계 판단**에 집중한다:
 
-1. **인덱스 구조와 설계 원칙** — 왜 B+Tree가 기본이고, 언제 다른 걸 쓰는가
+1. **인덱스 설계 전에 알아야 할 것** — 왜 B+Tree가 기본이고, 언제 다른 걸 쓰는가
 2. **설계 레벨 인덱스** — 커버링 인덱스, 부분 인덱스, Expression 인덱스, 카디널리티 분석
 3. **JOIN 알고리즘** — Nested Loop, Hash Join, Merge Join의 작동 원리와 선택 조건
 4. **EXPLAIN ANALYZE 읽기** — 실행 계획을 읽고, 옵티마이저의 판단을 이해하기
@@ -31,7 +31,7 @@ heroImage: "../../assets/RdbIndexJoinStrategyGuide.png"
 
 ---
 
-## 1. 인덱스 구조와 설계 원칙
+## 1. 인덱스 설계 전에 알아야 할 것
 
 ### 1.1 B+Tree — 왜 기본인가
 
