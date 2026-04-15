@@ -63,17 +63,25 @@ Account findByIdForShare(@Param("id") Long id);
 
 ```sql
 -- MySQL / PostgreSQL
+-- 실행 쿼리: SELECT * FROM accounts WHERE id = 1 FOR UPDATE
+-- → id=1 행에 배타 락(X Lock)을 걸고 해당 행을 조회한다
 SELECT * FROM accounts WHERE id = 1 FOR UPDATE;
 
 -- SQL Server
+-- 실행 쿼리: SELECT * FROM accounts WITH (UPDLOCK, HOLDLOCK) WHERE id = 1
+-- → UPDLOCK(배타 락) + HOLDLOCK(트랜잭션 끝까지 유지)으로 id=1 행을 조회한다
 SELECT * FROM accounts WITH (UPDLOCK, HOLDLOCK) WHERE id = 1;
 
 -- UPDATE/DELETE는 자동으로 배타 락 (모든 DB 공통)
+-- 실행 쿼리: UPDATE accounts SET balance = 0 WHERE id = 1
+-- → id=1 행에 배타 락을 자동으로 걸고 balance를 0으로 변경한다
 UPDATE accounts SET balance = 0 WHERE id = 1;
 ```
 
 ```java
 // Spring Boot
+// 실행 쿼리: SELECT * FROM account WHERE id = ? FOR UPDATE
+// → PESSIMISTIC_WRITE는 JPA가 SELECT ... FOR UPDATE 쿼리를 생성한다
 @Lock(LockModeType.PESSIMISTIC_WRITE)
 @Query("SELECT a FROM Account a WHERE a.id = :id")
 Account findByIdForUpdate(@Param("id") Long id);

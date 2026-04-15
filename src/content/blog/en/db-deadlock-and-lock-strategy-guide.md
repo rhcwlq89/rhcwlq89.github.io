@@ -64,17 +64,25 @@ Multiple transactions can **hold shared locks simultaneously**. However, no tran
 
 ```sql
 -- MySQL / PostgreSQL
+-- Query: SELECT * FROM accounts WHERE id = 1 FOR UPDATE
+-- → Acquires an exclusive lock (X Lock) on the row where id=1, then returns it
 SELECT * FROM accounts WHERE id = 1 FOR UPDATE;
 
 -- SQL Server
+-- Query: SELECT * FROM accounts WITH (UPDLOCK, HOLDLOCK) WHERE id = 1
+-- → UPDLOCK (exclusive lock) + HOLDLOCK (held until transaction ends) on the row where id=1
 SELECT * FROM accounts WITH (UPDLOCK, HOLDLOCK) WHERE id = 1;
 
 -- UPDATE/DELETE automatically acquire exclusive locks (all DBs)
+-- Query: UPDATE accounts SET balance = 0 WHERE id = 1
+-- → Automatically acquires an exclusive lock on the row where id=1 and sets balance to 0
 UPDATE accounts SET balance = 0 WHERE id = 1;
 ```
 
 ```java
 // Spring Boot
+// Query: SELECT * FROM account WHERE id = ? FOR UPDATE
+// → PESSIMISTIC_WRITE causes JPA to generate a SELECT ... FOR UPDATE query
 @Lock(LockModeType.PESSIMISTIC_WRITE)
 @Query("SELECT a FROM Account a WHERE a.id = :id")
 Account findByIdForUpdate(@Param("id") Long id);
