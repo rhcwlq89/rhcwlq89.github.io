@@ -113,15 +113,25 @@ FROM product_attributes
 WHERE attribute_name = 'price';
 ```
 
-### 1.4 When EAV Is Acceptable
+### 1.4 "We Need EAV" Is a Signal — Consider NoSQL
 
-EAV is the **only option** in some cases:
+These are the situations people commonly claim EAV is the **only option**:
 
-- **Marketplaces with hundreds of attributes varying by product**: electronics have CPU/RAM/resolution, clothing has material/size/season — you can't make columns for all of them
+- **Marketplaces with hundreds of attributes varying by product**: electronics have CPU/RAM/resolution, clothing has material/size/season
 - **User-defined fields**: SaaS where customers add their own fields
 - **Configuration stores**: key-value is the natural shape
 
-Even then, the principle is **core attributes as columns, variable attributes only in EAV.**
+But if you need this level of schema flexibility, **you should use a document database (MongoDB, DynamoDB, etc.) instead of forcing EAV into an RDB.** Document databases are purpose-built for exactly this kind of flexible structure.
+
+```json
+// MongoDB — different attributes per product, naturally
+{ "_id": 1, "name": "Laptop", "price": 1290000, "cpu": "M3", "ram": "16GB", "screen": "14inch" }
+{ "_id": 2, "name": "T-shirt", "price": 29900, "size": "XL", "material": "cotton", "season": "summer" }
+```
+
+Every problem with EAV (type safety, JOIN hell, broken constraints) **structurally does not exist** in document databases. Forcing a relational model onto schema-fluid data is itself the anti-pattern.
+
+> **Principle**: The moment you feel "we need EAV" is the moment to evaluate NoSQL. If you must stay in RDB, JSON columns (section 1.5) are the next best option.
 
 ### 1.5 Alternative: JSON Columns
 
@@ -816,7 +826,7 @@ Without snapshots, you replay from event #1. With snapshots, you only replay **t
 
 ### 8.1 Anti-Pattern Check
 
-- [ ] **Using EAV?** Are core attributes in columns and only variable attributes in JSON?
+- [ ] **Using EAV?** If that level of flexibility is needed, consider NoSQL first. If staying in RDB, are core attributes in columns and variable attributes in JSON?
 - [ ] **God Table present?** If a table uses a `type` column to distinguish row types, consider splitting
 - [ ] **Polymorphic Association?** If `_type` + `_id` combinations exist without FK, review alternatives
 - [ ] **Soft Delete burdening every query?** Consider archive table or status column transition
@@ -839,7 +849,7 @@ Without snapshots, you replay from event #1. With snapshots, you only replay **t
 
 Core takeaways from this post:
 
-1. **EAV looks flexible but sacrifices type safety, constraints, and query performance.** The alternative: core attributes as columns, variable attributes as JSON.
+1. **EAV looks flexible but sacrifices type safety, constraints, and query performance.** If you need EAV-level flexibility, consider NoSQL first. If you must stay in RDB, use core attributes as columns and variable attributes as JSON.
 2. **God Tables neutralize all domain constraints.** Splitting by domain is the only solution.
 3. **Polymorphic Association is a reference without FK.** Exclusive FK, junction tables, or shared parent tables can restore data integrity.
 4. **Soft Delete looks simple but breaks UNIQUE constraints, causes query omissions, and creates index bloat.** Archive tables or status columns are cleaner.
