@@ -858,4 +858,4 @@ Core takeaways from this post:
 
 **"Knowing good design" and "recognizing bad design" are different skills.** You need the eyes to spot anti-patterns to catch problems in code reviews and see the path forward for legacy improvement. Hopefully this post helped develop that vision.
 
-Next up: **RBAC permission system schema design** — role/permission tables, caching strategy, role hierarchies, and resource-level permissions.
+Next up: **Zero-downtime migration and multi-tenant design** — ALTER TABLE lock traps, Expand-Contract pattern, Flyway vs Liquibase, and multi-tenant schema strategies.
