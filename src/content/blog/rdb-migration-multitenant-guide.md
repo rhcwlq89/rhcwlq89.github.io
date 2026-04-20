@@ -46,6 +46,10 @@ ALTER TABLE orders ADD COLUMN memo VARCHAR(500);
 
 ### 1.2 MySQL의 Online DDL
 
+> **Online DDL이란?**
+>
+> 여기서 "Online"은 **DDL이 실행되는 동안에도 서비스가 정상 동작한다**는 의미다. 전통적인 방식(Offline DDL)은 ALTER TABLE이 끝날 때까지 테이블 전체에 락을 걸어 모든 읽기/쓰기를 차단했고, 그래서 대형 테이블의 스키마 변경은 곧 **점검 공지**를 의미했다. Online DDL은 변경 작업과 **동시에 일반 DML(INSERT/UPDATE/DELETE/SELECT)을 허용**해, 운영 중에도 무중단으로 스키마를 바꿀 수 있게 한 기능이다. 단, 모든 ALTER가 Online으로 동작하는 건 아니며 — 작업 종류와 `ALGORITHM`/`LOCK` 옵션의 조합에 따라 결정된다.
+
 MySQL 5.6+에서 Online DDL이 도입되면서, **일부 ALTER TABLE은 테이블을 잠그지 않고 실행**할 수 있게 됐다.
 
 ```sql

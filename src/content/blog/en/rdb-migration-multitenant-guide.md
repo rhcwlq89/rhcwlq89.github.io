@@ -40,6 +40,10 @@ The core problem is **locks.** While ALTER TABLE runs, other queries wait — ef
 
 ### 1.2 MySQL's Online DDL
 
+> **What is Online DDL?**
+>
+> "Online" here means **the service keeps serving traffic while the DDL is running.** Traditional (offline) DDL locks the entire table for the full duration of ALTER TABLE, blocking every read and write — which is why schema changes on large tables historically meant **scheduled maintenance windows.** Online DDL allows regular **DML (INSERT/UPDATE/DELETE/SELECT) to proceed concurrently** with the schema change, enabling zero-downtime modifications in production. Not every ALTER qualifies, though — whether an operation runs online depends on the combination of operation type, `ALGORITHM`, and `LOCK` options.
+
 MySQL 5.6+ introduced Online DDL, allowing **some ALTER TABLE operations to run without locking the table.**
 
 ```sql
