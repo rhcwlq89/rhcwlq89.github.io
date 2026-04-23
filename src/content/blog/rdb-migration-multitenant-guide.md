@@ -88,7 +88,7 @@ ALTER TABLE orders ADD COLUMN memo VARCHAR(500),
 | 컬럼 순서 변경 | COPY | ❌ |
 | PRIMARY KEY 변경 | COPY | ❌ |
 
-> **주의**: Online DDL도 **시작과 끝에 잠깐 메타데이터 락(MDL)**을 잡는다. 테이블에 장시간 트랜잭션이 걸려 있으면 이 MDL 대기가 길어져서 후속 쿼리가 줄줄이 밀린다. `LOCK=NONE`이라고 완전히 안전한 건 아니다.
+> **주의**: Online DDL도 **시작과 끝에 잠깐 메타데이터 락(MDL)을** 잡는다. 테이블에 장시간 트랜잭션이 걸려 있으면 이 MDL 대기가 길어져서 후속 쿼리가 줄줄이 밀린다. `LOCK=NONE`이라고 완전히 안전한 건 아니다.
 
 ### 1.3 PostgreSQL의 Lock 수준
 
