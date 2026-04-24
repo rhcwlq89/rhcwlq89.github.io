@@ -9,17 +9,17 @@ lang: en
 
 ## Introduction
 
-"Put your EC2 in a Private Subnet and wrap it with an ALB and a NAT Gateway" — you'll see this advice after a few minutes of Googling AWS. But most guides jump straight to Terraform code without explaining **why**. This series starts with that missing piece.
+"Put your EC2 in a Private Subnet and wrap it with an ALB and a NAT Gateway" — you'll see this advice after a few minutes of Googling AWS. But most guides jump straight to Terraform code without explaining <strong>why</strong>. This series starts with that missing piece.
 
-Over five parts, we cover a practical playbook for running EC2 in a Private Subnet on AWS: connecting without a Bastion via SSM, deploying with GitHub Actions, and optimizing cost. Part 1 is **about the "why"** — the groundwork you need before moving on to Part 2.
+Over five parts, we cover a practical playbook for running EC2 in a Private Subnet on AWS: connecting without a Bastion via SSM, deploying with GitHub Actions, and optimizing cost. Part 1 is <strong>about the "why"</strong> — the groundwork you need before moving on to Part 2.
 
-- **Part 1 — Why Private Subnet? (this post)**
+- <strong>Part 1 — Why Private Subnet? (this post)</strong>
 - Part 2 — Building the VPC infrastructure with Terraform
 - Part 3 — Connecting without Bastion using SSM Session Manager
 - Part 4 — CI/CD pipeline with GitHub Actions + SSM/CodeDeploy
 - Part 5 — Cost analysis and optimization strategies
 
-The target reader is a junior engineer who has "followed a tutorial to launch an EC2 but doesn't really understand why Private Subnet or NAT Gateway are needed." After this post, you should walk away thinking **"ah, so that's why we do it this way."**
+The target reader is a junior engineer who has "followed a tutorial to launch an EC2 but doesn't really understand why Private Subnet or NAT Gateway are needed." After this post, you should walk away thinking <strong>"ah, so that's why we do it this way."</strong>
 
 ---
 
@@ -41,12 +41,12 @@ Internet
 
 ### 1.2 Role of Each Component
 
-- **EC2 lives in the Private Subnet.** It has no public IP and cannot be reached directly from the internet. Inbound traffic arrives only through the ALB.
-- **ALB lives in the Public Subnet.** It accepts HTTP/HTTPS traffic from the internet and routes it to the Private EC2s behind it. It is the "front door" for your service.
-- **NAT Gateway also lives in the Public Subnet.** It is an **outbound-only** channel so EC2 can call external APIs, pull OS patches, or ship logs outward. Reverse access (internet → EC2) is not possible through it.
-- **Multi-AZ is the production baseline.** ALB, NAT Gateway, and EC2 are all spread across at least two AZs so that a single AZ failure doesn't take the service down.
+- <strong>EC2 lives in the Private Subnet.</strong> It has no public IP and cannot be reached directly from the internet. Inbound traffic arrives only through the ALB.
+- <strong>ALB lives in the Public Subnet.</strong> It accepts HTTP/HTTPS traffic from the internet and routes it to the Private EC2s behind it. It is the "front door" for your service.
+- <strong>NAT Gateway also lives in the Public Subnet.</strong> It is an <strong>outbound-only</strong> channel so EC2 can call external APIs, pull OS patches, or ship logs outward. Reverse access (internet → EC2) is not possible through it.
+- <strong>Multi-AZ is the production baseline.</strong> ALB, NAT Gateway, and EC2 are all spread across at least two AZs so that a single AZ failure doesn't take the service down.
 
-One principle sums it up: **"Inbound only via ALB, outbound only via NAT, everything else blocked."**
+One principle sums it up: <strong>"Inbound only via ALB, outbound only via NAT, everything else blocked."</strong>
 
 ### 1.3 Glossary for This Series
 
@@ -77,14 +77,14 @@ When an EC2 sits in a Public Subnet, it gets a public IP — and that comes in t
 | --- | --- | --- |
 | Allocation | Auto-assigned when EC2 starts | Manually allocated by the user |
 | Lifetime | Changes on stop/start | Fixed until explicitly released |
-| Cost | $0.005/hour (since Feb 2024) | Same when attached to a running EC2. **Also billed while unattached** |
+| Cost | $0.005/hour (since Feb 2024) | Same when attached to a running EC2. <strong>Also billed while unattached</strong> |
 | Use case | Temporary testing; no need for a stable IP | DNS records, IP allowlists, external integrations |
 | Attaches to | Automatically to an EC2 | Manually to EC2, NAT Gateway, NLB, etc. |
 
 > [!NOTE]
 > Stop → start an EC2 and the Public IPv4 changes. If you pointed DNS at that IP, the connection breaks. Use an EIP when you need a stable IP. But watch out: EIPs allocated without being attached still incur charges. AWS added this penalty because IPv4 is scarce — "don't hoard addresses you don't use."
 
-**Relation to this architecture**: EC2 in a Private Subnet has neither a Public IPv4 nor an EIP, because there's no external exposure in the first place. Inbound is handled by the ALB, outbound by the NAT Gateway. This is one of the reasons Private Subnets are more secure by design.
+<strong>Relation to this architecture</strong>: EC2 in a Private Subnet has neither a Public IPv4 nor an EIP, because there's no external exposure in the first place. Inbound is handled by the ALB, outbound by the NAT Gateway. This is one of the reasons Private Subnets are more secure by design.
 
 ---
 
@@ -119,13 +119,13 @@ Concrete criteria for drawing the line between small-scale and mid-scale:
 | Availability requirement | Downtime tolerable | 99.9%+ SLA |
 | Data sensitivity | Mostly public data | PII, payment data |
 
-If even one row lands on the right side, it's time to consider a Private Subnet — especially **compliance and data sensitivity**, which push you to the mid-scale column regardless of traffic volume.
+If even one row lands on the right side, it's time to consider a Private Subnet — especially <strong>compliance and data sensitivity</strong>, which push you to the mid-scale column regardless of traffic volume.
 
 ### 3.3 Aside: What Is HA (High Availability)?
 
 The table above mentions "2+ EC2 instances" and "99.9%+ SLA." Both tie directly to HA, so a quick primer.
 
-HA means **"the service stays alive and doesn't die."** ALB is one of the tools that help achieve HA.
+HA means <strong>"the service stays alive and doesn't die."</strong> ALB is one of the tools that help achieve HA.
 
 ```text
 HA (goal) = "the service must always be up"
@@ -137,7 +137,7 @@ HA (goal) = "the service must always be up"
 If you run a single EC2, the moment it dies the service is gone. With two or more, one can die and the rest keep serving — that "can survive one death" state is HA. ALB distributes traffic across them and automatically drops unhealthy instances out of rotation.
 
 > [!NOTE]
-> **Core decision point**: Can you justify the $60–140/month that Private Subnet architecture adds? Spending $140 on a side project that runs fine on $40 is wasteful. Spending $40 on a service that handles PII just to save money is reckless. Detailed cost analysis comes in Part 5.
+> <strong>Core decision point</strong>: Can you justify the $60–140/month that Private Subnet architecture adds? Spending $140 on a side project that runs fine on $40 is wasteful. Spending $40 on a service that handles PII just to save money is reckless. Detailed cost analysis comes in Part 5.
 
 Concretely, you need a Private Subnet when:
 
@@ -154,28 +154,28 @@ Above we said "cutting costs by leaving PII-handling servers in a Public Subnet 
 
 ### 4.1 Direct Attack Surface Exposure
 
-- EC2 in a Public Subnet has a public IP, meaning it is **directly reachable from the internet**.
+- EC2 in a Public Subnet has a public IP, meaning it is <strong>directly reachable from the internet</strong>.
 - A single Security Group mistake can expose database ports (3306, 5432, etc.) or SSH (22) to the entire world. These misconfigurations cause real incidents every year.
-- Public IPs themselves are **automatic targets for bots and scanners**. Spin up an EC2 on AWS and within minutes your logs will show SSH brute-force attempts.
-- If a server holding PII is directly exposed, a breach leads **straight to data exfiltration**. Attackers skip the usual "web tier → internal network → DB" pivot.
-- With a Private Subnet architecture, all inbound traffic goes through the ALB — you get **an extra defense layer**. The ALB can block anomalous requests at L7, and with WAF attached you can detect and block attack patterns.
+- Public IPs themselves are <strong>automatic targets for bots and scanners</strong>. Spin up an EC2 on AWS and within minutes your logs will show SSH brute-force attempts.
+- If a server holding PII is directly exposed, a breach leads <strong>straight to data exfiltration</strong>. Attackers skip the usual "web tier → internal network → DB" pivot.
+- With a Private Subnet architecture, all inbound traffic goes through the ALB — you get <strong>an extra defense layer</strong>. The ALB can block anomalous requests at L7, and with WAF attached you can detect and block attack patterns.
 
 ### 4.2 Compliance Violations
 
-- Regulations like Korea's Personal Information Protection Act and ISMS-P include **network isolation requirements**. They mandate that "systems processing personal information must be physically or logically separated from external networks."
-- During an audit, "the PII-handling server sits in a Public Subnet and is exposed via a public IP" is itself a **finding**. It can be classified as insufficient technical safeguards.
-- After an incident, it becomes **evidence that the company did not take reasonable protective measures**, widening the scope of legal liability.
+- Regulations like Korea's Personal Information Protection Act and ISMS-P include <strong>network isolation requirements</strong>. They mandate that "systems processing personal information must be physically or logically separated from external networks."
+- During an audit, "the PII-handling server sits in a Public Subnet and is exposed via a public IP" is itself a <strong>finding</strong>. It can be classified as insufficient technical safeguards.
+- After an incident, it becomes <strong>evidence that the company did not take reasonable protective measures</strong>, widening the scope of legal liability.
 
 ### 4.3 Broader Liability After an Incident
 
-- A Private Subnet + ALB setup lets you argue **"we applied the standard security architecture"** — evidence that you followed AWS Well-Architected's security guidance.
-- Leaving the server in a Public Subnet exposes you to the judgment that **"security was neglected to cut costs."**
-- That judgment **directly affects fines and damages awarded** in court. The wider the fault, the bigger the payout.
+- A Private Subnet + ALB setup lets you argue <strong>"we applied the standard security architecture"</strong> — evidence that you followed AWS Well-Architected's security guidance.
+- Leaving the server in a Public Subnet exposes you to the judgment that <strong>"security was neglected to cut costs."</strong>
+- That judgment <strong>directly affects fines and damages awarded</strong> in court. The wider the fault, the bigger the payout.
 
 > [!NOTE]
-> **Bottom line**: For a side project that only handles public data, Public Subnet + Security Group is fine. But the moment PII (user data, payment information, sensitive records) is involved, network-level isolation (Private Subnet) is **insurance, not cost**. Weigh the extra $60–100/month against potential fines and reputational damage, and the direction is obvious.
+> <strong>Bottom line</strong>: For a side project that only handles public data, Public Subnet + Security Group is fine. But the moment PII (user data, payment information, sensitive records) is involved, network-level isolation (Private Subnet) is <strong>insurance, not cost</strong>. Weigh the extra $60–100/month against potential fines and reputational damage, and the direction is obvious.
 
-In practice, the pragmatic path is: **start with Public Subnet + SG for small scale, and migrate to Private Subnet architecture when scale or data sensitivity changes**. You don't need to go full-fledged from day one — but when the nature of your data shifts, don't hesitate.
+In practice, the pragmatic path is: <strong>start with Public Subnet + SG for small scale, and migrate to Private Subnet architecture when scale or data sensitivity changes</strong>. You don't need to go full-fledged from day one — but when the nature of your data shifts, don't hesitate.
 
 ---
 
@@ -183,12 +183,12 @@ In practice, the pragmatic path is: **start with Public Subnet + SG for small sc
 
 Key takeaways from this post:
 
-1. **The standard architecture is "ALB + Private EC2 + NAT Gateway."** Inbound only via ALB, outbound only via NAT, everything else blocked.
-2. **Understand Public IPv4 vs EIP** to see why neither is needed in this architecture — there's no external exposure at all.
-3. **Not every service needs this setup.** A $40/month Public Subnet + SG is reasonable for small side projects. Move to Private Subnet when scale or compliance demands it.
-4. **HA means "2+ EC2s + ALB + Multi-AZ."** This is often the practical tipping point that forces you into a Private Subnet architecture.
-5. **PII + Public Subnet has three concrete risks**: direct attack exposure, compliance violations, and broader liability after incidents. The moment PII is involved, Private Subnet is insurance, not cost.
+1. <strong>The standard architecture is "ALB + Private EC2 + NAT Gateway."</strong> Inbound only via ALB, outbound only via NAT, everything else blocked.
+2. <strong>Understand Public IPv4 vs EIP</strong> to see why neither is needed in this architecture — there's no external exposure at all.
+3. <strong>Not every service needs this setup.</strong> A $40/month Public Subnet + SG is reasonable for small side projects. Move to Private Subnet when scale or compliance demands it.
+4. <strong>HA means "2+ EC2s + ALB + Multi-AZ."</strong> This is often the practical tipping point that forces you into a Private Subnet architecture.
+5. <strong>PII + Public Subnet has three concrete risks</strong>: direct attack exposure, compliance violations, and broader liability after incidents. The moment PII is involved, Private Subnet is insurance, not cost.
 
-Part 1 had one goal — **making the architecture make sense**. If you now think "oh, that's why we do it this way" when you see a Private Subnet diagram, we're done here. Part 2 starts building this architecture in actual code.
+Part 1 had one goal — <strong>making the architecture make sense</strong>. If you now think "oh, that's why we do it this way" when you see a Private Subnet diagram, we're done here. Part 2 starts building this architecture in actual code.
 
-In the next post — **Building VPC Infrastructure with Terraform** — we design the VPC CIDR, lay out 2AZ Public/Private subnets, wire up route tables, use the "SG-references-SG" pattern for Security Groups, and stand up ALB and EC2 in a single `main.tf` that comes up with one `terraform apply`.
+In the next post — <strong>Building VPC Infrastructure with Terraform</strong> — we design the VPC CIDR, lay out 2AZ Public/Private subnets, wire up route tables, use the "SG-references-SG" pattern for Security Groups, and stand up ALB and EC2 in a single `main.tf` that comes up with one `terraform apply`.
