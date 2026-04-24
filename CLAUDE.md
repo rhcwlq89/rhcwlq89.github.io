@@ -13,6 +13,10 @@
   - ❌ `> [!NOTE]\n> 본문`
   - ✅ `> <strong>참고</strong>: 본문`
   - 점검: `rg '\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]'` — 새 글 커밋 전 실행.
+- **다이어그램(구성도, 흐름도, 트리 등)은 `\`\`\`mermaid` 코드 블록 사용** — 프로젝트에 `mermaid` 패키지와 `BlogPost.astro` 레이아웃의 렌더링이 이미 구성돼 있고, 기존 포스트들(terraform, saml, deadlock, sso 등)이 전부 mermaid를 쓴다. 새 글에서 `\`\`\`text` + ASCII 박스 그림으로 대체하지 말 것. ASCII는 폰트·AZ-너비에 따라 깨지고 다크 모드에서 가독성이 떨어진다.
+  - ❌ `\`\`\`text` 안의 `┌─┐│└┘` ASCII 박스 다이어그램
+  - ✅ `\`\`\`mermaid\nflowchart TB\n  A --> B\n\`\`\`` 또는 `flowchart LR`, `TD` 등
+  - 기존 포스트에서 mermaid 쓰는 방식 참고 후 일관되게 적용.
 
 ## Hero Image Style Guide
 

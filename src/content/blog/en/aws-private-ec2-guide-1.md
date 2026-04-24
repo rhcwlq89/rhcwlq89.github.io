@@ -27,21 +27,23 @@ The target reader is a junior engineer who has "followed a tutorial to launch an
 
 ### 1.1 Topology
 
-```text
-            Internet
-               ↓
-┌──────────── VPC (10.0.0.0/16) ──────────────┐
-│                                                │
-│   [ ALB ]           ← Public Subnet            │
-│      ↓                                          │
-│   [ EC2 ]           ← Private Subnet           │
-│      ↓                                          │
-│   [ NAT Gateway ]   ← Public Subnet            │
-│                       (outbound only)          │
-│                                                │
-└────────────────────────────────────────────────┘
-               ↓
-            Internet
+```mermaid
+flowchart TB
+    I1([Internet])
+    I2([Internet])
+    subgraph VPC["VPC (10.0.0.0/16)"]
+        subgraph Public["Public Subnet"]
+            ALB[ALB]
+            NAT["NAT Gateway<br/>(outbound only)"]
+        end
+        subgraph Private["Private Subnet"]
+            EC2[EC2]
+        end
+    end
+    I1 -->|inbound| ALB
+    ALB --> EC2
+    EC2 -->|outbound| NAT
+    NAT --> I2
 ```
 
 ### 1.2 Role of Each Component
@@ -55,7 +57,57 @@ One common point of confusion first: <strong>the VPC is the outer box enclosing 
 
 One principle sums it up: <strong>"Inbound only via ALB, outbound only via NAT, everything else blocked."</strong>
 
-### 1.3 Glossary for This Series
+### 1.3 Aside: Subnet ↔ AZ Relationship, and What Multi-AZ Actually Means
+
+Earlier we said "Multi-AZ placement is the production baseline" — but it's worth a short detour to see what that actually looks like. Start with how Subnets, AZs, and the VPC relate.
+
+<strong>Three key facts</strong>:
+
+1. <strong>A Subnet belongs to exactly one AZ.</strong> When you create a Subnet, you must pick an AZ for it. You cannot put EC2s from different AZs into the same Subnet.
+2. <strong>A VPC spans the entire region.</strong> Within one VPC, create a Subnet per AZ and you naturally end up with a Multi-AZ setup.
+3. <strong>A single ALB spans multiple AZs.</strong> When creating an ALB, attach it to Public Subnets across multiple AZs and AWS automatically handles cross-AZ routing. <strong>Do not create an ALB per AZ</strong> — that splits the DNS endpoint in two and defeats the ALB's built-in HA.
+
+<strong>What a 2-AZ Multi-AZ setup actually looks like</strong>:
+
+```mermaid
+flowchart TB
+    Internet([Internet])
+    subgraph VPC["VPC (10.0.0.0/16) — region-wide"]
+        ALB["ALB<br/>(attached to both Public Subnets, single ALB)"]
+        subgraph AZa["AZ-a"]
+            PubA["Public Subnet<br/>NAT GW A"]
+            PriA["Private Subnet<br/>EC2-1"]
+        end
+        subgraph AZc["AZ-c"]
+            PubC["Public Subnet<br/>NAT GW B"]
+            PriC["Private Subnet<br/>EC2-2"]
+        end
+    end
+    Internet --> ALB
+    ALB --> PriA
+    ALB --> PriC
+    PriA -.outbound.-> PubA
+    PriC -.outbound.-> PubC
+```
+
+- 1 VPC (region-wide)
+- 1 ALB (attached to both Public Subnets, serving both AZs)
+- 1 Public Subnet per AZ → 2 total
+- 1 Private Subnet per AZ → 2 total
+- 1 NAT Gateway per AZ → 2 total (for AZ failure isolation; a cheaper single-AZ NAT setup is an option — covered in Part 5)
+- EC2s spread across the Private Subnets
+
+<strong>What happens if one AZ dies</strong>: If AZ-a goes down entirely, the Public/Private Subnets and EC2s in AZ-c keep running. The ALB routes traffic only to the surviving AZ and users barely notice. That's the practical meaning of "HA via Multi-AZ."
+
+<strong>Why you shouldn't create an ALB per AZ</strong>:
+
+- Each ALB gives you one DNS endpoint. Two ALBs means you have to pick between them in Route 53 (weighted or failover routing policies).
+- You lose the ALB's built-in cross-AZ HA — it's already Multi-AZ internally.
+- Double the cost, double the operational overhead.
+
+---
+
+### 1.4 Glossary for This Series
 
 Bookmark this table and come back when acronyms blur together.
 
@@ -178,11 +230,12 @@ The table above mentions "2+ EC2 instances" and "99.9%+ SLA." Both tie directly 
 
 HA means <strong>"the service stays alive and doesn't die."</strong> ALB is one of the tools that help achieve HA.
 
-```text
-HA (goal) = "the service must always be up"
-  ├─ Lever 1: Run 2+ EC2s (if one dies, the others handle requests)
-  ├─ Lever 2: Use ALB to spread traffic (only send requests to healthy EC2s)
-  └─ Lever 3: Multi-AZ placement (if one AZ fails, another keeps running)
+```mermaid
+flowchart TD
+    HA["HA (goal)<br/>the service must always be up"]
+    HA --> L1["Lever 1:<br/>Run 2+ EC2s<br/>(if one dies, others handle requests)"]
+    HA --> L2["Lever 2:<br/>ALB spreads traffic<br/>(only to healthy EC2s)"]
+    HA --> L3["Lever 3:<br/>Multi-AZ placement<br/>(if one AZ fails, another runs)"]
 ```
 
 If you run a single EC2, the moment it dies the service is gone. With two or more, one can die and the rest keep serving — that "can survive one death" state is HA. ALB distributes traffic across them and automatically drops unhealthy instances out of rotation.
