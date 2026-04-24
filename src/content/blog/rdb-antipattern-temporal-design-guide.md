@@ -30,7 +30,7 @@ heroImage: "../../assets/RdbAntipatternTemporalDesignGuide.png"
 
 ### 1.1 EAV란?
 
-속성(attribute)을 컬럼이 아니라 **행(row)**으로 저장하는 패턴이다.
+속성(attribute)을 컬럼이 아니라 **행(row)으로** 저장하는 패턴이다.
 
 ```sql
 -- 일반적인 설계
@@ -741,7 +741,7 @@ UPDATE accounts SET balance = balance - 10000 WHERE id = 1;
 -- → 이전 잔액은 사라진다
 ```
 
-**이벤트 소싱**: 상태를 직접 수정하지 않고, **발생한 사건(이벤트)**을 순서대로 기록한다. 현재 상태는 이벤트를 순서대로 재생(replay)해서 도출한다.
+**이벤트 소싱**: 상태를 직접 수정하지 않고, **발생한 사건(이벤트)을** 순서대로 기록한다. 현재 상태는 이벤트를 순서대로 재생(replay)해서 도출한다.
 
 ```sql
 -- 이벤트 저장
@@ -771,7 +771,7 @@ CREATE TABLE events (
 
 **핵심 원칙:**
 
-- 이벤트는 **불변(immutable)**이다. INSERT만 있고 UPDATE/DELETE는 없다.
+- 이벤트는 **불변(immutable)이다**. INSERT만 있고 UPDATE/DELETE는 없다.
 - `version`으로 **순서와 동시성**을 제어한다. 같은 aggregate에 동시 쓰기 시 version 충돌로 하나가 실패한다.
 - `event_data`는 JSON으로 이벤트마다 다른 구조를 허용한다.
 

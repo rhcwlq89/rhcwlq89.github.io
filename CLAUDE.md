@@ -5,6 +5,10 @@
 - `pubDate` must always include the time (e.g., `2026-02-03T15:30:00+09:00`)
 - Every blog post must be written in both Korean and English versions
 - **NEVER remove bold (`**`) formatting** from blog content. If bold renders incorrectly (e.g., in markdown table cells), fix the structure — do NOT strip the bold. Keep bold consistent with the rest of the post.
+- **한글 조사 + `)**` 조합 금지** — `**단어(설명)**을/를/이/의/다` 패턴은 Astro/remark가 닫는 `**`을 인식하지 못해 `**`이 본문에 그대로 노출되는 사고가 재발한다. 반드시 조사를 bold 안으로 넣어 닫는 `**` 뒤를 공백으로 만들어라.
+  - ❌ `**락(lock)**이다`, `**여러 고객(테넌트)**의`
+  - ✅ `**락(lock)이다**`, `**여러 고객(테넌트)의**`
+  - 새 글 작성 시 `rg '\)\*\*[가-힣]'`로 사전 점검하는 것을 권장.
 
 ## Hero Image Style Guide
 
