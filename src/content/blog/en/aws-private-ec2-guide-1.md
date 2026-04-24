@@ -28,18 +28,25 @@ The target reader is a junior engineer who has "followed a tutorial to launch an
 ### 1.1 Topology
 
 ```text
-Internet
-   ↓
-[ ALB ]          ← Public Subnet
-   ↓
-[ EC2 ]          ← Private Subnet
-   ↓
-[ NAT Gateway ]  ← Public Subnet (outbound only)
-   ↓
-Internet
+            Internet
+               ↓
+┌──────────── VPC (10.0.0.0/16) ──────────────┐
+│                                                │
+│   [ ALB ]           ← Public Subnet            │
+│      ↓                                          │
+│   [ EC2 ]           ← Private Subnet           │
+│      ↓                                          │
+│   [ NAT Gateway ]   ← Public Subnet            │
+│                       (outbound only)          │
+│                                                │
+└────────────────────────────────────────────────┘
+               ↓
+            Internet
 ```
 
 ### 1.2 Role of Each Component
+
+One common point of confusion first: <strong>the VPC is the outer box enclosing ALB, NAT Gateway, and EC2 — all three</strong>. Saying "ALB and NAT live in the Public Subnet" doesn't mean they sit outside the VPC; they're placed in a Public Subnet, which is a zone <strong>inside</strong> the same VPC. Public vs Private isn't physical isolation — it's a <strong>route table</strong> difference. Public Subnets have a route to the Internet Gateway; Private Subnets don't. (The actual route table code comes in Part 2.)
 
 - <strong>EC2 lives in the Private Subnet.</strong> It has no public IP and cannot be reached directly from the internet. Inbound traffic arrives only through the ALB.
 - <strong>ALB lives in the Public Subnet.</strong> It accepts HTTP/HTTPS traffic from the internet and routes it to the Private EC2s behind it. It is the "front door" for your service.

@@ -34,18 +34,25 @@ heroImage: "../../assets/AwsPrivateEc2Guide1.png"
 ### 1.1 구성도
 
 ```text
-Internet
-   ↓
-[ ALB ]          ← Public Subnet
-   ↓
-[ EC2 ]          ← Private Subnet
-   ↓
-[ NAT Gateway ]  ← Public Subnet (outbound only)
-   ↓
-Internet
+            Internet
+               ↓
+┌──────────── VPC (10.0.0.0/16) ──────────────┐
+│                                                │
+│   [ ALB ]           ← Public Subnet            │
+│      ↓                                          │
+│   [ EC2 ]           ← Private Subnet           │
+│      ↓                                          │
+│   [ NAT Gateway ]   ← Public Subnet            │
+│                       (outbound only)          │
+│                                                │
+└────────────────────────────────────────────────┘
+               ↓
+            Internet
 ```
 
 ### 1.2 각 컴포넌트의 역할
+
+먼저 오해하기 쉬운 지점부터 짚고 간다: <strong>VPC는 ALB/NAT Gateway/EC2 셋을 모두 감싸는 외곽 박스</strong>다. "ALB와 NAT가 Public Subnet에 있다"는 말은 VPC 바깥에 있다는 뜻이 아니라, 같은 VPC 안의 Public Subnet이라는 구역에 배치된다는 뜻이다. Public과 Private의 차이는 물리적 격리가 아니라 <strong>라우트 테이블 설정</strong> — Public Subnet은 Internet Gateway로 가는 경로가 있고, Private Subnet은 그 경로가 없을 뿐이다. (라우트 테이블의 실제 코드는 2편에서 다룬다.)
 
 - <strong>EC2는 Private Subnet에 둔다.</strong> 공인 IP가 붙지 않고, 외부에서 직접 접근이 불가능하다. 인바운드 트래픽은 ALB를 통해서만 들어온다.
 - <strong>ALB는 Public Subnet에 둔다.</strong> 인터넷에서 들어오는 HTTP/HTTPS 트래픽을 받아서 뒤의 Private EC2로 라우팅한다. EC2의 "대문" 역할.
