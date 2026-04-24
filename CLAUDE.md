@@ -9,6 +9,10 @@
   - ❌ `**락(lock)**이다` (파서 버그), `**락(lock)이다**` (강조 범위 어긋남)
   - ✅ `<strong>락(lock)</strong>이다`
   - 깨진 곳 점검: `rg '\)\*\*[가-힣]'` — 새 글 커밋 전 실행 권장.
+- **GFM 콜아웃 문법(`> [!NOTE]`, `[!TIP]`, `[!WARNING]` 등) 사용 금지** — Astro 기본 markdown 파서가 이 확장 문법을 지원하지 않아 `[!NOTE]`이 본문에 리터럴로 그대로 노출된다. 대신 기존 글들과 동일하게 `> <strong>참고</strong>: 본문` (또는 `<strong>주의</strong>`, `<strong>결론</strong>`, `<strong>핵심</strong>` 등 맥락에 맞는 라벨) 형태의 일반 blockquote를 사용한다.
+  - ❌ `> [!NOTE]\n> 본문`
+  - ✅ `> <strong>참고</strong>: 본문`
+  - 점검: `rg '\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]'` — 새 글 커밋 전 실행.
 
 ## Hero Image Style Guide
 

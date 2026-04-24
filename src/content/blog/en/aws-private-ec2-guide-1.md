@@ -88,8 +88,7 @@ When an EC2 sits in a Public Subnet, it gets a public IP — and that comes in t
 | Use case | Temporary testing; no need for a stable IP | DNS records, IP allowlists, external integrations |
 | Attaches to | Automatically to an EC2 | Manually to EC2, NAT Gateway, NLB, etc. |
 
-> [!NOTE]
-> Stop → start an EC2 and the Public IPv4 changes. If you pointed DNS at that IP, the connection breaks. Use an EIP when you need a stable IP. But watch out: EIPs allocated without being attached still incur charges. AWS added this penalty because IPv4 is scarce — "don't hoard addresses you don't use."
+> <strong>Note</strong>: Stop → start an EC2 and the Public IPv4 changes. If you pointed DNS at that IP, the connection breaks. Use an EIP when you need a stable IP. But watch out: EIPs allocated without being attached still incur charges. AWS added this penalty because IPv4 is scarce — "don't hoard addresses you don't use."
 
 <strong>Relation to this architecture</strong>: EC2 in a Private Subnet has neither a Public IPv4 nor an EIP, because there's no external exposure in the first place. Inbound is handled by the ALB, outbound by the NAT Gateway. This is one of the reasons Private Subnets are more secure by design.
 
@@ -97,8 +96,7 @@ When an EC2 sits in a Public Subnet, it gets a public IP — and that comes in t
 
 ## 3. Do You Actually Need This Architecture? — Sizing-Based Judgment
 
-> [!NOTE]
-> Honestly, for small-scale systems, ALB + Private Subnet + NAT Gateway can be over-engineering. NAT Gateway alone costs $43+/month, and ALB adds $20+ — infrastructure can end up costing more than the service itself.
+> <strong>Note</strong>: Honestly, for small-scale systems, ALB + Private Subnet + NAT Gateway can be over-engineering. NAT Gateway alone costs $43+/month, and ALB adds $20+ — infrastructure can end up costing more than the service itself.
 
 "Standard architecture" doesn't mean every service must adopt it. Shoving production topology into a side project wastes money, but cutting corners on a service that handles PII creates real risk. Here's where the boundary actually sits.
 
@@ -143,7 +141,6 @@ HA (goal) = "the service must always be up"
 
 If you run a single EC2, the moment it dies the service is gone. With two or more, one can die and the rest keep serving — that "can survive one death" state is HA. ALB distributes traffic across them and automatically drops unhealthy instances out of rotation.
 
-> [!NOTE]
 > <strong>Core decision point</strong>: Can you justify the $60–140/month that Private Subnet architecture adds? Spending $140 on a side project that runs fine on $40 is wasteful. Spending $40 on a service that handles PII just to save money is reckless. Detailed cost analysis comes in Part 5.
 
 Concretely, you need a Private Subnet when:
@@ -179,7 +176,6 @@ Above we said "cutting costs by leaving PII-handling servers in a Public Subnet 
 - Leaving the server in a Public Subnet exposes you to the judgment that <strong>"security was neglected to cut costs."</strong>
 - That judgment <strong>directly affects fines and damages awarded</strong> in court. The wider the fault, the bigger the payout.
 
-> [!NOTE]
 > <strong>Bottom line</strong>: For a side project that only handles public data, Public Subnet + Security Group is fine. But the moment PII (user data, payment information, sensitive records) is involved, network-level isolation (Private Subnet) is <strong>insurance, not cost</strong>. Weigh the extra $60–100/month against potential fines and reputational damage, and the direction is obvious.
 
 In practice, the pragmatic path is: <strong>start with Public Subnet + SG for small scale, and migrate to Private Subnet architecture when scale or data sensitivity changes</strong>. You don't need to go full-fledged from day one — but when the nature of your data shifts, don't hesitate.
