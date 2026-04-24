@@ -5,18 +5,18 @@
 - `pubDate` must always include the time (e.g., `2026-02-03T15:30:00+09:00`)
 - Every blog post must be written in both Korean and English versions
 - **NEVER remove bold formatting** from blog content. If bold renders incorrectly, fix the structure — do NOT strip the bold.
-- **Bold는 HTML `<strong>` 태그로 작성** — 마크다운 `**...**`은 Astro/remark에서 `)` 다음에 한글 조사가 붙을 때(`**락(lock)**이다` 등) 닫는 `**`이 인식되지 않는 재발성 버그가 있다. 조사를 bold 안으로 넣는 우회법(`**락(lock)이다**`)은 강조 범위가 어긋나므로, 새 글에서는 `<strong>락(lock)</strong>이다` 형태로 작성해 강조 범위를 조사 앞까지로 정확히 유지한다. 기존 글은 렌더링이 깨지지 않는 한 그대로 둔다.
-  - ❌ `**락(lock)**이다` (파서 버그), `**락(lock)이다**` (강조 범위 어긋남)
+- **Use the HTML `<strong>` tag for bold, not Markdown `**...**`** — Astro/remark has a recurring parser bug where the closing `**` fails to register when it comes right after `)` and is immediately followed by a Korean particle (e.g. `**락(lock)**이다`). The common workaround of pulling the particle inside the bold (`**락(lock)이다**`) silently extends the emphasis onto the particle, which is wrong. In new posts, write `<strong>락(lock)</strong>이다` so the emphasis ends exactly before the particle. Leave existing posts alone unless they actually render broken.
+  - ❌ `**락(lock)**이다` (parser bug), `**락(lock)이다**` (emphasis scope drifts onto the particle)
   - ✅ `<strong>락(lock)</strong>이다`
-  - 깨진 곳 점검: `rg '\)\*\*[가-힣]'` — 새 글 커밋 전 실행 권장.
-- **GFM 콜아웃 문법(`> [!NOTE]`, `[!TIP]`, `[!WARNING]` 등) 사용 금지** — Astro 기본 markdown 파서가 이 확장 문법을 지원하지 않아 `[!NOTE]`이 본문에 리터럴로 그대로 노출된다. 대신 기존 글들과 동일하게 `> <strong>참고</strong>: 본문` (또는 `<strong>주의</strong>`, `<strong>결론</strong>`, `<strong>핵심</strong>` 등 맥락에 맞는 라벨) 형태의 일반 blockquote를 사용한다.
-  - ❌ `> [!NOTE]\n> 본문`
-  - ✅ `> <strong>참고</strong>: 본문`
-  - 점검: `rg '\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]'` — 새 글 커밋 전 실행.
-- **다이어그램(구성도, 흐름도, 트리 등)은 `\`\`\`mermaid` 코드 블록 사용** — 프로젝트에 `mermaid` 패키지와 `BlogPost.astro` 레이아웃의 렌더링이 이미 구성돼 있고, 기존 포스트들(terraform, saml, deadlock, sso 등)이 전부 mermaid를 쓴다. 새 글에서 `\`\`\`text` + ASCII 박스 그림으로 대체하지 말 것. ASCII는 폰트·AZ-너비에 따라 깨지고 다크 모드에서 가독성이 떨어진다.
-  - ❌ `\`\`\`text` 안의 `┌─┐│└┘` ASCII 박스 다이어그램
-  - ✅ `\`\`\`mermaid\nflowchart TB\n  A --> B\n\`\`\`` 또는 `flowchart LR`, `TD` 등
-  - 기존 포스트에서 mermaid 쓰는 방식 참고 후 일관되게 적용.
+  - Pre-commit scan: `rg '\)\*\*[가-힣]'`.
+- **Do NOT use GFM alert syntax (`> [!NOTE]`, `[!TIP]`, `[!WARNING]`, etc.)** — Astro's default Markdown parser doesn't implement this GitHub extension, so `[!NOTE]` ends up as literal text in the rendered post. Follow the existing convention across other posts: a plain blockquote with a bold label, e.g. `> <strong>참고</strong>: body` (or `<strong>주의</strong>`, `<strong>결론</strong>`, `<strong>핵심</strong>`, etc. — pick a label that fits the content).
+  - ❌ `> [!NOTE]\n> body`
+  - ✅ `> <strong>참고</strong>: body`
+  - Pre-commit scan: `rg '\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]'`.
+- **Diagrams (architecture, flow, trees) must use `\`\`\`mermaid` fenced blocks** — the `mermaid` package and rendering in `src/layouts/BlogPost.astro` are already wired up, and existing posts (terraform, saml, deadlock, sso, etc.) all use Mermaid. Do NOT fall back to `\`\`\`text` with ASCII box art (`┌─┐│└┘`): it breaks depending on font and CJK character width, and reads poorly in dark mode.
+  - ❌ ASCII boxes inside `\`\`\`text`
+  - ✅ `\`\`\`mermaid` with `flowchart TB` / `LR` / `TD`, `sequenceDiagram`, etc.
+  - Match the Mermaid style of existing posts for consistency.
 
 ## Hero Image Style Guide
 
