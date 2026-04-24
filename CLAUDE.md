@@ -2,21 +2,131 @@
 
 ## Blog Writing Rules
 
-- `pubDate` must always include the time (e.g., `2026-02-03T15:30:00+09:00`)
-- Every blog post must be written in both Korean and English versions
-- **NEVER remove bold formatting** from blog content. If bold renders incorrectly, fix the structure — do NOT strip the bold.
-- **Use the HTML `<strong>` tag for bold, not Markdown `**...**`** — Astro/remark has a recurring parser bug where the closing `**` fails to register when it comes right after `)` and is immediately followed by a Korean particle (e.g. `**락(lock)**이다`). The common workaround of pulling the particle inside the bold (`**락(lock)이다**`) silently extends the emphasis onto the particle, which is wrong. In new posts, write `<strong>락(lock)</strong>이다` so the emphasis ends exactly before the particle. Leave existing posts alone unless they actually render broken.
-  - ❌ `**락(lock)**이다` (parser bug), `**락(lock)이다**` (emphasis scope drifts onto the particle)
+### Frontmatter
+
+- `pubDate` must always include the time (e.g., `2026-02-03T15:30:00+09:00`).
+- Every post must be written in both Korean and English: KO in `src/content/blog/<slug>.md`, EN in `src/content/blog/en/<slug>.md`.
+- Hero image path: KO uses `../../assets/...`, EN uses `../../../assets/...`.
+- EN frontmatter must include `lang: en`. KO uses YAML list form for `tags:`; EN uses the inline array form (match existing posts).
+
+### Post Structure (mandatory skeleton)
+
+Every post follows this skeleton. No deviations without a concrete reason. The canonical reference is `src/content/blog/aws-private-ec2-guide-1.md` (KO) and `src/content/blog/en/aws-private-ec2-guide-1.md` (EN) — new posts should match their shape.
+
+```
+---
+frontmatter
+---
+
+## 서론 / Introduction
+  - 3–5 short paragraphs: hook, context, target reader.
+  - Series posts: include the full series nav as a bullet list with the current part bolded.
+  - Part 2+ of a series: link to the previous post — `[이전 글](/blog/…)` / `[previous post](/blog/en/…)`.
+
+---
+
+## TL;DR
+  - 3–5 bullets, each 1–2 short lines.
+  - Captures the whole post's thesis. A reader who reads only this and stops should walk away with the gist.
+
+---
+
+## 1. [First major H2 section]
+  ### 1.1 ...
+  ### 1.2 ...
+  # Aside sections use `### N.X 참고: ...` / `### N.X Aside: ...` placed
+  # immediately after the H2 where the concept first appears.
+
+---
+
+## [More H2 sections, numbered 2, 3, 4, …]
+
+---
+
+## 정리 / Recap
+  - 3–5 key takeaways as bullets, each bolded core idea + one sentence of context.
+  - End with a next-post teaser paragraph for series posts.
+
+---
+
+## 부록 / Appendix (optional)
+  - Glossary tables, external references, cheat-sheets — content the reader
+    consults after reading, not while reading.
+```
+
+**Do not** insert a one-line summary at the top of every H2 section. The global TL;DR covers that role.
+
+Terminology-heavy reference material (glossary tables, acronym lists, external links) belongs in the Appendix at the end, not in Section 1. Keep the opening of the post about the actual subject.
+
+### Prose Density Rules
+
+The most common readability failure is wall-of-text prose. Enforce the following when drafting and when editing:
+
+- **Korean sentence length cap: ~200 characters.** If a sentence crosses this, split into 2–3 short sentences and strip filler ("~에 대해서", "~라는 점에서", "~할 수 있다는 점").
+- **At most 3 consecutive prose paragraphs.** After 3, break the rhythm with a table, list, diagram, callout, or `<details>` block.
+- **Comparisons of 3+ items always use a table.** Never render a comparison as a sequence of `<strong>Label</strong>: description` paragraphs.
+- **Bullet format**: prefer `- <strong>Core phrase</strong> — one-line elaboration.` over multi-sentence bullets. Each bullet should be scannable in about 2 seconds.
+- **Lead with the definition.** When introducing a term or acronym, open with a one-sentence definition (`**X = Y**` or `<strong>X는 …</strong>이다`) before elaborating. Do not bury the definition at the end of a paragraph.
+- **No `<strong>Label</strong>:` walls.** If you find yourself writing 4+ back-to-back `<strong>Label</strong>: body.` paragraphs, that's a signal — convert the block into a table or a tight bullet list instead.
+
+### Bold Formatting
+
+- **NEVER remove bold formatting** from blog content. If it renders incorrectly, fix the structure, do NOT strip the bold.
+- **Use the HTML `<strong>` tag for bold, not Markdown `**...**`.** Astro/remark has a recurring parser bug where the closing `**` fails to register when it comes right after `)` and is immediately followed by a Korean particle (e.g. `**락(lock)**이다` leaks literal `**`). The workaround of pulling the particle inside the bold (`**락(lock)이다**`) silently extends the emphasis onto the particle, which is wrong. New posts must use `<strong>락(lock)</strong>이다` so the emphasis ends exactly before the particle. Leave existing posts alone unless they actually render broken.
+  - ❌ `**락(lock)**이다` (parser bug), `**락(lock)이다**` (emphasis drifts onto the particle)
   - ✅ `<strong>락(lock)</strong>이다`
-  - Pre-commit scan: `rg '\)\*\*[가-힣]'`.
-- **Do NOT use GFM alert syntax (`> [!NOTE]`, `[!TIP]`, `[!WARNING]`, etc.)** — Astro's default Markdown parser doesn't implement this GitHub extension, so `[!NOTE]` ends up as literal text in the rendered post. Follow the existing convention across other posts: a plain blockquote with a bold label, e.g. `> <strong>참고</strong>: body` (or `<strong>주의</strong>`, `<strong>결론</strong>`, `<strong>핵심</strong>`, etc. — pick a label that fits the content).
-  - ❌ `> [!NOTE]\n> body`
-  - ✅ `> <strong>참고</strong>: body`
-  - Pre-commit scan: `rg '\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]'`.
-- **Diagrams (architecture, flow, trees) must use `\`\`\`mermaid` fenced blocks** — the `mermaid` package and rendering in `src/layouts/BlogPost.astro` are already wired up, and existing posts (terraform, saml, deadlock, sso, etc.) all use Mermaid. Do NOT fall back to `\`\`\`text` with ASCII box art (`┌─┐│└┘`): it breaks depending on font and CJK character width, and reads poorly in dark mode.
-  - ❌ ASCII boxes inside `\`\`\`text`
-  - ✅ `\`\`\`mermaid` with `flowchart TB` / `LR` / `TD`, `sequenceDiagram`, etc.
-  - Match the Mermaid style of existing posts for consistency.
+
+### Callouts & Notes
+
+- **Do NOT use GFM alert syntax** (`> [!NOTE]`, `[!TIP]`, `[!WARNING]`, `[!IMPORTANT]`, `[!CAUTION]`). Astro's default Markdown parser doesn't implement this GitHub extension, so the tag leaks as literal text.
+- Use plain blockquote with a bold label: `> <strong>참고</strong>: body` / `> <strong>Note</strong>: body`. Match the label to the content's tone — typical labels include `참고 / Note`, `주의 / Caution`, `핵심 / Key`, `결론 / Bottom line`.
+
+### Diagrams
+
+- **All diagrams — architecture, flow, sequence, ER, state, timeline — must use `\`\`\`mermaid` fenced blocks.** The `mermaid` package and rendering in `src/layouts/BlogPost.astro` are already wired up and existing posts (terraform, saml, deadlock, sso, etc.) all use Mermaid.
+- **Never draw topology or flow in `\`\`\`text` with ASCII box art** (`┌─┐│└┘`). ASCII breaks on font changes and CJK width, and reads poorly in dark mode. If you catch yourself starting a box in `\`\`\`text`, stop and switch to Mermaid.
+- Allowed Mermaid types: `flowchart TB/LR/TD`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `stateDiagram`, `gantt`.
+- `\`\`\`text` is still fine for **non-diagram content**: CLI output, file trees, log snippets, config examples — anything that is real monospaced text rather than hand-drawn art.
+
+### Collapsible Content (`<details>`)
+
+Use `<details><summary>…</summary>…</details>` to keep the main flow short without losing depth. Astro passes raw HTML through, so this works in both KO and EN posts.
+
+- **✅ Fold**: "더 자세히 / More detail" branches of an aside, advanced edge cases, long derivations, reinforcing examples a first-time reader can skip.
+- **❌ Do not fold**: the TL;DR, tables, diagrams, the main argument of a section, anything a first-time reader must see.
+- Summary text should preview what's inside and invite the click (e.g. `<summary><strong>More detail — AZ failure behavior, why not one ALB per AZ</strong></summary>`).
+
+### Series Posts
+
+- Title format: `"<Series Title> Part N: <Topic>"` (or the Korean equivalent). Keep the same series title verbatim across all parts.
+- The Introduction must include a full series nav bullet list, with the current part bolded: `<strong>Part 1 — … (이 글)</strong>`.
+- Recap ends with a next-post teaser paragraph that names the topic of the next post and previews what the reader will learn or build.
+- Part 2+ links back to the previous post in the intro.
+
+### Pre-publish Self-check
+
+Run these before committing a new or edited post. Expect all five to come back clean (or the TL;DR to be present) before pushing.
+
+```bash
+FILE=src/content/blog/<slug>.md
+
+# 1. Bold parser bug — closing ** followed by a Korean particle
+rg '\)\*\*[가-힣]' "$FILE"
+
+# 2. GFM alert leakage
+rg '\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]' "$FILE"
+
+# 3. ASCII box art leaking into text code blocks (diagrams should be Mermaid)
+awk '/^```text/{t=1; next} /^```/{t=0} t && /[┌└│─┐┘]/{print NR": "$0}' "$FILE"
+
+# 4. Overlong Korean sentences (>200 chars) — candidates for splitting
+awk 'length > 200 {print NR": "length" chars"}' "$FILE"
+
+# 5. Structural sanity — TL;DR section present
+rg -q '^## TL;DR' "$FILE" || echo "MISSING: TL;DR section"
+```
+
+Also run the same checks on the EN counterpart under `src/content/blog/en/<slug>.md` (checks 1 and 4 mostly don't apply to English, but 2, 3, and 5 do).
 
 ## Hero Image Style Guide
 
