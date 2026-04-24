@@ -196,9 +196,9 @@ L7 라우팅·HTTPS 종료·리버스 프록시 자체는 기능이 겹친다. <
 | Auto Scaling / WAF·Shield·Cognito 연동 | <strong>ALB</strong> |
 | EC2 1대 소규모 | <strong>Nginx</strong> |
 | 정적 파일 직접 서빙 / Lua·ngx_module 커스터마이징 | <strong>Nginx</strong> |
-| 프로덕션 대형 서비스 | <strong>ALB → EC2(Nginx) → 앱</strong> 조합 (역할 분담) |
+| slow client·대용량 정적·무중단 배포 버퍼가 실제로 아플 때 | <strong>ALB → EC2(Nginx) → 앱</strong> (상황별 추가) |
 
-둘은 경쟁이 아니라 <strong>서로 다른 계층의 역할 분담</strong> 관계다. 프로덕션에서는 ALB가 HA/헬스체크/WAF를 맡고, Nginx가 EC2 안에서 gzip/정적/URL 리라이팅을 맡는 구성이 흔하다.
+둘은 경쟁이 아니라 <strong>서로 다른 계층의 역할 분담</strong> 관계다. 프로덕션에서는 ALB가 HA·헬스체크·WAF를 맡는다. EC2 안의 Nginx는 <strong>slow client 보호·대용량 정적 버퍼링·무중단 배포 완충·복잡한 rewrite</strong>가 실제로 아플 때 얹는 선택지이고, Spring Boot + CloudFront + ALB만으로 충분한 스택도 많다.
 
 ### 3.3 언제부터 Private Subnet 구성이 필요한가
 

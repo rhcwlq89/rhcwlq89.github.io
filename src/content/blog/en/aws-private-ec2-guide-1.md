@@ -190,9 +190,9 @@ L7 routing, HTTPS termination, and reverse-proxying overlap. <strong>With just o
 | Auto Scaling / WAF · Shield · Cognito integration | <strong>ALB</strong> |
 | Small-scale, one EC2 is enough | <strong>Nginx</strong> |
 | Direct static-file serving / Lua · ngx_module customization | <strong>Nginx</strong> |
-| Large production stack | <strong>ALB → EC2 (Nginx) → app</strong> combo (split roles) |
+| Slow-client / large-static / zero-downtime-deploy pain actually hits | <strong>ALB → EC2 (Nginx) → app</strong> (situational addition) |
 
-They operate at different layers and are <strong>complementary rather than competing</strong>. In production, ALB handles HA / health checks / WAF; Nginx inside the EC2 handles gzip / static serving / URL rewriting.
+They operate at different layers and are <strong>complementary rather than competing</strong>. In production, ALB handles HA, health checks, and WAF. Nginx inside the EC2 is an <strong>optional layer</strong> you add when slow-client protection, buffering large static assets, a zero-downtime deploy buffer, or complex rewrites actually hurt — plenty of stacks ship with just Spring Boot + CloudFront + ALB.
 
 ### 3.3 When Does a Private Subnet Become Necessary?
 
