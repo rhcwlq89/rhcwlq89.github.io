@@ -586,6 +586,8 @@ SELECT * FROM orders WHERE tenant_id = 42 AND user_id = 100;
 
 **tenant_id 누락 방지 전략:**
 
+> <strong>RLS(Row-Level Security)란?</strong> PostgreSQL이 제공하는 <strong>테이블의 행 단위 접근 제어</strong> 기능이다. 기존 `GRANT`가 "이 테이블에 접근할 수 있는가"까지만 결정했다면, RLS는 한 단계 더 내려가서 "이 테이블의 어떤 행을 볼 수 있는가"를 DB 레벨에서 강제한다. `CREATE POLICY`로 조건을 정의하면 그 조건을 만족하는 행만 쿼리 결과에 노출되고, 앱 코드에서 `WHERE`를 빠뜨려도 DB가 자동으로 필터링해준다. 멀티테넌트에서 `tenant_id` 누락으로 인한 데이터 유출을 구조적으로 막는 데 특히 강력하다. 단, MySQL에는 RLS가 없어 뷰나 ORM 미들웨어로 유사하게 구현하는 게 일반적이다.
+
 ```sql
 -- PostgreSQL: Row-Level Security (RLS)
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;

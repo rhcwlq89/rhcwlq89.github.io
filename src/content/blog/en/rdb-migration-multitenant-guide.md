@@ -581,6 +581,8 @@ SELECT * FROM orders WHERE tenant_id = 42 AND user_id = 100;
 
 **Preventing tenant_id omission:**
 
+> <strong>What is RLS (Row-Level Security)?</strong> It's a PostgreSQL feature that controls access <strong>at the row level</strong> within a table. Traditional `GRANT` decides "can you access this table?"; RLS goes one level deeper and enforces "which rows in this table can you see?" at the DB level. Define conditions with `CREATE POLICY` and only rows matching those conditions appear in query results — even if the app forgets a `WHERE` clause, the DB filters automatically. This is especially powerful for multitenancy: it structurally prevents data leaks caused by missing `tenant_id`. Note that MySQL has no equivalent RLS, so views or ORM middleware are typically used to approximate it.
+
 ```sql
 -- PostgreSQL: Row-Level Security (RLS)
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
