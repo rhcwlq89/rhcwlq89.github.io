@@ -23,6 +23,16 @@ The target reader is a junior engineer who has "followed a tutorial to launch an
 
 ---
 
+## TL;DR
+
+- <strong>Standard architecture</strong>: `Internet → ALB (Public) → EC2 (Private) → NAT (Public) → Internet`. All inside one VPC. Public/Private is not physical isolation — just a <strong>route table</strong> difference (whether the subnet has a route to the Internet Gateway).
+- <strong>Multi-AZ</strong>: a single ALB spans multiple AZs. Subnets must be created per AZ, but <strong>never create an ALB per AZ</strong>.
+- <strong>This setup is not always required</strong>: for side projects, a ~$40/month Public Subnet + SG is plenty. A full Private Subnet architecture runs $100~320/month.
+- <strong>When it becomes mandatory</strong>: 2+ EC2s with HA / PII / payment / compliance (ISMS, PCI DSS, etc.) / 99.9% SLA — any one of these and you need to move.
+- <strong>Putting PII on Public Subnet = three real risks</strong>: direct attack exposure, compliance violations, broader liability after incidents. Past that line, Private Subnet is "insurance, not cost."
+
+---
+
 ## 1. The Standard Architecture
 
 ### 1.1 Topology
@@ -48,7 +58,9 @@ flowchart TB
 
 ### 1.2 Role of Each Component
 
-One common point of confusion first: <strong>the VPC is the outer box enclosing ALB, NAT Gateway, and EC2 — all three</strong>. Saying "ALB and NAT live in the Public Subnet" doesn't mean they sit outside the VPC; they're placed in a Public Subnet, which is a zone <strong>inside</strong> the same VPC. Public vs Private isn't physical isolation — it's a <strong>route table</strong> difference. Public Subnets have a route to the Internet Gateway; Private Subnets don't. (The actual route table code comes in Part 2.)
+First, a common point of confusion. <strong>The VPC is the outer box enclosing ALB, NAT Gateway, and EC2 — all three</strong>. Saying "ALB and NAT live in the Public Subnet" doesn't mean they sit outside the VPC; they're placed in a Public Subnet, <strong>a zone inside the same VPC</strong>.
+
+Public vs Private is not physical isolation — it's a <strong>route table</strong> difference. Public Subnets have a route to the Internet Gateway; Private Subnets don't. (The actual route table code comes in Part 2.)
 
 - <strong>EC2 lives in the Private Subnet.</strong> It has no public IP and cannot be reached directly from the internet. Inbound traffic arrives only through the ALB.
 - <strong>ALB lives in the Public Subnet.</strong> It accepts HTTP/HTTPS traffic from the internet and routes it to the Private EC2s behind it. It is the "front door" for your service.
@@ -59,15 +71,15 @@ One principle sums it up: <strong>"Inbound only via ALB, outbound only via NAT, 
 
 ### 1.3 Aside: Subnet ↔ AZ Relationship, and What Multi-AZ Actually Means
 
-Earlier we said "Multi-AZ placement is the production baseline" — but it's worth a short detour to see what that actually looks like. Start with how Subnets, AZs, and the VPC relate.
+We said "Multi-AZ is the production baseline." Here's what that actually looks like — the short version.
 
 <strong>Three key facts</strong>:
 
-1. <strong>A Subnet belongs to exactly one AZ.</strong> When you create a Subnet, you must pick an AZ for it. You cannot put EC2s from different AZs into the same Subnet.
-2. <strong>A VPC spans the entire region.</strong> Within one VPC, create a Subnet per AZ and you naturally end up with a Multi-AZ setup.
-3. <strong>A single ALB spans multiple AZs.</strong> When creating an ALB, attach it to Public Subnets across multiple AZs and AWS automatically handles cross-AZ routing. <strong>Do not create an ALB per AZ</strong> — that splits the DNS endpoint in two and defeats the ALB's built-in HA.
+1. <strong>A Subnet belongs to exactly one AZ.</strong> You pick the AZ at creation time. You cannot mix EC2s from different AZs into the same Subnet.
+2. <strong>A VPC spans the entire region.</strong> Create a Subnet per AZ inside one VPC and you naturally have a Multi-AZ setup.
+3. <strong>A single ALB spans multiple AZs.</strong> Attach it to Public Subnets across multiple AZs and AWS automatically handles cross-AZ routing. <strong>Do not create an ALB per AZ.</strong>
 
-<strong>What a 2-AZ Multi-AZ setup actually looks like</strong>:
+<strong>What a 2-AZ setup looks like</strong>:
 
 ```mermaid
 flowchart TB
@@ -91,38 +103,25 @@ flowchart TB
 ```
 
 - 1 VPC (region-wide)
-- 1 ALB (attached to both Public Subnets, serving both AZs)
-- 1 Public Subnet per AZ → 2 total
-- 1 Private Subnet per AZ → 2 total
-- 1 NAT Gateway per AZ → 2 total (for AZ failure isolation; a cheaper single-AZ NAT setup is an option — covered in Part 5)
+- 1 ALB (attached to both Public Subnets)
+- 1 Public/Private Subnet per AZ
+- 1 NAT Gateway per AZ (a single-AZ NAT is cheaper — covered in Part 5)
 - EC2s spread across the Private Subnets
 
-<strong>What happens if one AZ dies</strong>: If AZ-a goes down entirely, the Public/Private Subnets and EC2s in AZ-c keep running. The ALB routes traffic only to the surviving AZ and users barely notice. That's the practical meaning of "HA via Multi-AZ."
+<details>
+<summary><strong>More detail — what happens when an AZ dies, why not one ALB per AZ</strong></summary>
 
-<strong>Why you shouldn't create an ALB per AZ</strong>:
+<strong>When one AZ dies</strong>: if AZ-a goes down entirely, the Subnets and EC2s in AZ-c keep running. The ALB routes only to the surviving AZ and users barely notice. That's the practical meaning of "HA via Multi-AZ."
 
-- Each ALB gives you one DNS endpoint. Two ALBs means you have to pick between them in Route 53 (weighted or failover routing policies).
+<strong>Why you should not create an ALB per AZ</strong>:
+
+- One ALB = one DNS endpoint. Two ALBs means you have to manage routing between them in Route 53 (weighted or failover policies).
 - You lose the ALB's built-in cross-AZ HA — it's already Multi-AZ internally.
 - Double the cost, double the operational overhead.
 
+</details>
+
 ---
-
-### 1.4 Glossary for This Series
-
-Bookmark this table and come back when acronyms blur together.
-
-| Acronym | Meaning |
-| --- | --- |
-| VPC | Virtual Private Cloud. Your own virtual network inside AWS |
-| Subnet | An IP range inside a VPC. Split into Public (internet-connected) and Private (internal only) |
-| ALB | Application Load Balancer. An L7 load balancer that distributes traffic across multiple EC2s |
-| NAT | Network Address Translation. Lets Private Subnet EC2s reach the internet outbound |
-| AZ | Availability Zone. A physically separated datacenter inside a region. Seoul has 2a, 2b, 2c, 2d |
-| SG | Security Group. Instance-level firewall attached to EC2/ALB/etc. |
-| NACL | Network Access Control List. Subnet-level firewall |
-| IAM | Identity and Access Management. AWS's permissions system |
-| SSM | AWS Systems Manager. An umbrella service for EC2 management (Session Manager, Run Command, etc.) |
-| CloudTrail | AWS API call audit log — automatically records who did what, when |
 
 ---
 
@@ -164,29 +163,36 @@ When an EC2 sits in a Public Subnet, it gets a public IP — and that comes in t
 
 ### 3.2 Aside: Nginx (Reverse Proxy) vs ALB — What's the Difference?
 
-The table above lists "EC2 + Nginx (reverse proxy)" as an option. Understanding why requires knowing what Nginx is and where its features overlap with ALB.
+The table lists "EC2 + Nginx (reverse proxy)" as an option, so let's clear that up.
 
-<strong>Nginx is an open-source web server and reverse proxy.</strong> A reverse proxy takes client requests and forwards them to the real application (Node.js, Spring, etc.) behind it. Nginx can handle HTTPS termination, static file serving, caching, and L7 routing — all inside a single EC2.
+- <strong>Nginx</strong> = open-source web server / reverse proxy. Takes client requests and forwards them to the real app (Node.js, Spring, etc.). Handles HTTPS termination, static file serving, caching, and L7 routing — all inside a single EC2.
+- <strong>ALB</strong> is also a reverse proxy, really — AWS's managed L7 reverse proxy + load balancer.
 
-<strong>ALB is also a reverse proxy, really</strong> — AWS's managed L7 reverse proxy and load balancer.
+<strong>Feature comparison</strong>:
 
 | Feature | Nginx (on EC2) | ALB |
 | --- | --- | --- |
 | L7 routing, HTTPS termination | O | O |
-| Static file serving | O | X (use S3/CloudFront separately) |
+| Static file serving | O | X (use S3/CloudFront) |
 | Multi-AZ availability | Dies with the EC2 | AWS handles it |
 | Health checks / Auto Scaling | Manual | Automatic |
 | WAF, Shield integration | Build it yourself | One click |
-| Monthly cost | Included in EC2 cost | $20+ separate |
-| Operational burden | You update/configure it | None (managed) |
+| Monthly cost | Included in EC2 | $20+ separate |
+| Operational burden | You manage it | None (managed) |
 
-<strong>Where their features overlap</strong>: L7 routing, HTTPS termination, and the reverse-proxying itself. So with just one EC2, you usually don't need ALB — with only one server, there's nothing to balance traffic across.
+L7 routing, HTTPS termination, and reverse-proxying overlap. <strong>With just one EC2, ALB is overkill</strong> — there's nothing to load-balance across.
 
-<strong>When ALB wins</strong>: 2+ EC2s with HA requirements / Auto Scaling where instance counts change dynamically / integration with AWS WAF, Shield, Cognito. Nginx can't provide distributed HA or Multi-AZ on its own because "if this EC2 dies, the service is gone."
+<strong>Which one to pick</strong>:
 
-<strong>When Nginx wins</strong>: Small-scale where one EC2 is enough / workloads that serve static files directly / aggressive cost optimization / fine-grained routing and customization (Lua scripts, custom ngx_modules).
+| Situation | Pick |
+| --- | --- |
+| 2+ EC2s with HA | <strong>ALB</strong> (Nginx alone can't provide Multi-AZ HA) |
+| Auto Scaling / WAF · Shield · Cognito integration | <strong>ALB</strong> |
+| Small-scale, one EC2 is enough | <strong>Nginx</strong> |
+| Direct static-file serving / Lua · ngx_module customization | <strong>Nginx</strong> |
+| Large production stack | <strong>ALB → EC2 (Nginx) → app</strong> combo (split roles) |
 
-<strong>Often used together</strong>: In production, "ALB → EC2 (Nginx) → app (Node.js/Spring)" is a common stack. ALB handles HA, health checks, and WAF; Nginx handles gzip compression, static file serving, and URL rewriting inside the EC2. They operate at different layers and are <strong>complementary rather than competing</strong>.
+They operate at different layers and are <strong>complementary rather than competing</strong>. In production, ALB handles HA / health checks / WAF; Nginx inside the EC2 handles gzip / static serving / URL rewriting.
 
 ### 3.3 When Does a Private Subnet Become Necessary?
 
@@ -206,9 +212,7 @@ If even one row lands on the right side, it's time to consider a Private Subnet 
 
 ### 3.4 Aside: What Is Compliance?
 
-The table above has a "compliance" row mentioning "financial, healthcare, PII regulations." Let's unpack what that really means.
-
-<strong>Compliance means adhering to laws, regulations, and industry standards.</strong> For a backend engineer, the regulations that most directly shape infrastructure decisions are:
+<strong>Compliance = adhering to laws, regulations, and industry standards.</strong> For a backend engineer, the regulations that most directly shape infrastructure decisions are:
 
 | Regulation | Applies to | Core infrastructure requirement |
 | --- | --- | --- |
@@ -220,9 +224,15 @@ The table above has a "compliance" row mentioning "financial, healthcare, PII re
 | GDPR (EU) | EU citizen data | Data residency, right to deletion, consent management |
 | SOC 2 (global) | B2B SaaS | Access control, audit logs, change management |
 
-<strong>How this shapes infrastructure</strong>: Almost every regulation requires <strong>network separation</strong>. "Servers processing PII or payment data must not be directly reachable from the internet" is equivalent to "you can't just drop an EC2 in a Public Subnet." A Private Subnet + ALB architecture is the <strong>standard answer</strong> that satisfies this requirement.
+<strong>Common requirement</strong>: nearly every regulation demands <strong>network separation</strong>. "PII / payment servers must not be directly reachable from the internet" = <strong>no EC2 dropped straight into a Public Subnet</strong>. Private Subnet + ALB is the <strong>standard answer</strong>.
 
-<strong>When juniors hit this</strong>: When the company prepares for ISMS certification, when a startup chases enterprise customers and needs SOC 2, when launching a financial or healthcare service. Once any of these kick in, the Private Subnet architecture shifts from "infra cost" to "compliance cost" — and becomes non-negotiable.
+<strong>When juniors hit this</strong>:
+
+- Company preparing for ISMS certification
+- Startup chasing enterprise customers and needing SOC 2
+- Launching a financial or healthcare service
+
+Once any of these kick in, the Private Subnet architecture reclassifies from "infra cost" to <strong>"compliance cost"</strong> — non-negotiable.
 
 ### 3.5 Aside: What Is HA (High Availability)?
 
@@ -257,23 +267,22 @@ Above we said "cutting costs by leaving PII-handling servers in a Public Subnet 
 
 ### 4.1 Direct Attack Surface Exposure
 
-- EC2 in a Public Subnet has a public IP, meaning it is <strong>directly reachable from the internet</strong>.
-- A single Security Group mistake can expose database ports (3306, 5432, etc.) or SSH (22) to the entire world. These misconfigurations cause real incidents every year.
-- Public IPs themselves are <strong>automatic targets for bots and scanners</strong>. Spin up an EC2 on AWS and within minutes your logs will show SSH brute-force attempts.
-- If a server holding PII is directly exposed, a breach leads <strong>straight to data exfiltration</strong>. Attackers skip the usual "web tier → internal network → DB" pivot.
-- With a Private Subnet architecture, all inbound traffic goes through the ALB — you get <strong>an extra defense layer</strong>. The ALB can block anomalous requests at L7, and with WAF attached you can detect and block attack patterns.
+- <strong>Public IPs are automatic scanner targets</strong> — within minutes of spinning up an EC2, bots start SSH brute-force attempts.
+- <strong>One SG mistake = DB/SSH exposed to the world</strong> — this misconfig causes real incidents every year.
+- <strong>Direct exposure = direct data exfiltration</strong> — attackers skip the "web → internal network → DB" pivot.
+- <strong>Private Subnet + ALB adds a defense layer</strong> — ALB blocks anomalies at L7; attach WAF and you also get attack detection and blocking.
 
 ### 4.2 Compliance Violations
 
-- Regulations like Korea's Personal Information Protection Act and ISMS-P include <strong>network isolation requirements</strong>. They mandate that "systems processing personal information must be physically or logically separated from external networks."
-- During an audit, "the PII-handling server sits in a Public Subnet and is exposed via a public IP" is itself a <strong>finding</strong>. It can be classified as insufficient technical safeguards.
-- After an incident, it becomes <strong>evidence that the company did not take reasonable protective measures</strong>, widening the scope of legal liability.
+- <strong>Regulations mandate network separation</strong> — Korea's PIPA and ISMS-P: "systems processing PII must be physically or logically separated from external networks."
+- <strong>Instant audit finding</strong> — "PII server in a Public Subnet with a public IP" is classified as insufficient technical safeguards.
+- <strong>Evidence of failing reasonable protection duty</strong> after an incident — widens the scope of legal liability.
 
-### 4.3 Broader Liability After an Incident
+### 4.3 Broader Liability After Incidents
 
-- A Private Subnet + ALB setup lets you argue <strong>"we applied the standard security architecture"</strong> — evidence that you followed AWS Well-Architected's security guidance.
-- Leaving the server in a Public Subnet exposes you to the judgment that <strong>"security was neglected to cut costs."</strong>
-- That judgment <strong>directly affects fines and damages awarded</strong> in court. The wider the fault, the bigger the payout.
+- <strong>Private Subnet + ALB</strong> → you can argue "we applied the standard security architecture" (Well-Architected as evidence).
+- <strong>Public Subnet neglect</strong> → opens the judgment "security was sacrificed for cost."
+- <strong>This judgment directly affects fines and damages</strong> — the wider the fault, the bigger the payout.
 
 > <strong>Bottom line</strong>: For a side project that only handles public data, Public Subnet + Security Group is fine. But the moment PII (user data, payment information, sensitive records) is involved, network-level isolation (Private Subnet) is <strong>insurance, not cost</strong>. Weigh the extra $60–100/month against potential fines and reputational damage, and the direction is obvious.
 
@@ -294,3 +303,22 @@ Key takeaways from this post:
 Part 1 had one goal — <strong>making the architecture make sense</strong>. If you now think "oh, that's why we do it this way" when you see a Private Subnet diagram, we're done here. Part 2 starts building this architecture in actual code.
 
 In the next post — <strong>Building VPC Infrastructure with Terraform</strong> — we design the VPC CIDR, lay out 2AZ Public/Private subnets, wire up route tables, use the "SG-references-SG" pattern for Security Groups, and stand up ALB and EC2 in a single `main.tf` that comes up with one `terraform apply`.
+
+---
+
+## Appendix: Glossary for This Series
+
+Bookmark this table and come back when acronyms blur together.
+
+| Acronym | Meaning |
+| --- | --- |
+| VPC | Virtual Private Cloud. Your own virtual network inside AWS |
+| Subnet | An IP range inside a VPC. Split into Public (internet-connected) and Private (internal only) |
+| ALB | Application Load Balancer. An L7 load balancer that distributes traffic across multiple EC2s |
+| NAT | Network Address Translation. Lets Private Subnet EC2s reach the internet outbound |
+| AZ | Availability Zone. A physically separated datacenter inside a region. Seoul has 2a, 2b, 2c, 2d |
+| SG | Security Group. Instance-level firewall attached to EC2/ALB/etc. |
+| NACL | Network Access Control List. Subnet-level firewall |
+| IAM | Identity and Access Management. AWS's permissions system |
+| SSM | AWS Systems Manager. An umbrella service for EC2 management (Session Manager, Run Command, etc.) |
+| CloudTrail | AWS API call audit log — automatically records who did what, when |
