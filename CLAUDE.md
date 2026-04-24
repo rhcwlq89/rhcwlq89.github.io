@@ -4,11 +4,11 @@
 
 - `pubDate` must always include the time (e.g., `2026-02-03T15:30:00+09:00`)
 - Every blog post must be written in both Korean and English versions
-- **NEVER remove bold (`**`) formatting** from blog content. If bold renders incorrectly (e.g., in markdown table cells), fix the structure — do NOT strip the bold. Keep bold consistent with the rest of the post.
-- **한글 조사 + `)**` 조합 금지** — `**단어(설명)**을/를/이/의/다` 패턴은 Astro/remark가 닫는 `**`을 인식하지 못해 `**`이 본문에 그대로 노출되는 사고가 재발한다. 반드시 조사를 bold 안으로 넣어 닫는 `**` 뒤를 공백으로 만들어라.
-  - ❌ `**락(lock)**이다`, `**여러 고객(테넌트)**의`
-  - ✅ `**락(lock)이다**`, `**여러 고객(테넌트)의**`
-  - 새 글 작성 시 `rg '\)\*\*[가-힣]'`로 사전 점검하는 것을 권장.
+- **NEVER remove bold formatting** from blog content. If bold renders incorrectly, fix the structure — do NOT strip the bold.
+- **Bold는 HTML `<strong>` 태그로 작성** — 마크다운 `**...**`은 Astro/remark에서 `)` 다음에 한글 조사가 붙을 때(`**락(lock)**이다` 등) 닫는 `**`이 인식되지 않는 재발성 버그가 있다. 조사를 bold 안으로 넣는 우회법(`**락(lock)이다**`)은 강조 범위가 어긋나므로, 새 글에서는 `<strong>락(lock)</strong>이다` 형태로 작성해 강조 범위를 조사 앞까지로 정확히 유지한다. 기존 글은 렌더링이 깨지지 않는 한 그대로 둔다.
+  - ❌ `**락(lock)**이다` (파서 버그), `**락(lock)이다**` (강조 범위 어긋남)
+  - ✅ `<strong>락(lock)</strong>이다`
+  - 깨진 곳 점검: `rg '\)\*\*[가-힣]'` — 새 글 커밋 전 실행 권장.
 
 ## Hero Image Style Guide
 
