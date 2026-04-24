@@ -110,7 +110,33 @@ When an EC2 sits in a Public Subnet, it gets a public IP — and that comes in t
 | ALB + Private EC2 + NAT Instance | ~$60 | Keep the security posture, cut NAT Gateway cost with a NAT Instance |
 | ALB + Private EC2 + NAT Gateway (this series) | $100~320 | Mid-scale and up, compliance requirements, multi-person teams |
 
-### 3.2 When Does a Private Subnet Become Necessary?
+### 3.2 Aside: Nginx (Reverse Proxy) vs ALB — What's the Difference?
+
+The table above lists "EC2 + Nginx (reverse proxy)" as an option. Understanding why requires knowing what Nginx is and where its features overlap with ALB.
+
+<strong>Nginx is an open-source web server and reverse proxy.</strong> A reverse proxy takes client requests and forwards them to the real application (Node.js, Spring, etc.) behind it. Nginx can handle HTTPS termination, static file serving, caching, and L7 routing — all inside a single EC2.
+
+<strong>ALB is also a reverse proxy, really</strong> — AWS's managed L7 reverse proxy and load balancer.
+
+| Feature | Nginx (on EC2) | ALB |
+| --- | --- | --- |
+| L7 routing, HTTPS termination | O | O |
+| Static file serving | O | X (use S3/CloudFront separately) |
+| Multi-AZ availability | Dies with the EC2 | AWS handles it |
+| Health checks / Auto Scaling | Manual | Automatic |
+| WAF, Shield integration | Build it yourself | One click |
+| Monthly cost | Included in EC2 cost | $20+ separate |
+| Operational burden | You update/configure it | None (managed) |
+
+<strong>Where their features overlap</strong>: L7 routing, HTTPS termination, and the reverse-proxying itself. So with just one EC2, you usually don't need ALB — with only one server, there's nothing to balance traffic across.
+
+<strong>When ALB wins</strong>: 2+ EC2s with HA requirements / Auto Scaling where instance counts change dynamically / integration with AWS WAF, Shield, Cognito. Nginx can't provide distributed HA or Multi-AZ on its own because "if this EC2 dies, the service is gone."
+
+<strong>When Nginx wins</strong>: Small-scale where one EC2 is enough / workloads that serve static files directly / aggressive cost optimization / fine-grained routing and customization (Lua scripts, custom ngx_modules).
+
+<strong>Often used together</strong>: In production, "ALB → EC2 (Nginx) → app (Node.js/Spring)" is a common stack. ALB handles HA, health checks, and WAF; Nginx handles gzip compression, static file serving, and URL rewriting inside the EC2. They operate at different layers and are <strong>complementary rather than competing</strong>.
+
+### 3.3 When Does a Private Subnet Become Necessary?
 
 Concrete criteria for drawing the line between small-scale and mid-scale:
 
@@ -126,7 +152,27 @@ Concrete criteria for drawing the line between small-scale and mid-scale:
 
 If even one row lands on the right side, it's time to consider a Private Subnet — especially <strong>compliance and data sensitivity</strong>, which push you to the mid-scale column regardless of traffic volume.
 
-### 3.3 Aside: What Is HA (High Availability)?
+### 3.4 Aside: What Is Compliance?
+
+The table above has a "compliance" row mentioning "financial, healthcare, PII regulations." Let's unpack what that really means.
+
+<strong>Compliance means adhering to laws, regulations, and industry standards.</strong> For a backend engineer, the regulations that most directly shape infrastructure decisions are:
+
+| Regulation | Applies to | Core infrastructure requirement |
+| --- | --- | --- |
+| PIPA (Korea) | Any business handling personal information | Access control, encryption, log retention, network separation |
+| ISMS / ISMS-P (Korea) | IT companies above a size threshold | Network segmentation, access control, audit logs |
+| e-Financial Supervision (Korea) | Financial services | Internal network isolation, DR, encryption key management |
+| HIPAA (US) | Healthcare data | Encryption, access logs, BAA-covered services only |
+| PCI DSS (global) | Credit card processing | Card number encryption, network isolation, vulnerability scans |
+| GDPR (EU) | EU citizen data | Data residency, right to deletion, consent management |
+| SOC 2 (global) | B2B SaaS | Access control, audit logs, change management |
+
+<strong>How this shapes infrastructure</strong>: Almost every regulation requires <strong>network separation</strong>. "Servers processing PII or payment data must not be directly reachable from the internet" is equivalent to "you can't just drop an EC2 in a Public Subnet." A Private Subnet + ALB architecture is the <strong>standard answer</strong> that satisfies this requirement.
+
+<strong>When juniors hit this</strong>: When the company prepares for ISMS certification, when a startup chases enterprise customers and needs SOC 2, when launching a financial or healthcare service. Once any of these kick in, the Private Subnet architecture shifts from "infra cost" to "compliance cost" — and becomes non-negotiable.
+
+### 3.5 Aside: What Is HA (High Availability)?
 
 The table above mentions "2+ EC2 instances" and "99.9%+ SLA." Both tie directly to HA, so a quick primer.
 
