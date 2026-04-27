@@ -247,6 +247,111 @@ Tighten down to repo + branch + environment. Splitting PR-build roles from prod-
 
 > <strong>Caution</strong>: Use `StringLike` (rather than `StringEquals`) only when environment matching genuinely requires wildcards (`repo:owner/repo:environment:prod*`). For exact matches, prefer `StringEquals` — it removes the wildcard footgun.
 
+### 3.5 How signature verification actually works — RS256, JWKS, and why KMS isn't involved
+
+Step 4 of the §3.2 sequence diagram ("verify JWT signature") was a single line, but what happens inside is the heart of the OIDC security model. Let's go one level deeper.
+
+<strong>① How the signature is created</strong>
+
+A GitHub OIDC Provider holds an RSA key pair.
+
+- <strong>Private key</strong> — held only by GitHub, used to generate signatures when issuing tokens
+- <strong>Public key</strong> — anyone can fetch it, used only for verification
+
+The algorithm is <strong>RS256</strong> (RSA + SHA-256). The flow:
+
+1. SHA-256 hash of `header.payload` (the first two dot-separated segments)
+2. Encrypt the hash with GitHub's private key — that's the signature (the third segment)
+3. AWS hashes the same `header.payload`
+4. Decrypt the signature with GitHub's <strong>public key</strong>
+5. If the two hashes match, verification passes
+
+The asymmetry is the whole point. <strong>Generating a signature requires the private key</strong>, but <strong>verifying only needs the public key</strong>. AWS can verify with the public key but cannot forge new signatures with it.
+
+<strong>② How AWS gets GitHub's public key — JWKS</strong>
+
+Standard OIDC discovery, in three lines:
+
+```text
+https://token.actions.githubusercontent.com/.well-known/openid-configuration
+   → jwks_uri field points to:
+   → https://token.actions.githubusercontent.com/.well-known/jwks
+   → { "keys": [ { "kty": "RSA", "kid": "...", "n": "...", "e": "AQAB" }, ... ] }
+```
+
+AWS STS periodically fetches and caches this JWKS. When a token arrives, STS reads the `kid` in its header to identify which key signed it, then verifies with the cached public key.
+
+> <strong>Note</strong>: humans don't register the public key in IAM. STS derives the JWKS location from the OIDC Provider's URL alone and fetches it automatically.
+
+<strong>③ STS does not use KMS — a common point of confusion</strong>
+
+After reading the above, a natural question arises — <strong>"isn't signing/verifying = KMS?"</strong> The answer is a clear <strong>no</strong>.
+
+| Operation | Tool used | KMS? |
+| --- | --- | --- |
+| GitHub signs the JWT | RSA private key in GitHub's internal HSM | <strong>N/A</strong> (outside AWS) |
+| AWS verifies the JWT | Cached GitHub public key + standard library | <strong>No</strong> |
+| Client signs AWS API requests | SecretAccessKey + HMAC-SHA256 (SigV4) | <strong>No</strong> |
+| SessionToken integrity | AWS internal infrastructure (opaque) | <strong>No</strong> (not customer KMS) |
+
+KMS shows up when <strong>"the application layer encrypts / decrypts / signs data"</strong>: S3 SSE-KMS, RDS encryption, Secrets Manager secret decryption, KMS Sign API for digitally signing documents — that domain.
+
+The signatures in the credential issuance flow use only <strong>public-key verification (JWT)</strong> or <strong>HMAC (SigV4)</strong>. KMS doesn't appear anywhere in that chain. <strong>STS is the badge issuance counter; KMS is the vault</strong> — both are security infrastructure, but they handle different jobs.
+
+### 3.6 What signature verification doesn't catch — the real role of `exp`, `aud`, and `sub`
+
+Signature verification is powerful but only catches <strong>tampering</strong>. The JWT security model addresses other threats with separate mechanisms.
+
+| Threat | Caught by signature alone? | Mitigation |
+| --- | --- | --- |
+| <strong>Tampering</strong> | ✅ | RS256 itself |
+| <strong>Token theft & replay</strong> | ❌ | Short <strong>`exp`</strong> (5–15 min) |
+| <strong>Reusing tokens for other systems</strong> | ❌ | <strong>`aud`</strong> validation |
+| <strong>Reusing tokens from other repos / branches</strong> | ❌ | <strong>`sub`</strong> condition (trust policy) |
+| <strong>`alg: none` bypass</strong> | ❌ | Library's algorithm allowlist |
+| <strong>JWKS endpoint forgery</strong> | ❌ | HTTPS certificates + Provider thumbprint |
+
+Briefly on each.
+
+<strong>① Tampering — fully covered by signature</strong>
+
+If an attacker changes a single byte in the payload, the SHA-256 hash changes. The original signature won't match the new hash, so verification fails. <strong>Forging a valid signature requires GitHub's private key</strong>, which exists only inside GitHub's infrastructure. Brute-forcing RSA-2048 takes universe-lifetime scales — effectively impossible.
+
+<strong>② Theft and replay — `exp` shrinks the window</strong>
+
+What if an attacker grabs a valid JWT from someone's workflow logs? The signature is valid, so AWS will accept it. That's why GitHub OIDC tokens carry a short <strong>`exp` of 5–15 minutes</strong>. The window for stolen-token use is narrow. AWS STS always checks `exp` as part of verification.
+
+<strong>③ Tokens minted for other systems — `aud` blocks them</strong>
+
+GitHub Actions can mint OIDC tokens for <strong>multiple destination systems</strong> in the same workflow — `aud=sts.amazonaws.com` for AWS, `aud=api://AzureADTokenExchange` for Azure, etc. AWS STS rejects tokens whose `aud` isn't its own. An Azure-bound token cannot be reused to assume an AWS role.
+
+<strong>④ Tokens from other repos — `sub` is the lock</strong>
+
+All GitHub repos receive tokens through the same OIDC provider. The signature can be perfectly valid even when `sub` is from someone else's repo. The IAM Role's trust policy must reject those. <strong>The missing-`sub` incident from §3.4 is exactly this lock unlocked</strong> — a perfectly-signed token from another repo just walks through.
+
+<strong>⑤ `alg: none` bypass — a historical pitfall</strong>
+
+The JWT spec includes an `alg: none` option (no signature). Some older libraries treated this as "verification passed" and accepted unsigned tokens. An attacker would set the header to `{"alg":"none"}`, blank out the signature, and slip through. Every well-built verifier today (AWS included) uses an <strong>algorithm allowlist</strong> (e.g., RS256-only) and rejects `none`.
+
+<strong>⑥ JWKS endpoint forgery — the certificate trust chain</strong>
+
+The deepest layer. For signature verification to be meaningful, <strong>AWS must hold the genuine GitHub public key</strong>. If an attacker could intercept the connection and inject a fake public key, they could mint their own valid signatures freely. Two safeguards prevent this:
+
+- <strong>HTTPS / TLS certificates</strong>: AWS validates the standard TLS chain when fetching JWKS, blocking man-in-the-middle attacks.
+- <strong>OIDC Provider thumbprint</strong>: registering the provider in IAM pins GitHub's certificate thumbprint (the `thumbprint_list` field in [Part 4](/blog/en/aws-private-ec2-guide-4)'s Terraform). If the cert changes unexpectedly, the call is rejected. AWS now auto-validates this so it's largely vestigial, but the original intent was this layer of defense.
+
+<strong>Summary — JWT security is a five-piece set</strong>
+
+Signature verification is sufficient and powerful for tampering. But it doesn't cover token theft, context misuse, `alg: none` bypass, or JWKS forgery on its own. So the OIDC security model relies on:
+
+- <strong>Signature verification (RS256)</strong> — prevents tampering
+- <strong>Short `exp`</strong> — narrows theft windows
+- <strong>`aud` validation</strong> — blocks cross-system token misuse
+- <strong>`sub` condition</strong> — blocks other identities sharing the same IdP
+- <strong>Algorithm allowlist + JWKS HTTPS trust</strong> — prevents bypass and forgery
+
+All five together. Drop any one and the whole posture weakens — which is why [Part 4](/blog/en/aws-private-ec2-guide-4) emphasized the missing-`sub` case so heavily.
+
 ---
 
 ## 4. Where Do You Configure STS — the Mental Model of an "Invisible" Service

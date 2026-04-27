@@ -253,6 +253,111 @@ sequenceDiagram
 
 > <strong>주의</strong>: `StringEquals` 대신 `StringLike`를 쓰는 건 environment 매칭에 와일드카드가 필요한 경우(`repo:owner/repo:environment:prod*` 등)에만 정당하다. 단순 매칭이라면 `StringEquals`가 안전하다 — 와일드카드 사고 가능성이 줄어든다.
 
+### 3.5 시그니처 검증은 어떻게 작동하나 — RS256, JWKS, 그리고 KMS가 등장하지 않는 이유
+
+3.2절 시퀀스 다이어그램의 4번("JWT 서명 검증")은 한 줄로 끝났지만, 그 안에서 일어나는 일은 OIDC 보안 모델의 심장이다. 한 단계 들여다보자.
+
+<strong>① 서명은 어떻게 만들어지나</strong>
+
+GitHub OIDC Provider는 RSA 키 쌍을 갖고 있다.
+
+- <strong>개인키(private key)</strong> — GitHub만 보유, 토큰 발급 시 서명 생성에 사용
+- <strong>공개키(public key)</strong> — 누구나 가져갈 수 있음, 검증에만 사용
+
+알고리즘은 <strong>RS256</strong>(RSA + SHA-256). 흐름은 이렇다.
+
+1. JWT의 `header.payload`(점으로 구분된 첫 두 토막)를 SHA-256 해시
+2. 그 해시를 GitHub의 개인키로 암호화 → 결과가 시그니처(세 번째 토막)
+3. AWS가 같은 `header.payload`를 다시 해시
+4. 시그니처를 GitHub의 <strong>공개키</strong>로 복호화
+5. 두 해시가 일치하면 검증 통과
+
+이 모델의 비대칭성이 핵심이다. <strong>서명 생성에는 개인키가 필수</strong>지만 <strong>검증에는 공개키만 있으면 된다</strong>. AWS는 공개키만 갖고도 검증할 수 있고, 그 공개키로 새 서명을 만들지는 못한다.
+
+<strong>② AWS는 GitHub의 공개키를 어떻게 받아오나 — JWKS</strong>
+
+표준 OIDC 디스커버리 메커니즘이다. 흐름만 보면:
+
+```text
+https://token.actions.githubusercontent.com/.well-known/openid-configuration
+   → jwks_uri 필드가 가리킴
+   → https://token.actions.githubusercontent.com/.well-known/jwks
+   → { "keys": [ { "kty": "RSA", "kid": "...", "n": "...", "e": "AQAB" }, ... ] }
+```
+
+AWS STS는 이 JWKS를 주기적으로 fetch & 캐시한다. 토큰이 도착하면 헤더의 `kid`로 어떤 키가 서명에 쓰였는지 식별, 캐시된 공개키로 검증.
+
+> <strong>참고</strong>: 사람이 IAM에 공개키를 등록할 필요는 없다. STS가 OIDC Provider 등록 정보(URL)만으로 JWKS 위치를 알아내고 자동으로 가져온다.
+
+<strong>③ STS는 KMS를 쓰지 않는다 — 자주 헷갈리는 지점</strong>
+
+여기까지 읽고 자연스럽게 떠오르는 질문 — <strong>"서명·검증 = KMS 아닌가?"</strong>. 답은 분명히 <strong>아니오</strong>다.
+
+| 작업 | 사용 도구 | KMS? |
+| --- | --- | --- |
+| GitHub이 JWT 서명 | GitHub 내부 HSM의 RSA 개인키 | <strong>해당 없음</strong> (AWS 바깥) |
+| AWS가 JWT 검증 | 캐시된 GitHub 공개키 + 표준 라이브러리 | <strong>아니오</strong> |
+| 클라이언트가 AWS API 요청에 서명 | SecretAccessKey + HMAC-SHA256 (SigV4) | <strong>아니오</strong> |
+| SessionToken 무결성 | AWS 내부 인프라 (불투명) | <strong>아니오</strong> (사용자 KMS 아님) |
+
+KMS는 <strong>"애플리케이션 레이어에서 데이터를 암호화·복호화·서명"</strong>할 때 등장한다. S3 SSE-KMS, RDS 암호화, Secrets Manager 시크릿 복호화, KMS Sign API로 문서 디지털 서명 — 이 영역.
+
+자격증명 발급 흐름의 시그니처는 <strong>공개키 검증(JWT)</strong> 또는 <strong>HMAC(SigV4)</strong>만 쓰지, KMS는 어디에도 없다. <strong>STS는 신분증 발급소, KMS는 금고</strong> — 둘 다 보안 인프라지만 하는 일이 분리되어 있다.
+
+### 3.6 시그니처 검증이 못 막는 위협들 — `exp`·`aud`·`sub`의 진짜 역할
+
+서명 검증은 강력하지만 <strong>위변조 한 가지</strong>만 막는다. JWT 보안 모델은 다른 위협을 별도 메커니즘으로 처리한다.
+
+| 위협 | 서명만으로 막히나? | 보강 메커니즘 |
+| --- | --- | --- |
+| <strong>위변조 (tampering)</strong> | ✅ | RS256 자체 |
+| <strong>도용 후 재전송</strong> | ❌ | 짧은 <strong>`exp`</strong> (5~15분) |
+| <strong>다른 시스템용 토큰 가져다 쓰기</strong> | ❌ | <strong>`aud`</strong> 검증 |
+| <strong>다른 레포·브랜치 토큰 가져다 쓰기</strong> | ❌ | <strong>`sub`</strong> 조건 (신뢰 정책) |
+| <strong>`alg: none` 우회</strong> | ❌ | 라이브러리의 알고리즘 화이트리스트 |
+| <strong>JWKS 엔드포인트 위조</strong> | ❌ | HTTPS 인증서 + Provider thumbprint |
+
+각각 짧게 보자.
+
+<strong>① 위변조 — 서명만으로 완벽히 잡힌다</strong>
+
+공격자가 페이로드의 한 글자라도 바꾸면 SHA-256 해시가 달라진다. 기존 시그니처는 새 해시와 매치되지 않으니 검증에서 거부. <strong>올바른 시그니처를 만들려면 GitHub의 개인키가 필요</strong>한데, 그 키는 GitHub 내부에서만 존재한다. RSA-2048 brute-force는 우주 수명 단위라 사실상 불가능.
+
+<strong>② 도용 후 재전송 — `exp`로 창을 좁힌다</strong>
+
+공격자가 누군가의 워크플로 로그에서 JWT를 그대로 훔쳤다면? 시그니처는 유효하니 AWS가 받을 수 있다. 그래서 GitHub OIDC 토큰의 `exp`는 보통 <strong>5~15분</strong>으로 짧다. 도용해도 사용 가능한 창이 매우 좁다. AWS STS도 검증 시 `exp`를 반드시 확인한다.
+
+<strong>③ 다른 시스템용 토큰 — `aud`로 차단</strong>
+
+GitHub Actions는 같은 워크플로에서 <strong>여러 시스템용 OIDC 토큰</strong>을 발급받을 수 있다. AWS용은 `aud=sts.amazonaws.com`, Azure용은 `aud=api://AzureADTokenExchange` 같은 식. AWS STS는 `aud`가 자기 것이 아니면 거부한다. Azure용으로 만든 토큰을 AWS Role 가정에 쓰는 시도는 막힌다.
+
+<strong>④ 다른 레포의 토큰 — `sub` 조건이 자물쇠</strong>
+
+GitHub의 모든 레포가 동일한 OIDC Provider를 통해 토큰을 받는다. 시그니처는 멀쩡한데 `sub`가 다른 레포면? IAM Role의 신뢰 정책이 거부해야 한다. <strong>3.4절에서 강조한 `sub` 누락 사고가 정확히 이 자물쇠가 풀린 상태</strong>다 — 서명 멀쩡한 다른 레포 토큰이 통과해버린다.
+
+<strong>⑤ `alg: none` 우회 — 역사적 함정</strong>
+
+JWT 명세에 `alg: none`(서명 없음) 옵션이 있다. 옛 라이브러리 일부가 이걸 보고 "검증 통과"로 잘못 처리한 사고가 있었다. 공격자가 헤더를 `{"alg":"none"}`으로 바꾸고 서명 부분을 비우면 통과하는 식. 현재 잘 만든 검증 라이브러리(AWS 포함)는 모두 <strong>알고리즘 화이트리스트</strong>(`RS256`만 허용)로 `none`을 거부한다.
+
+<strong>⑥ JWKS 엔드포인트 위조 — 인증서 신뢰 체인</strong>
+
+가장 깊은 한 층. 시그니처 검증이 의미 있으려면 <strong>AWS가 진짜 GitHub 공개키를 갖고 있어야</strong> 한다. 공격자가 통신을 가로채 가짜 공개키를 주입할 수 있다면 자기 키 쌍으로 자유롭게 서명할 수 있게 된다. 이걸 막는 게 두 가지:
+
+- <strong>HTTPS / TLS 인증서</strong>: AWS가 JWKS를 가져올 때 표준 TLS 검증을 한다. 중간자 공격이 차단된다.
+- <strong>OIDC Provider Thumbprint</strong>: IAM에 OIDC Provider 등록 시 GitHub의 인증서 thumbprint가 박힌다([4편](/blog/aws-private-ec2-guide-4) 코드의 `thumbprint_list`). 인증서가 갑자기 바뀌면 거부. 최근 AWS는 자동 검증을 도입해 거의 형식적이지만, 원래 의도는 이 layer였다.
+
+<strong>정리 — JWT 보안은 다섯 가지가 한 세트</strong>
+
+위변조 한 가지에 대해서는 시그니처 검증이 충분하고 강력하다. 다만 토큰 도용·컨텍스트 오용·`alg: none` 우회·JWKS 위조 같은 다른 위협까지 한 번에 막진 못한다. 그래서 OIDC 보안 모델은:
+
+- <strong>시그니처 검증 (RS256)</strong> — 위변조 방지
+- <strong>짧은 `exp`</strong> — 도용 시간창 좁히기
+- <strong>`aud` 검증</strong> — 시스템 간 토큰 오용 차단
+- <strong>`sub` 조건</strong> — 같은 IdP 내 다른 신원 차단
+- <strong>알고리즘 화이트리스트 + JWKS HTTPS 신뢰</strong> — 우회·위조 차단
+
+다섯 가지가 한 세트로 동작한다. 어느 하나가 빠지면 전체가 약해진다 — 그래서 [4편](/blog/aws-private-ec2-guide-4)이 `sub` 조건 누락을 그렇게 강조했던 것이다.
+
 ---
 
 ## 4. STS는 어디서 설정하는가 — "보이지 않는 서비스"의 멘탈 모델
