@@ -46,6 +46,10 @@ export default defineConfig({
 	integrations: [
 		mdx(),
 		sitemap({
+			filter(page) {
+				const { pathname } = new URL(page);
+				return !pathname.startsWith('/blog/tags/') && !pathname.startsWith('/en/blog/tags/');
+			},
 			i18n: {
 				defaultLocale: 'ko',
 				locales: {

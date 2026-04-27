@@ -7,10 +7,11 @@ import FormattedDate from "../../../components/FormattedDate.astro";
 import Header from "../../../components/Header.astro";
 import { SITE_TITLE } from "../../../consts";
 import { useTranslations } from "../../../i18n/utils";
+import { isPublished } from "../../../utils/posts";
 
 const t = useTranslations('en');
 const posts = (await getCollection("blog"))
-  .filter((post) => post.id.startsWith("en/"))
+  .filter((post) => post.id.startsWith("en/") && isPublished(post))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 ---
 

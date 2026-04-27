@@ -4,10 +4,11 @@ import BaseHead from "../../../components/BaseHead.astro";
 import Footer from "../../../components/Footer.astro";
 import Header from "../../../components/Header.astro";
 import { SITE_TITLE } from "../../../consts";
+import { isPublished } from "../../../utils/posts";
 import { collectTags } from "../../../utils/tags";
 
 const posts = (await getCollection("blog")).filter(
-  (post) => !post.id.startsWith("en/"),
+  (post) => !post.id.startsWith("en/") && isPublished(post),
 );
 const tags = collectTags(posts);
 ---
@@ -19,6 +20,7 @@ const tags = collectTags(posts);
       title={`태그 | ${SITE_TITLE}`}
       description="모든 블로그 글을 태그별로 모아 봅니다."
       lang="ko"
+      noindex
     />
     <style>
       main {

@@ -15,6 +15,7 @@ interface Props {
 	type?: 'website' | 'article';
 	publishedTime?: Date;
 	modifiedTime?: Date;
+	noindex?: boolean;
 }
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
@@ -26,7 +27,8 @@ const {
 	image,
 	type = 'website',
 	publishedTime,
-	modifiedTime
+	modifiedTime,
+	noindex = false
 } = Astro.props;
 
 const imageURL = image ? new URL(image.src, Astro.url) : null;
@@ -138,6 +140,7 @@ const breadcrumbLd = type === 'article' ? {
 <meta name="title" content={title} />
 <meta name="description" content={description} />
 <meta name="author" content={AUTHOR_NAME} />
+{noindex && <meta name="robots" content="noindex,follow" />}
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content={type} />
@@ -178,4 +181,3 @@ const breadcrumbLd = type === 'article' ? {
   gtag('js', new Date());
   gtag('config', 'G-N2ZJ87F6YX');
 </script>
-

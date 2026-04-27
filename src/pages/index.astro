@@ -6,9 +6,10 @@ import Header from "../components/Header.astro";
 import FormattedDate from "../components/FormattedDate.astro";
 import { Image } from "astro:assets";
 import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
+import { isPublished } from "../utils/posts";
 
 const posts = (await getCollection("blog"))
-  .filter((post) => !post.id.startsWith("en/"))
+  .filter((post) => !post.id.startsWith("en/") && isPublished(post))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 ---
 
