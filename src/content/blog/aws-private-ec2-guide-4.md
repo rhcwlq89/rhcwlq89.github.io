@@ -73,7 +73,7 @@ flowchart LR
 
 ### 1.2 두 갈래의 선택지
 
-3번째 단계(트리거)에서 갈린다. <strong>SSM Run Command</strong>는 셸 스크립트를 인스턴스에 푸시해서 실행하는 가장 단순한 길이다. <strong>CodeDeploy</strong>는 무중단·롤백·Hook 단계 같은 운영 기능을 추가로 제공한다. §4–§5에서 각각 다루고, §6에서 의사결정 표를 본다.
+3번째 단계(트리거)에서 갈린다. <strong>SSM Run Command</strong>는 셸 스크립트를 인스턴스에 푸시해서 실행하는 가장 단순한 길이다. <strong>CodeDeploy</strong>는 무중단·롤백·Hook 단계 같은 운영 기능을 추가로 제공한다. 4–5절에서 각각 다루고, 6절에서 의사결정 표를 본다.
 
 ---
 
@@ -576,7 +576,7 @@ flowchart TB
 | --- | --- | --- |
 | GitHub Actions에서 빨간불 | Actions 화면의 step 로그 | OIDC 단계면 IAM 신뢰 정책 `sub` 확인 |
 | `aws s3 cp` 실패 | GitHubActionsDeploy Role의 S3 권한 | 버킷 정책·KMS |
-| `send-command` 실패 | Run Command 콘솔 → 명령 ID 추적 | 인스턴스가 SSM Online인지(3편 §5.1) |
+| `send-command` 실패 | Run Command 콘솔 → 명령 ID 추적 | 인스턴스가 SSM Online인지(3편 5.1절) |
 | CodeDeploy 단계 실패 | 콘솔 → Deployments → 실패 단계 | EC2의 `/var/log/aws/codedeploy-agent/codedeploy-agent.log` |
 | 헬스체크 실패 | `validate.sh` 또는 `curl` 결과 | 앱 자체의 로그 |
 
@@ -641,7 +641,7 @@ aws ssm list-command-invocations \
 
 ### B. 최소 권한 IAM 정책 — GitHubActionsDeploy 좁히기
 
-§2.4의 정책은 학습용으로 넓게 잡았다. 운영에서는 다음 둘은 꼭 좁혀쓴다:
+2.4절의 정책은 학습용으로 넓게 잡았다. 운영에서는 다음 둘은 꼭 좁혀쓴다:
 
 - `s3:PutObject`는 `Resource = "arn:aws:s3:::my-private-ec2-artifacts/app/*"`로 prefix 한정.
 - `ssm:SendCommand`는 `Resource`에 인스턴스 ARN을 태그 조건과 함께 — `Condition: ssm:resourceTag/Env: prod`로 prod에만 보내게 강제.

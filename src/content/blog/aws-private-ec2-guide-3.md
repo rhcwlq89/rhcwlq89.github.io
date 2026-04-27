@@ -126,7 +126,7 @@ systemctl status amazon-ssm-agent
 
 ### 3.2 IAM Role
 
-EC2가 AWS API를 호출하려면 자격증명이 필요하다. 정답은 <strong>EC2 인스턴스 프로파일에 IAM Role 부착</strong>이다. 2편 §6.1에서 이미 만들어뒀다.
+EC2가 AWS API를 호출하려면 자격증명이 필요하다. 정답은 <strong>EC2 인스턴스 프로파일에 IAM Role 부착</strong>이다. 2편 6.1절에서 이미 만들어뒀다.
 
 ```hcl
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
@@ -147,7 +147,7 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 - `ssmmessages.<region>.amazonaws.com` — Session Manager 양방향 채널
 - `ec2messages.<region>.amazonaws.com` — Run Command 메시지 채널
 
-도달 방법은 두 가지 — <strong>NAT Gateway 경유로 인터넷</strong>을 통해 가거나, <strong>Interface VPC Endpoint</strong>로 VPC 내부에서 직접 닿거나. 어느 쪽을 택할지가 §4의 핵심 결정이다.
+도달 방법은 두 가지 — <strong>NAT Gateway 경유로 인터넷</strong>을 통해 가거나, <strong>Interface VPC Endpoint</strong>로 VPC 내부에서 직접 닿거나. 어느 쪽을 택할지가 4절의 핵심 결정이다.
 
 ### 3.4 클라이언트 — Session Manager Plugin
 
@@ -208,7 +208,7 @@ flowchart LR
 | 컴플라이언스(PCI, ISMS-P, 금융) | <strong>VPC Endpoint</strong> — 트래픽이 AWS 내부에 머무는 게 명시 요건 |
 | 에어갭 환경 / 인터넷 끊긴 VPC | <strong>VPC Endpoint 외 선택지 없음</strong> |
 
-이 시리즈의 학습 트랙은 첫 번째 — <strong>NAT 경유</strong>다. 2편에서 만든 그대로 SSM이 동작한다. §4.4의 Endpoint 코드는 "필요해지면 어떻게 추가하는가"를 보여주는 참고용이다.
+이 시리즈의 학습 트랙은 첫 번째 — <strong>NAT 경유</strong>다. 2편에서 만든 그대로 SSM이 동작한다. 4.4절의 Endpoint 코드는 "필요해지면 어떻게 추가하는가"를 보여주는 참고용이다.
 
 ### 4.4 참고: Interface VPC Endpoint를 추가하는 Terraform
 
@@ -253,6 +253,29 @@ resource "aws_vpc_endpoint" "ssm" {
 
 `private_dns_enabled = true`가 핵심이다. 이걸 켜야 EC2 안에서 `ssm.ap-northeast-2.amazonaws.com`이 자동으로 Endpoint의 사설 IP로 해석된다 — 코드를 바꿀 필요 없이 SSM Agent가 그대로 작동한다. 2편에서 VPC에 `enable_dns_hostnames = true`를 켜둔 게 이 시점에 효과를 본다.
 
+### 4.5 참고: 실무에서는 보통 둘 다 쓴다
+
+4.3절 표를 "둘 중 하나"로 읽기 쉽지만, 학습 단계를 지나 <strong>컨테이너 기반 운영</strong>으로 넘어가면 NAT과 VPC Endpoint를 <strong>병행하는 구성</strong>이 디폴트가 된다. 이유는 아웃바운드 트래픽이 자연스럽게 두 종류로 갈라지기 때문이다.
+
+| 트래픽 | 통로 | 이유 |
+| --- | --- | --- |
+| AWS 서비스 호출 (ECR, S3, Logs, Secrets Manager 등) | <strong>VPC Endpoint</strong> | 더 싸고, 인터넷 안 탐, 컴플라이언스 우위 |
+| 외부 API 호출 (Stripe, Slack, OpenAI 등) | <strong>NAT Gateway</strong> | Endpoint가 없는 서비스라 다른 선택지 없음 |
+| OS·언어 패키지 (`dnf update`, `pip install` 등) | <strong>NAT Gateway</strong> | 외부 미러 접근 필요 |
+
+라우팅 분기는 자동이다. S3 Gateway Endpoint를 만들면 S3 prefix list가 라우트 테이블에 자동으로 추가되고, Interface Endpoint는 Private DNS가 사설 IP로 응답한다. 그 외 `0.0.0.0/0` 트래픽만 NAT으로 흐른다. 애플리케이션 코드는 평소처럼 SDK를 쓰면 된다.
+
+> <strong>핵심</strong>: "Endpoint가 NAT을 대체"가 아니라 <strong>"Endpoint가 NAT의 트래픽 비용을 흡수"</strong>한다. 컨테이너 이미지 pull(ECR), 로그 전송(CloudWatch Logs), 시크릿 조회(Secrets Manager) — 운영 트래픽 대부분이 Endpoint 쪽으로 빠지면서 NAT 처리량 과금이 확 줄어든다. 5편 2절의 절감 전략이 이 원리를 활용한다.
+
+이 분리는 <strong>컨테이너·k8s 환경</strong>에서 특히 잘 맞는다. 빌드 타임과 런타임이 본래 분리되어 있기 때문이다.
+
+- <strong>빌드 타임</strong>: CI(GitHub Actions 등 인터넷이 있는 환경)에서 `dnf install`, `pip install`로 의존성을 모두 설치해 이미지에 박는다 → ECR push.
+- <strong>런타임</strong>: 프라이빗 서브넷의 EKS/ECS 노드는 ECR Endpoint로 이미지 pull, CloudWatch Logs Endpoint로 로그 전송, Secrets Manager Endpoint로 시크릿 조회.
+
+런타임에 인터넷이 필요한 일이 거의 없다. 패키지가 이미 이미지 안에 있기 때문이다. <strong>"VPC Endpoint로 패키지 다운로드가 안 된다"는 제약이 컨테이너 시대에 사실상 무력화되는 지점</strong>이다.
+
+극단적으로 보안이 중요한 환경(금융·의료·정부)은 NAT까지 제거하고 외부 API는 PrivateLink 파트너 서비스나 별도 프록시 VPC를 경유시킨다. 다만 일반 백엔드 운영 기준으로는 <strong>"Endpoint + NAT 병행"이 디폴트, "Endpoint 단독"이 특수 케이스</strong>로 이해하면 된다.
+
 ---
 
 ## 5. 실습 — 접속하고 명령 실행하기
@@ -271,8 +294,8 @@ aws ssm start-session --target i-0123456789abcdef0
 | --- | --- |
 | `TargetNotConnected` | EC2가 Online이 아님 — IAM Role 또는 Network 경로 문제 |
 | `AccessDeniedException` | 운영자 IAM에 `ssm:StartSession` 권한이 없음 |
-| `SessionManagerPlugin is not found` | 클라이언트 플러그인 미설치 (§3.4) |
-| 세션은 열리는데 `dnf install`이 안 됨 | NAT은 있지만 Private RT가 NAT을 안 가리킴 (2편 §3.3) |
+| `SessionManagerPlugin is not found` | 클라이언트 플러그인 미설치 (3.4절) |
+| 세션은 열리는데 `dnf install`이 안 됨 | NAT은 있지만 Private RT가 NAT을 안 가리킴 (2편 3.3절) |
 
 EC2의 SSM 등록 상태는 콘솔의 <strong>Systems Manager → Fleet Manager</strong>에서 `Online`으로 보여야 한다. 또는 CLI로:
 
@@ -364,7 +387,7 @@ psql -h localhost -p 15432 -U app_user -d app
 | 보안 관점 | 효과 |
 | --- | --- |
 | RDS의 Public Access | 계속 `false` 유지 — 외부 노출 없음 |
-| DB SG | EC2 SG만 허용 (2편 §4.3 패턴 그대로) |
+| DB SG | EC2 SG만 허용 (2편 4.3절 패턴 그대로) |
 | 운영자 인증 | IAM 사용자 단위 — 키 공유 없음 |
 | 감사 | CloudTrail에 `StartSession` 이벤트, 누가 언제 어디로 포워딩했는지 |
 

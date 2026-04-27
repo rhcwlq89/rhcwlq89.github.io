@@ -247,6 +247,29 @@ resource "aws_vpc_endpoint" "ssm" {
 
 `private_dns_enabled = true` is the magic. With it, `ssm.ap-northeast-2.amazonaws.com` resolves automatically to the endpoint's private IP from inside the EC2 — the SSM Agent keeps working with no code changes. Setting `enable_dns_hostnames = true` on the VPC back in Part 2 pays off here.
 
+### 4.5 Aside: in practice you usually run both
+
+The table in §4.3 reads like an either/or, but once you move past the learning phase into <strong>container-based operations</strong>, the default becomes <strong>running NAT and VPC Endpoints side by side</strong>. The reason is that outbound traffic naturally splits into two kinds.
+
+| Traffic | Path | Why |
+| --- | --- | --- |
+| AWS service APIs (ECR, S3, Logs, Secrets Manager, ...) | <strong>VPC Endpoint</strong> | Cheaper, never touches the internet, better compliance posture |
+| External APIs (Stripe, Slack, OpenAI, ...) | <strong>NAT Gateway</strong> | No Endpoint exists — there's no alternative |
+| OS / language packages (`dnf update`, `pip install`, ...) | <strong>NAT Gateway</strong> | External mirrors require internet egress |
+
+Routing splits automatically. An S3 Gateway Endpoint adds the S3 prefix list to the route table; Interface Endpoints replace public DNS answers with private IPs. Everything else (`0.0.0.0/0`) still flows through NAT. Application code keeps using the SDK exactly as before.
+
+> <strong>Key point</strong>: it's not "Endpoint replaces NAT" — it's <strong>"Endpoint absorbs NAT's traffic bill"</strong>. Container image pulls (ECR), log shipping (CloudWatch Logs), and secret fetches (Secrets Manager) — most operational traffic moves to the Endpoint side, and NAT data-processing charges drop sharply. The savings strategy in Part 5 §2 leans on this exact principle.
+
+This split fits <strong>container / k8s workloads</strong> especially well, because build time and runtime are already separated.
+
+- <strong>Build time</strong>: in CI (GitHub Actions, etc., where internet is available) you `dnf install` / `pip install` everything into the image, then push to ECR.
+- <strong>Runtime</strong>: EKS/ECS nodes in the private subnet pull images via the ECR Endpoint, ship logs via the CloudWatch Logs Endpoint, and fetch secrets via the Secrets Manager Endpoint.
+
+The runtime barely needs the internet at all — packages are already baked into the image. <strong>This is precisely where the "VPC Endpoint can't download packages" constraint becomes irrelevant in the container era</strong>.
+
+In strictly hardened environments (finance, healthcare, government) operators sometimes drop NAT entirely and force external APIs through a PrivateLink-partner service or a dedicated proxy VPC. For typical backend operations, though, the right mental model is <strong>"Endpoint + NAT side-by-side is the default; Endpoint-only is the special case"</strong>.
+
 ---
 
 ## 5. Hands-On — Connecting and Running Commands

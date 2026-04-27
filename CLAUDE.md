@@ -76,6 +76,15 @@ The most common readability failure is wall-of-text prose. Enforce the following
   - ❌ `**락(lock)**이다` (parser bug), `**락(lock)이다**` (emphasis drifts onto the particle)
   - ✅ `<strong>락(lock)</strong>이다`
 
+### Cross-Section References
+
+- **Korean posts: use the `N.M절` form, not `§N.M`.** The `§` symbol is an academic convention that doesn't read as "section" at a glance to a typical Korean reader, and these references are usually plain text (not anchor links) so there's no affordance to navigate.
+  - ❌ `§4.3`, `2편 §6.1`, `§4–§5`, `§2~§4`
+  - ✅ `4.3절`, `2편 6.1절`, `4–5절`, `2~4절`
+  - Top-level reference: `3절` rather than `§3`.
+- **English posts keep `§`** since it's a standard typographic convention for "section" in English documents.
+- **Exception**: if the reference is genuinely a clickable anchor link (e.g. `[§4.3](#section-4-3)`), `§` is fine in either language — the rule is about plain-text references.
+
 ### Callouts & Notes
 
 - **Do NOT use GFM alert syntax** (`> [!NOTE]`, `[!TIP]`, `[!WARNING]`, `[!IMPORTANT]`, `[!CAUTION]`). Astro's default Markdown parser doesn't implement this GitHub extension, so the tag leaks as literal text.
@@ -124,9 +133,12 @@ awk 'length > 200 {print NR": "length" chars"}' "$FILE"
 
 # 5. Structural sanity — TL;DR section present
 rg -q '^## TL;DR' "$FILE" || echo "MISSING: TL;DR section"
+
+# 6. Stray § in KO posts — should be 'N.M절' instead (KO file only)
+rg '§[0-9]' "$FILE"
 ```
 
-Also run the same checks on the EN counterpart under `src/content/blog/en/<slug>.md` (checks 1 and 4 mostly don't apply to English, but 2, 3, and 5 do).
+Also run the same checks on the EN counterpart under `src/content/blog/en/<slug>.md` (checks 1, 4, and 6 mostly don't apply to English, but 2, 3, and 5 do).
 
 ## Hero Image Style Guide
 

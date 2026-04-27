@@ -83,7 +83,7 @@ pie title 1~4편 환경 월 비용 분포
     "기타 (S3/EBS/Logs/Transfer)" : 4
 ```
 
-<strong>NAT 하나가 비용의 절반</strong>이라는 게 거의 모든 시리즈 환경의 공통점이다. 그래서 §2가 단일 항목으로 가장 큰 한 줄이다.
+<strong>NAT 하나가 비용의 절반</strong>이라는 게 거의 모든 시리즈 환경의 공통점이다. 그래서 2절이 단일 항목으로 가장 큰 한 줄이다.
 
 ---
 
@@ -105,7 +105,7 @@ pie title 1~4편 환경 월 비용 분포
 | 일반 프로덕션 (HA 권장) | AZ별 1개 (2개) | $64.80 |
 | 트래픽이 큰 프로덕션 | AZ별 1개 + 데이터 처리 큼 | $100+ |
 
-Multi-AZ NAT는 2편 §3.3에서 설명한 AZ 장애 격리를 보장한다. 비용이 부담스러우면 dev/stage는 단일 NAT, prod만 Multi-AZ — 환경별 분리가 표준 패턴이다.
+Multi-AZ NAT는 2편 3.3절에서 설명한 AZ 장애 격리를 보장한다. 비용이 부담스러우면 dev/stage는 단일 NAT, prod만 Multi-AZ — 환경별 분리가 표준 패턴이다.
 
 ### 2.3 S3 Gateway Endpoint — 가장 빠른 무료 절감
 
@@ -131,7 +131,7 @@ resource "aws_vpc_endpoint" "s3" {
 
 ### 2.4 SSM Interface Endpoint — 언제 가치 있나
 
-3편 §4.2의 비교 그대로다.
+3편 4.2절의 비교 그대로다.
 
 - NAT가 이미 있고 SSM 외 다른 인터넷 아웃 트래픽도 필요한 경우: <strong>NAT 재사용</strong>이 더 싸다.
 - NAT를 완전히 끊고 SSM·S3·핵심 AWS만 닿게 하고 싶은 경우: <strong>Interface Endpoint × 3 + S3 Gateway Endpoint</strong>로 NAT 제거 가능. 3 endpoint × 2 AZ × $0.011/h × 720h ≈ ~$48/월 vs Multi-AZ NAT $64/월 — Endpoint 쪽이 약간 싸고, Private EC2가 인터넷에 안 닿는다는 보안 이득까지 따라온다.
@@ -335,7 +335,7 @@ Interface VPC Endpoint 추가, EC2 더 큰 사양, RDS Multi-AZ, KMS, WAF, Cloud
 | KMS, Secrets Manager | $5 |
 | <strong>합계</strong> | <strong>$300+</strong> |
 
-이 단계에서는 한 항목 한 항목보다 <strong>비용 가시성과 거버넌스</strong>가 더 중요하다. §5의 태그·Budgets·Anomaly가 필수 인프라가 된다.
+이 단계에서는 한 항목 한 항목보다 <strong>비용 가시성과 거버넌스</strong>가 더 중요하다. 5절의 태그·Budgets·Anomaly가 필수 인프라가 된다.
 
 ---
 
@@ -351,7 +351,7 @@ Interface VPC Endpoint 추가, EC2 더 큰 사양, RDS Multi-AZ, KMS, WAF, Cloud
 - ☐ <strong>S3 Versioning + Lifecycle 미설정</strong> — 산출물 버킷에 버전이 쌓이면 폭발한다. SHA-키 방식이면 90일 후 Glacier IR 또는 Delete.
 - ☐ <strong>cross-AZ chatty traffic</strong> — 같은 서비스의 두 컴포넌트가 AZ 다르고 트래픽이 많으면 inter-AZ 비용이 크다.
 - ☐ <strong>잊혀진 dev/stage 환경</strong> — 24x7 켜둔 dev는 prod의 1/3쯤 든다. Instance Scheduler로 야간·주말 자동 stop.
-- ☐ <strong>ALB 5개 이상</strong> — 호스트/패스 라우팅으로 묶을 수 있는지 검토(§4.3).
+- ☐ <strong>ALB 5개 이상</strong> — 호스트/패스 라우팅으로 묶을 수 있는지 검토(4.3절).
 - ☐ <strong>cross-region 트래픽</strong> — 별 의도 없이 다른 리전 S3나 DynamoDB를 부르고 있지 않은지.
 
 ---
@@ -433,4 +433,4 @@ aws ce get-cost-and-usage \
   --group-by Type=DIMENSION,Key=SERVICE
 ```
 
-상위 3개 서비스가 보일 것이다. 거기서부터 §2~§4의 절감 기법을 차례로 적용한다 — 시리즈 전체가 그 한 줄을 위한 길었다.
+상위 3개 서비스가 보일 것이다. 거기서부터 2~4절의 절감 기법을 차례로 적용한다 — 시리즈 전체가 그 한 줄을 위한 길었다.

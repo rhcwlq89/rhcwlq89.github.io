@@ -49,10 +49,10 @@ heroImage: "../../assets/AwsPrivateEc2Guide2.png"
 | Subnet | `/24` 4개 (Public 2 + Private 2) | 각 254개 IP. AZ 식별이 CIDR만 봐도 됨 |
 | AZ 수 | 2개 (`ap-northeast-2a`, `2c`) | 1편의 Multi-AZ 기준 유지 |
 | IGW | 1개 | 리전 하나에 1개면 충분 |
-| NAT Gateway | AZ별 1개 (총 2개) | AZ 장애 격리 — 이유는 §3에서 |
+| NAT Gateway | AZ별 1개 (총 2개) | AZ 장애 격리 — 이유는 3절에서 |
 | Route Table | Public 1개 + Private AZ별 1개 | AZ별 NAT을 가리키려면 분리 필요 |
 | Security Group | `alb-sg`, `ec2-sg`, `db-sg` 3개 | SG 참조 체인 패턴 |
-| NACL | 기본값 그대로 | Stateless의 번거로움 — §5 참고 |
+| NACL | 기본값 그대로 | Stateless의 번거로움 — 5절 참고 |
 | EC2 | `t3.micro` 2대 (Private Subnet에 분산) | SSM 접속을 위해 IAM Role 부여 |
 | ALB | Internet-facing, 양쪽 Public Subnet attach | 1편 "ALB는 AZ마다 만들지 않는다" 원칙 |
 
