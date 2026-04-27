@@ -69,6 +69,24 @@ const posts = (await getCollection("blog"))
       ul a:hover img {
         box-shadow: var(--box-shadow);
       }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1.5rem;
+      }
+      .toolbar a {
+        font-size: 0.95em;
+        color: rgb(var(--gray-dark));
+        text-decoration: none;
+        padding: 0.4em 0.9em;
+        border: 1px solid rgba(var(--gray), 0.3);
+        border-radius: 999px;
+      }
+      .toolbar a:hover {
+        background: rgb(var(--accent));
+        color: white;
+        border-color: rgb(var(--accent));
+      }
       @media (max-width: 720px) {
         ul {
           gap: 0.5em;
@@ -89,6 +107,9 @@ const posts = (await getCollection("blog"))
   <body>
     <Header lang="ko" />
     <main>
+      <div class="toolbar">
+        <a href="/blog/tags/">태그로 보기 →</a>
+      </div>
       <section>
         <ul>
           {

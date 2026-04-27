@@ -67,6 +67,32 @@ const jsonLd = type === 'article' ? {
 	"description": description,
 	"url": Astro.site?.href
 };
+
+// Breadcrumb (article pages only): Home > Blog > Current
+const breadcrumbLd = type === 'article' ? {
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	"itemListElement": [
+		{
+			"@type": "ListItem",
+			"position": 1,
+			"name": lang === 'en' ? "Home" : "홈",
+			"item": new URL(lang === 'en' ? '/en/' : '/', Astro.site).href
+		},
+		{
+			"@type": "ListItem",
+			"position": 2,
+			"name": lang === 'en' ? "Blog" : "블로그",
+			"item": new URL(lang === 'en' ? '/en/blog/' : '/blog/', Astro.site).href
+		},
+		{
+			"@type": "ListItem",
+			"position": 3,
+			"name": title,
+			"item": canonicalURL.href
+		}
+	]
+} : null;
 ---
 
 <!-- 다크모드 FOUC 방지 (페이지 로드 전 테마 적용) -->
@@ -140,6 +166,9 @@ const jsonLd = type === 'article' ? {
 
 <!-- JSON-LD 구조화된 데이터 -->
 <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+{breadcrumbLd && (
+	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbLd)} />
+)}
 
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-N2ZJ87F6YX"></script>

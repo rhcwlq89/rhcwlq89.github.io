@@ -1,0 +1,96 @@
+---
+import { getCollection } from "astro:content";
+import BaseHead from "../../../../components/BaseHead.astro";
+import Footer from "../../../../components/Footer.astro";
+import Header from "../../../../components/Header.astro";
+import { SITE_TITLE } from "../../../../consts";
+import { collectTags } from "../../../../utils/tags";
+
+const posts = (await getCollection("blog")).filter((post) =>
+  post.id.startsWith("en/"),
+);
+const tags = collectTags(posts);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead
+      title={`Tags | ${SITE_TITLE}`}
+      description="Browse all blog posts grouped by tag."
+      lang="en"
+    />
+    <style>
+      main {
+        width: 800px;
+        max-width: calc(100% - 2em);
+        margin: 2em auto;
+      }
+      h1 {
+        margin-bottom: 0.5em;
+      }
+      .lead {
+        color: rgb(var(--gray));
+        margin-bottom: 2em;
+      }
+      ul.tag-cloud {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6em;
+      }
+      ul.tag-cloud li a {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.4em;
+        padding: 0.4em 0.9em;
+        border-radius: 999px;
+        background: rgba(var(--gray), 0.12);
+        color: rgb(var(--gray-dark));
+        text-decoration: none;
+        font-size: 0.95em;
+      }
+      ul.tag-cloud li a:hover {
+        background: rgb(var(--accent));
+        color: white;
+      }
+      ul.tag-cloud li .count {
+        font-size: 0.8em;
+        opacity: 0.7;
+      }
+      .breadcrumb {
+        font-size: 0.9em;
+        margin-bottom: 1em;
+        color: rgb(var(--gray));
+      }
+      .breadcrumb a {
+        color: rgb(var(--gray-dark));
+      }
+    </style>
+  </head>
+  <body>
+    <Header lang="en" />
+    <main>
+      <nav class="breadcrumb" aria-label="breadcrumb">
+        <a href="/en/">Home</a> &rsaquo; <a href="/en/blog/">Blog</a> &rsaquo; Tags
+      </nav>
+      <h1>Tags</h1>
+      <p class="lead">{tags.length} tags across {posts.length} posts</p>
+      <ul class="tag-cloud">
+        {
+          tags.map((t) => (
+            <li>
+              <a href={`/en/blog/tags/${t.slug}/`}>
+                <span>{t.tag}</span>
+                <span class="count">{t.posts.length}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </main>
+    <Footer lang="en" />
+  </body>
+</html>

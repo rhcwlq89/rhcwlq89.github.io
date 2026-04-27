@@ -9,11 +9,13 @@ import Comments from "../components/Comments.astro";
 import AffiliateAds from "../components/AffiliateAds.astro";
 import type { Lang } from "../i18n/languages";
 import { useTranslations } from "../i18n/utils";
+import { slugifyTag } from "../utils/tags";
 
 type Props = CollectionEntry<"blog">["data"] & { lang?: Lang };
 
-const { title, description, pubDate, updatedDate, heroImage, lang = 'ko' } = Astro.props;
+const { title, description, pubDate, updatedDate, heroImage, tags, lang = 'ko' } = Astro.props;
 const t = useTranslations(lang);
+const tagBase = lang === 'en' ? '/en/blog/tags' : '/blog/tags';
 ---
 
 <html lang={lang}>
@@ -68,6 +70,33 @@ const t = useTranslations(lang);
       .last-updated-on {
         font-style: italic;
       }
+      .tags {
+        margin-top: 2.5em;
+        padding-top: 1.5em;
+        border-top: 1px solid rgba(var(--gray), 0.25);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5em;
+        align-items: center;
+      }
+      .tags-label {
+        font-size: 0.9em;
+        color: rgb(var(--gray));
+        margin-right: 0.4em;
+      }
+      .tags a {
+        display: inline-block;
+        padding: 0.3em 0.8em;
+        border-radius: 999px;
+        background: rgba(var(--gray), 0.12);
+        color: rgb(var(--gray-dark));
+        text-decoration: none;
+        font-size: 0.9em;
+      }
+      .tags a:hover {
+        background: rgb(var(--accent));
+        color: white;
+      }
     </style>
   </head>
 
@@ -98,6 +127,14 @@ const t = useTranslations(lang);
             <hr />
           </div>
           <slot />
+          {tags && tags.length > 0 && (
+            <div class="tags">
+              <span class="tags-label">{lang === 'en' ? 'Tags' : '태그'}</span>
+              {tags.map((tag) => (
+                <a href={`${tagBase}/${slugifyTag(tag)}/`}>#{tag}</a>
+              ))}
+            </div>
+          )}
           <AffiliateAds lang={lang} />
         </div>
       </article>
