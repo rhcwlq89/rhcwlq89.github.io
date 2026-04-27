@@ -98,20 +98,20 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 5.0"  # 5.x: current major at the time of writing
     }
   }
 }
 
 provider "aws" {
-  region = "ap-northeast-2"
+  region = "ap-northeast-2"  # Seoul region — matches Part 1
 }
 
 # ===== VPC =====
 resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
+  cidr_block           = "10.0.0.0/16"   # 65K+ IPs. Hard to change later, so oversize upfront
+  enable_dns_support   = true             # In-VPC DNS resolution (default true)
+  enable_dns_hostnames = true             # Default false — required for ALB DNS and Part 3's SSM Endpoint Private DNS
   tags = { Name = "private-ec2-vpc" }
 }
 ```
@@ -124,16 +124,16 @@ resource "aws_vpc" "main" {
 # ===== Public Subnets =====
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "ap-northeast-2a"
-  map_public_ip_on_launch = true
+  cidr_block              = "10.0.1.0/24"       # Third octet 1 = Public by convention
+  availability_zone       = "ap-northeast-2a"   # A subnet belongs to exactly one AZ — this one is AZ-a
+  map_public_ip_on_launch = true                 # ★ This switch IS what makes a subnet "Public" — EC2 auto-gets a public IP
   tags = { Name = "private-ec2-public-a" }
 }
 
 resource "aws_subnet" "public_c" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.2.0/24"
-  availability_zone       = "ap-northeast-2c"
+  availability_zone       = "ap-northeast-2c"   # Second AZ for Multi-AZ
   map_public_ip_on_launch = true
   tags = { Name = "private-ec2-public-c" }
 }
@@ -141,8 +141,9 @@ resource "aws_subnet" "public_c" {
 # ===== Private Subnets =====
 resource "aws_subnet" "private_a" {
   vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.11.0/24"
+  cidr_block        = "10.0.11.0/24"            # Third octet 11 = Private by convention
   availability_zone = "ap-northeast-2a"
+  # map_public_ip_on_launch omitted = default false → no public IP (= what "Private" really means)
   tags              = { Name = "private-ec2-private-a" }
 }
 
@@ -168,21 +169,24 @@ resource "aws_subnet" "private_c" {
 
 ```hcl
 # ===== Internet Gateway =====
+# The door between the VPC and the internet. One per VPC, free.
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
   tags   = { Name = "private-ec2-igw" }
 }
 
 # ===== Public Route Table =====
+# Any subnet attached to this RT becomes "Public" — the key is the 0.0.0.0/0 → IGW route below
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+    cidr_block = "0.0.0.0/0"                    # All outbound destinations
+    gateway_id = aws_internet_gateway.main.id   # sent to the IGW → reaches the internet
   }
   tags = { Name = "private-ec2-public-rt" }
 }
 
+# Subnet ↔ RT binding — without this association, a Subnet has no character
 resource "aws_route_table_association" "public_a" {
   subnet_id      = aws_subnet.public_a.id
   route_table_id = aws_route_table.public.id
@@ -201,7 +205,8 @@ resource "aws_route_table_association" "public_c" {
 <strong>A NAT Gateway is the outbound-only exit for Private Subnet EC2s.</strong> Allocate an `aws_eip` (Elastic IP) and drop the NAT into a Public Subnet.
 
 ```hcl
-# ===== NAT Gateways (per AZ) =====
+# ===== NAT Gateways (one per AZ) =====
+# NAT needs a stable public IP to egress — allocate an EIP first
 resource "aws_eip" "nat_a" {
   domain = "vpc"
   tags   = { Name = "private-ec2-nat-eip-a" }
@@ -214,9 +219,9 @@ resource "aws_eip" "nat_c" {
 
 resource "aws_nat_gateway" "a" {
   allocation_id = aws_eip.nat_a.id
-  subnet_id     = aws_subnet.public_a.id
+  subnet_id     = aws_subnet.public_a.id       # NAT itself lives in a Public Subnet (it needs IGW to reach the internet)
   tags          = { Name = "private-ec2-nat-a" }
-  depends_on    = [aws_internet_gateway.main]
+  depends_on    = [aws_internet_gateway.main]  # IGW must exist first for NAT to have an outbound path
 }
 
 resource "aws_nat_gateway" "c" {
@@ -226,12 +231,13 @@ resource "aws_nat_gateway" "c" {
   depends_on    = [aws_internet_gateway.main]
 }
 
-# ===== Private Route Tables (per AZ) =====
+# ===== Private Route Tables (split per AZ) =====
+# ★ AZ failure isolation — each AZ's Private Subnet only points at its own NAT
 resource "aws_route_table" "private_a" {
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.a.id
+    nat_gateway_id = aws_nat_gateway.a.id     # AZ-a Private → AZ-a NAT (no cross-AZ)
   }
   tags = { Name = "private-ec2-private-rt-a" }
 }
@@ -240,7 +246,7 @@ resource "aws_route_table" "private_c" {
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.c.id
+    nat_gateway_id = aws_nat_gateway.c.id     # AZ-c Private → AZ-c NAT
   }
   tags = { Name = "private-ec2-private-rt-c" }
 }
@@ -321,6 +327,7 @@ Imagine you run 10 EC2s and add an 11th. With IP rules you'd open the DB SG one 
 
 ```hcl
 # ===== ALB SG — outer boundary =====
+# The only SG that faces the internet. IP-based allow (0.0.0.0/0) is unavoidable here.
 resource "aws_security_group" "alb" {
   name        = "private-ec2-alb-sg"
   description = "ALB: HTTP/HTTPS from the internet"
@@ -331,7 +338,7 @@ resource "aws_security_group" "alb" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["0.0.0.0/0"]            # Inbound from the internet = IP-based allow is inevitable
   }
 
   ingress {
@@ -345,7 +352,7 @@ resource "aws_security_group" "alb" {
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
+    protocol    = "-1"                      # -1 = all protocols
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -353,6 +360,7 @@ resource "aws_security_group" "alb" {
 }
 
 # ===== EC2 SG — accepts only from ALB =====
+# ★ Here is where "SG references SG" begins — no IPs involved
 resource "aws_security_group" "ec2" {
   name        = "private-ec2-app-sg"
   description = "EC2: app port from ALB SG only"
@@ -363,20 +371,20 @@ resource "aws_security_group" "ec2" {
     from_port       = 8080
     to_port         = 8080
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]  # ← SG reference
+    security_groups = [aws_security_group.alb.id]  # ★ SG ID instead of cidr — immune to ALB IP churn
   }
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]  # Outbound via NAT Gateway
+    cidr_blocks = ["0.0.0.0/0"]                    # Outbound via NAT Gateway — needed for dnf install, etc.
   }
 
   tags = { Name = "private-ec2-app-sg" }
 }
 
-# ===== DB SG — accepts only from EC2 (for illustration) =====
+# ===== DB SG — accepts only from EC2 (illustrates the SG chain) =====
 resource "aws_security_group" "db" {
   name        = "private-ec2-db-sg"
   description = "DB: Postgres from EC2 SG only"
@@ -387,7 +395,7 @@ resource "aws_security_group" "db" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]  # ← SG reference
+    security_groups = [aws_security_group.ec2.id]  # ★ Last link in the chain: alb-sg → ec2-sg → db-sg
   }
 
   tags = { Name = "private-ec2-db-sg" }
@@ -425,23 +433,26 @@ A Private EC2 has no public IP, so SSH is off the table. We'll use <strong>SSM S
 
 ```hcl
 # ===== IAM Role for EC2 (SSM) =====
+# EC2 uses the Role attached via its "instance profile" when calling AWS APIs — not user credentials
 resource "aws_iam_role" "ec2_ssm" {
   name = "private-ec2-ssm-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
+      Principal = { Service = "ec2.amazonaws.com" }  # Trust policy: "EC2 service may assume this role"
       Action    = "sts:AssumeRole"
     }]
   })
 }
 
+# AWS-managed policy — the minimum permission set for SSM Session Manager (this alone suffices for Part 3)
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2_ssm.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Instance Profile wrapper that actually attaches the Role to an EC2 — pass this name to aws_instance.iam_instance_profile
 resource "aws_iam_instance_profile" "ec2_ssm" {
   name = "private-ec2-ssm-profile"
   role = aws_iam_role.ec2_ssm.name
@@ -452,9 +463,10 @@ resource "aws_iam_instance_profile" "ec2_ssm" {
 
 ```hcl
 # ===== AMI (Amazon Linux 2023) =====
+# al2023 = SSM Agent preinstalled + dnf. AMI IDs rotate, so resolve the latest via a data source
 data "aws_ami" "al2023" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["amazon"]                         # Only images owned by Amazon's official account
   filter {
     name   = "name"
     values = ["al2023-ami-*-x86_64"]
@@ -464,13 +476,14 @@ data "aws_ami" "al2023" {
 # ===== EC2 Instances (Private Subnet, Multi-AZ) =====
 resource "aws_instance" "app_a" {
   ami                    = data.aws_ami.al2023.id
-  instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.private_a.id
+  instance_type          = "t3.micro"              # Lab-sized (near free tier)
+  subnet_id              = aws_subnet.private_a.id # ★ Placed in Private Subnet → no public IP, SSH not possible
   vpc_security_group_ids = [aws_security_group.ec2.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2_ssm.name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_ssm.name  # ★ The Role that enables SSM access in Part 3
   user_data = <<-EOT
     #!/bin/bash
     dnf install -y nginx
+    # Demo only — flip Nginx to listen on 8080 so it matches the ALB target port
     sed -i 's/listen\s*80;/listen 8080;/' /etc/nginx/nginx.conf
     echo "Hello from AZ-a ($(hostname))" > /usr/share/nginx/html/index.html
     systemctl enable --now nginx
@@ -481,7 +494,7 @@ resource "aws_instance" "app_a" {
 resource "aws_instance" "app_c" {
   ami                    = data.aws_ami.al2023.id
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.private_c.id
+  subnet_id              = aws_subnet.private_c.id # Private Subnet on the AZ-c side — Multi-AZ spread
   vpc_security_group_ids = [aws_security_group.ec2.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_ssm.name
   user_data = <<-EOT
@@ -503,13 +516,14 @@ The Nginx port swap in `user_data` is a <strong>demo-level trick</strong> — ju
 # ===== ALB =====
 resource "aws_lb" "app" {
   name               = "private-ec2-alb"
-  internal           = false
-  load_balancer_type = "application"
+  internal           = false                                              # false = internet-facing (true = VPC-internal only)
+  load_balancer_type = "application"                                      # L7 — supports path/host-based routing
   security_groups    = [aws_security_group.alb.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_c.id]  # attach both AZs
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_c.id]   # ★ One ALB, attached to both Public Subnets — never one-per-AZ (Part 1 rule)
   tags               = { Name = "private-ec2-alb" }
 }
 
+# Target Group: the backend pool ALB forwards to + the health check definition
 resource "aws_lb_target_group" "app" {
   name     = "private-ec2-tg"
   port     = 8080
@@ -518,14 +532,15 @@ resource "aws_lb_target_group" "app" {
 
   health_check {
     path                = "/"
-    matcher             = "200"
-    interval            = 30
+    matcher             = "200"                   # Only 200 OK counts as healthy
+    interval            = 30                      # Check every 30s
     timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
+    healthy_threshold   = 2                       # 2 consecutive OKs → flip to healthy
+    unhealthy_threshold = 3                       # 3 consecutive fails → out of rotation
   }
 }
 
+# Register each EC2 with the Target Group manually (static — we aren't using Auto Scaling)
 resource "aws_lb_target_group_attachment" "app_a" {
   target_group_arn = aws_lb_target_group.app.arn
   target_id        = aws_instance.app_a.id
@@ -538,6 +553,7 @@ resource "aws_lb_target_group_attachment" "app_c" {
   port             = 8080
 }
 
+# Listener: which port ALB accepts and where it forwards. Lab only — production adds 443 + ACM
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app.arn
   port              = 80
@@ -549,6 +565,7 @@ resource "aws_lb_listener" "http" {
 }
 
 # ===== Outputs =====
+# Printed at the end of apply — paste the values directly into the next step
 output "alb_dns_name" {
   value       = aws_lb.app.dns_name
   description = "ALB public DNS — open this directly in a browser"
