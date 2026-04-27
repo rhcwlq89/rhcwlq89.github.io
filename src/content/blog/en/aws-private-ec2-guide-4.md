@@ -101,6 +101,8 @@ sequenceDiagram
 - Claims include `repo:my-org/my-repo:ref:refs/heads/main`, so the IAM trust policy can <strong>narrow access to a specific repo and branch</strong>.
 - CloudTrail records the OIDC `sub` claim, so you know which workflow run made the call.
 
+> <strong>Going deeper</strong>: A separate post unpacks STS internals, the federation skeleton, and how SAML / IAM Identity Center / EKS IRSA are variants of the same pattern — [Understanding AWS Credential Federation](/blog/en/aws-credential-federation-deep-dive). Pair it with this section if you want to step beyond the recipe and build the foundation.
+
 ### 2.3 Register the OIDC Provider in IAM
 
 Register GitHub's OIDC issuer (`token.actions.githubusercontent.com`) in IAM once. With Terraform:

@@ -107,6 +107,8 @@ sequenceDiagram
 - 토큰의 클레임에 `repo:my-org/my-repo:ref:refs/heads/main` 같은 정보가 박혀 있어, IAM Role 신뢰 정책에서 <strong>특정 레포·특정 브랜치만 허용</strong>하도록 좁힐 수 있다.
 - CloudTrail에는 어떤 워크플로 실행이 호출했는지 OIDC sub 클레임이 남는다.
 
+> <strong>더 깊이</strong>: STS의 본질, 페더레이션 골격, OIDC 외 SAML·IAM Identity Center·EKS IRSA가 같은 패턴을 어떻게 변주하는지 별도 글에서 정리했다 — [AWS 자격증명 페더레이션 완벽 이해](/blog/aws-credential-federation-deep-dive). 이 절의 레시피를 한 단계 넘어 토대를 잡고 싶으면 함께 읽으면 좋다.
+
 ### 2.3 IAM에 OIDC Provider 등록
 
 GitHub의 OIDC 발급자(`token.actions.githubusercontent.com`)를 AWS IAM에 한 번 등록한다. Terraform으로:
