@@ -79,6 +79,10 @@ But Roles still have a limit. <strong>Calling AssumeRole still requires that som
 
 The answer is to <strong>have AWS trust an external Identity Provider (IdP)</strong>. The IdP issues a signed proof saying "this user/workflow has been verified by us," AWS receives the proof, and STS issues temporary credentials in return. This model is <strong>federation</strong>.
 
+The mental model flips once here. <strong>Federation isn't "register users in AWS" — it's "trust an identity system outside AWS."</strong> If 1.1's IAM User approach means creating 100 IAM Users for 100 employees, federation lets AWS accept identities that already live in the company SSO (Okta, Azure AD), keeping just <strong>one IdP registration and a handful of Roles</strong> in IAM. AWS doesn't know those 100 people as IAM Users — it only holds rules like "if a token signed by Okta with `sub = X` arrives, lend out this Role for one hour."
+
+> <strong>Note</strong>: IAM Identity Center (formerly AWS SSO) <strong>looks like console login</strong> on the surface — there's a browser sign-in page. But what happens behind it is federation. Users are not registered as IAM Users; STS mints fresh temporary credentials on every sign-in.
+
 | Federation type | IdP examples | AWS API |
 | --- | --- | --- |
 | <strong>OIDC</strong> | GitHub Actions, GitLab, EKS, Auth0 | `AssumeRoleWithWebIdentity` |

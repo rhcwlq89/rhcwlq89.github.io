@@ -53,7 +53,7 @@ resource "aws_iam_access_key" "ci"  { user = aws_iam_user.ci.name }
 # AccessKeyId / SecretAccessKey를 GitHub Secrets에 저장
 ```
 
-이 모델은 익숙하지만 운영하면서 다음 네 가지 통점이 누적된다.
+이 모델은 익숙하지만 운영하면서 다음 네 가지 한계가 누적된다.
 
 | 문제 | 구체적 모습 |
 | --- | --- |
@@ -64,7 +64,7 @@ resource "aws_iam_access_key" "ci"  { user = aws_iam_user.ci.name }
 
 ### 1.2 한 단계 진화 — IAM Role
 
-AWS는 이 통점을 풀기 위해 <strong>IAM Role</strong>을 도입했다. Role은 <strong>"권한을 지닌 가면(persona)"</strong>이다 — 장기 키가 붙어 있지 않고, 누가(어느 Principal이) 일시적으로 쓸 수 있는지 신뢰 정책(Trust Policy)으로 정의한다.
+AWS는 이 한계를 풀기 위해 <strong>IAM Role</strong>을 도입했다. Role은 <strong>"권한을 지닌 가면(persona)"</strong>이다 — 장기 키가 붙어 있지 않고, 누가(어느 Principal이) 일시적으로 쓸 수 있는지 신뢰 정책(Trust Policy)으로 정의한다.
 
 ```mermaid
 flowchart LR
@@ -84,6 +84,10 @@ flowchart LR
 ### 1.3 페더레이션 — AWS 바깥의 신원을 받아들이기
 
 답은 <strong>외부 신원 발급자(Identity Provider, IdP)를 AWS가 신뢰</strong>하는 것이다. IdP가 "이 사용자/워크플로는 우리가 검증했다"는 서명된 증거를 발급하면, AWS는 그 증거를 받아 임시 자격증명을 내준다. 이 모델이 <strong>페더레이션(federation, 연합 인증)</strong>이다.
+
+여기서 멘탈 모델이 한 번 뒤집힌다. <strong>페더레이션은 "AWS에 사용자를 등록한다"가 아니라 "AWS 바깥의 신원 시스템을 신뢰한다"이다.</strong> 1.1절의 IAM User 방식이 회사 직원 100명마다 IAM User 100개를 만드는 모델이라면, 페더레이션은 회사 SSO(Okta·Azure AD)에 이미 있는 신원을 AWS가 그대로 받아들이고 IAM에는 <strong>IdP 등록 1개 + Role 몇 개</strong>만 둔다. AWS는 그 100명의 신원을 IAM에 가지고 있지 않다 — 단지 "Okta가 검증했고 `sub`이 X인 토큰이면 이 Role을 1시간 빌려줘라"는 규칙만 가지고 있을 뿐이다.
+
+> <strong>참고</strong>: IAM Identity Center(과거 AWS SSO)를 쓰면 <strong>외형은 콘솔 로그인과 비슷</strong>하다 — 브라우저 로그인 화면이 뜬다. 하지만 그 뒤에서 일어나는 일은 페더레이션이다. 사용자는 IAM에 IAM User로 등록되어 있지 않고, 매번 STS가 임시 키를 발급한다.
 
 | 페더레이션 종류 | IdP 예시 | AWS API |
 | --- | --- | --- |
