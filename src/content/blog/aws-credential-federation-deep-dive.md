@@ -105,6 +105,21 @@ flowchart LR
 
 이 흐름이 <strong>2026년 AWS 자격증명 운영의 표준</strong>이다. 장기 키는 점점 안티패턴이 되어가고 있다.
 
+### 1.4 참고: OAuth 2.0 / OIDC / SAML — 셋의 위치
+
+페더레이션 글에는 세 프로토콜이 자주 같이 등장한다. 위치가 헷갈리면 이후 절의 그림이 흐려지므로 한 번 정리한다.
+
+| 프로토콜 | 본래 목적 | 인증에 단독 사용? | AWS에서 등장하는 곳 |
+| --- | --- | --- | --- |
+| <strong>OAuth 2.0</strong> | API 호출 <strong>인가(authorization)</strong> — "이 앱이 사용자의 Drive를 읽도록 허락" | ❌ 사용자 신원을 표현하는 표준이 없음 | 직접은 안 씀 |
+| <strong>OIDC</strong> | OAuth 2.0 위에 <strong>인증(authentication) 계층</strong>을 얹은 표준. `id_token`(JWT)으로 "누구인지" 증명 | ✅ | GitHub Actions, EKS IRSA, Cognito — 머신·앱 페더레이션 (3절) |
+| <strong>SAML 2.0</strong> | XML 기반 SSO 표준. OAuth보다 먼저 등장 | ✅ | Okta·Azure AD·Google Workspace → IAM Identity Center / 콘솔 로그인 (5.1·5.2절) |
+
+핵심 두 가지:
+
+- <strong>"OAuth2 vs SAML"은 잘못된 비교다.</strong> OAuth 2.0은 인가 프레임워크일 뿐 그 자체로는 "누구인지" 모른다. 정확한 비교는 <strong>"OIDC vs SAML"</strong>이고, OAuth 2.0은 OIDC의 하부 구조다.
+- <strong>AWS는 두 프로토콜을 시나리오별로 나눠 쓴다.</strong> 사람이 브라우저로 콘솔에 들어가는 흐름은 SAML이 주력, CI·Pod·앱이 API를 호출하는 흐름은 OIDC가 주력. 같은 페더레이션이지만 진입 API(`AssumeRoleWithSAML` vs `AssumeRoleWithWebIdentity`)도 다르다.
+
 ---
 
 ## 2. STS — 임시 자격증명의 발급소

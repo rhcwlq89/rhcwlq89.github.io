@@ -99,6 +99,21 @@ The names vary, but <strong>the essence is identical</strong>:
 
 This flow is <strong>the standard for AWS credential operations in 2026</strong>. Long-lived keys are increasingly an anti-pattern.
 
+### 1.4 Aside: OAuth 2.0 / OIDC / SAML — where each one sits
+
+Three protocols keep showing up in federation discussions. Mixing them up muddies later sections, so a quick orientation:
+
+| Protocol | Original purpose | Usable for sign-in alone? | Where it shows up in AWS |
+| --- | --- | --- | --- |
+| <strong>OAuth 2.0</strong> | API call <strong>authorization</strong> — "let this app read the user's Drive" | ❌ no standard for representing the user's identity | Not used directly |
+| <strong>OIDC</strong> | An <strong>authentication layer</strong> built on top of OAuth 2.0. An `id_token` (JWT) proves who the user is | ✅ | GitHub Actions, EKS IRSA, Cognito — machine/app federation (§3) |
+| <strong>SAML 2.0</strong> | XML-based SSO standard. Predates OAuth | ✅ | Okta, Azure AD, Google Workspace → IAM Identity Center / console sign-in (§5.1, §5.2) |
+
+Two takeaways:
+
+- <strong>"OAuth2 vs SAML" is the wrong framing.</strong> OAuth 2.0 is an authorization framework — by itself it has no notion of "who the user is." The correct comparison is <strong>"OIDC vs SAML"</strong>, and OAuth 2.0 is the substrate underneath OIDC.
+- <strong>AWS picks one protocol per scenario.</strong> Humans signing into the console go through SAML; CI / Pods / apps calling the API go through OIDC. Same federation idea, but different entry APIs (`AssumeRoleWithSAML` vs `AssumeRoleWithWebIdentity`).
+
 ---
 
 ## 2. STS — the Issuance Counter for Temporary Credentials
