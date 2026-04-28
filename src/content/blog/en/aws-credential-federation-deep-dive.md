@@ -423,7 +423,7 @@ flowchart LR
     STS -->|"Temporary credentials"| Caller
 ```
 
-The left side is what we touch in the console or Terraform. The right side runs on its own at request time. <strong>STS is one box on the right</strong> — your intuition that it's "invisible" was correct.
+The <strong>"What humans configure (IAM)" box</strong> is what we touch in the console or Terraform; the <strong>"What runs automatically (STS)" box</strong> runs on its own at request time. STS is just that single box — your intuition that it's "invisible" was correct.
 
 ---
 
