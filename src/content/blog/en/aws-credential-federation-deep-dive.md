@@ -437,11 +437,11 @@ Logging into the AWS Console via Okta, Azure AD, or Google Workspace.
 
 ```mermaid
 flowchart LR
-    User[Employee browser] -->|Login| IdP[Okta / Azure AD]
-    IdP -->|SAML assertion| User
-    User -->|Submit assertion| Console[AWS Sign-in]
-    Console -->|AssumeRoleWithSAML| STS[AWS STS]
-    STS -->|Temporary credentials| Console
+    User[Employee browser] -->|"1. Login"| IdP[Okta / Azure AD]
+    IdP -->|"2. SAML assertion"| User
+    User -->|"3. Submit assertion"| Console[AWS Sign-in]
+    Console -->|"4. AssumeRoleWithSAML"| STS[AWS STS]
+    STS -->|"5. Temporary credentials"| Console
 ```
 
 Only the token format differs — XML-based SAML assertion instead of a JWT. The skeleton is identical to OIDC. The AWS API is `AssumeRoleWithSAML`.
@@ -462,10 +462,10 @@ How Kubernetes Pods call AWS services. <strong>The EKS cluster itself acts as an
 
 ```mermaid
 flowchart LR
-    Pod[K8s Pod] -->|Token request| SA[ServiceAccount<br/>+ EKS OIDC token]
-    SA -->|AssumeRoleWithWebIdentity| STS[AWS STS]
-    STS -->|Temporary credentials| Pod
-    Pod -->|S3, DynamoDB calls| AWS[AWS API]
+    Pod[K8s Pod] -->|"1. Token request"| SA[ServiceAccount<br/>+ EKS OIDC token]
+    SA -->|"2. AssumeRoleWithWebIdentity"| STS[AWS STS]
+    STS -->|"3. Temporary credentials"| Pod
+    Pod -->|"4. S3, DynamoDB calls"| AWS[AWS API]
 ```
 
 If GitHub Actions receives temporary keys <strong>per workflow run</strong>, IRSA receives them <strong>per Pod</strong>. Map a ServiceAccount in the Pod spec and the SDK handles the rest. Permission isolation is far finer-grained than a node-wide IAM Role.
