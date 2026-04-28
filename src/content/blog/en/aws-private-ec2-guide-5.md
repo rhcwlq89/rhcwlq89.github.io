@@ -186,7 +186,7 @@ flowchart TB
     OD[Stay On-Demand]
     Q1 -->|yes| SP
     Q1 -->|no| Q2
-    Q2 -->|yes (batch / CI)| Spot
+    Q2 -->|"yes (batch / CI)"| Spot
     Q2 -->|no| OD
 ```
 

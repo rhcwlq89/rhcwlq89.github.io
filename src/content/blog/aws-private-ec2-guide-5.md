@@ -192,7 +192,7 @@ flowchart TB
     OD[On-Demand 유지]
     Q1 -->|예| SP
     Q1 -->|아니오| Q2
-    Q2 -->|예 (배치/CI)| Spot
+    Q2 -->|"예 (배치/CI)"| Spot
     Q2 -->|아니오| OD
 ```
 
