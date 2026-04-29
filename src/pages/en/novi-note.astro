@@ -812,52 +812,56 @@ import BaseHead from "../../components/BaseHead.astro";
         border-radius: 22px;
         background: linear-gradient(135deg, var(--accent-line), var(--line) 60%);
       }
-      .compare-card {
+      .compare-grid {
+        display: grid;
+        grid-template-columns: 18fr 22fr 20fr 20fr 20fr;
+        background: var(--panel);
         border-radius: 16px;
         overflow: hidden;
-        background: var(--panel);
       }
-      .compare-card table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      .compare-card th, .compare-card td {
+      .cg-cell {
         padding: 18px 20px;
-        text-align: center;
+        font-family: var(--font-body);
         font-size: 15px;
+        color: var(--text-dim);
         border-top: 1px solid var(--line);
+        display: flex; align-items: center; justify-content: center;
+        text-align: center;
+        min-width: 0;
+        word-break: keep-all;
       }
-      .compare-card thead th {
-        padding: 18px 20px;
+      .cg-cell:nth-child(-n+5) { border-top: none; }
+      .cg-cell.cg-head {
         background: var(--panel-hi);
         font-family: var(--font-mono);
         font-size: 12.5px; font-weight: 500;
         color: var(--text-mute);
         letter-spacing: 0.06em; text-transform: uppercase;
-        border-top: none;
       }
-      .compare-card thead th.first { text-align: left; }
-      .compare-card thead th.novi {
-        font-family: var(--font-display);
-        font-size: 18px; font-weight: 600;
-        color: #fff;
-        background: var(--accent);
-        text-transform: none; letter-spacing: -0.01em;
-      }
-      .compare-card tbody td.first {
+      .cg-cell.cg-first {
+        background: var(--panel-hi);
         text-align: left;
+        justify-content: flex-start;
         color: var(--text);
         font-weight: 500;
         font-size: 14.5px;
       }
-      .compare-card tbody td.novi {
+      .cg-cell.cg-novi-head {
+        background: var(--accent);
+        color: #fff;
+        font-family: var(--font-display);
+        font-size: 18px; font-weight: 600;
+        text-transform: none; letter-spacing: -0.01em;
+      }
+      .cg-cell.cg-novi {
         background: var(--accent-soft);
         color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 13.5px;
       }
-      .compare-card tbody td { color: var(--text-dim); }
-      .compare-card tbody tr:first-child td { border-top: 1px solid var(--line); }
-      .compare-card .check { color: var(--success); }
-      .compare-card td.novi .check { color: var(--accent); }
-      .compare-card .x { color: var(--text-mute); }
-      .compare-card td.text {
-        font-family: var(--font-mono); font-size: 13.5px;
+      .cg-cell.cg-mono {
+        font-family: var(--font-mono);
+        font-size: 13.5px;
       }
 
       .ph-row {
@@ -997,9 +1001,8 @@ import BaseHead from "../../components/BaseHead.astro";
         .hero { padding: 64px 20px 32px; }
         .section, .section.tight { padding-left: 20px; padding-right: 20px; }
         .final-cta { padding: 56px 24px; border-radius: 20px; }
-        .compare-card { font-size: 12px; }
+        .compare-grid { font-size: 12px; min-width: 560px; }
         .compare-frame { overflow-x: auto; }
-        .compare-card table { min-width: 560px; }
         .v3-notebook .body { padding: 20px 24px; }
       }
     </style>
@@ -1282,63 +1285,43 @@ import BaseHead from "../../components/BaseHead.astro";
           <div class="kicker"><span class="bar"></span>Compare</div>
           <h2>A different kind of note app.</h2>
         </div>
-        <div class="compare-frame" style="width:100%">
-          <div class="compare-card" style="width:100%">
-            <table style="width:100%; table-layout:fixed; border-collapse:collapse">
-              <colgroup>
-                <col style="width:18%" />
-                <col style="width:22%" />
-                <col style="width:20%" />
-                <col style="width:20%" />
-                <col style="width:20%" />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th class="first"></th>
-                  <th class="novi">Novi</th>
-                  <th>Subscription</th>
-                  <th>Plugin-based</th>
-                  <th>Lightweight</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="first">Price</td>
-                  <td class="novi text">One-time</td>
-                  <td class="text">Monthly</td>
-                  <td class="text">Free + paid sync</td>
-                  <td class="text">Annual</td>
-                </tr>
-                <tr>
-                  <td class="first">AI integration</td>
-                  <td class="novi text">Built-in via MCP</td>
-                  <td class="text">Extra fee</td>
-                  <td class="text">Plugins + API key</td>
-                  <td class="text">None</td>
-                </tr>
-                <tr>
-                  <td class="first">Data storage</td>
-                  <td class="novi text">Local (your Mac)</td>
-                  <td class="text">Cloud only</td>
-                  <td class="text">Local files</td>
-                  <td class="text">Cloud sync</td>
-                </tr>
-                <tr>
-                  <td class="first">Works offline</td>
-                  <td class="novi text">Yes, fully</td>
-                  <td class="text">Limited</td>
-                  <td class="text">Yes</td>
-                  <td class="text">Yes</td>
-                </tr>
-                <tr>
-                  <td class="first">Data portability</td>
-                  <td class="novi text">PDF · Markdown</td>
-                  <td class="text">Limited</td>
-                  <td class="text">Native Markdown</td>
-                  <td class="text">Markdown · PDF</td>
-                </tr>
-              </tbody>
-            </table>
+        <div class="compare-frame">
+          <div class="compare-grid">
+            <div class="cg-cell cg-head cg-first"></div>
+            <div class="cg-cell cg-novi-head">Novi</div>
+            <div class="cg-cell cg-head">Subscription</div>
+            <div class="cg-cell cg-head">Plugin-based</div>
+            <div class="cg-cell cg-head">Lightweight</div>
+
+            <div class="cg-cell cg-first">Price</div>
+            <div class="cg-cell cg-novi">One-time</div>
+            <div class="cg-cell cg-mono">Monthly</div>
+            <div class="cg-cell cg-mono">Free + paid sync</div>
+            <div class="cg-cell cg-mono">Annual</div>
+
+            <div class="cg-cell cg-first">AI integration</div>
+            <div class="cg-cell cg-novi">Built-in via MCP</div>
+            <div class="cg-cell cg-mono">Extra fee</div>
+            <div class="cg-cell cg-mono">Plugins + API key</div>
+            <div class="cg-cell cg-mono">None</div>
+
+            <div class="cg-cell cg-first">Data storage</div>
+            <div class="cg-cell cg-novi">Local (your Mac)</div>
+            <div class="cg-cell cg-mono">Cloud only</div>
+            <div class="cg-cell cg-mono">Local files</div>
+            <div class="cg-cell cg-mono">Cloud sync</div>
+
+            <div class="cg-cell cg-first">Works offline</div>
+            <div class="cg-cell cg-novi">Yes, fully</div>
+            <div class="cg-cell cg-mono">Limited</div>
+            <div class="cg-cell cg-mono">Yes</div>
+            <div class="cg-cell cg-mono">Yes</div>
+
+            <div class="cg-cell cg-first">Data portability</div>
+            <div class="cg-cell cg-novi">PDF · Markdown</div>
+            <div class="cg-cell cg-mono">Limited</div>
+            <div class="cg-cell cg-mono">Native Markdown</div>
+            <div class="cg-cell cg-mono">Markdown · PDF</div>
           </div>
         </div>
       </section>

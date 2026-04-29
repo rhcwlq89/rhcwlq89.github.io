@@ -824,52 +824,56 @@ import BaseHead from "../components/BaseHead.astro";
         border-radius: 22px;
         background: linear-gradient(135deg, var(--accent-line), var(--line) 60%);
       }
-      .compare-card {
+      .compare-grid {
+        display: grid;
+        grid-template-columns: 18fr 22fr 20fr 20fr 20fr;
+        background: var(--panel);
         border-radius: 16px;
         overflow: hidden;
-        background: var(--panel);
       }
-      .compare-card table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      .compare-card th, .compare-card td {
+      .cg-cell {
         padding: 18px 20px;
-        text-align: center;
+        font-family: var(--font-body);
         font-size: 15px;
+        color: var(--text-dim);
         border-top: 1px solid var(--line);
+        display: flex; align-items: center; justify-content: center;
+        text-align: center;
+        min-width: 0;
+        word-break: keep-all;
       }
-      .compare-card thead th {
-        padding: 18px 20px;
+      .cg-cell:nth-child(-n+5) { border-top: none; }
+      .cg-cell.cg-head {
         background: var(--panel-hi);
         font-family: var(--font-mono);
         font-size: 12.5px; font-weight: 500;
         color: var(--text-mute);
         letter-spacing: 0.06em; text-transform: uppercase;
-        border-top: none;
       }
-      .compare-card thead th.first { text-align: left; }
-      .compare-card thead th.novi {
-        font-family: var(--font-display);
-        font-size: 18px; font-weight: 600;
-        color: #fff;
-        background: var(--accent);
-        text-transform: none; letter-spacing: -0.01em;
-      }
-      .compare-card tbody td.first {
+      .cg-cell.cg-first {
+        background: var(--panel-hi);
         text-align: left;
+        justify-content: flex-start;
         color: var(--text);
         font-weight: 500;
         font-size: 14.5px;
       }
-      .compare-card tbody td.novi {
+      .cg-cell.cg-novi-head {
+        background: var(--accent);
+        color: #fff;
+        font-family: var(--font-display);
+        font-size: 18px; font-weight: 600;
+        text-transform: none; letter-spacing: -0.01em;
+      }
+      .cg-cell.cg-novi {
         background: var(--accent-soft);
         color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 13.5px;
       }
-      .compare-card tbody td { color: var(--text-dim); }
-      .compare-card tbody tr:first-child td { border-top: 1px solid var(--line); }
-      .compare-card .check { color: var(--success); }
-      .compare-card td.novi .check { color: var(--accent); }
-      .compare-card .x { color: var(--text-mute); }
-      .compare-card td.text {
-        font-family: var(--font-mono); font-size: 13.5px;
+      .cg-cell.cg-mono {
+        font-family: var(--font-mono);
+        font-size: 13.5px;
       }
 
       /* ===== Product Hunt section ===== */
@@ -1013,9 +1017,8 @@ import BaseHead from "../components/BaseHead.astro";
         .hero { padding: 64px 20px 32px; }
         .section, .section.tight { padding-left: 20px; padding-right: 20px; }
         .final-cta { padding: 56px 24px; border-radius: 20px; }
-        .compare-card { font-size: 12px; }
+        .compare-grid { font-size: 12px; min-width: 560px; }
         .compare-frame { overflow-x: auto; }
-        .compare-card table { min-width: 560px; }
         .v3-notebook .body { padding: 20px 24px; }
       }
     </style>
@@ -1298,63 +1301,43 @@ import BaseHead from "../components/BaseHead.astro";
           <div class="kicker"><span class="bar"></span>비교</div>
           <h2>Novi가 다른 자리에 서는 이유.</h2>
         </div>
-        <div class="compare-frame" style="width:100%">
-          <div class="compare-card" style="width:100%">
-            <table style="width:100%; table-layout:fixed; border-collapse:collapse">
-              <colgroup>
-                <col style="width:18%" />
-                <col style="width:22%" />
-                <col style="width:20%" />
-                <col style="width:20%" />
-                <col style="width:20%" />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th class="first"></th>
-                  <th class="novi">Novi</th>
-                  <th>구독 기반</th>
-                  <th>플러그인 기반</th>
-                  <th>경량형</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="first">가격</td>
-                  <td class="novi text">일회성 구매</td>
-                  <td class="text">월 구독</td>
-                  <td class="text">무료 + 유료 동기화</td>
-                  <td class="text">연간 구독</td>
-                </tr>
-                <tr>
-                  <td class="first">AI 통합</td>
-                  <td class="novi text">MCP 내장</td>
-                  <td class="text">추가 비용</td>
-                  <td class="text">플러그인 + API 키</td>
-                  <td class="text">없음</td>
-                </tr>
-                <tr>
-                  <td class="first">데이터 저장</td>
-                  <td class="novi text">로컬 (내 Mac)</td>
-                  <td class="text">클라우드 전용</td>
-                  <td class="text">로컬 파일</td>
-                  <td class="text">클라우드 동기화</td>
-                </tr>
-                <tr>
-                  <td class="first">오프라인</td>
-                  <td class="novi text">완전 지원</td>
-                  <td class="text">제한적</td>
-                  <td class="text">지원</td>
-                  <td class="text">지원</td>
-                </tr>
-                <tr>
-                  <td class="first">데이터 이동</td>
-                  <td class="novi text">PDF · Markdown</td>
-                  <td class="text">제한적</td>
-                  <td class="text">네이티브 Markdown</td>
-                  <td class="text">Markdown · PDF</td>
-                </tr>
-              </tbody>
-            </table>
+        <div class="compare-frame">
+          <div class="compare-grid">
+            <div class="cg-cell cg-head cg-first"></div>
+            <div class="cg-cell cg-novi-head">Novi</div>
+            <div class="cg-cell cg-head">구독 기반</div>
+            <div class="cg-cell cg-head">플러그인 기반</div>
+            <div class="cg-cell cg-head">경량형</div>
+
+            <div class="cg-cell cg-first">가격</div>
+            <div class="cg-cell cg-novi">일회성 구매</div>
+            <div class="cg-cell cg-mono">월 구독</div>
+            <div class="cg-cell cg-mono">무료 + 유료 동기화</div>
+            <div class="cg-cell cg-mono">연간 구독</div>
+
+            <div class="cg-cell cg-first">AI 통합</div>
+            <div class="cg-cell cg-novi">MCP 내장</div>
+            <div class="cg-cell cg-mono">추가 비용</div>
+            <div class="cg-cell cg-mono">플러그인 + API 키</div>
+            <div class="cg-cell cg-mono">없음</div>
+
+            <div class="cg-cell cg-first">데이터 저장</div>
+            <div class="cg-cell cg-novi">로컬 (내 Mac)</div>
+            <div class="cg-cell cg-mono">클라우드 전용</div>
+            <div class="cg-cell cg-mono">로컬 파일</div>
+            <div class="cg-cell cg-mono">클라우드 동기화</div>
+
+            <div class="cg-cell cg-first">오프라인</div>
+            <div class="cg-cell cg-novi">완전 지원</div>
+            <div class="cg-cell cg-mono">제한적</div>
+            <div class="cg-cell cg-mono">지원</div>
+            <div class="cg-cell cg-mono">지원</div>
+
+            <div class="cg-cell cg-first">데이터 이동</div>
+            <div class="cg-cell cg-novi">PDF · Markdown</div>
+            <div class="cg-cell cg-mono">제한적</div>
+            <div class="cg-cell cg-mono">네이티브 Markdown</div>
+            <div class="cg-cell cg-mono">Markdown · PDF</div>
           </div>
         </div>
       </section>
