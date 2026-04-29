@@ -394,6 +394,40 @@ import BaseHead from "../components/BaseHead.astro";
       .v3-cmd .item.accent .ic {
         background: var(--accent); color: #fff;
       }
+      .v3-cmd .item .ic.spk {
+        background: var(--accent-soft); color: var(--accent);
+        font-size: 11px; font-weight: 600;
+      }
+      .v3-cmd .item .body .quote {
+        font-size: 13px; color: var(--text);
+        font-weight: 400; line-height: 1.45;
+        font-family: var(--font-body);
+      }
+      .v3-cmd .rec {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: #ef4444;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .v3-cmd .rec-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 12px #ef4444;
+        animation: rec-pulse 1.5s infinite;
+      }
+      @keyframes rec-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
+      .v3-cmd .placeholder.transcribing {
+        display: flex; align-items: center; gap: 8px;
+        color: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+      }
+      .v3-cmd .placeholder.transcribing .mcp-dot {
+        background: var(--accent);
+      }
       .v3-cmd .item .body { flex: 1; }
       .v3-cmd .item .body .t {
         font-size: 13.5px; color: var(--text); font-weight: 500;
@@ -1110,43 +1144,37 @@ import BaseHead from "../components/BaseHead.astro";
 
           <div class="v3-cmd">
             <div class="head">
-              <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
-                <rect x="3" y="3" width="26" height="26" rx="7" stroke="currentColor" stroke-opacity="0.28" stroke-width="1" />
-                <path d="M9 22V11l8 8.5V11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                <circle cx="22.5" cy="11" r="1.6" fill="currentColor" />
-              </svg>
-              <span class="label">novi 검색</span>
+              <span class="rec"><span class="rec-dot"></span>REC</span>
+              <span class="label">회의 녹음 — Q2 로드맵</span>
               <span style="flex:1"></span>
-              <span class="kbd">⌘ K</span>
+              <span class="kbd">18:32</span>
             </div>
-            <div class="placeholder">
-              데일리, 매뉴얼, AI 스킬…
-              <span class="cursor"></span>
+            <div class="placeholder transcribing">
+              <span class="mcp-dot"></span><span class="mcp-dot d2"></span><span class="mcp-dot d3"></span>
+              <span style="margin-left:4px">WhisperKit으로 받아쓰는 중…</span>
             </div>
             <div class="results">
               <div class="item">
-                <span class="ic">⌘</span>
+                <span class="ic spk">A</span>
                 <div class="body">
-                  <div class="t">데일리 노트</div>
-                  <div class="s">이번주 5건</div>
+                  <div class="quote">"Q2 우선순위는 결제 모듈 안정화로 가야 합니다."</div>
+                  <div class="s">화자 A · 02:14</div>
                 </div>
-                <span class="kbd">⌘ D</span>
+              </div>
+              <div class="item">
+                <span class="ic spk">B</span>
+                <div class="body">
+                  <div class="quote">"동의합니다. 데이터 마이그레이션은 5월 둘째 주에 하시죠."</div>
+                  <div class="s">화자 B · 03:08</div>
+                </div>
               </div>
               <div class="item accent">
                 <span class="ic">✦</span>
                 <div class="body">
-                  <div class="t">/주간리뷰 실행</div>
-                  <div class="s">AI 스킬</div>
+                  <div class="t">회의록으로 변환</div>
+                  <div class="s">2,847자 → 일반문서 작성</div>
                 </div>
                 <span class="kbd">↵</span>
-              </div>
-              <div class="item">
-                <span class="ic">☰</span>
-                <div class="body">
-                  <div class="t">업무 / 회의록</div>
-                  <div class="s">5개 노트</div>
-                </div>
-                <span class="kbd">⌘ 2</span>
               </div>
             </div>
           </div>

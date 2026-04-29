@@ -387,6 +387,40 @@ import BaseHead from "../../components/BaseHead.astro";
       .v3-cmd .item.accent .ic {
         background: var(--accent); color: #fff;
       }
+      .v3-cmd .item .ic.spk {
+        background: var(--accent-soft); color: var(--accent);
+        font-size: 11px; font-weight: 600;
+      }
+      .v3-cmd .item .body .quote {
+        font-size: 13px; color: var(--text);
+        font-weight: 400; line-height: 1.45;
+        font-family: var(--font-body);
+      }
+      .v3-cmd .rec {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: #ef4444;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .v3-cmd .rec-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 12px #ef4444;
+        animation: rec-pulse 1.5s infinite;
+      }
+      @keyframes rec-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
+      .v3-cmd .placeholder.transcribing {
+        display: flex; align-items: center; gap: 8px;
+        color: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+      }
+      .v3-cmd .placeholder.transcribing .mcp-dot {
+        background: var(--accent);
+      }
       .v3-cmd .item .body { flex: 1; }
       .v3-cmd .item .body .t {
         font-size: 13.5px; color: var(--text); font-weight: 500;
@@ -1094,43 +1128,37 @@ import BaseHead from "../../components/BaseHead.astro";
 
           <div class="v3-cmd">
             <div class="head">
-              <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
-                <rect x="3" y="3" width="26" height="26" rx="7" stroke="currentColor" stroke-opacity="0.28" stroke-width="1" />
-                <path d="M9 22V11l8 8.5V11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                <circle cx="22.5" cy="11" r="1.6" fill="currentColor" />
-              </svg>
-              <span class="label">novi search</span>
+              <span class="rec"><span class="rec-dot"></span>REC</span>
+              <span class="label">Recording — Q2 Roadmap</span>
               <span style="flex:1"></span>
-              <span class="kbd">⌘ K</span>
+              <span class="kbd">18:32</span>
             </div>
-            <div class="placeholder">
-              daily notes, manuals, AI skills…
-              <span class="cursor"></span>
+            <div class="placeholder transcribing">
+              <span class="mcp-dot"></span><span class="mcp-dot d2"></span><span class="mcp-dot d3"></span>
+              <span style="margin-left:4px">Transcribing with WhisperKit…</span>
             </div>
             <div class="results">
               <div class="item">
-                <span class="ic">⌘</span>
+                <span class="ic spk">A</span>
                 <div class="body">
-                  <div class="t">Open Daily</div>
-                  <div class="s">5 this week</div>
+                  <div class="quote">"Q2 priority should be payment module stabilization."</div>
+                  <div class="s">Speaker A · 02:14</div>
                 </div>
-                <span class="kbd">⌘ D</span>
+              </div>
+              <div class="item">
+                <span class="ic spk">B</span>
+                <div class="body">
+                  <div class="quote">"Agreed. Let's run the data migration in the second week of May."</div>
+                  <div class="s">Speaker B · 03:08</div>
+                </div>
               </div>
               <div class="item accent">
                 <span class="ic">✦</span>
                 <div class="body">
-                  <div class="t">/weekly-review</div>
-                  <div class="s">AI Skill</div>
+                  <div class="t">Turn into meeting note</div>
+                  <div class="s">2,847 chars → doc</div>
                 </div>
                 <span class="kbd">↵</span>
-              </div>
-              <div class="item">
-                <span class="ic">☰</span>
-                <div class="body">
-                  <div class="t">Work / Meeting notes</div>
-                  <div class="s">5 notes</div>
-                </div>
-                <span class="kbd">⌘ 2</span>
               </div>
             </div>
           </div>
