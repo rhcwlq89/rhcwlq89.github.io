@@ -19,10 +19,13 @@ Docker Compose는 그 `.sh`를 <strong>선언형 YAML</strong>로 바꿔주는 �
 
 이 글은 Compose를 처음 쓰는 주니어, 또는 "그냥 따라치기만 했지 services/networks/volumes가 정확히 뭔지는 모르겠다"는 사람을 대상으로 한다. 다 읽고 나면 <strong>왜 그렇게 써야 하는지</strong>, 그리고 흔히 빠지는 함정 — `depends_on`만 걸고 안심하다가 앱이 DB보다 먼저 죽는 식의 — 까지 함께 잡힌다.
 
+미리 짚어둘 한 가지. Compose의 주력 용도는 <strong>로컬 개발·CI 통합 테스트·셀프호스팅 배포 패키징</strong>이다. 트래픽을 받는 SaaS 운영 배포는 거의 예외 없이 <strong>Kubernetes(EKS/GKE) 또는 ECS</strong>의 영역이고, Compose는 single-host 오케스트레이터라 그 자리에 끼지 못한다(롤링 배포·오토스케일링·시크릿 관리 모두 없음). 이 글의 "prod" 예시들도 그 경계 안 — CI 환경, OSS 셀프호스팅 패키지, 온프레미스 단일 테넌트 어플라이언스, 개인 VPS — 에서만 의미가 있다.
+
 ---
 
 ## TL;DR
 
+- <strong>Compose는 SaaS 운영용 도구가 아니다.</strong> 주력은 로컬 개발·CI·셀프호스팅 배포 패키징이고, 실제 트래픽 받는 운영은 K8s/ECS 영역이다. 이 글에서 "prod"라고 부르는 예시는 그 한정 시나리오에서만 유효하다.
 - <strong>Compose의 본질</strong>은 `docker run`의 줄세우기를 YAML 선언으로 바꾸고, 같은 프로젝트의 컨테이너들을 <strong>같은 네트워크/같은 라이프사이클</strong>로 묶는 것이다.
 - <strong>`services` / `networks` / `volumes`</strong>가 최상위 키 3대장. 한 파일 안의 서비스는 자동으로 한 네트워크에 묶여 <strong>서비스명 = DNS</strong>로 서로를 찾는다.
 - <strong>`depends_on`만 걸면 시작 순서만 보장된다.</strong> "DB가 쿼리 받을 준비가 됐다"는 보장이 아니다. `condition: service_healthy` + `healthcheck`를 함께 걸어야 진짜 의존성이 표현된다.
@@ -533,9 +536,17 @@ APP_PORT=8080
 
 ## 7. 환경 분리 — dev와 prod를 한 파일로 욱여넣지 않기
 
-> <strong>참고</strong>: 이 절의 "prod"는 <strong>단일 호스트에 컨테이너 스택을 직접 띄우는 자체 호스팅 시나리오</strong>(소규모 VPS, 내부 도구, 홈랩, MVP) 한정이다. Compose v2는 single-host 오케스트레이터다. 멀티 노드 스케줄링·롤링 배포·오토스케일링·시크릿 관리가 모두 없다.
->
-> 트래픽을 받는 다중 노드 운영이라면 답은 Compose가 아니라 <strong>Kubernetes(EKS/GKE) 또는 ECS/Nomad</strong>다. 아래 패턴은 그 경계 안에서만 유효하다.
+> <strong>주의</strong>: 여기서 "prod"라는 단어를 회사 SaaS 운영 환경으로 읽으면 안 된다. Compose v2는 single-host 오케스트레이터라 멀티 노드 스케줄링·롤링 배포·오토스케일링·시크릿 관리가 모두 없다. 트래픽을 받는 운영 배포는 거의 예외 없이 <strong>Kubernetes(EKS/GKE) 또는 ECS</strong>의 영역이다.
+
+Compose의 prod 패턴이 실무에서 정당하게 쓰이는 자리는 다음 셋 정도다.
+
+| 시나리오 | 예 |
+| --- | --- |
+| <strong>CI 통합 테스트 ephemeral 환경</strong> | PR마다 실제 DB+Redis와 함께 풀 스택을 띄워 테스트 |
+| <strong>OSS 셀프호스팅 배포 패키징</strong> | Sentry·Mattermost·Plausible·GitLab Omnibus처럼 "이 `docker-compose.yml`로 너희 서버에 깔아라" |
+| <strong>온프레미스 단일 테넌트 어플라이언스 · 홈랩 · 개인 VPS</strong> | 진짜 한 박스에 다 들어가는 시나리오 |
+
+아래 dev/prod 분리 패턴은 이 경계 안에서만 유효하다. SaaS 트래픽을 받는 운영 아키텍처의 청사진으로 읽지 말 것.
 
 같은 YAML 안에 if-else로 환경을 분기하면 곧 읽을 수 없는 상태가 된다. 표준 패턴이 두 가지 있다.
 
@@ -715,7 +726,7 @@ docker compose run --rm app gradle test   # 일회성 실행
 1. <strong>Compose의 본질은 `docker run` 줄세우기를 선언형으로 바꾸고 컨테이너를 프로젝트 단위로 묶는 것</strong>이다. 같은 파일의 서비스는 자동으로 한 네트워크에 들어가고 서비스명으로 서로를 찾는다.
 2. <strong>`services` / `networks` / `volumes`</strong>가 최상위 키 3대장. 대부분의 디버깅은 이 셋의 멘탈 모델만 잘 잡혀 있어도 풀린다.
 3. <strong>`depends_on`만 걸면 시작 순서만 보장된다.</strong> "DB가 쿼리 받을 준비가 됐다"를 표현하려면 `condition: service_healthy` + `healthcheck` + 적절한 `start_period`가 함께 가야 한다. 그래도 운영 중 끊김에 대비한 앱 레벨 재시도는 별도로 둬야 한다.
-4. <strong>dev와 prod를 한 파일로 욱여넣지 않는다.</strong> 베이스 + override 또는 profiles로 분리. 핫 리로드 bind mount는 dev에만, 리소스 제한·로그 회전·고정 태그는 prod에만 둔다.
+4. <strong>dev와 prod를 한 파일로 욱여넣지 않는다.</strong> 베이스 + override 또는 profiles로 분리. 단, 여기서 "prod"는 CI·셀프호스팅·단일 호스트 시나리오 한정이다 — SaaS 트래픽을 받는 운영은 Compose가 아니라 K8s/ECS의 영역이다.
 5. <strong>가장 자주 잡히는 함정 4개</strong>: `.env` 커밋, macOS bind mount 성능, 무한히 커지는 로그, 리소스 제한 누락. 기능보다 이 운영 항목이 사고를 만든다.
 
 처음 쓰는 사람이라면 1~3절(services·volumes·networks)만 잡고 4·5절(`-f` 합치기, profiles, 함정)은 필요할 때 다시 펴는 식으로 써도 충분하다. 핵심은 <strong>`docker compose config`로 항상 "내가 의도한 게 진짜 그대로 적용됐는지" 확인하는 습관</strong>이다.

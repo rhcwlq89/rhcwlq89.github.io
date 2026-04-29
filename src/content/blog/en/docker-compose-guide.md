@@ -15,10 +15,13 @@ Docker Compose replaces that `.sh` with <strong>declarative YAML</strong>. You w
 
 This guide is for engineers who are new to Compose, or who have copy-pasted Compose files without quite knowing what `services`, `networks`, and `volumes` actually do. After reading it, you should know <strong>why</strong> things are written the way they are, and how to avoid the classic traps — like trusting `depends_on` and watching your app crash before the DB is ready.
 
+One disclaimer up front. Compose's primary uses are <strong>local development, CI integration testing, and self-hosted packaging</strong>. SaaS production deployments serving real traffic almost always run on <strong>Kubernetes (EKS/GKE) or ECS</strong> — Compose is a single-host orchestrator with no rolling deploys, no autoscaling, and no first-class secrets, and it doesn't compete in that space. The "prod" examples in this post only make sense inside that boundary — CI environments, OSS self-hosted distributions, on-prem single-tenant appliances, hobby VPSes.
+
 ---
 
 ## TL;DR
 
+- <strong>Compose isn't a SaaS production tool.</strong> Its real domain is local dev, CI, and self-hosted packaging; serving real traffic at scale belongs to Kubernetes or ECS. The "prod" examples in this post are only valid inside that limited scope.
 - <strong>The point of Compose</strong> is to replace a sequence of `docker run` commands with a YAML declaration and to bind containers in the same project to a <strong>shared network and lifecycle</strong>.
 - <strong>`services` / `networks` / `volumes`</strong> are the three top-level keys. Services in one file automatically join the same network, and <strong>service name = DNS</strong> — they find each other by name.
 - <strong>`depends_on` alone only guarantees start order.</strong> It does not mean "the DB is ready to accept queries." Pair it with `condition: service_healthy` and a real `healthcheck` to express true readiness.
@@ -529,7 +532,17 @@ APP_PORT=8080
 
 ## 7. Separating Environments — Don't Cram dev and prod Together
 
-> <strong>Note</strong>: "prod" in this section means the <strong>self-hosted, single-host scenario</strong> — a small VPS, an internal tool, a homelab, an MVP. Compose v2 is a single-host orchestrator: no multi-node scheduling, no rolling deploys, no autoscaling, no first-class secrets. Once you need any of that for real production traffic, the right answer is not Compose — it's <strong>Kubernetes (EKS/GKE) or ECS/Nomad</strong>. The patterns below are only valid inside that boundary.
+> <strong>Caution</strong>: don't read "prod" in this section as "company SaaS production." Compose v2 is a single-host orchestrator: no multi-node scheduling, no rolling deploys, no autoscaling, no first-class secrets. Production deployments serving real traffic almost exclusively run on <strong>Kubernetes (EKS/GKE) or ECS</strong>.
+
+Where the Compose prod pattern legitimately shows up in practice:
+
+| Scenario | Example |
+| --- | --- |
+| <strong>CI ephemeral integration test environments</strong> | Spin up the full stack with a real DB and Redis on every PR |
+| <strong>OSS self-hosted distributions</strong> | Sentry, Mattermost, Plausible, GitLab Omnibus — "install our product on your server with this `docker-compose.yml`" |
+| <strong>On-prem single-tenant appliances · homelabs · hobby VPSes</strong> | Places where the whole stack genuinely fits on one box |
+
+The dev/prod separation patterns below are only valid inside that boundary. Don't treat them as a blueprint for an architecture that takes SaaS traffic.
 
 A single YAML branched with if-style conditionals quickly becomes unreadable. Two standard patterns work well.
 
@@ -709,7 +722,7 @@ The five takeaways:
 1. <strong>Compose's job is to replace stacked `docker run` with a declaration and to bind containers per project.</strong> Services in one file share a network and find each other by name.
 2. <strong>`services` / `networks` / `volumes`</strong> are the three top-level keys. A correct mental model of these three solves most debugging on its own.
 3. <strong>`depends_on` alone only guarantees start order.</strong> To express "DB is ready to accept queries," combine `condition: service_healthy` with a real `healthcheck` and a sensible `start_period`. Mid-flight blips still need application-level retries.
-4. <strong>Don't cram dev and prod into one file.</strong> Split with base + override or profiles. Hot-reload bind mounts go in dev; resource limits, log rotation, and pinned tags go in prod.
+4. <strong>Don't cram dev and prod into one file.</strong> Split with base + override or profiles. "Prod" here means CI / self-hosted / single-host scenarios — actual SaaS production lives on Kubernetes or ECS, not Compose.
 5. <strong>The four most common production traps</strong>: committing `.env`, macOS bind mount cost, runaway logs, missing resource limits. Operational hygiene causes more incidents than feature gaps do.
 
 If you're brand new, §1–3 (services, volumes, networks) is the core; §4–5 (`-f` merging, profiles, traps) is something you'll re-open as needed. The single best habit to build: <strong>run `docker compose config` whenever something is unclear</strong> — it shows the YAML that Compose actually applies, not the one you think you wrote.
