@@ -1081,7 +1081,7 @@ import BaseHead from "../components/BaseHead.astro";
           </a>
         </div>
         <div class="meta-row">
-          <span>Apple Silicon · Intel<span class="sep">·</span></span>
+          <span>Apple Silicon 전용<span class="sep">·</span></span>
           <span>macOS 14+<span class="sep">·</span></span>
           <span>Mac App Store에서 판매</span>
         </div>
@@ -1429,22 +1429,23 @@ import BaseHead from "../components/BaseHead.astro";
     <script is:inline>
       (function () {
         const SCRIPT_KO = [
-          { kind: "user", t: 350, text: "지난주 스탠드업 5개 묶어서 회고 노트로 만들어줘." },
-          { kind: "tool", t: 600, tool: "novi_search", args: '{ "query": "standup", "since": "7d" }' },
-          { kind: "tool_ret", t: 600, text: "5개 노트 · 124줄" },
-          { kind: "thinking", t: 700, text: "데일리 노트 5개 읽는 중…" },
-          { kind: "note_action", t: 700, action: "create", title: "Retro · Wk 17" },
-          { kind: "note_block", t: 500, block: { kind: "h1", text: "Retro · Wk 17" } },
-          { kind: "note_block", t: 320, block: { kind: "callout", text: "MCP를 통해 스탠드업 5개를 합쳤습니다." } },
-          { kind: "note_block", t: 320, block: { kind: "h2", text: "잘된 일" } },
-          { kind: "note_block", t: 280, block: { kind: "li", text: "블록 에디터 v2 출시 — 3일 단축." } },
-          { kind: "note_block", t: 280, block: { kind: "li", text: "MCP 검색 p95 40ms 이하 달성." } },
-          { kind: "note_block", t: 320, block: { kind: "h2", text: "블로커" } },
-          { kind: "note_block", t: 280, block: { kind: "li", text: "Intel Mac에서 WhisperKit 콜드스타트." } },
-          { kind: "note_block", t: 320, block: { kind: "h2", text: "다음주" } },
-          { kind: "note_block", t: 280, block: { kind: "todo", text: "Intel에서 Whisper 모델 로드 프로파일링." } },
-          { kind: "note_block", t: 280, block: { kind: "todo", text: "캘린더 싱크 리팩터링 머지." } },
-          { kind: "assistant", t: 500, text: "완료. **업무 / 스탠드업** 폴더에 **Retro · Wk 17** 노트를 만들었어요. 블로커들을 내일 데일리 노트의 TODO로 옮길까요?" },
+          { kind: "user", t: 350, text: "방금 회의 녹음한 거 받아쓰고 회의록으로 정리해줘." },
+          { kind: "tool", t: 600, tool: "novi_list_recordings", args: '{ "since": "1h" }' },
+          { kind: "tool_ret", t: 600, text: "1개 녹음 · 18분 32초" },
+          { kind: "thinking", t: 700, text: "WhisperKit으로 받아쓰는 중…" },
+          { kind: "tool", t: 600, tool: "novi_transcribe", args: '{ "id": "rec_2026-04-29_1430" }' },
+          { kind: "tool_ret", t: 600, text: "2,847자 · ko-KR" },
+          { kind: "thinking", t: 700, text: "스크립트 읽고 핵심만 추리는 중…" },
+          { kind: "note_action", t: 700, action: "create", title: "Q2 로드맵 회의" },
+          { kind: "note_block", t: 500, block: { kind: "h1", text: "Q2 로드맵 회의" } },
+          { kind: "note_block", t: 320, block: { kind: "callout", text: "녹음 18:32 → WhisperKit 전사 → AI 요약" } },
+          { kind: "note_block", t: 320, block: { kind: "h2", text: "주요 결정" } },
+          { kind: "note_block", t: 280, block: { kind: "li", text: "Q2 우선순위: 결제 모듈 안정화 — 2주 단축" } },
+          { kind: "note_block", t: 280, block: { kind: "li", text: "데이터 마이그레이션은 5월 둘째 주 진행" } },
+          { kind: "note_block", t: 320, block: { kind: "h2", text: "액션 아이템" } },
+          { kind: "note_block", t: 280, block: { kind: "todo", text: "결제 회귀 테스트 시나리오 정리 (호종)" } },
+          { kind: "note_block", t: 280, block: { kind: "todo", text: "마이그레이션 롤백 플랜 초안 (예린)" } },
+          { kind: "assistant", t: 500, text: "완료. **업무 / 회의록** 폴더에 **Q2 로드맵 회의** 문서를 만들었어요. 액션 아이템을 내일 데일리 노트로 옮길까요?" },
         ];
         const LABELS_KO = { idle: "대기 중…", writing: "쓰는 중", empty: "— 노트 없음 —" };
 
@@ -1522,7 +1523,7 @@ import BaseHead from "../components/BaseHead.astro";
           const blocks = events.filter((e) => e.kind === "note_block").map((e) => e.block);
 
           if (noteAction) {
-            noteCrumb.textContent = `Work / Standups / ${noteAction.title}`;
+            noteCrumb.textContent = `업무 / 회의록 / ${noteAction.title}`;
             noteWriting.classList.add("on");
           } else {
             noteCrumb.textContent = L.idle;

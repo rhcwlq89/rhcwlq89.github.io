@@ -1065,7 +1065,7 @@ import BaseHead from "../../components/BaseHead.astro";
           </a>
         </div>
         <div class="meta-row">
-          <span>Apple Silicon · Intel<span class="sep">·</span></span>
+          <span>Apple Silicon only<span class="sep">·</span></span>
           <span>macOS 14+<span class="sep">·</span></span>
           <span>On the Mac App Store</span>
         </div>
@@ -1080,15 +1080,15 @@ import BaseHead from "../../components/BaseHead.astro";
               <span class="title">Novi</span>
             </div>
             <div class="body">
-              <div class="crumb">RETRO · WK 17</div>
-              <h3>Retro · Wk 17</h3>
+              <div class="crumb">DAILY · APR 29 (TUE)</div>
+              <h3>Today's log</h3>
               <div class="callout">
                 <span class="star">✦</span>
-                <span>Built from 5 standups via MCP</span>
+                <span>Claude read yesterday's log and drafted today's TODOs</span>
               </div>
-              <h4>Wins</h4>
-              <div class="li"><span class="b">•</span>Shipped block editor v2 — 3 days early</div>
-              <div class="li"><span class="b">•</span>MCP search p95 &lt; 40ms</div>
+              <h4>What I did</h4>
+              <div class="li"><span class="b">•</span>Cleared meeting notes — 12 stickies</div>
+              <div class="li"><span class="b">•</span>Onboarding manual ch.1 wrapped</div>
             </div>
           </div>
 
@@ -1104,7 +1104,7 @@ import BaseHead from "../../components/BaseHead.astro";
               <span class="kbd">⌘ K</span>
             </div>
             <div class="placeholder">
-              retros, standups, MCP…
+              daily notes, manuals, AI skills…
               <span class="cursor"></span>
             </div>
             <div class="results">
@@ -1119,15 +1119,15 @@ import BaseHead from "../../components/BaseHead.astro";
               <div class="item accent">
                 <span class="ic">✦</span>
                 <div class="body">
-                  <div class="t">Build retro with Claude</div>
-                  <div class="s">MCP action</div>
+                  <div class="t">/weekly-review</div>
+                  <div class="s">AI Skill</div>
                 </div>
                 <span class="kbd">↵</span>
               </div>
               <div class="item">
                 <span class="ic">☰</span>
                 <div class="body">
-                  <div class="t">Work / Standups</div>
+                  <div class="t">Work / Meeting notes</div>
                   <div class="s">5 notes</div>
                 </div>
                 <span class="kbd">⌘ 2</span>
@@ -1138,9 +1138,9 @@ import BaseHead from "../../components/BaseHead.astro";
           <div class="v3-todo">
             <div class="sub">Rolled over from yesterday</div>
             <div class="title">Today · TODO</div>
-            <div class="row done"><span class="box">✓</span><span>Standup retro</span></div>
-            <div class="row"><span class="box"></span><span>Editor v2 review</span></div>
-            <div class="row"><span class="box"></span><span>Profile MCP</span></div>
+            <div class="row done"><span class="box">✓</span><span>Clear meeting notes</span></div>
+            <div class="row"><span class="box"></span><span>Onboarding manual v1</span></div>
+            <div class="row"><span class="box"></span><span>Quarterly report draft</span></div>
           </div>
         </div>
         <div class="mock-note-wrap"><span class="mock-note">Illustrative mock. Actual usage differs.</span></div>
@@ -1413,22 +1413,23 @@ import BaseHead from "../../components/BaseHead.astro";
     <script is:inline>
       (function () {
         const SCRIPT_EN = [
-          { kind: "user", t: 350, text: "Summarize last week's standups into a single retro note." },
-          { kind: "tool", t: 600, tool: "novi_search", args: '{ "query": "standup", "since": "7d" }' },
-          { kind: "tool_ret", t: 600, text: "5 notes · 124 lines" },
-          { kind: "thinking", t: 700, text: "Reading 5 daily notes…" },
-          { kind: "note_action", t: 700, action: "create", title: "Retro · Wk 17" },
-          { kind: "note_block", t: 500, block: { kind: "h1", text: "Retro · Wk 17" } },
-          { kind: "note_block", t: 320, block: { kind: "callout", text: "Synthesized from 5 standups via MCP." } },
-          { kind: "note_block", t: 320, block: { kind: "h2", text: "Wins" } },
-          { kind: "note_block", t: 280, block: { kind: "li", text: "Shipped block editor v2 — 3 days ahead." } },
-          { kind: "note_block", t: 280, block: { kind: "li", text: "MCP search latency p95 < 40ms." } },
-          { kind: "note_block", t: 320, block: { kind: "h2", text: "Blockers" } },
-          { kind: "note_block", t: 280, block: { kind: "li", text: "WhisperKit cold-start on Intel Macs." } },
-          { kind: "note_block", t: 320, block: { kind: "h2", text: "Next week" } },
-          { kind: "note_block", t: 280, block: { kind: "todo", text: "Profile Whisper model load on Intel." } },
-          { kind: "note_block", t: 280, block: { kind: "todo", text: "Land calendar sync rewrite." } },
-          { kind: "assistant", t: 500, text: "Done. Wrote **Retro · Wk 17** to your **Work / Standups** folder. Want me to file the blockers as TODOs in tomorrow's daily note?" },
+          { kind: "user", t: 350, text: "Transcribe the meeting I just recorded and turn it into a doc." },
+          { kind: "tool", t: 600, tool: "novi_list_recordings", args: '{ "since": "1h" }' },
+          { kind: "tool_ret", t: 600, text: "1 recording · 18:32" },
+          { kind: "thinking", t: 700, text: "Transcribing with WhisperKit…" },
+          { kind: "tool", t: 600, tool: "novi_transcribe", args: '{ "id": "rec_2026-04-29_1430" }' },
+          { kind: "tool_ret", t: 600, text: "2,847 chars · ko-KR" },
+          { kind: "thinking", t: 700, text: "Reading the transcript and pulling out the essentials…" },
+          { kind: "note_action", t: 700, action: "create", title: "Q2 Roadmap Meeting" },
+          { kind: "note_block", t: 500, block: { kind: "h1", text: "Q2 Roadmap Meeting" } },
+          { kind: "note_block", t: 320, block: { kind: "callout", text: "18:32 recording → WhisperKit transcript → AI summary" } },
+          { kind: "note_block", t: 320, block: { kind: "h2", text: "Decisions" } },
+          { kind: "note_block", t: 280, block: { kind: "li", text: "Q2 priority: payment stabilization — 2 weeks ahead" } },
+          { kind: "note_block", t: 280, block: { kind: "li", text: "Data migration scheduled for the second week of May" } },
+          { kind: "note_block", t: 320, block: { kind: "h2", text: "Action items" } },
+          { kind: "note_block", t: 280, block: { kind: "todo", text: "Draft payment regression test scenarios (Hojong)" } },
+          { kind: "note_block", t: 280, block: { kind: "todo", text: "Migration rollback plan — first draft (Yerin)" } },
+          { kind: "assistant", t: 500, text: "Done. Wrote **Q2 Roadmap Meeting** to **Work / Meeting Notes**. Want me to file the action items into tomorrow's daily?" },
         ];
         const LABELS_EN = { idle: "Idle…", writing: "WRITING", empty: "— no note open —" };
 
@@ -1506,7 +1507,7 @@ import BaseHead from "../../components/BaseHead.astro";
           const blocks = events.filter((e) => e.kind === "note_block").map((e) => e.block);
 
           if (noteAction) {
-            noteCrumb.textContent = `Work / Standups / ${noteAction.title}`;
+            noteCrumb.textContent = `Work / Meeting Notes / ${noteAction.title}`;
             noteWriting.classList.add("on");
           } else {
             noteCrumb.textContent = L.idle;
