@@ -829,7 +829,10 @@ import BaseHead from "../components/BaseHead.astro";
         overflow: hidden;
         background: var(--panel);
       }
-      .compare-card table { width: 100%; border-collapse: collapse; }
+      .compare-card table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .compare-card col.col-label { width: 18%; }
+      .compare-card col.col-novi { width: 22%; }
+      .compare-card col.col-other { width: 20%; }
       .compare-card th, .compare-card td {
         padding: 14px 16px;
         text-align: center;
@@ -1300,6 +1303,13 @@ import BaseHead from "../components/BaseHead.astro";
         <div class="compare-frame">
           <div class="compare-card">
             <table>
+              <colgroup>
+                <col class="col-label" />
+                <col class="col-novi" />
+                <col class="col-other" />
+                <col class="col-other" />
+                <col class="col-other" />
+              </colgroup>
               <thead>
                 <tr>
                   <th class="first"></th>
