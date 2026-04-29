@@ -830,20 +830,17 @@ import BaseHead from "../components/BaseHead.astro";
         background: var(--panel);
       }
       .compare-card table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      .compare-card col.col-label { width: 18%; }
-      .compare-card col.col-novi { width: 22%; }
-      .compare-card col.col-other { width: 20%; }
       .compare-card th, .compare-card td {
-        padding: 14px 16px;
+        padding: 18px 20px;
         text-align: center;
-        font-size: 13px;
+        font-size: 15px;
         border-top: 1px solid var(--line);
       }
       .compare-card thead th {
-        padding: 16px;
+        padding: 18px 20px;
         background: var(--panel-hi);
         font-family: var(--font-mono);
-        font-size: 11px; font-weight: 500;
+        font-size: 12.5px; font-weight: 500;
         color: var(--text-mute);
         letter-spacing: 0.06em; text-transform: uppercase;
         border-top: none;
@@ -851,7 +848,7 @@ import BaseHead from "../components/BaseHead.astro";
       .compare-card thead th.first { text-align: left; }
       .compare-card thead th.novi {
         font-family: var(--font-display);
-        font-size: 16px; font-weight: 600;
+        font-size: 18px; font-weight: 600;
         color: #fff;
         background: var(--accent);
         text-transform: none; letter-spacing: -0.01em;
@@ -860,6 +857,7 @@ import BaseHead from "../components/BaseHead.astro";
         text-align: left;
         color: var(--text);
         font-weight: 500;
+        font-size: 14.5px;
       }
       .compare-card tbody td.novi {
         background: var(--accent-soft);
@@ -871,7 +869,7 @@ import BaseHead from "../components/BaseHead.astro";
       .compare-card td.novi .check { color: var(--accent); }
       .compare-card .x { color: var(--text-mute); }
       .compare-card td.text {
-        font-family: var(--font-mono); font-size: 12px;
+        font-family: var(--font-mono); font-size: 13.5px;
       }
 
       /* ===== Product Hunt section ===== */
@@ -1304,11 +1302,11 @@ import BaseHead from "../components/BaseHead.astro";
           <div class="compare-card">
             <table>
               <colgroup>
-                <col class="col-label" />
-                <col class="col-novi" />
-                <col class="col-other" />
-                <col class="col-other" />
-                <col class="col-other" />
+                <col style="width:18%" />
+                <col style="width:22%" />
+                <col style="width:20%" />
+                <col style="width:20%" />
+                <col style="width:20%" />
               </colgroup>
               <thead>
                 <tr>
