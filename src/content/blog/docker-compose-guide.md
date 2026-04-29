@@ -533,6 +533,10 @@ APP_PORT=8080
 
 ## 7. 환경 분리 — dev와 prod를 한 파일로 욱여넣지 않기
 
+> <strong>참고</strong>: 이 절의 "prod"는 <strong>단일 호스트에 컨테이너 스택을 직접 띄우는 자체 호스팅 시나리오</strong>(소규모 VPS, 내부 도구, 홈랩, MVP) 한정이다. Compose v2는 single-host 오케스트레이터다. 멀티 노드 스케줄링·롤링 배포·오토스케일링·시크릿 관리가 모두 없다.
+>
+> 트래픽을 받는 다중 노드 운영이라면 답은 Compose가 아니라 <strong>Kubernetes(EKS/GKE) 또는 ECS/Nomad</strong>다. 아래 패턴은 그 경계 안에서만 유효하다.
+
 같은 YAML 안에 if-else로 환경을 분기하면 곧 읽을 수 없는 상태가 된다. 표준 패턴이 두 가지 있다.
 
 ### 7.1 베이스 + 오버라이드 (`-f` 합치기)
@@ -670,7 +674,7 @@ services:
           memory: 512M
 ```
 
-> <strong>참고</strong>: `deploy:` 블록은 원래 Swarm 전용으로 도입됐지만, Compose v2부터 일반 `up`에서도 `limits`/`reservations`가 적용된다. 운영 환경 가정이라면 이 표기를 그대로 써도 된다.
+> <strong>참고</strong>: `deploy:` 블록은 원래 Swarm용이라, Compose v2 standalone(`docker compose up`)에서는 <strong>`resources.limits` / `resources.reservations`만 적용된다</strong>. `replicas`·`update_config`·`placement`·`restart_policy`처럼 멀티 노드를 전제로 한 필드들은 Swarm에서만 의미가 있고 standalone에선 조용히 무시된다(`restart_policy` 대신 서비스 레벨 `restart:`를 써야 한다).
 
 ---
 

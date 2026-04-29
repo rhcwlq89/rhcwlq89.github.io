@@ -529,6 +529,8 @@ APP_PORT=8080
 
 ## 7. Separating Environments — Don't Cram dev and prod Together
 
+> <strong>Note</strong>: "prod" in this section means the <strong>self-hosted, single-host scenario</strong> — a small VPS, an internal tool, a homelab, an MVP. Compose v2 is a single-host orchestrator: no multi-node scheduling, no rolling deploys, no autoscaling, no first-class secrets. Once you need any of that for real production traffic, the right answer is not Compose — it's <strong>Kubernetes (EKS/GKE) or ECS/Nomad</strong>. The patterns below are only valid inside that boundary.
+
 A single YAML branched with if-style conditionals quickly becomes unreadable. Two standard patterns work well.
 
 ### 7.1 Base + override (`-f` merging)
@@ -666,7 +668,7 @@ services:
           memory: 512M
 ```
 
-> <strong>Note</strong>: the `deploy:` block was originally Swarm-only, but Compose v2 honors `limits`/`reservations` for plain `up` as well. For production, use this form directly.
+> <strong>Note</strong>: the `deploy:` block was originally Swarm-only, and Compose v2 standalone (`docker compose up`) honors <strong>only `resources.limits` / `resources.reservations`</strong>. Multi-node fields like `replicas`, `update_config`, `placement`, and `restart_policy` only make sense under Swarm and are silently ignored in standalone mode (use the service-level `restart:` instead of `restart_policy`).
 
 ---
 
