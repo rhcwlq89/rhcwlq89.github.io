@@ -1,731 +1,1610 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
-import { SITE_TITLE } from "../consts";
 ---
 
 <!doctype html>
-<html lang="ko" class="dark">
+<html lang="ko" class="theme-dark">
   <head>
     <BaseHead
-      title="Novi Note — 로컬 우선 AI 노트앱 (MCP 지원)"
-      description="macOS용 로컬 우선 노트앱. MCP를 통해 Claude와 바로 연동. 플러그인 없이, API 키 없이, 구독 없이. 일회성 구매."
+      title="Novi Note — 내 Mac의 AI 메모리 레이어"
+      description="모든 노트는 내 Mac 안에. MCP로 Claude · Claude Code · Gemini · Codex가 노트를 읽고 씁니다. 구독 없음, 일회성 구매."
       lang="ko"
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
     <style>
-      /* ===== Reset & Base ===== */
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-      :root {
-        --bg-primary: #0a0a0a;
-        --bg-secondary: #111111;
-        --bg-card: #1a1a1a;
-        --bg-card-hover: #222222;
-        --text-primary: #f5f5f5;
-        --text-secondary: #a3a3a3;
-        --text-muted: #737373;
-        --accent: #f59e0b;
-        --accent-hover: #fbbf24;
-        --accent-dim: rgba(245, 158, 11, 0.15);
-        --border: #262626;
-        --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
-        --max-width: 1100px;
-        --section-padding: 6rem 1.5rem;
+      /* ===== Theme tokens ===== */
+      .theme-dark {
+        --bg: #08070d;
+        --bg-soft: #0e0c14;
+        --panel: #13111a;
+        --panel-hi: #1a1722;
+        --line: rgba(255, 255, 255, 0.08);
+        --line-hi: rgba(255, 255, 255, 0.14);
+        --text: #f0eef7;
+        --text-dim: rgba(240, 238, 247, 0.62);
+        --text-mute: rgba(240, 238, 247, 0.42);
+        --accent: #a78bfa;
+        --accent-hi: #c4b5fd;
+        --accent-soft: rgba(167, 139, 250, 0.14);
+        --accent-line: rgba(167, 139, 250, 0.32);
+        --success: #7ddca0;
+        --grid: rgba(255, 255, 255, 0.04);
+        --primary-fg: #0a0810;
+        --hero-glow-1: rgba(167, 139, 250, 0.22);
+        --hero-glow-2: rgba(196, 181, 253, 0.12);
+      }
+      .theme-light {
+        --bg: #fbfaf7;
+        --bg-soft: #f3f1ec;
+        --panel: #ffffff;
+        --panel-hi: #fbfaf7;
+        --line: rgba(20, 16, 30, 0.1);
+        --line-hi: rgba(20, 16, 30, 0.18);
+        --text: #1a1626;
+        --text-dim: rgba(26, 22, 38, 0.66);
+        --text-mute: rgba(26, 22, 38, 0.46);
+        --accent: #7c3aed;
+        --accent-hi: #5b21b6;
+        --accent-soft: rgba(124, 58, 237, 0.1);
+        --accent-line: rgba(124, 58, 237, 0.32);
+        --success: #16a34a;
+        --grid: rgba(20, 16, 30, 0.04);
+        --primary-fg: #ffffff;
+        --hero-glow-1: rgba(124, 58, 237, 0.1);
+        --hero-glow-2: rgba(167, 139, 250, 0.1);
       }
 
+      /* ===== Reset ===== */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html { scroll-behavior: smooth; }
-
       body {
-        font-family: var(--font-sans) !important;
-        background: var(--bg-primary) !important;
-        color: var(--text-primary) !important;
-        line-height: 1.6;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, "SF Pro Text", -apple-system, sans-serif;
+        font-feature-settings: "ss01", "cv11";
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         overflow-x: hidden;
+        line-height: 1.55;
+      }
+      a { color: inherit; text-decoration: none; }
+      button { font: inherit; cursor: pointer; }
+
+      :root {
+        --font-display: "Inter Tight", "SF Pro Display", -apple-system, Inter, sans-serif;
+        --font-body: Inter, "SF Pro Text", -apple-system, sans-serif;
+        --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+        --content-w: 1180px;
       }
 
-      a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
-      a:hover { color: var(--accent-hover); }
-
-      /* ===== Layout ===== */
-      .container { max-width: var(--max-width); margin: 0 auto; }
-
-      section {
-        padding: var(--section-padding);
+      .page-bg {
+        position: relative;
+        background:
+          radial-gradient(ellipse 60% 70% at 80% 0%, var(--hero-glow-1) 0%, transparent 60%),
+          radial-gradient(ellipse 50% 50% at 10% 30%, var(--hero-glow-2) 0%, transparent 60%),
+          var(--bg);
       }
 
-      .section-title {
-        font-size: clamp(1.75rem, 4vw, 2.5rem);
-        font-weight: 700;
+      /* ===== Nav ===== */
+      .nav {
+        position: sticky; top: 0; z-index: 50;
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        background: color-mix(in srgb, var(--bg) 80%, transparent);
+        border-bottom: 1px solid var(--line);
+      }
+      .nav-inner {
+        max-width: var(--content-w); margin: 0 auto;
+        padding: 14px 24px;
+        display: flex; align-items: center; gap: 16px;
+      }
+      .brand-pill {
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 14px 6px 8px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+      .brand-pill .name {
+        font-family: var(--font-display);
+        font-size: 14px; font-weight: 600;
         letter-spacing: -0.02em;
-        margin-bottom: 1rem;
-        text-align: center;
       }
+      .brand-pill .ver {
+        font-family: var(--font-mono);
+        font-size: 9.5px; color: var(--accent);
+        padding: 2px 6px; border-radius: 4px;
+        background: var(--accent-soft);
+        letter-spacing: 0.04em;
+      }
+      .nav-spacer { flex: 1; }
 
-      .section-subtitle {
-        color: var(--text-secondary);
-        font-size: 1.125rem;
-        text-align: center;
-        max-width: 600px;
-        margin: 0 auto 3rem;
+      .toggles { display: flex; gap: 8px; align-items: center; }
+      .toggle-pill {
+        display: flex; padding: 3px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
       }
+      .toggle-pill button {
+        padding: 5px 10px; border-radius: 999px;
+        font-size: 11.5px; font-weight: 500;
+        color: var(--text-mute);
+        background: transparent;
+        border: none;
+        letter-spacing: 0.02em;
+        transition: all 0.15s;
+      }
+      .toggle-pill button.active,
+      .toggle-pill a.active {
+        color: var(--text);
+        background: var(--panel-hi);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .toggle-pill.lang a {
+        display: inline-block;
+        padding: 5px 10px; border-radius: 999px;
+        font-size: 11.5px; font-weight: 500;
+        color: var(--text-mute);
+        text-decoration: none;
+        letter-spacing: 0.02em;
+        transition: all 0.15s;
+      }
+      .toggle-pill.lang a:hover { color: var(--text); }
 
-      /* ===== Fade-in Animation ===== */
-      .fade-in {
-        opacity: 0;
-        transform: translateY(24px);
-        transition: opacity 0.6s ease, transform 0.6s ease;
+      /* ===== Buttons ===== */
+      .btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 9px 16px;
+        font-family: var(--font-body);
+        font-size: 13px; font-weight: 500;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        letter-spacing: -0.01em;
+        transition: transform 0.12s, opacity 0.12s, background-color 0.12s;
       }
-      .fade-in.visible {
-        opacity: 1;
-        transform: translateY(0);
+      .btn:active { transform: scale(0.98); }
+      .btn.big { padding: 12px 20px; font-size: 14.5px; }
+      .btn-primary {
+        color: var(--primary-fg);
+        background: var(--text);
+        box-shadow:
+          0 1px 0 var(--line-hi) inset,
+          0 8px 24px -12px var(--text);
       }
+      .btn-primary:hover { opacity: 0.92; }
+      .btn-ghost {
+        color: var(--text);
+        background: transparent;
+        border-color: var(--line);
+      }
+      .btn-ghost:hover { background: var(--panel); }
+
+      /* ===== Kicker ===== */
+      .kicker {
+        display: inline-flex; align-items: center; gap: 8px;
+        font-family: var(--font-mono);
+        font-size: 11px; font-weight: 500;
+        color: var(--accent);
+        letter-spacing: 0.08em; text-transform: uppercase;
+      }
+      .kicker .bar { width: 14px; height: 1px; background: var(--accent); }
+      .kicker.muted { color: var(--text-mute); }
+      .kicker.muted .bar { background: var(--text-mute); }
 
       /* ===== Hero ===== */
       .hero {
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        position: relative;
+        max-width: var(--content-w);
+        margin: 0 auto;
+        padding: 88px 24px 40px;
         text-align: center;
-        padding: 4rem 1.5rem;
-        background: radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, 0.08) 0%, transparent 60%);
       }
-
-      .hero-inner { max-width: 800px; }
-
-      .hero-icon {
-        width: 96px;
-        height: 96px;
-        border-radius: 22px;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      .hero-chip {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 4px 4px 4px 14px; border-radius: 999px;
+        background: var(--panel); border: 1px solid var(--line);
+        font-size: 12px; color: var(--text-dim);
+        margin-bottom: 28px;
       }
-
-      .hero-badge {
-        display: inline-block;
-        padding: 0.375rem 1rem;
-        border: 1px solid var(--border);
-        border-radius: 9999px;
-        font-size: 0.8125rem;
-        color: var(--accent);
-        background: var(--accent-dim);
-        margin-bottom: 2rem;
-        letter-spacing: 0.03em;
-      }
-
-      .hero h1 {
-        font-size: clamp(2.5rem, 6vw, 4rem);
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        line-height: 1.1;
-        margin-bottom: 1.5rem;
-      }
-
-      .hero h1 .highlight {
-        background: linear-gradient(135deg, var(--accent) 0%, #fbbf24 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
-
-      .hero-sub {
-        font-size: clamp(1rem, 2.5vw, 1.25rem);
-        color: var(--text-secondary);
-        line-height: 1.7;
-        max-width: 640px;
-        margin: 0 auto 2.5rem;
-      }
-
-      .hero-buttons {
-        display: flex;
-        gap: 1rem;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 3.5rem;
-      }
-
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.875rem 1.75rem;
-        border-radius: 12px;
-        font-size: 1rem;
-        font-weight: 600;
-        transition: all 0.2s;
-        cursor: pointer;
-        border: none;
-      }
-
-      .btn-primary {
+      .hero-chip .live {
+        width: 6px; height: 6px; border-radius: 50%;
         background: var(--accent);
-        color: #0a0a0a;
+        box-shadow: 0 0 12px var(--accent);
       }
-      .btn-primary:hover {
-        background: var(--accent-hover);
-        color: #0a0a0a;
-        transform: translateY(-1px);
-        box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25);
+      .hero-chip .ver {
+        padding: 4px 10px; border-radius: 999px;
+        background: var(--accent-soft); color: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 10.5px; letter-spacing: 0.04em;
       }
+      .hero h1 {
+        margin: 0 auto;
+        max-width: 900px;
+        font-family: var(--font-display);
+        font-size: clamp(54px, 7.5vw, 104px);
+        line-height: 0.96;
+        letter-spacing: -0.045em;
+        font-weight: 600;
+        text-wrap: balance;
+      }
+      .hero h1 .grad {
+        background: linear-gradient(120deg, var(--accent), var(--accent-hi), var(--accent));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .hero-sub {
+        margin: 28px auto 0;
+        max-width: 600px;
+        font-size: 17px; line-height: 1.55;
+        color: var(--text-dim);
+        text-wrap: pretty;
+      }
+      .hero-cta {
+        display: inline-flex; gap: 10px;
+        margin-top: 32px;
+        flex-wrap: wrap; justify-content: center;
+      }
+      .meta-row {
+        margin-top: 18px;
+        display: flex; gap: 18px;
+        justify-content: center; flex-wrap: wrap;
+        font-family: var(--font-mono);
+        font-size: 11px; color: var(--text-mute);
+        letter-spacing: 0.02em;
+      }
+      .meta-row .sep { color: var(--line-hi); margin-left: 18px; }
 
-      .btn-outline {
-        background: transparent;
-        color: var(--text-primary);
-        border: 1px solid var(--border);
+      /* ===== V3 Showcase: layered cards ===== */
+      .v3-showcase {
+        position: relative;
+        margin: 64px auto 0;
+        max-width: 760px;
+        padding-bottom: 60px;
+        text-align: left;
       }
-      .btn-outline:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-        transform: translateY(-1px);
-      }
-
-      .hero-screenshot {
-        max-width: 100%;
+      .v3-notebook {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        background: var(--panel);
+        border: 1px solid var(--line);
         border-radius: 16px;
-        border: 1px solid var(--border);
-        background: var(--bg-card);
-        aspect-ratio: 16/10;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--text-muted);
-        font-size: 0.875rem;
+        box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.4);
+        text-align: left;
         overflow: hidden;
       }
-
-      .hero-screenshot img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
+      .v3-notebook .bar {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel-hi);
+        display: flex; gap: 6px; align-items: center;
       }
-
-      /* ===== Problem ===== */
-      .problem { background: var(--bg-secondary); }
-
-      .problem-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 1.5rem;
+      .v3-notebook .bar .traffic {
+        width: 10px; height: 10px; border-radius: 50%;
       }
-
-      .problem-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 2rem;
-        transition: border-color 0.2s, transform 0.2s;
+      .v3-notebook .bar .title {
+        flex: 1; text-align: center;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--text-mute);
       }
-      .problem-card:hover {
-        border-color: #333;
-        transform: translateY(-2px);
+      .v3-notebook .body { padding: 32px 40px; }
+      .v3-notebook .crumb {
+        font-family: var(--font-mono);
+        font-size: 11px; color: var(--text-mute);
+        letter-spacing: 0.06em; text-transform: uppercase;
       }
-
-      .problem-card .icon {
-        font-size: 2rem;
-        margin-bottom: 1rem;
-        display: block;
+      .v3-notebook h3 {
+        font-family: var(--font-display);
+        font-size: 28px; font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 8px 0 14px;
       }
-
-      .problem-card h3 {
-        font-size: 1.125rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
+      .v3-notebook .callout {
+        padding: 8px 12px; border-radius: 8px;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent-line);
+        font-size: 12.5px; color: var(--text);
+        margin-bottom: 16px;
+        display: flex; gap: 8px; align-items: center;
       }
-
-      .problem-card p {
-        color: var(--text-secondary);
-        font-size: 0.9375rem;
-        line-height: 1.6;
+      .v3-notebook .callout .star { color: var(--accent); }
+      .v3-notebook h4 {
+        font-family: var(--font-display);
+        font-size: 14px; font-weight: 600;
+        margin: 0 0 6px;
       }
-
-      /* ===== Features ===== */
-      .features-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 1.5rem;
+      .v3-notebook .li {
+        display: flex; gap: 8px;
+        font-size: 13px; padding: 2px 0;
+        color: var(--text);
       }
+      .v3-notebook .li .b { color: var(--text-mute); }
 
-      .feature-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 2rem;
-        text-align: center;
-        transition: border-color 0.2s, transform 0.2s;
-      }
-      .feature-card:hover {
-        border-color: var(--accent);
-        transform: translateY(-2px);
-      }
-
-      .feature-card .icon {
-        width: 56px;
-        height: 56px;
-        border-radius: 14px;
-        background: var(--accent-dim);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        margin: 0 auto 1.25rem;
-      }
-
-      .feature-card h3 {
-        font-size: 1.125rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-      }
-
-      .feature-card p {
-        color: var(--text-secondary);
-        font-size: 0.9375rem;
-        line-height: 1.5;
-      }
-
-      /* ===== How It Works ===== */
-      .how-it-works { background: var(--bg-secondary); }
-
-      .steps {
-        display: flex;
-        gap: 2rem;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 2.5rem;
-      }
-
-      .step {
-        flex: 1;
-        min-width: 220px;
-        max-width: 320px;
-        text-align: center;
+      .v3-cmd {
         position: relative;
-      }
-
-      .step-number {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: var(--accent);
-        color: #0a0a0a;
-        font-weight: 800;
-        font-size: 1.25rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto 1.25rem;
-      }
-
-      .step h3 {
-        font-size: 1.125rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-      }
-
-      .step p {
-        color: var(--text-secondary);
-        font-size: 0.9375rem;
-      }
-
-      .step-connector {
-        display: none;
-      }
-
-      @media (min-width: 768px) {
-        .step-connector {
-          display: block;
-          position: absolute;
-          top: 24px;
-          left: calc(50% + 32px);
-          width: calc(100% - 64px);
-          height: 1px;
-          background: var(--border);
-        }
-        .step:last-child .step-connector { display: none; }
-      }
-
-      .mcp-note {
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 0.875rem;
-        padding: 1rem 1.5rem;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        max-width: 600px;
-        margin: 0 auto;
-      }
-
-      /* ===== Comparison Table ===== */
-      .comparison-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-
-      .comparison-table {
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 600px;
-        font-size: 0.9375rem;
-      }
-
-      .comparison-table th,
-      .comparison-table td {
-        padding: 1rem 1.25rem;
-        text-align: center;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .comparison-table thead th {
-        font-weight: 700;
-        font-size: 1rem;
-        padding-bottom: 1.25rem;
-        color: var(--text-secondary);
-      }
-
-      .comparison-table thead th:first-child {
+        z-index: 2;
+        width: min(540px, 100%);
+        margin: 0 auto -36px;
+        border-radius: 16px;
+        background: var(--panel);
+        border: 1px solid var(--line-hi);
+        box-shadow:
+          0 30px 80px -10px rgba(0, 0, 0, 0.55),
+          0 0 60px -10px color-mix(in srgb, var(--accent) 53%, transparent);
         text-align: left;
+        overflow: hidden;
       }
-
-      .comparison-table tbody td:first-child {
-        text-align: left;
-        font-weight: 600;
-        color: var(--text-primary);
+      .v3-cmd .head {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
       }
-
-      .comparison-table tbody td {
-        color: var(--text-secondary);
+      .v3-cmd .label {
+        font-family: var(--font-mono);
+        font-size: 11.5px; color: var(--text-mute);
       }
-
-      /* Highlight Novi Note column */
-      .comparison-table th.highlight-col {
-        color: var(--accent) !important;
-        position: relative;
+      .v3-cmd .kbd {
+        font-family: var(--font-mono);
+        font-size: 10px; color: var(--text-mute);
+        padding: 2px 6px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
       }
-
-      .comparison-table td.highlight-col {
-        color: var(--text-primary) !important;
-        background: var(--accent-dim);
-        font-weight: 600;
+      .v3-cmd .placeholder {
+        padding: 14px 14px 8px;
+        font-size: 14px; color: var(--text-mute);
       }
-
-      .comparison-table tbody tr:last-child td {
-        border-bottom: none;
-      }
-
-      /* ===== CTA ===== */
-      .cta-section {
-        text-align: center;
-        background: radial-gradient(ellipse at 50% 100%, rgba(245, 158, 11, 0.08) 0%, transparent 60%);
-      }
-
-      .cta-section .section-title {
-        margin-bottom: 0.75rem;
-      }
-
-      .cta-sub {
-        color: var(--text-secondary);
-        font-size: 1.125rem;
-        margin-bottom: 2.5rem;
-      }
-
-      .cta-buttons {
-        display: flex;
-        gap: 1rem;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 2.5rem;
-      }
-
-      .ph-badge {
+      .v3-cmd .cursor {
         display: inline-block;
-        margin-top: 1rem;
+        width: 1.5px; height: 14px;
+        background: var(--accent);
+        margin-left: 4px;
+        vertical-align: middle;
+        animation: v3blink 1s infinite;
+      }
+      @keyframes v3blink { 50% { opacity: 0 } }
+      .v3-cmd .results { padding: 4px 8px 10px; }
+      .v3-cmd .item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 2px;
+        border: 1px solid transparent;
+      }
+      .v3-cmd .item.accent {
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
+      }
+      .v3-cmd .item .ic {
+        width: 28px; height: 28px; border-radius: 7px;
+        background: var(--bg-soft);
+        color: var(--text);
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 13px;
+      }
+      .v3-cmd .item.accent .ic {
+        background: var(--accent); color: #fff;
+      }
+      .v3-cmd .item .body { flex: 1; }
+      .v3-cmd .item .body .t {
+        font-size: 13.5px; color: var(--text); font-weight: 500;
+      }
+      .v3-cmd .item .body .s {
+        font-size: 11.5px; color: var(--text-mute);
+        font-family: var(--font-mono);
       }
 
-      .ph-badge img {
-        height: 54px;
+      .v3-todo {
+        position: absolute;
+        right: -12px; bottom: -10px;
+        z-index: 3;
+        width: 240px;
+        padding: 16px;
+        border-radius: 14px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: 0 20px 50px -15px rgba(0, 0, 0, 0.4);
+        text-align: left;
+        transform: rotate(2deg);
+      }
+      .v3-todo .sub {
+        font-family: var(--font-mono);
+        font-size: 10px; color: var(--accent);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .v3-todo .title {
+        font-family: var(--font-display);
+        font-size: 15px; font-weight: 600;
+        margin-top: 4px; margin-bottom: 8px;
+      }
+      .v3-todo .row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 4px 0;
+        font-size: 12.5px;
+        color: var(--text-dim);
+      }
+      .v3-todo .row .box {
+        width: 13px; height: 13px;
+        border-radius: 3px;
+        border: 1.4px solid var(--line-hi);
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 9px;
+      }
+      .v3-todo .row.done .box {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .v3-todo .row.done span:last-child {
+        text-decoration: line-through;
+        color: var(--text-mute);
+      }
+
+      /* ===== Section heading ===== */
+      .section { max-width: var(--content-w); margin: 0 auto; padding: 80px 24px; }
+      .section.tight { padding: 40px 24px 80px; }
+      .section-head {
+        text-align: center; margin-bottom: 40px;
+      }
+      .section-head h2 {
+        margin: 14px auto 0;
+        font-family: var(--font-display);
+        font-size: clamp(34px, 4.5vw, 56px);
+        font-weight: 600;
+        letter-spacing: -0.035em;
+        line-height: 1.05;
+        text-wrap: balance;
+        max-width: 700px;
+      }
+      .section-head p {
+        margin: 12px auto 0;
+        max-width: 580px;
+        font-size: 15px; line-height: 1.55;
+        color: var(--text-dim);
+      }
+
+      /* ===== Bento grid features ===== */
+      .bento {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        grid-auto-rows: 180px;
+        gap: 14px;
+      }
+      .bento-card {
+        position: relative;
+        overflow: hidden;
+        padding: 24px;
+        border-radius: 18px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--text);
+        transition: transform 0.2s, border-color 0.2s;
+        display: flex; flex-direction: column;
+      }
+      .bento-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent-line);
+      }
+      .bento-card .tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--text-mute);
+        letter-spacing: 0.08em; text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .bento-card h3 {
+        font-family: var(--font-display);
+        font-size: 18px; font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 0 0 6px;
+        line-height: 1.15;
+      }
+      .bento-card p {
+        margin: 0;
+        font-size: 13.5px; line-height: 1.5;
+        color: var(--text-dim);
+        flex: 1;
+      }
+      .bento-card.workday h3 { font-size: 26px; }
+      .bento-card.workday .chips {
+        display: flex; gap: 6px;
+        margin-top: 14px; flex-wrap: wrap;
+      }
+      .bento-card.workday .chips span {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 4px 9px; border-radius: 999px;
+        background: var(--bg-soft);
+        color: var(--text-dim);
+        border: 1px solid var(--line);
+      }
+      .bento-card.pricing .price-tag {
+        margin-top: 14px;
+        font-family: var(--font-display);
+        font-size: 22px; font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--accent);
+      }
+      .bento-card.pricing .price-tag .sub {
+        font-size: 12px; color: var(--text-mute);
+        font-family: var(--font-mono);
+        font-weight: 400;
+        letter-spacing: 0.02em;
+        margin-left: 4px;
+      }
+
+      .bento-card.featured {
+        grid-column: span 4; grid-row: span 2;
+        padding: 32px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-hi));
+        border: none;
+        color: #fff;
+      }
+      .bento-card.featured:hover {
+        transform: translateY(-2px);
+      }
+      .bento-card.featured .deco {
+        position: absolute;
+        right: -40px; top: -40px;
+        opacity: 0.18;
+        pointer-events: none;
+      }
+      .bento-card.featured .tag {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff;
+        text-transform: none;
+        align-self: flex-start;
+        margin-bottom: 12px;
+      }
+      .bento-card.featured h3 {
+        font-size: 36px;
+        color: #fff;
+        max-width: 70%;
+        margin-bottom: 12px;
+      }
+      .bento-card.featured p {
+        font-size: 15px;
+        color: rgba(255, 255, 255, 0.85);
+        max-width: 70%;
+      }
+      .bento-card.featured .mcp-chips {
+        display: flex; gap: 8px;
+        margin-top: 18px;
+        flex-wrap: wrap;
+        position: relative;
+      }
+      .bento-card.featured .mcp-chips span {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+        letter-spacing: 0.02em;
+      }
+      .bento-card.span2 { grid-column: span 2; }
+      .bento-card.span6 { grid-column: span 6; }
+
+      /* ===== How it works (pill cards + connector) ===== */
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        position: relative;
+      }
+      .steps .connector {
+        position: absolute;
+        top: 38px; left: 12%; right: 12%;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--accent-line), var(--accent-line), transparent);
+        z-index: 0;
+      }
+      .step-pill {
+        position: relative; z-index: 1;
+        padding: 28px 24px;
+        border-radius: 18px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+      .step-pill .num {
+        width: 36px; height: 36px;
+        border-radius: 12px;
+        background: var(--accent);
+        color: #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 13px; font-weight: 600;
+        margin-bottom: 16px;
+        box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 40%, transparent);
+      }
+      .step-pill h3 {
+        font-family: var(--font-display);
+        font-size: 20px; font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 0 0 8px;
+      }
+      .step-pill p {
+        margin: 0;
+        font-size: 13.5px; line-height: 1.55;
+        color: var(--text-dim);
+      }
+      .step-pill code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--bg-soft);
+        padding: 1px 6px; border-radius: 4px;
+        color: var(--text);
+      }
+
+      /* ===== MCP demo (gradient frame) ===== */
+      .demo-frame-wrap {
+        padding: 8px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, var(--accent-line), transparent 50%, var(--accent-line));
+        box-shadow:
+          0 30px 80px -30px rgba(0, 0, 0, 0.5),
+          0 0 80px -20px color-mix(in srgb, var(--accent) 40%, transparent);
+      }
+      .demo-frame {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+        border-radius: 16px; overflow: hidden;
+        background: var(--bg);
+        height: 520px;
+      }
+      .demo-pane { display: flex; flex-direction: column; min-width: 0; }
+      .demo-pane.chat { border-right: 1px solid var(--line); background: var(--bg-soft); }
+      .demo-pane.note { background: var(--bg); }
+      .demo-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 10.5px; color: var(--text-mute); letter-spacing: 0.06em;
+      }
+      .demo-head .who { text-transform: uppercase; }
+      .demo-head .crumb { color: var(--text-mute); margin-left: 4px; text-transform: none; }
+      .demo-head .spacer { flex: 1; }
+      .demo-head .live {
+        color: var(--success);
+        display: flex; align-items: center; gap: 4px;
+      }
+      .demo-head .live .led {
+        width: 5px; height: 5px; border-radius: 50%;
+        background: var(--success);
+        box-shadow: 0 0 8px var(--success);
+      }
+      .demo-head .writing { color: var(--accent); display: none; align-items: center; gap: 4px; }
+      .demo-head .writing.on { display: flex; }
+      .demo-head .writing .led {
+        width: 5px; height: 5px; border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+      }
+      .demo-body {
+        flex: 1; overflow: hidden;
+        padding: 14px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .demo-body.note-body { padding: 18px 18px 14px; gap: 4px; }
+
+      .ev { animation: mcpFadeIn 0.35s cubic-bezier(0.2, 0.7, 0.3, 1) both; min-width: 0; }
+      .ev-user { display: flex; justify-content: flex-end; }
+      .ev-user .bubble {
+        max-width: 82%;
+        padding: 8px 12px; border-radius: 12px;
+        background: var(--text); color: var(--primary-fg);
+        font-size: 12.5px; line-height: 1.45;
+      }
+      .ev-thinking {
+        display: flex; align-items: center; gap: 8px;
+        color: var(--text-mute);
+        font-size: 11.5px; padding: 2px 4px;
+      }
+      .ev-tool {
+        display: flex; flex-direction: column;
+        padding: 8px 10px; border-radius: 8px;
+        background: var(--panel); border: 1px solid var(--line);
+        font-family: var(--font-mono); font-size: 11px;
+      }
+      .ev-tool .head {
+        display: flex; align-items: center; gap: 8px;
+        color: var(--accent);
+      }
+      .ev-tool .head .led {
+        display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+        background: var(--accent); box-shadow: 0 0 8px var(--accent);
+      }
+      .ev-tool .head strong { font-weight: 600; }
+      .ev-tool .args {
+        color: var(--text-dim);
+        margin-top: 4px; padding-left: 13px;
+        word-break: break-all;
+      }
+      .ev-tool .ret {
+        margin-top: 6px; padding-left: 13px;
+        color: var(--text-mute);
+        display: flex; align-items: center; gap: 6px;
+      }
+      .ev-tool .ret .arr { color: var(--success); }
+      .ev-assistant {
+        display: flex; gap: 8px; align-items: flex-start;
+      }
+      .ev-assistant .body {
+        flex: 1; padding: 8px 0;
+        font-size: 12.5px; line-height: 1.5; color: var(--text);
+      }
+      .ev-assistant .body strong { color: var(--accent); font-weight: 600; }
+
+      .nb-h1 {
+        font-family: var(--font-display);
+        font-size: 19px; font-weight: 600; letter-spacing: -0.02em;
+        margin: 6px 0 4px;
+      }
+      .nb-h2 {
+        font-family: var(--font-display);
+        font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+        margin: 10px 0 2px;
+      }
+      .nb-callout {
+        padding: 8px 10px; border-radius: 6px;
+        background: var(--accent-soft); border: 1px solid var(--accent-line);
+        font-size: 11.5px; display: flex; gap: 8px;
+      }
+      .nb-callout .star { color: var(--accent); }
+      .nb-li {
+        display: flex; gap: 8px; padding: 1px 0;
+        font-size: 12.5px; line-height: 1.45;
+      }
+      .nb-li .bullet { color: var(--text-mute); margin-top: 1px; }
+      .nb-todo {
+        display: flex; gap: 8px; align-items: center; padding: 1px 0;
+        font-size: 12.5px;
+      }
+      .nb-todo .box {
+        width: 13px; height: 13px; border-radius: 3px;
+        border: 1.4px solid var(--line-hi); flex-shrink: 0;
+      }
+      .nb-empty {
+        color: var(--text-mute); font-size: 11.5px;
+        font-family: var(--font-mono); margin-top: 8px;
+      }
+      .nb-cursor {
+        display: inline-block; width: 1.5px; height: 14px;
+        background: var(--accent); margin-top: 4px;
+        animation: mcpDot 1s infinite;
+      }
+
+      .demo-foot {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--line);
+        font-family: var(--font-body);
+        font-size: 12px; color: var(--text-mute);
+      }
+      .demo-foot button {
+        width: 26px; height: 26px; border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        background: transparent; border: 1px solid var(--line); color: var(--text-dim);
+      }
+      .demo-foot .play {
+        background: var(--accent); border: none; color: #fff;
+      }
+      .demo-foot .progress {
+        flex: 1; text-align: right;
+        font-family: var(--font-mono); font-size: 10.5px;
+      }
+
+      @keyframes mcpDot { 0%, 80%, 100% { opacity: 0.2 } 40% { opacity: 1 } }
+      .mcp-dot {
+        display: inline-block; width: 4px; height: 4px; border-radius: 50%;
+        background: currentColor; animation: mcpDot 1.2s infinite ease-in-out;
+      }
+      .mcp-dot.d2 { animation-delay: 0.16s }
+      .mcp-dot.d3 { animation-delay: 0.32s }
+      @keyframes mcpFadeIn {
+        from { opacity: 0; transform: translateY(4px) }
+        to { opacity: 1; transform: none }
+      }
+
+      /* ===== Compare (full-accent header) ===== */
+      .compare-frame {
+        padding: 6px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, var(--accent-line), var(--line) 60%);
+      }
+      .compare-card {
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+      .compare-card table { width: 100%; border-collapse: collapse; }
+      .compare-card th, .compare-card td {
+        padding: 14px 16px;
+        text-align: center;
+        font-size: 13px;
+        border-top: 1px solid var(--line);
+      }
+      .compare-card thead th {
+        padding: 16px;
+        background: var(--panel-hi);
+        font-family: var(--font-mono);
+        font-size: 11px; font-weight: 500;
+        color: var(--text-mute);
+        letter-spacing: 0.06em; text-transform: uppercase;
+        border-top: none;
+      }
+      .compare-card thead th.first { text-align: left; }
+      .compare-card thead th.novi {
+        font-family: var(--font-display);
+        font-size: 16px; font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        text-transform: none; letter-spacing: -0.01em;
+      }
+      .compare-card tbody td.first {
+        text-align: left;
+        color: var(--text);
+        font-weight: 500;
+      }
+      .compare-card tbody td.novi {
+        background: var(--accent-soft);
+        color: var(--text);
+      }
+      .compare-card tbody td { color: var(--text-dim); }
+      .compare-card tbody tr:first-child td { border-top: 1px solid var(--line); }
+      .compare-card .check { color: var(--success); }
+      .compare-card td.novi .check { color: var(--accent); }
+      .compare-card .x { color: var(--text-mute); }
+      .compare-card td.text {
+        font-family: var(--font-mono); font-size: 12px;
+      }
+
+      /* ===== Product Hunt section ===== */
+      .ph-row {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 24px; padding: 20px 0 0;
+      }
+      .ph-card {
+        padding: 32px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--accent-soft), transparent);
+        border: 1px solid var(--accent-line);
+        max-width: 460px;
+        text-align: center;
+      }
+      .ph-card .ph-sub {
+        color: var(--text-dim);
+        font-size: 14px;
+        margin-bottom: 18px;
+        line-height: 1.55;
+      }
+
+      /* ===== Final CTA (full gradient) ===== */
+      .final-cta {
+        position: relative;
+        padding: 80px 40px;
+        border-radius: 28px;
+        overflow: hidden;
+        text-align: center;
+        background: linear-gradient(135deg, var(--accent), var(--accent-hi));
+        color: #fff;
+        box-shadow: 0 40px 100px -20px color-mix(in srgb, var(--accent) 40%, transparent);
+      }
+      .final-cta::before {
+        content: ""; position: absolute; inset: 0;
+        opacity: 0.15;
+        background-image: radial-gradient(white 1px, transparent 1px);
+        background-size: 32px 32px;
+        pointer-events: none;
+      }
+      .final-cta .inner { position: relative; }
+      .final-cta .kicker-light {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.7);
+        margin-bottom: 18px;
+      }
+      .final-cta h2 {
+        margin: 0 auto 18px;
+        font-family: var(--font-display);
+        font-size: clamp(40px, 6vw, 72px);
+        font-weight: 600;
+        letter-spacing: -0.04em;
+        line-height: 1;
+        color: #fff;
+        text-wrap: balance;
+      }
+      .final-cta p {
+        margin: 0 auto 32px;
+        max-width: 480px;
+        font-size: 16px; line-height: 1.55;
+        color: rgba(255, 255, 255, 0.85);
+      }
+      .final-cta .cta-btn {
+        padding: 14px 24px;
+        font-size: 15px; font-weight: 600;
+        background: #fff;
+        color: var(--accent);
+        border: none; border-radius: 10px;
+        display: inline-flex; align-items: center; gap: 8px;
+        font-family: var(--font-body);
+        letter-spacing: -0.01em;
+        box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.3);
+        transition: transform 0.12s, box-shadow 0.12s;
+      }
+      .final-cta .cta-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.35);
       }
 
       /* ===== Footer ===== */
-      .landing-footer {
+      .foot {
+        border-top: 1px solid var(--line);
+        padding: 32px;
+      }
+      .foot-inner {
+        max-width: var(--content-w); margin: 0 auto;
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        font-family: var(--font-mono);
+        font-size: 11px; color: var(--text-mute);
+        letter-spacing: 0.04em;
+      }
+      .foot .links { display: flex; gap: 18px; }
+      .foot .links a:hover { color: var(--text); }
+      .foot .pad { flex: 1; }
+      .mock-note-wrap {
         text-align: center;
-        padding: 3rem 1.5rem;
-        border-top: 1px solid var(--border);
-        color: var(--text-muted);
-        font-size: 0.875rem;
+        margin-top: 22px;
       }
-
-      .landing-footer p {
-        margin-bottom: 0.5rem;
+      .mock-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 16px 9px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        border: 1px solid var(--accent-line);
+        font-family: var(--font-body);
+        font-size: 13.5px;
+        color: var(--text);
+        line-height: 1.4;
+        letter-spacing: -0.005em;
       }
-
-      .footer-links {
-        display: flex;
-        gap: 1.5rem;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-top: 1rem;
-      }
-
-      .footer-links a {
-        color: var(--text-muted);
-        font-size: 0.8125rem;
-      }
-      .footer-links a:hover {
+      .mock-note::before {
+        content: "ⓘ";
         color: var(--accent);
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1;
       }
 
       /* ===== Responsive ===== */
+      @media (max-width: 980px) {
+        .bento { grid-template-columns: repeat(2, 1fr); grid-auto-rows: auto; }
+        .bento-card { grid-column: span 2 !important; grid-row: span 1 !important; min-height: 220px; }
+        .bento-card.featured h3 { max-width: none; }
+        .bento-card.featured p { max-width: none; }
+        .steps { grid-template-columns: 1fr; }
+        .steps .connector { display: none; }
+        .demo-frame { grid-template-columns: 1fr; height: auto; }
+        .demo-pane.chat { border-right: none; border-bottom: 1px solid var(--line); }
+        .demo-body { max-height: 320px; overflow-y: auto; }
+        .v3-showcase { padding-bottom: 24px; }
+        .v3-cmd { margin-bottom: 16px; }
+        .v3-todo { position: relative; right: auto; bottom: auto; margin: 24px auto 0; transform: rotate(0); width: 100%; max-width: 320px; }
+      }
       @media (max-width: 640px) {
-        :root {
-          --section-padding: 4rem 1.25rem;
-        }
-
-        .hero { min-height: auto; padding: 6rem 1.25rem 3rem; }
-        .hero h1 { font-size: 2.25rem; }
-
-        .steps { flex-direction: column; align-items: center; }
-        .step { max-width: 100%; }
-        .step-connector { display: none; }
-
-        .btn { width: 100%; justify-content: center; padding: 0.875rem 1.25rem; }
-        .hero-buttons, .cta-buttons { flex-direction: column; align-items: center; }
+        .nav-inner { padding: 12px 16px; gap: 8px; }
+        .hero { padding: 64px 20px 32px; }
+        .section, .section.tight { padding-left: 20px; padding-right: 20px; }
+        .final-cta { padding: 56px 24px; border-radius: 20px; }
+        .compare-card { font-size: 12px; }
+        .compare-frame { overflow-x: auto; }
+        .compare-card table { min-width: 560px; }
+        .v3-notebook .body { padding: 20px 24px; }
       }
     </style>
   </head>
   <body>
-    <!-- ===== Hero ===== -->
-    <section class="hero">
-      <div class="hero-inner fade-in">
-        <img src="/images/novi-note-icon.png" alt="Novi Note 앱 아이콘" class="hero-icon" width="96" height="96" />
-        <br />
-        <span class="hero-badge">Product Hunt 런칭</span>
+    <div class="page-bg">
+      <!-- ===== NAV ===== -->
+      <nav class="nav">
+        <div class="nav-inner">
+          <div class="brand-pill">
+            <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+              <rect x="3" y="3" width="26" height="26" rx="7" stroke="currentColor" stroke-opacity="0.28" stroke-width="1" />
+              <path d="M9 22V11l8 8.5V11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="22.5" cy="11" r="1.6" fill="currentColor" />
+            </svg>
+            <span class="name">Novi</span>
+            <span class="ver">1.1.6 · NEW</span>
+          </div>
+          <div class="nav-spacer"></div>
+          <div class="toggles">
+            <div class="toggle-pill lang">
+              <a href="/novi-note/" class="active">KO</a>
+              <a href="/en/novi-note/">EN</a>
+            </div>
+            <div class="toggle-pill" id="theme-toggle">
+              <button type="button" data-mode="light" aria-label="Light mode">☀</button>
+              <button type="button" data-mode="dark" aria-label="Dark mode" class="active">☾</button>
+            </div>
+          </div>
+          <a class="btn btn-primary" href="https://apps.apple.com/app/novi-notes/id6759056556" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16.7 12.5c0-2.7 2.2-3.9 2.3-4-1.3-1.8-3.2-2.1-3.9-2.1-1.6-.2-3.2.9-4 .9-.8 0-2.1-.9-3.5-.9-1.8 0-3.5 1-4.4 2.7-1.9 3.3-.5 8.1 1.3 10.8.9 1.3 2 2.7 3.4 2.7 1.4-.1 1.9-.9 3.5-.9 1.7 0 2.1.9 3.5.9 1.5 0 2.4-1.3 3.3-2.6.7-1 1.3-2.1 1.6-3.3-3.1-1.2-3.1-4.3-3.1-4.2zM14 4.7c.7-.9 1.2-2.1 1.1-3.4-1.1.1-2.4.7-3.1 1.6-.7.8-1.3 2.1-1.1 3.3 1.2.1 2.4-.6 3.1-1.5z" /></svg>
+            다운로드
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
+          </a>
+        </div>
+      </nav>
 
-        <h1>내 노트, 내 Mac,<br />내 <span class="highlight">AI</span>.</h1>
-
+      <!-- ===== HERO ===== -->
+      <section class="hero">
+        <div class="hero-chip">
+          <span class="live"></span>
+          <span>macOS · 일회성 구매</span>
+          <span class="ver">v1.1.6 →</span>
+        </div>
+        <h1>
+          Claude와 대화하는<br />
+          <span class="grad">로컬 노트.</span>
+        </h1>
         <p class="hero-sub">
-          MCP를 통해 AI와 바로 연동되는 로컬 우선 노트앱.
-          Claude Desktop과 Claude Code 지원 &mdash; 플러그인 없이, API 키 없이, 구독 없이.
+          모든 노트는 내 Mac 안에. 클라우드도, 구독도 없습니다. Claude · Claude Code · Gemini · Codex — Mac의 모든 AI가 MCP로 노트를 읽고 씁니다.
         </p>
-
-        <div class="hero-buttons">
-          <a href="https://apps.apple.com/app/novi-notes/id6759056556" class="btn btn-primary" target="_blank" rel="noopener">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-            Mac App Store에서 다운로드
+        <div class="hero-cta">
+          <a class="btn btn-primary big" href="https://apps.apple.com/app/novi-notes/id6759056556" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16.7 12.5c0-2.7 2.2-3.9 2.3-4-1.3-1.8-3.2-2.1-3.9-2.1-1.6-.2-3.2.9-4 .9-.8 0-2.1-.9-3.5-.9-1.8 0-3.5 1-4.4 2.7-1.9 3.3-.5 8.1 1.3 10.8.9 1.3 2 2.7 3.4 2.7 1.4-.1 1.9-.9 3.5-.9 1.7 0 2.1.9 3.5.9 1.5 0 2.4-1.3 3.3-2.6.7-1 1.3-2.1 1.6-3.3-3.1-1.2-3.1-4.3-3.1-4.2zM14 4.7c.7-.9 1.2-2.1 1.1-3.4-1.1.1-2.4.7-3.1 1.6-.7.8-1.3 2.1-1.1 3.3 1.2.1 2.4-.6 3.1-1.5z" /></svg>
+            macOS용 다운로드
           </a>
-          <a href="https://www.producthunt.com/posts/novi-notes" class="ph-badge" target="_blank" rel="noopener">
-            <img
-              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1087121&theme=dark"
-              alt="Novi Notes - Product Hunt"
-              style="width: 250px; height: 54px;"
-            />
+          <a class="btn btn-ghost big" href="#demo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8V4z" /></svg>
+            라이브 데모 보기
           </a>
         </div>
-
-        <div class="hero-screenshot">
-          <img src="/images/novi-note-screenshot.png" alt="Novi Note 앱 스크린샷 - 홈 화면" />
+        <div class="meta-row">
+          <span>Apple Silicon · Intel<span class="sep">·</span></span>
+          <span>macOS 14+<span class="sep">·</span></span>
+          <span>Mac App Store에서 판매</span>
         </div>
-      </div>
-    </section>
 
-    <!-- ===== Problem ===== -->
-    <section class="problem">
-      <div class="container fade-in">
-        <h2 class="section-title">2026년, 노트앱은 여전히 선택을 강요합니다</h2>
-        <p class="section-subtitle">기능, 단순함, 소유권 &mdash; 왜 하나만 골라야 하나요?</p>
+        <!-- V3 Showcase -->
+        <div class="v3-showcase">
+          <div class="v3-notebook">
+            <div class="bar">
+              <span class="traffic" style="background:#ff5f57"></span>
+              <span class="traffic" style="background:#febc2e"></span>
+              <span class="traffic" style="background:#28c840"></span>
+              <span class="title">Novi</span>
+            </div>
+            <div class="body">
+              <div class="crumb">RETRO · WK 17</div>
+              <h3>회고 · 17주차</h3>
+              <div class="callout">
+                <span class="star">✦</span>
+                <span>MCP로 스탠드업 5개를 합친 결과</span>
+              </div>
+              <h4>잘된 일</h4>
+              <div class="li"><span class="b">•</span>블록 에디터 v2 출시 — 3일 단축</div>
+              <div class="li"><span class="b">•</span>MCP 검색 p95 40ms 이하</div>
+            </div>
+          </div>
 
-        <div class="problem-grid">
-          <div class="problem-card">
-            <span class="icon">💰</span>
-            <h3>매달 구독료 결제</h3>
-            <p>대부분의 노트앱은 구독을 요구합니다. 생산성 도구에 매달 돈을 낼 필요가 있을까요?</p>
+          <div class="v3-cmd">
+            <div class="head">
+              <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                <rect x="3" y="3" width="26" height="26" rx="7" stroke="currentColor" stroke-opacity="0.28" stroke-width="1" />
+                <path d="M9 22V11l8 8.5V11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="22.5" cy="11" r="1.6" fill="currentColor" />
+              </svg>
+              <span class="label">novi 검색</span>
+              <span style="flex:1"></span>
+              <span class="kbd">⌘ K</span>
+            </div>
+            <div class="placeholder">
+              회고, 스탠드업, MCP…
+              <span class="cursor"></span>
+            </div>
+            <div class="results">
+              <div class="item">
+                <span class="ic">⌘</span>
+                <div class="body">
+                  <div class="t">데일리 노트</div>
+                  <div class="s">이번주 5건</div>
+                </div>
+                <span class="kbd">⌘ D</span>
+              </div>
+              <div class="item accent">
+                <span class="ic">✦</span>
+                <div class="body">
+                  <div class="t">Claude로 회고 만들기</div>
+                  <div class="s">MCP 동작</div>
+                </div>
+                <span class="kbd">↵</span>
+              </div>
+              <div class="item">
+                <span class="ic">☰</span>
+                <div class="body">
+                  <div class="t">업무 / 스탠드업</div>
+                  <div class="s">5개 노트</div>
+                </div>
+                <span class="kbd">⌘ 2</span>
+              </div>
+            </div>
           </div>
-          <div class="problem-card">
-            <span class="icon">🔧</span>
-            <h3>AI 연동은 직접 설정</h3>
-            <p>플러그인을 설치하고, API 키를 발급받고, 추가 요금을 내야 합니다. 노트에 AI를 붙이는 게 이렇게 복잡해야 하나요?</p>
-          </div>
-          <div class="problem-card">
-            <span class="icon">⚖️</span>
-            <h3>구조 아니면 단순함</h3>
-            <p>기능이 많으면 무겁고, 가벼우면 단조롭고, 유연하면 설정이 복잡합니다. 강력하면서 단순한 노트앱은 왜 없을까요?</p>
+
+          <div class="v3-todo">
+            <div class="sub">어제 일지에서 자동 이월</div>
+            <div class="title">오늘의 TODO</div>
+            <div class="row done"><span class="box">✓</span><span>Standup retro</span></div>
+            <div class="row"><span class="box"></span><span>Editor v2 review</span></div>
+            <div class="row"><span class="box"></span><span>Profile MCP</span></div>
           </div>
         </div>
-      </div>
-    </section>
+        <div class="mock-note-wrap"><span class="mock-note">위 화면은 실제 앱이 아닌 시각화 예시입니다.</span></div>
+      </section>
 
-    <!-- ===== Features / Solution ===== -->
-    <section class="features">
-      <div class="container fade-in">
-        <h2 class="section-title">Novi Note는 세 가지를 모두 드립니다</h2>
-        <p class="section-subtitle">필요한 것만, 불필요한 것은 없이.</p>
-
-        <div class="features-grid">
-          <div class="feature-card">
-            <div class="icon">🤖</div>
-            <h3>AI 네이티브</h3>
-            <p>Claude가 MCP를 통해 노트를 읽고 씁니다. 설정 필요 없음. 더 많은 AI 앱 지원 예정.</p>
-          </div>
-          <div class="feature-card">
-            <div class="icon">🔒</div>
-            <h3>로컬 우선</h3>
-            <p>데이터는 내 Mac에만 저장됩니다. 완전한 오프라인 지원. 클라우드 의존 없음.</p>
-          </div>
-          <div class="feature-card">
-            <div class="icon">📋</div>
-            <h3>업무에 최적화</h3>
-            <p>데일리 노트, 매뉴얼, 포스트잇, 캘린더 &mdash; 실제 업무 흐름에 맞춘 구조.</p>
-          </div>
-          <div class="feature-card">
-            <div class="icon">💵</div>
-            <h3>일회성 구매</h3>
-            <p>한 번 사면 영원히. 구독 없음, 절대로.</p>
-          </div>
+      <!-- ===== FEATURES (bento) ===== -->
+      <section class="section" id="features">
+        <div class="section-head">
+          <div class="kicker"><span class="bar"></span>직장인을 위한 노트</div>
+          <h2>네 가지를, 제대로.</h2>
         </div>
-      </div>
-    </section>
+        <div class="bento">
+          <article class="bento-card featured">
+            <svg class="deco" width="320" height="320" viewBox="0 0 200 200" fill="none">
+              <circle cx="100" cy="100" r="70" stroke="white" stroke-width="1" />
+              <circle cx="100" cy="100" r="50" stroke="white" stroke-width="1" />
+              <circle cx="100" cy="100" r="30" stroke="white" stroke-width="1" />
+              <circle cx="100" cy="30" r="6" fill="white" />
+              <circle cx="170" cy="100" r="6" fill="white" />
+              <circle cx="100" cy="170" r="6" fill="white" />
+              <circle cx="30" cy="100" r="6" fill="white" />
+            </svg>
+            <span class="tag">AI · MCP</span>
+            <h3>AI는 옵션이 아닌 코어</h3>
+            <p>MCP 네이티브. Mac의 AI(Claude · Gemini · Codex)가 노트를 읽고 쓰고, 폴더 구조를 따르고, 블록을 존중합니다.</p>
+            <div class="mcp-chips">
+              <span>search_notes</span>
+              <span>create_document</span>
+              <span>update_document</span>
+              <span>delete_document</span>
+            </div>
+          </article>
 
-    <!-- ===== How It Works ===== -->
-    <section class="how-it-works">
-      <div class="container fade-in">
-        <h2 class="section-title">AI와 이렇게 연동됩니다</h2>
-        <p class="section-subtitle">3단계. 설정 필요 없음.</p>
+          <article class="bento-card span2">
+            <div class="tag">프라이버시</div>
+            <h3>언제나 로컬 우선</h3>
+            <p>SwiftData 로컬 저장. 오프라인 동작. 계정 없음, 추적 없음, 락인 없음.</p>
+          </article>
 
+          <article class="bento-card span2 pricing">
+            <div class="tag">가격</div>
+            <h3>한 번 사면 평생</h3>
+            <p>월 결제 없음. 시트당 요금 없음.</p>
+            <div class="price-tag">1회 결제<span class="sub">한 번만</span></div>
+          </article>
+
+          <article class="bento-card span6 workday">
+            <div class="tag">워크플로우</div>
+            <h3>하루치 업무가 한 앱에</h3>
+            <p>데일리 노트, 이월되는 TODO, 업무일지, 매뉴얼 버전 관리, 포스트잇, 캘린더 — 모두 여기에.</p>
+            <div class="chips">
+              <span>데일리 노트</span>
+              <span>TODO 이월</span>
+              <span>업무일지</span>
+              <span>매뉴얼 버전 관리</span>
+              <span>포스트잇</span>
+              <span>캘린더</span>
+              <span>15가지 블록</span>
+              <span>음성→텍스트</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===== HOW IT WORKS ===== -->
+      <section class="section tight" id="how">
+        <div class="section-head">
+          <div class="kicker"><span class="bar"></span>작동 방식</div>
+          <h2>계정도, 클라우드도 없이. 세 단계.</h2>
+        </div>
         <div class="steps">
-          <div class="step">
-            <div class="step-connector"></div>
-            <div class="step-number">1</div>
-            <h3>Novi Note 설치</h3>
-            <p>Mac App Store에서 다운로드하면 끝.</p>
+          <div class="connector"></div>
+          <div class="step-pill">
+            <div class="num">01</div>
+            <h3>Novi 설치</h3>
+            <p>SwiftUI 네이티브 앱. SwiftData로 노트는 모두 내 Mac에만 — 서버에 절대 가지 않습니다.</p>
           </div>
-          <div class="step">
-            <div class="step-connector"></div>
-            <div class="step-number">2</div>
-            <h3>Claude 앱 실행</h3>
-            <p>Claude Desktop 또는 Claude Code를 실행하세요.</p>
+          <div class="step-pill">
+            <div class="num">02</div>
+            <h3>MCP 연결</h3>
+            <p>AI 설정에서 한 번 클릭. Claude Desktop · Claude Code · Gemini · Codex가 자동으로 연결됩니다 — 설정 파일도, API 키도, 클라우드도 없습니다.</p>
           </div>
-          <div class="step">
-            <div class="step-number">3</div>
-            <h3>그냥 물어보세요</h3>
-            <p>&ldquo;회의 노트 요약해줘&rdquo; &mdash; Claude가 노트를 읽고 답합니다.</p>
+          <div class="step-pill">
+            <div class="num">03</div>
+            <h3>노트와 대화</h3>
+            <p>"지난주 스탠드업 요약해줘", "어제 일지 보고 오늘 TODO 만들어줘" — AI가 Novi 안에서 직접 처리합니다.</p>
           </div>
         </div>
+      </section>
 
-        <div class="mcp-note">
-          플러그인 없이. API 키 없이. 설정 파일 없이. <strong>MCP</strong>(Model Context Protocol)로 그냥 됩니다.
+      <!-- ===== MCP DEMO ===== -->
+      <section class="section tight" id="demo">
+        <div class="section-head">
+          <div class="kicker"><span class="bar"></span>라이브 MCP</div>
+          <h2>Claude가 내 노트를 읽고 쓰는 순간.</h2>
+          <p>왼쪽은 대화, 오른쪽은 노트. 재생을 누르면 Claude가 검색하고, 추가하고, 요약하는 과정을 그대로 봅니다.</p>
         </div>
-      </div>
-    </section>
-
-    <!-- ===== Comparison Table ===== -->
-    <section class="comparison">
-      <div class="container fade-in">
-        <h2 class="section-title">Novi Note 비교</h2>
-        <p class="section-subtitle">다른 유형의 노트앱과 비교해 보세요.</p>
-
-        <div class="comparison-wrapper">
-          <table class="comparison-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th class="highlight-col">Novi Note</th>
-                <th>구독형 노트앱</th>
-                <th>플러그인 기반 노트앱</th>
-                <th>경량 노트앱</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>가격</td>
-                <td class="highlight-col">일회성 구매</td>
-                <td>월 구독</td>
-                <td>무료 + 유료 동기화</td>
-                <td>연간 구독</td>
-              </tr>
-              <tr>
-                <td>AI 연동</td>
-                <td class="highlight-col">MCP 내장</td>
-                <td>추가 요금</td>
-                <td>플러그인 + API 키</td>
-                <td>없음</td>
-              </tr>
-              <tr>
-                <td>데이터 저장</td>
-                <td class="highlight-col">로컬 (내 Mac)</td>
-                <td>클라우드 전용</td>
-                <td>로컬 파일</td>
-                <td>클라우드 동기화</td>
-              </tr>
-              <tr>
-                <td>오프라인 사용</td>
-                <td class="highlight-col">완전 지원</td>
-                <td>제한적</td>
-                <td>지원</td>
-                <td>지원</td>
-              </tr>
-              <tr>
-                <td>데이터 이동성</td>
-                <td class="highlight-col">PDF, Markdown 내보내기</td>
-                <td>제한적 내보내기</td>
-                <td>네이티브 Markdown</td>
-                <td>Markdown, PDF</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="demo-frame-wrap">
+          <div class="demo-frame" id="mcp-demo" data-lang="ko">
+            <div class="demo-pane chat">
+              <div class="demo-head">
+                <span style="display:inline-flex;width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#d97757,#c95a3a);align-items:center;justify-content:center">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="white"><path d="M4 17l4-10h2l4 10h-2l-1-2.5H7L6 17H4zm3.6-4.5h2.8L9 8.5l-1.4 4z" /><path d="M14 17V7h2v4l3.5-4h2.5l-4 4.5L22 17h-2.5l-3-4-.5.5V17H14z" /></svg>
+                </span>
+                <span class="who">Claude</span>
+                <span class="spacer"></span>
+                <span class="live"><span class="led"></span>MCP</span>
+              </div>
+              <div class="demo-body" id="chat-pane"></div>
+              <div class="demo-foot">
+                <button id="mcp-restart" type="button" title="다시 재생">↻</button>
+                <button id="mcp-play" class="play" type="button" title="일시정지">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                </button>
+                <span class="progress" id="mcp-progress">0 / 0</span>
+              </div>
+            </div>
+            <div class="demo-pane note">
+              <div class="demo-head">
+                <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
+                  <rect x="3" y="3" width="26" height="26" rx="7" stroke="currentColor" stroke-opacity="0.28" stroke-width="1" />
+                  <path d="M9 22V11l8 8.5V11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                  <circle cx="22.5" cy="11" r="1.6" fill="currentColor" />
+                </svg>
+                <span class="who">Novi</span>
+                <span class="crumb" id="note-crumb">대기 중…</span>
+                <span class="spacer"></span>
+                <span class="writing" id="note-writing"><span class="led"></span>쓰는 중</span>
+              </div>
+              <div class="demo-body note-body" id="note-pane">
+                <div class="nb-empty">— 노트 없음 —</div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+        <div class="mock-note-wrap"><span class="mock-note">위 데모는 흐름을 보여주는 예시이며, 실제 사용 시와 다를 수 있습니다.</span></div>
+      </section>
 
-    <!-- ===== CTA ===== -->
-    <section class="cta-section">
-      <div class="container fade-in">
-        <h2 class="section-title">내 노트를 되찾으세요.</h2>
-        <p class="cta-sub">로컬. AI 네이티브. 구독 없음.</p>
-
-        <div class="cta-buttons">
-          <a href="https://apps.apple.com/app/novi-notes/id6759056556" class="btn btn-primary" target="_blank" rel="noopener">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-            Mac App Store에서 다운로드
-          </a>
+      <!-- ===== COMPARE ===== -->
+      <section class="section tight" id="compare">
+        <div class="section-head">
+          <div class="kicker"><span class="bar"></span>비교</div>
+          <h2>Novi가 다른 자리에 서는 이유.</h2>
         </div>
+        <div class="compare-frame">
+          <div class="compare-card">
+            <table>
+              <thead>
+                <tr>
+                  <th class="first"></th>
+                  <th class="novi">Novi</th>
+                  <th>구독 기반</th>
+                  <th>플러그인 기반</th>
+                  <th>경량형</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="first">가격</td>
+                  <td class="novi text">일회성 구매</td>
+                  <td class="text">월 구독</td>
+                  <td class="text">무료 + 유료 동기화</td>
+                  <td class="text">연간 구독</td>
+                </tr>
+                <tr>
+                  <td class="first">AI 통합</td>
+                  <td class="novi text">MCP 내장</td>
+                  <td class="text">추가 비용</td>
+                  <td class="text">플러그인 + API 키</td>
+                  <td class="text">없음</td>
+                </tr>
+                <tr>
+                  <td class="first">데이터 저장</td>
+                  <td class="novi text">로컬 (내 Mac)</td>
+                  <td class="text">클라우드 전용</td>
+                  <td class="text">로컬 파일</td>
+                  <td class="text">클라우드 동기화</td>
+                </tr>
+                <tr>
+                  <td class="first">오프라인</td>
+                  <td class="novi text">완전 지원</td>
+                  <td class="text">제한적</td>
+                  <td class="text">지원</td>
+                  <td class="text">지원</td>
+                </tr>
+                <tr>
+                  <td class="first">데이터 이동</td>
+                  <td class="novi text">PDF · Markdown</td>
+                  <td class="text">제한적</td>
+                  <td class="text">네이티브 Markdown</td>
+                  <td class="text">Markdown · PDF</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
-        <a href="https://www.producthunt.com/posts/novi-notes" class="ph-badge" target="_blank" rel="noopener">
-          <img
-            src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1087121&theme=dark"
-            alt="Novi Notes - Product Hunt"
-            style="width: 250px; height: 54px;"
-          />
-        </a>
-      </div>
-    </section>
+      <!-- ===== PRODUCT HUNT ===== -->
+      <section class="section tight">
+        <div class="section-head">
+          <div class="kicker muted"><span class="bar"></span>Product Hunt</div>
+        </div>
+        <div class="ph-row">
+          <div class="ph-card">
+            <p class="ph-sub">Product Hunt에서 Novi Notes를 응원해주세요.</p>
+            <a href="https://www.producthunt.com/posts/novi-notes" target="_blank" rel="noopener">
+              <img
+                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1087121&theme=dark"
+                alt="Novi Notes - Product Hunt"
+                style="width:250px;height:54px"
+              />
+            </a>
+          </div>
+        </div>
+      </section>
 
-    <!-- ===== Footer ===== -->
-    <footer class="landing-footer">
-      <p>서울의 인디 개발자가 만들었습니다 🇰🇷</p>
-      <div class="footer-links">
-        <a href="/">블로그</a>
-        <a href="/novi/privacy">개인정보 처리방침</a>
-        <a href="/novi/terms">이용약관</a>
-        <a href="/novi/support">고객 지원</a>
-      </div>
-    </footer>
+      <!-- ===== FINAL CTA ===== -->
+      <section class="section tight">
+        <div class="final-cta">
+          <div class="inner">
+            <div class="kicker-light">준비됐어요</div>
+            <h2>노트를 더 이상 빌리지 마세요.</h2>
+            <p>한 번 사고, 평생 내 것. 나머지는 AI가 합니다.</p>
+            <a class="cta-btn" href="https://apps.apple.com/app/novi-notes/id6759056556" target="_blank" rel="noopener">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16.7 12.5c0-2.7 2.2-3.9 2.3-4-1.3-1.8-3.2-2.1-3.9-2.1-1.6-.2-3.2.9-4 .9-.8 0-2.1-.9-3.5-.9-1.8 0-3.5 1-4.4 2.7-1.9 3.3-.5 8.1 1.3 10.8.9 1.3 2 2.7 3.4 2.7 1.4-.1 1.9-.9 3.5-.9 1.7 0 2.1.9 3.5.9 1.5 0 2.4-1.3 3.3-2.6.7-1 1.3-2.1 1.6-3.3-3.1-1.2-3.1-4.3-3.1-4.2zM14 4.7c.7-.9 1.2-2.1 1.1-3.4-1.1.1-2.4.7-3.1 1.6-.7.8-1.3 2.1-1.1 3.3 1.2.1 2.4-.6 3.1-1.5z" /></svg>
+              macOS용 다운로드
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
+            </a>
+          </div>
+        </div>
+      </section>
 
-    <!-- Scroll fade-in observer -->
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const observer = new IntersectionObserver(
+      <!-- ===== FOOTER ===== -->
+      <footer class="foot">
+        <div class="foot-inner">
+          <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
+            <rect x="3" y="3" width="26" height="26" rx="7" stroke="currentColor" stroke-opacity="0.28" stroke-width="1" />
+            <path d="M9 22V11l8 8.5V11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="22.5" cy="11" r="1.6" fill="currentColor" />
+          </svg>
+          <span style="color:var(--text-dim)">Novi</span>
+          <div class="links">
+            <a href="/">블로그</a>
+            <a href="/novi/privacy/">개인정보 처리방침</a>
+            <a href="/novi/terms/">이용약관</a>
+            <a href="/novi/support/">지원</a>
+          </div>
+          <span class="pad"></span>
+          <span>© 2026 Novi · Made on a Mac</span>
+        </div>
+      </footer>
+    </div>
+
+    <script is:inline>
+      (function () {
+        const stored = localStorage.getItem("novi-theme");
+        if (stored === "light") {
+          document.documentElement.classList.remove("theme-dark");
+          document.documentElement.classList.add("theme-light");
+        }
+        const toggle = document.getElementById("theme-toggle");
+        if (!toggle) return;
+        const sync = () => {
+          const isLight = document.documentElement.classList.contains("theme-light");
+          toggle.querySelectorAll("button").forEach((b) => {
+            b.classList.toggle("active", b.dataset.mode === (isLight ? "light" : "dark"));
+          });
+        };
+        sync();
+        toggle.querySelectorAll("button").forEach((b) => {
+          b.addEventListener("click", () => {
+            const mode = b.dataset.mode;
+            document.documentElement.classList.toggle("theme-light", mode === "light");
+            document.documentElement.classList.toggle("theme-dark", mode !== "light");
+            localStorage.setItem("novi-theme", mode);
+            sync();
+          });
+        });
+      })();
+    </script>
+
+    <script is:inline>
+      (function () {
+        const SCRIPT_KO = [
+          { kind: "user", t: 350, text: "지난주 스탠드업 5개 묶어서 회고 노트로 만들어줘." },
+          { kind: "tool", t: 600, tool: "novi_search", args: '{ "query": "standup", "since": "7d" }' },
+          { kind: "tool_ret", t: 600, text: "5개 노트 · 124줄" },
+          { kind: "thinking", t: 700, text: "데일리 노트 5개 읽는 중…" },
+          { kind: "note_action", t: 700, action: "create", title: "Retro · Wk 17" },
+          { kind: "note_block", t: 500, block: { kind: "h1", text: "Retro · Wk 17" } },
+          { kind: "note_block", t: 320, block: { kind: "callout", text: "MCP를 통해 스탠드업 5개를 합쳤습니다." } },
+          { kind: "note_block", t: 320, block: { kind: "h2", text: "잘된 일" } },
+          { kind: "note_block", t: 280, block: { kind: "li", text: "블록 에디터 v2 출시 — 3일 단축." } },
+          { kind: "note_block", t: 280, block: { kind: "li", text: "MCP 검색 p95 40ms 이하 달성." } },
+          { kind: "note_block", t: 320, block: { kind: "h2", text: "블로커" } },
+          { kind: "note_block", t: 280, block: { kind: "li", text: "Intel Mac에서 WhisperKit 콜드스타트." } },
+          { kind: "note_block", t: 320, block: { kind: "h2", text: "다음주" } },
+          { kind: "note_block", t: 280, block: { kind: "todo", text: "Intel에서 Whisper 모델 로드 프로파일링." } },
+          { kind: "note_block", t: 280, block: { kind: "todo", text: "캘린더 싱크 리팩터링 머지." } },
+          { kind: "assistant", t: 500, text: "완료. **업무 / 스탠드업** 폴더에 **Retro · Wk 17** 노트를 만들었어요. 블로커들을 내일 데일리 노트의 TODO로 옮길까요?" },
+        ];
+        const LABELS_KO = { idle: "대기 중…", writing: "쓰는 중", empty: "— 노트 없음 —" };
+
+        const root = document.getElementById("mcp-demo");
+        if (!root) return;
+        const SCRIPT = SCRIPT_KO;
+        const L = LABELS_KO;
+
+        const chatPane = document.getElementById("chat-pane");
+        const notePane = document.getElementById("note-pane");
+        const noteCrumb = document.getElementById("note-crumb");
+        const noteWriting = document.getElementById("note-writing");
+        const playBtn = document.getElementById("mcp-play");
+        const restartBtn = document.getElementById("mcp-restart");
+        const progress = document.getElementById("mcp-progress");
+
+        const PLAY_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8V4z" /></svg>';
+        const PAUSE_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>';
+        const CLAUDE_MARK = '<span style="display:inline-flex;width:20px;height:20px;border-radius:5px;background:linear-gradient(135deg,#d97757,#c95a3a);align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M4 17l4-10h2l4 10h-2l-1-2.5H7L6 17H4zm3.6-4.5h2.8L9 8.5l-1.4 4z" /><path d="M14 17V7h2v4l3.5-4h2.5l-4 4.5L22 17h-2.5l-3-4-.5.5V17H14z" /></svg></span>';
+
+        let step = 0;
+        let playing = true;
+        let timer = null;
+
+        function escapeHtml(s) {
+          return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+        }
+        function renderAssistantText(s) {
+          return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        }
+
+        function chatRowHtml(e, ret) {
+          if (e.kind === "user") {
+            return `<div class="ev ev-user"><div class="bubble">${escapeHtml(e.text)}</div></div>`;
+          }
+          if (e.kind === "thinking") {
+            return `<div class="ev ev-thinking"><span class="mcp-dot"></span><span class="mcp-dot d2"></span><span class="mcp-dot d3"></span><span style="margin-left:4px">${escapeHtml(e.text)}</span></div>`;
+          }
+          if (e.kind === "tool") {
+            const retHtml = ret ? `<div class="ret"><span class="arr">↵</span><span>${escapeHtml(ret.text)}</span></div>` : "";
+            return `<div class="ev ev-tool"><div class="head"><span class="led"></span><strong>mcp · ${escapeHtml(e.tool)}</strong></div><div class="args">${escapeHtml(e.args)}</div>${retHtml}</div>`;
+          }
+          if (e.kind === "assistant") {
+            return `<div class="ev ev-assistant">${CLAUDE_MARK}<div class="body">${renderAssistantText(e.text)}</div></div>`;
+          }
+          return "";
+        }
+
+        function blockHtml(b) {
+          if (b.kind === "h1") return `<div class="ev nb-h1">${escapeHtml(b.text)}</div>`;
+          if (b.kind === "h2") return `<div class="ev nb-h2">${escapeHtml(b.text)}</div>`;
+          if (b.kind === "callout") return `<div class="ev nb-callout"><span class="star">✦</span><span>${escapeHtml(b.text)}</span></div>`;
+          if (b.kind === "li") return `<div class="ev nb-li"><span class="bullet">•</span><span>${escapeHtml(b.text)}</span></div>`;
+          if (b.kind === "todo") return `<div class="ev nb-todo"><span class="box"></span><span>${escapeHtml(b.text)}</span></div>`;
+          return "";
+        }
+
+        function render() {
+          const events = SCRIPT.slice(0, step);
+          const chatEvents = events.filter((e) => ["user", "assistant", "tool", "tool_ret", "thinking"].includes(e.kind));
+          const rendered = [];
+          for (let i = 0; i < chatEvents.length; i++) {
+            const e = chatEvents[i];
+            if (e.kind === "tool") {
+              const ret = chatEvents[i + 1] && chatEvents[i + 1].kind === "tool_ret" ? chatEvents[i + 1] : null;
+              rendered.push(chatRowHtml(e, ret));
+              if (ret) i++;
+            } else if (e.kind !== "tool_ret") {
+              rendered.push(chatRowHtml(e));
+            }
+          }
+          chatPane.innerHTML = rendered.join("");
+
+          const noteAction = events.find((e) => e.kind === "note_action");
+          const blocks = events.filter((e) => e.kind === "note_block").map((e) => e.block);
+
+          if (noteAction) {
+            noteCrumb.textContent = `Work / Standups / ${noteAction.title}`;
+            noteWriting.classList.add("on");
+          } else {
+            noteCrumb.textContent = L.idle;
+            noteWriting.classList.remove("on");
+          }
+          if (blocks.length === 0 && !noteAction) {
+            notePane.innerHTML = `<div class="nb-empty">${L.empty}</div>`;
+          } else {
+            const blockHtmls = blocks.map(blockHtml).join("");
+            const cursor = noteAction && step < SCRIPT.length ? '<div class="nb-cursor"></div>' : "";
+            notePane.innerHTML = blockHtmls + cursor;
+          }
+
+          chatPane.scrollTop = chatPane.scrollHeight;
+          notePane.scrollTop = notePane.scrollHeight;
+          progress.textContent = `${Math.min(step, SCRIPT.length)} / ${SCRIPT.length}`;
+        }
+
+        function schedule() {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          if (!playing) return;
+          if (step >= SCRIPT.length) {
+            timer = setTimeout(() => {
+              step = 0;
+              render();
+              schedule();
+            }, 3500);
+            return;
+          }
+          const delay = SCRIPT[step].t;
+          timer = setTimeout(() => {
+            step++;
+            render();
+            schedule();
+          }, delay);
+        }
+
+        function setPlaying(v) {
+          playing = v;
+          playBtn.innerHTML = v ? PAUSE_SVG : PLAY_SVG;
+          playBtn.title = v ? "일시정지" : "재생";
+          if (v) schedule();
+          else if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+        }
+
+        playBtn.addEventListener("click", () => setPlaying(!playing));
+        restartBtn.addEventListener("click", () => {
+          step = 0;
+          render();
+          if (!playing) setPlaying(true);
+          else schedule();
+        });
+
+        const io = new IntersectionObserver(
           (entries) => {
             entries.forEach((entry) => {
               if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
+                render();
+                schedule();
+                io.disconnect();
               }
             });
           },
-          { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+          { threshold: 0.2 },
         );
-
-        document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
-      });
+        io.observe(root);
+      })();
     </script>
   </body>
 </html>
