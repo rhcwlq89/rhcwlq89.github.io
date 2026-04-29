@@ -45,8 +45,8 @@ import BaseHead from "../../components/BaseHead.astro";
         --line: rgba(20, 16, 30, 0.1);
         --line-hi: rgba(20, 16, 30, 0.18);
         --text: #1a1626;
-        --text-dim: rgba(26, 22, 38, 0.66);
-        --text-mute: rgba(26, 22, 38, 0.46);
+        --text-dim: rgba(26, 22, 38, 0.82);
+        --text-mute: rgba(26, 22, 38, 0.64);
         --accent: #7c3aed;
         --accent-hi: #5b21b6;
         --accent-soft: rgba(124, 58, 237, 0.1);
@@ -226,6 +226,7 @@ import BaseHead from "../../components/BaseHead.astro";
         letter-spacing: -0.045em;
         font-weight: 600;
         text-wrap: balance;
+        color: var(--text);
       }
       .hero h1 .grad {
         background: linear-gradient(120deg, var(--accent), var(--accent-hi), var(--accent));
@@ -288,7 +289,7 @@ import BaseHead from "../../components/BaseHead.astro";
         font-size: 10.5px;
         color: var(--text-mute);
       }
-      .v3-notebook .body { padding: 32px 40px; }
+      .v3-notebook .body { padding: 32px 40px; color: var(--text); }
       .v3-notebook .crumb {
         font-family: var(--font-mono);
         font-size: 11px; color: var(--text-mute);
@@ -299,6 +300,7 @@ import BaseHead from "../../components/BaseHead.astro";
         font-size: 28px; font-weight: 600;
         letter-spacing: -0.02em;
         margin: 8px 0 14px;
+        color: var(--text);
       }
       .v3-notebook .callout {
         padding: 8px 12px; border-radius: 8px;
@@ -313,6 +315,7 @@ import BaseHead from "../../components/BaseHead.astro";
         font-family: var(--font-display);
         font-size: 14px; font-weight: 600;
         margin: 0 0 6px;
+        color: var(--text);
       }
       .v3-notebook .li {
         display: flex; gap: 8px;
