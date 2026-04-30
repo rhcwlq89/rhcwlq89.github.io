@@ -1,143 +1,105 @@
 ---
-title: "스프링 사전과제 가이드 2편: Database & Testing"
-description: "H2/MySQL 설정, JPA 엔티티 매핑, 테스트 전략(단위·통합·슬라이스)을 실무 예제와 함께 정리한 Spring Boot 사전과제 가이드"
+title: "스프링 사전과제 가이드 2편: Database & Testing — 환경 분리·테스트 피라미드·Testcontainers"
+description: "환경별 DB 선택과 ddl-auto 정책, Memory Repository 구현 시 주의사항, Test Pyramid에 따른 어노테이션 선택 기준, Mock vs Fake vs 실제 객체 트레이드오프, Testcontainers로 H2 방언 차이가 가리는 버그를 잡는 법까지 — 사전과제 평가자가 두 번째로 자주 지적하는 Database & Testing 영역을 한 편으로 정리했다."
 pubDate: 2026-01-11T10:00:00+09:00
-tags: ["Spring Boot", "JPA", "Testing", "Backend", "사전과제"]
-heroImage: "../../assets/PreinterviewTaskGuide.png"
----
-
-## 시리즈 네비게이션
-
-| 이전 | 현재 | 다음 |
-|:---:|:---:|:---:|
-| [1편: Core Layer](/blog/spring-boot-pre-interview-guide-1) | **2편: DB & Testing** | [3편: Documentation & AOP](/blog/spring-boot-pre-interview-guide-3) |
-
-> 📚 **전체 로드맵**: [스프링 사전과제 가이드 로드맵](/blog/spring-boot-pre-interview-guide-1) 참고
-
+tags:
+  - Spring Boot
+  - JPA
+  - Testing
+  - Backend
+  - 사전과제
+heroImage: "../../assets/SpringBootPreInterviewGuide2.png"
 ---
 
 ## 서론
 
-1편에서 다룬 계층 구조를 기반으로, 이번 편에서는 데이터베이스 설정과 테스트 전략을 다룬다.
+1편에서 Controller · Service · Repository · Domain 4계층을 어떻게 나누는지를 다뤘다.
 
-**2편에서 다루는 내용:**
-- 데이터베이스 설정 (H2, MySQL, 프로파일 분리)
-- Repository 테스트
-- Service 테스트
-- Controller 테스트
+계층 설계 다음으로 평가자가 가장 많이 지적하는 영역은 <strong>Database 설정과 테스트 전략</strong>이다.
 
-### 목차
+기능은 동작하는데 환경별 DB가 분리되지 않거나, 테스트가 전부 `@SpringBootTest`로 도배되거나, Mock을 무분별하게 남용하면 감점이 이어진다.
 
-- [Database Config](#database-config)
-- [Test](#test)
-- [정리](#정리)
+2편은 그 두 번째 축을 다룬다. 어떤 환경에 어떤 DB를 쓸지, `ddl-auto`는 환경마다 어떻게 달라야 하는지를 먼저 살핀다.
+
+그 다음으로 테스트 어노테이션 선택 기준, Mock·Fake·실제 객체의 트레이드오프를 다루고, H2가 숨기는 버그를 Testcontainers로 잡는 방법으로 마무리한다.
+
+대상 독자는 1편을 읽었거나 4계층 구조는 이미 아는 주니어 백엔드 개발자다. 읽고 나면 환경별 DB 설정과 테스트 계층 선택에서 망설이지 않게 된다.
+
+[이전 글](/blog/spring-boot-pre-interview-guide-1)에서 4계층 설계를 먼저 익히고 오면 더 좋다.
+
+- 1편 — [Core Application Layer](/blog/spring-boot-pre-interview-guide-1)
+- <strong>2편 — Database & Testing (이 글)</strong>
+- 3편 — [Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
+- 4편 — [Logging](/blog/spring-boot-pre-interview-guide-4)
+- 5편 — [Authentication & Validation](/blog/spring-boot-pre-interview-guide-5)
+- 6편 — [Performance](/blog/spring-boot-pre-interview-guide-6)
+- 7편 — [Production Readiness](/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
-## Database Config
+## TL;DR
 
-일반적으로 과제에서 제시하는 DB는 세 가지다.
-- Memory 기반 RDB (H2)
-- 순수 Memory 저장소 (HashMap 등)
-- Docker 기반 RDB (MySQL, PostgreSQL 등)
+- <strong>환경별 DB 선택과 ddl-auto는 글로벌 설정이 아니다</strong> — 로컬은 `create-drop` + H2, 테스트는 `create-drop` + H2, 스테이징은 `validate`, 운영은 `none` + Flyway/Liquibase. 환경마다 `application-{profile}.yml`로 분리한다.
+- <strong>Memory Repository ≠ JPA Repository</strong> — `AtomicLong`으로 ID를 생성하고, `findById()` 반환 시 방어적 복사를 해야 외부 수정이 저장소에 영향을 주지 않는다. 페이징도 직접 구현해야 한다.
+- <strong>Test Pyramid — `@SpringBootTest`는 예외, 슬라이스 테스트가 기본</strong> — Repository는 `@DataJpaTest`, Controller는 `@WebMvcTest`, 순수 단위는 `@ExtendWith(MockitoExtension.class)`. `@SpringBootTest`는 E2E 시나리오 한두 개에만 쓴다.
+- <strong>Mock은 경계에만, 내부 의존은 Fake나 실제 객체로</strong> — 외부 API·시간처럼 제어 불가능한 것만 Mock하고, Repository 의존이 많은 Service는 Fake Repository로 테스트한다. 과도한 Mock은 테스트가 구현 세부사항만 검증하게 만든다.
+- <strong>H2 방언 차이가 버그를 가린다면 Testcontainers</strong> — 네이티브 쿼리·DB 전용 함수·JSON 컬럼 등을 쓸 때는 실제 MySQL/PostgreSQL 컨테이너로 검증한다. CRUD만 있는 과제에서는 H2로 충분하다.
 
-### 1. 공통 설정 (application.yml)
+---
 
-DB 접속 정보 (url, jdbc driver, username, password)를 설정한다.
-순수 Memory 저장소 사용 시에는 별도 설정이 불필요하다.
+## 1. Database 환경 매트릭스 — 로컬·테스트·운영 분리
 
-<details>
-<summary>application.yml (DB Connection)</summary>
+### 1.1 환경별 DB 선택 기준
+
+환경마다 DB 선택과 `ddl-auto` 정책이 달라야 한다. 아래 표가 기준이다.
+
+| 환경 | DB 선택 | ddl-auto | 프로파일 | 이유 |
+|------|---------|----------|----------|------|
+| 로컬 개발 | H2 또는 Docker RDB | `create-drop` (H2) / `update` (RDB) | `local` | 빠른 개발 사이클, 스키마 자동 생성 |
+| 테스트 | H2 | `create-drop` | `test` | 매 테스트마다 깨끗한 상태 보장 |
+| 스테이징 | Docker RDB (MySQL/PostgreSQL) | `validate` | `staging` | 스키마 불일치 조기 발견 |
+| 운영 | RDS / Cloud DB | `none` | `prod` | 스키마 변경은 마이그레이션 도구로만 |
+
+### 1.2 application.yml 패턴 — 공통 + H2 + Docker RDB
+
+`application.yml`에 공통 설정을 두고, 프로파일별 파일에서 DB를 오버라이드하는 패턴이 표준이다.
+
+```mermaid
+flowchart LR
+    Base["application.yml<br/>(JPA 공통 옵션)"]
+
+    subgraph Profiles["Profile별 오버라이드"]
+        Local["application-local.yml<br/>H2 또는 Docker RDB"]
+        Test["application-test.yml<br/>H2 in-memory"]
+        Staging["application-staging.yml<br/>MySQL / PostgreSQL"]
+        Prod["application-prod.yml<br/>RDS / Cloud DB"]
+    end
+
+    Base --> Local
+    Base --> Test
+    Base --> Staging
+    Base --> Prod
+```
+
+**공통 설정 (application.yml)**
 
 ```yaml
 spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/app
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: app
-    password: secret
   jpa:
-    hibernate:
-      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+        default_batch_fetch_size: 100
+    open-in-view: false
 ```
 
-</details>
-
-> **Tip**: `ddl-auto` 옵션
-> - `create`: 시작 시 테이블 새로 생성
-> - `create-drop`: 시작 시 생성, 종료 시 삭제
-> - `update`: 변경된 스키마만 반영
-> - `validate`: 엔티티와 테이블 매핑 검증만 수행
-> - `none`: 아무 작업도 하지 않음
-
-<details>
-<summary>⚠️ ddl-auto 운영 환경 주의사항</summary>
-
-**절대 사용하면 안 되는 조합**
-- 운영 환경 + `create` = 기존 데이터 전체 삭제
-- 운영 환경 + `create-drop` = 애플리케이션 종료 시 테이블 삭제
-- 운영 환경 + `update` = 예상치 못한 스키마 변경 (컬럼 삭제는 안 되지만, 추가/변경은 됨)
-
-**환경별 권장 설정**
-
-| 환경 | 권장 설정 | 이유 |
-|------|----------|------|
-| 로컬 개발 | `create` 또는 `update` | 빠른 개발 사이클 |
-| 테스트 | `create-drop` | 매 테스트마다 깨끗한 상태 |
-| 스테이징 | `validate` | 스키마 불일치 조기 발견 |
-| 운영 | `none` 또는 `validate` | 스키마 변경은 반드시 마이그레이션 도구로 |
-
-**실무 팁**
-
-운영 환경에서는 **Flyway** 또는 **Liquibase** 같은 DB 마이그레이션 도구를 사용하여 스키마를 관리한다. ddl-auto에 의존하면 예상치 못한 데이터 손실이 발생할 수 있다.
-
-```yaml
-# 운영 환경 설정 예시
-spring:
-  jpa:
-    hibernate:
-      ddl-auto: validate  # 또는 none
-  flyway:
-    enabled: true
-```
-
-**Flyway vs Liquibase 비교**
-
-| 항목 | Flyway | Liquibase |
-|------|--------|-----------|
-| **마이그레이션 방식** | SQL 파일 기반 | XML/YAML/JSON/SQL 지원 |
-| **파일 명명** | `V1__init.sql`, `V2__add_column.sql` | `changelog.xml` |
-| **롤백** | 유료 버전에서 지원 | 무료 버전에서 지원 |
-| **러닝커브** | 낮음 (SQL만 알면 됨) | 중간 (추상화 레이어 존재) |
-| **Spring Boot 통합** | `spring-boot-starter-flyway` | `spring-boot-starter-liquibase` |
-
-```
-# Flyway 마이그레이션 파일 구조
-src/main/resources/db/migration/
-├── V1__create_member_table.sql
-├── V2__create_product_table.sql
-└── V3__add_category_column.sql
-```
-
-**과제에서의 권장**: 간단한 과제에서는 `ddl-auto: create-drop`(로컬) + `validate`(Docker)로 충분하다. 마이그레이션 도구는 실무에서 더 중요하다.
-
-</details>
-
-### 2. H2 설정
-
-H2는 인메모리 데이터베이스로, 별도 설치 없이 사용할 수 있어 과제에서 자주 활용된다.
-
-<details>
-<summary>application.yml (H2 설정)</summary>
+**로컬 H2 설정 (application-local.yml)**
 
 ```yaml
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb
+    url: jdbc:h2:mem:localdb;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -148,136 +110,39 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
-    show-sql: true
 ```
 
-</details>
+**테스트 H2 설정 (application-test.yml)**
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+```
+
+**Docker RDB 설정 (application-staging.yml 예시)**
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/app
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: app
+    password: secret
+  jpa:
+    hibernate:
+      ddl-auto: validate
+```
 
 <details>
-<summary>build.gradle</summary>
-
-```groovy
-dependencies {
-    runtimeOnly 'com.h2database:h2'
-    // Spring Boot 4.x 이상에서는 별도 의존성 필요
-    runtimeOnly 'org.springframework.boot:spring-boot-h2console'
-}
-```
-
-</details>
-
-> **주의**: H2 콘솔 접속 시 JDBC URL이 `jdbc:h2:mem:testdb`와 정확히 일치하는지 확인한다.
-
-### 3. Memory DB 설정 (HashMap)
-
-순수 메모리 저장소 사용 시 별도 설정이 불필요하다.
-Repository 구현체에서 직접 메모리 저장 로직을 작성한다.
-
-<details>
-<summary>MemoryRepository 구현 예시</summary>
-
-```java
-@Repository
-public class MemoryProductRepository implements ProductRepository {
-
-    // 동시성 처리를 위해 ConcurrentHashMap 사용
-    private final Map<Long, Product> store = new ConcurrentHashMap<>();
-    private final AtomicLong sequence = new AtomicLong(0);
-
-    @Override
-    public Product save(Product product) {
-        if (product.getId() == null) {
-            product.setId(sequence.incrementAndGet());
-        }
-        store.put(product.getId(), product);
-        return product;
-    }
-
-    @Override
-    public Optional<Product> findById(Long id) {
-        return Optional.ofNullable(store.get(id));
-    }
-
-    @Override
-    public List<Product> findAll() {
-        return new ArrayList<>(store.values());
-    }
-
-    @Override
-    public void deleteById(Long id) {
-        store.remove(id);
-    }
-}
-```
-
-</details>
-
-> **Tip**: 컬렉션 선택 가이드
-> - `ConcurrentHashMap`: 일반적인 key-value 저장 (권장)
-> - `ConcurrentSkipListMap`: 정렬이 필요한 경우
-> - `CopyOnWriteArrayList`: 읽기가 많고 쓰기가 적은 경우
-
-<details>
-<summary>💡 Memory Repository 구현 시 주의사항</summary>
-
-**ID 생성 전략**
-
-JPA 환경에서는 `@GeneratedValue`가 자동으로 ID를 생성하지만, Memory 저장소에서는 직접 구현해야 한다.
-
-```java
-// ❌ 잘못된 예 - 동시성 문제
-private long sequence = 0;
-product.setId(++sequence);  // Race condition 발생 가능
-
-// ✅ 올바른 예 - AtomicLong 사용
-private final AtomicLong sequence = new AtomicLong(0);
-product.setId(sequence.incrementAndGet());
-```
-
-**객체 복사 주의**
-
-저장된 객체의 참조를 그대로 반환하면 외부에서 수정 시 저장소 데이터도 변경된다.
-
-```java
-// ❌ 위험한 코드
-return store.get(id);  // 원본 반환
-
-// ✅ 안전한 코드 (방어적 복사)
-return store.get(id).copy();  // 또는 new Product(...)로 복사
-```
-
-**방어적 복사가 필요한 경우**
-
-| 상황 | 방어적 복사 필요 | 이유 |
-|------|:---:|------|
-| Memory Repository (테스트용) | ✅ | 외부 수정이 저장소에 영향 |
-| JPA Repository | ❌ | 영속성 컨텍스트가 변경 감지 관리 |
-| DTO 반환 | - | 이미 새 객체 생성됨 |
-
-**핵심**: Memory Repository는 테스트 목적이므로 JPA의 동작을 흉내내야 한다. 실제 JPA에서는 조회한 엔티티를 수정하면 트랜잭션 커밋 시 DB에 반영되지만, Memory Repository는 그런 메커니즘이 없으므로 방어적 복사로 의도치 않은 변경을 방지하는 것이 안전하다.
-
-**페이징 처리**
-
-```java
-public Page<Product> findAll(Pageable pageable) {
-    List<Product> all = new ArrayList<>(store.values());
-    int start = (int) pageable.getOffset();
-    int end = Math.min(start + pageable.getPageSize(), all.size());
-
-    List<Product> content = all.subList(start, end);
-    return new PageImpl<>(content, pageable, all.size());
-}
-```
-
-</details>
-
-### 4. Docker 기반 RDB 설정
-
-Docker Compose로 MySQL, PostgreSQL 등을 구성한다.
-과제의 경우 대부분 단일 DB만 사용하므로 application.yml에 접속 정보만 설정하면 된다.
-
-<details>
-<summary>docker-compose.yml (MySQL)</summary>
+<summary><strong>docker-compose.yml (MySQL + PostgreSQL)</strong></summary>
 
 ```yaml
 services:
@@ -310,61 +175,110 @@ volumes:
 
 </details>
 
-<details>
-<summary>docker-compose.yml (PostgreSQL)</summary>
+### 1.3 ddl-auto와 마이그레이션 도구 — 운영 안전 가이드
 
-```yaml
-services:
-  postgres-db:
-    container_name: postgres-db
-    image: postgres:15
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: testdb
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      TZ: Asia/Seoul
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+<strong>ddl-auto</strong>는 Hibernate가 애플리케이션 시작 시 스키마를 어떻게 다룰지 결정하는 옵션이다.
 
-volumes:
-  pg_data:
+| 값 | 동작 | 사용 환경 |
+|----|------|----------|
+| `create` | 시작 시 테이블 새로 생성 (기존 데이터 삭제) | 절대 운영 금지 |
+| `create-drop` | 시작 시 생성, 종료 시 삭제 | 로컬·테스트 |
+| `update` | 변경된 스키마만 반영 (컬럼 삭제는 안 됨) | 로컬만, 운영 금지 |
+| `validate` | 엔티티와 테이블 매핑 검증만 수행 | 스테이징 |
+| `none` | 아무 작업도 하지 않음 | 운영 |
+
+운영에서 `ddl-auto`를 벗어나는 시점은 명확하다. <strong>팀에 DB가 생기는 순간부터 마이그레이션 도구를 써야 한다.</strong>
+
+| 항목 | Flyway | Liquibase |
+|------|--------|-----------|
+| 마이그레이션 방식 | SQL 파일 기반 | XML/YAML/JSON/SQL 지원 |
+| 파일 명명 | `V1__init.sql`, `V2__add_column.sql` | `changelog.xml` |
+| 롤백 | 유료 버전에서 지원 | 무료 버전에서 지원 |
+| 러닝커브 | 낮음 (SQL만 알면 됨) | 중간 (추상화 레이어 존재) |
+| Spring Boot 통합 | `spring-boot-starter-flyway` | `spring-boot-starter-liquibase` |
+
+> <strong>참고</strong>: 사전과제에서 마이그레이션 도구까지 도입할 필요는 없다. 로컬·테스트는 `create-drop`, Docker RDB 스테이징은 `validate`로 충분하다.
+> 단, 왜 운영에서 `update`를 쓰면 안 되는지는 설명할 수 있어야 한다.
+
+### 1.4 참고: Memory Repository 구현 시 주의사항
+
+과제에서 "순수 메모리 저장소"를 요구하는 경우, 흔히 빠지는 함정이 세 가지다.
+
+**1. ID 생성 — `AtomicLong`을 써야 한다**
+
+```java
+// ❌ 잘못된 예 — 동시성 문제
+private long sequence = 0;
+product.setId(++sequence);  // Race condition 발생 가능
+
+// ✅ 올바른 예
+private final AtomicLong sequence = new AtomicLong(0);
+product.setId(sequence.incrementAndGet());
 ```
 
-</details>
+**2. 방어적 복사 — 반환값이 저장소 원본을 노출하면 안 된다**
 
-**Docker Compose 실행 명령**
+```java
+// ❌ 위험 — 외부에서 수정하면 저장소 데이터도 바뀜
+return store.get(id);
 
-```bash
-# 컨테이너 시작 (백그라운드)
-docker compose up -d
-
-# 로그 확인
-docker compose logs -f
-
-# 컨테이너 중지
-docker compose down
-
-# 컨테이너 + 볼륨(데이터) 삭제
-docker compose down -v
-
-# 특정 서비스만 재시작
-docker compose restart mysql-db
+// ✅ 안전 — 새 객체로 복사해서 반환
+return store.get(id).copy();  // 또는 new Product(store.get(id))
 ```
 
-### 5. Querydsl 설정
+JPA는 영속성 컨텍스트가 변경 감지를 책임지지만, Memory Repository에는 그 메커니즘이 없다. 방어적 복사 없이는 테스트가 저장소 상태를 오염시킨다.
 
-복잡한 동적 쿼리가 필요한 경우 Querydsl을 사용한다.
+**3. 페이징 — 직접 구현해야 한다**
 
-<details>
-<summary>Querydsl Config (Kotlin)</summary>
+```java
+public Page<Product> findAll(Pageable pageable) {
+    List<Product> all = new ArrayList<>(store.values());
+    int start = (int) pageable.getOffset();
+    int end = Math.min(start + pageable.getPageSize(), all.size());
+    return new PageImpl<>(all.subList(start, end), pageable, all.size());
+}
+```
+
+| 항목 | Memory Repository | JPA Repository |
+|------|:-----------------:|:--------------:|
+| ID 자동 생성 | `AtomicLong` 직접 구현 | `@GeneratedValue` |
+| 변경 감지 | 방어적 복사 필요 | 영속성 컨텍스트 |
+| 페이징 | `PageImpl` 직접 구현 | Spring Data 제공 |
+
+---
+
+## 2. JPA & Querydsl 설정
+
+### 2.1 application.yml 핵심 옵션
+
+공통 `application.yml`에 들어가는 JPA 옵션들이다. 각 옵션을 왜 설정하는지가 중요하다.
+
+| 옵션 | 권장값 | 이유 |
+|------|--------|------|
+| `show-sql` | `true` (개발), `false` (운영) | SQL 가시성 — 운영에선 성능·보안 이슈 |
+| `format_sql` | `true` | 쿼리 가독성 |
+| `default_batch_fetch_size` | `100` | N+1 문제 완화 (IN 쿼리로 일괄 로딩) |
+| `open-in-view` | `false` | OSIV를 끄면 트랜잭션 범위 밖 지연 로딩 예외가 즉시 드러남 |
+| `naming.physical-strategy` | 기본값(snake_case) 유지 | 엔티티 필드명과 컬럼명이 자동으로 매핑됨 |
+
+> <strong>참고</strong>: `open-in-view`의 기본값은 `true`다.
+> `true`이면 HTTP 요청 전 구간에서 영속성 컨텍스트가 열려 지연 로딩이 자유롭지만, DB 커넥션을 오래 점유한다.
+> 사전과제에서는 `false`로 설정하고, Service 계층 안에서 Fetch 조인으로 필요한 연관 엔티티를 처리하는 패턴이 더 나은 평가를 받는다.
+
+### 2.2 Querydsl 도입 시점과 Q-Class 생성
+
+<strong>Querydsl</strong>은 타입 안전한 JPQL을 빌더 패턴으로 작성할 수 있게 해 주는 라이브러리다.
+
+Querydsl을 도입하는 시점의 기준은 다음과 같다.
+
+| 기준 | Spring Data JPA 메서드만 | Querydsl 필요 |
+|------|:---:|:---:|
+| 조건이 1~2개인 단순 쿼리 | ✅ | — |
+| 조건이 3개 이상이거나 동적 | — | ✅ |
+| 집계·서브쿼리·다중 조인 | — | ✅ |
+| 정렬·페이징이 동적으로 바뀜 | — | ✅ |
+
+**JPAQueryFactory Bean 등록 (Kotlin)**
 
 ```kotlin
 @Configuration(proxyBeanMethods = false)
@@ -372,24 +286,11 @@ class QuerydslConfig(
     private val entityManager: EntityManager
 ) {
     @Bean
-    fun jpaQueryFactory(): JPAQueryFactory {
-        return JPAQueryFactory(entityManager)
-    }
+    fun jpaQueryFactory(): JPAQueryFactory = JPAQueryFactory(entityManager)
 }
 ```
 
-</details>
-
-> **`proxyBeanMethods = false`란?**
->
-> Spring의 `@Configuration` 클래스는 기본적으로 CGLIB 프록시를 통해 `@Bean` 메서드 간 호출 시 **싱글톤을 보장** 한다. 하지만 `@Bean` 메서드가 서로 호출하지 않는 경우 프록시가 불필요하며, `proxyBeanMethods = false`로 설정하면:
-> - **프록시 생성 비용 절감** (애플리케이션 시작 시간 단축)
-> - **메모리 사용량 감소**
->
-> 주로 단순히 빈을 등록만 하는 설정 클래스에서 사용한다. Spring Boot 자체 auto-configuration도 대부분 이 옵션을 사용한다.
-
-<details>
-<summary>build.gradle.kts (Querydsl 의존성)</summary>
+**build.gradle.kts 의존성**
 
 ```kotlin
 dependencies {
@@ -398,141 +299,84 @@ dependencies {
 }
 ```
 
-</details>
+Q-Class는 빌드 시 `kapt`가 엔티티 클래스를 스캔하여 자동 생성한다. 생성 경로는 `build/generated/source/kapt/main` 이며, `.gitignore`에 추가한다.
+
+### 2.3 참고: `@Configuration(proxyBeanMethods = false)`의 의미
+
+<strong>`proxyBeanMethods = false`</strong>는 CGLIB 프록시 생성을 끄는 옵션이다.
+
+Spring의 `@Configuration`은 기본적으로 CGLIB 프록시를 통해 싱글톤을 보장한다. `@Bean` 메서드가 서로를 호출하지 않는 경우 프록시는 불필요하다.
+
+`proxyBeanMethods = false`로 설정하면:
+
+- 프록시 생성 비용이 줄어 애플리케이션 시작 시간이 단축된다.
+- 메모리 사용량이 감소한다.
+
+단순히 빈을 등록만 하는 설정 클래스에서 권장하며, Spring Boot 자체 auto-configuration 대부분도 이 옵션을 사용한다.
 
 ---
 
-## Test
+## 3. Test Pyramid — 어노테이션 선택 기준
 
-### 1. Test DB 설정
+### 3.1 Test Pyramid
 
-테스트 환경에서는 H2를 사용하는 것이 일반적이다.
-Profile 분리 또는 별도 yaml 파일을 사용할 수 있다.
+테스트는 피라미드 구조를 따른다. 아래로 갈수록 수가 많고 빠르며, 위로 갈수록 수가 적고 느리다.
 
-> **Profile 분리 vs 별도 yaml 파일**
->
-> | 방식 | 파일명 예시 | 활성화 방법 | 특징 |
-> |------|-------------|-------------|------|
-> | Profile 분리 | `application-test.yml` | `@ActiveProfiles("test")` | Spring Boot 표준, 환경별 설정 분리에 적합 |
-> | 별도 yaml | `application-test.yml` 또는 `test-application.yml` | `@TestPropertySource` | 테스트 전용 설정 명시적 분리 |
->
-> **실무 권장**: `application-{profile}.yml` 형태의 Profile 분리가 가장 보편적이다. `@ActiveProfiles("test")`로 간단히 활성화할 수 있고, Spring Boot의 설정 로딩 규칙을 그대로 따르기 때문이다.
+```mermaid
+flowchart TB
+    Integration["통합 테스트<br/>@SpringBootTest<br/>— 느림, 적게"]
+    Slice["슬라이스 테스트<br/>@DataJpaTest · @WebMvcTest<br/>— 중간 속도, 대부분"]
+    Unit["단위 테스트<br/>@ExtendWith(MockitoExtension)<br/>— 빠름, 가장 많음"]
 
-<details>
-<summary>application-test.yml</summary>
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+    Integration --> Slice
+    Slice --> Unit
 ```
 
-</details>
+사전과제에서 흔히 보이는 실수는 모든 테스트를 `@SpringBootTest`로 작성하는 것이다. `@SpringBootTest`는 전체 ApplicationContext를 로드하므로 느리고 무겁다.
 
-<details>
-<summary>build.gradle</summary>
+슬라이스 테스트를 기본으로 쓰고, `@SpringBootTest`는 주요 E2E 시나리오 한두 개로 제한한다.
 
-```groovy
-dependencies {
-    testRuntimeOnly 'com.h2database:h2'
-}
+### 3.2 어노테이션 비교 표
 
-tasks.named('test') {
-    useJUnitPlatform()
-    systemProperty 'spring.profiles.active', 'test'
-}
-```
+| 어노테이션 | 로드 범위 | 속도 | 사용 시점 |
+|-----------|----------|------|----------|
+| `@ExtendWith(MockitoExtension.class)` | 없음 (순수 JUnit) | 가장 빠름 | 의존성이 없는 순수 로직 |
+| `@DataJpaTest` | JPA 관련 빈만 | 빠름 | Repository 쿼리 검증 |
+| `@WebMvcTest` | MVC 관련 빈만 | 빠름 | Controller HTTP 응답 검증 |
+| `@SpringBootTest` | 전체 컨텍스트 | 느림 | E2E, 여러 계층 통합 |
 
-</details>
+`@DataJpaTest`와 `@WebMvcTest`는 각각 `@Transactional`이 기본 적용되어 테스트 종료 후 자동 롤백된다.
 
-### 2. 테스트 어노테이션 가이드
+### 3.3 Mock vs Fake vs 실제 객체
 
-| 어노테이션 | 용도 | 특징 |
-|-----------|------|------|
-| `@DataJpaTest` | Repository 테스트 | JPA 관련 빈만 로드, 자동 롤백 |
-| `@WebMvcTest` | Controller 테스트 | MVC 관련 빈만 로드 |
-| `@SpringBootTest` | 통합 테스트 | 전체 컨텍스트 로드 |
-| `@Transactional` | 테스트 롤백 | 테스트 종료 후 자동 롤백 |
+<strong>Mock</strong>: 호출을 가로채 미리 정의한 값을 반환하는 대역 객체다. 외부 API, 시간, 이메일 발송처럼 제어할 수 없는 경계에 쓴다.
 
-<details>
-<summary>💬 @DataJpaTest vs @SpringBootTest 선택 기준</summary>
+<strong>Fake</strong>: 실제 인터페이스를 구현하지만 메모리로 동작하는 단순한 구현체다. Repository 의존성이 많은 Service 테스트에 적합하다.
 
-**@DataJpaTest**
-- JPA 관련 빈만 로드하여 **빠름**
-- `@Transactional`이 기본 적용되어 자동 롤백
-- Service, Controller 등은 로드되지 않음
-- 순수 Repository 로직 테스트에 적합
+<strong>실제 객체</strong>: Repository는 `@DataJpaTest` + 실제 H2 또는 Testcontainers로 검증한다.
 
-**@SpringBootTest**
-- 전체 ApplicationContext 로드하여 **느림**
-- 실제 환경과 유사한 통합 테스트
-- 모든 빈이 주입되어 E2E 테스트 가능
-
-**선택 가이드**
-
-| 테스트 대상 | 권장 어노테이션 |
-|------------|----------------|
-| Repository 단위 테스트 | `@DataJpaTest` |
-| Service + Repository 통합 | `@SpringBootTest` |
-| Controller + Service + Repository | `@SpringBootTest` + `MockMvc` |
-| Controller 단위 테스트 | `@WebMvcTest` |
-
-**실무 팁**
-
-테스트 속도가 중요하다면 **Slice Test** (`@DataJpaTest`, `@WebMvcTest`)를 적극 활용하고, 주요 시나리오만 `@SpringBootTest`로 통합 테스트한다.
-
-</details>
-
-<details>
-<summary>💬 Mock vs 실제 객체, 언제 무엇을 써야 하나?</summary>
-
-**Mock 객체 사용이 적합한 경우**
-- 외부 API 호출 (결제, 알림 등)
-- 테스트하기 어려운 의존성 (시간, 랜덤 등)
-- 단위 테스트에서 특정 레이어만 테스트할 때
-- 에러 상황 시뮬레이션
-
-**실제 객체 사용이 적합한 경우**
-- DB와의 실제 상호작용 검증
-- 쿼리 성능 테스트
-- 트랜잭션 동작 검증
-- 연관관계 매핑 검증
-
-**주의: 과도한 Mock 사용의 문제**
+**과도한 Mock 사용의 안티패턴**
 
 ```java
-// ❌ 과도한 Mock - 테스트 의미가 없음
+// ❌ 과도한 Mock — 테스트가 구현 세부사항만 검증함
 given(repository.save(any())).willReturn(product);
 given(repository.findById(1L)).willReturn(Optional.of(product));
 
-Product saved = service.create(request);  // save() 호출
-Product found = service.find(1L);         // findById() 호출
+Product saved = service.create(request);
+Product found = service.find(1L);
 
-// 실제로는 같은 객체가 아닐 수 있는데, Mock이라 항상 성공
+// Mock이 같은 객체를 반환하도록 설정했기 때문에 항상 성공
+// 실제 저장·조회 로직은 검증하지 못함
 assertThat(found.getId()).isEqualTo(saved.getId());
 ```
 
-**과도한 Mock 사용을 줄이는 방법**
-
-| 방법 | 설명 | 적용 시점 |
-|------|------|----------|
-| **Fake 객체 사용** | Memory Repository로 실제 동작 흉내 | Repository 의존성이 많은 Service 테스트 |
-| **@DataJpaTest 활용** | 실제 DB로 Repository 테스트 | 쿼리 검증이 필요한 경우 |
-| **Testcontainers** | 실제 DB 컨테이너로 통합 테스트 | 운영 환경과 동일한 검증 필요 시 |
-| **경계만 Mock** | 외부 API, 시간 등 제어 불가능한 것만 Mock | 대부분의 테스트 |
+**Fake Repository로 개선**
 
 ```java
-// ✅ Fake Repository 활용 예시
+// ✅ Fake Repository 사용 — 실제 저장·조회 동작을 검증
 class ProductServiceTest {
     private ProductService service;
-    private FakeProductRepository repository;  // Memory 구현체
+    private FakeProductRepository repository;
 
     @BeforeEach
     void setUp() {
@@ -542,20 +386,15 @@ class ProductServiceTest {
 
     @Test
     void 상품_저장_후_조회() {
-        // Given
         CreateProductRequest request = new CreateProductRequest("상품", 1000);
 
-        // When
         Long savedId = service.create(request);
         Product found = service.findById(savedId);
 
-        // Then - 실제 저장/조회 동작 검증
         assertThat(found.getName()).isEqualTo("상품");
     }
 }
 ```
-
-**실무 팁**
 
 | 테스트 대상 | 권장 방식 |
 |------------|----------|
@@ -563,14 +402,14 @@ class ProductServiceTest {
 | Service | Fake Repository 또는 `@SpringBootTest` |
 | Controller | Mock Service (`@WebMvcTest`) |
 | 외부 API 연동 | Mock (WireMock, Mockito) |
-- 통합 테스트: 모두 실제 객체
 
-</details>
+---
 
-### 3. 테스트 예제
+## 4. 계층별 테스트 패턴
 
-<details>
-<summary>Repository 테스트 (Java)</summary>
+### 4.1 Repository — `@DataJpaTest`로 쿼리 검증
+
+**Java**
 
 ```java
 @DataJpaTest
@@ -609,10 +448,27 @@ class ProductRepositoryTest {
 }
 ```
 
-</details>
+**Kotlin + Kotest FunSpec**
 
-<details>
-<summary>Service 테스트 (Java + Mockito)</summary>
+```kotlin
+@DataJpaTest
+class ProductRepositoryTest(
+    private val productRepository: ProductRepository
+) : FunSpec({
+
+    test("상품 저장") {
+        val product = Product(name = "테스트 상품", price = 10000)
+        val saved = productRepository.save(product)
+
+        saved.id shouldNotBe null
+        saved.name shouldBe "테스트 상품"
+    }
+})
+```
+
+### 4.2 Service — Mock과 Fake의 트레이드오프
+
+**Java + Mockito (Mock 방식)**
 
 ```java
 @ExtendWith(MockitoExtension.class)
@@ -630,7 +486,6 @@ class ProductServiceTest {
         // given
         ProductRequest request = new ProductRequest("테스트 상품", 10000);
         Product product = new Product(1L, "테스트 상품", 10000);
-
         given(productRepository.save(any(Product.class))).willReturn(product);
 
         // when
@@ -643,10 +498,60 @@ class ProductServiceTest {
 }
 ```
 
-</details>
+**Kotlin + MockK BehaviorSpec (Mock 방식)**
 
-<details>
-<summary>Controller 테스트 (Java)</summary>
+```kotlin
+class ProductServiceTest : BehaviorSpec({
+
+    val productRepository = mockk<ProductRepository>()
+    val productService = ProductService(productRepository)
+
+    Given("상품 생성 요청이 주어졌을 때") {
+        val request = ProductRequest(name = "테스트 상품", price = 10000)
+        val product = Product(id = 1L, name = "테스트 상품", price = 10000)
+        every { productRepository.save(any()) } returns product
+
+        When("상품을 생성하면") {
+            val response = productService.create(request)
+
+            Then("상품이 정상적으로 생성된다") {
+                response.name shouldBe "테스트 상품"
+                verify(exactly = 1) { productRepository.save(any()) }
+            }
+        }
+    }
+})
+```
+
+**Fake Repository 패턴 — Repository 의존이 많은 Service에 적합**
+
+```java
+class ProductServiceFakeTest {
+    private ProductService service;
+    private FakeProductRepository repository;
+
+    @BeforeEach
+    void setUp() {
+        repository = new FakeProductRepository();
+        service = new ProductService(repository);
+    }
+
+    @Test
+    void 상품_저장_후_조회() {
+        Long savedId = service.create(new CreateProductRequest("상품", 1000));
+        Product found = service.findById(savedId);
+        assertThat(found.getName()).isEqualTo("상품");
+    }
+}
+```
+
+Fake Repository는 `ProductRepository` 인터페이스를 구현한 메모리 저장소다. Mock과 달리 실제 저장·조회 동작이 일어난다.
+
+덕분에 "저장 후 조회" 시나리오를 자연스럽게 검증할 수 있다.
+
+### 4.3 Controller — `@WebMvcTest` + MockMvc
+
+**Java**
 
 ```java
 @WebMvcTest(ProductController.class)
@@ -667,7 +572,6 @@ class ProductControllerTest {
         // given
         ProductRequest request = new ProductRequest("테스트 상품", 10000);
         ProductResponse response = new ProductResponse(1L, "테스트 상품", 10000);
-
         given(productService.create(any())).willReturn(response);
 
         // when & then
@@ -681,77 +585,7 @@ class ProductControllerTest {
 }
 ```
 
-</details>
-
-### 4. Kotlin + Kotest 테스트
-
-Kotest는 Kotlin에서 사용하는 테스트 프레임워크로, 다양한 Spec 스타일을 제공한다.
-
-| Spec | 용도 | 특징 |
-|------|------|------|
-| `FunSpec` | 일반적인 테스트 | `test("name") { }` 형태 |
-| `BehaviorSpec` | BDD 스타일 | Given-When-Then 구조 |
-| `DescribeSpec` | 그룹화된 테스트 | describe-context-it 구조 |
-| `StringSpec` | 간단한 테스트 | 문자열만으로 테스트 정의 |
-
-<details>
-<summary>Repository 테스트 (Kotlin + Kotest)</summary>
-
-```kotlin
-@DataJpaTest
-class ProductRepositoryTest(
-    private val productRepository: ProductRepository
-) : FunSpec({
-
-    test("상품 저장") {
-        // given
-        val product = Product(name = "테스트 상품", price = 10000)
-
-        // when
-        val saved = productRepository.save(product)
-
-        // then
-        saved.id shouldNotBe null
-        saved.name shouldBe "테스트 상품"
-    }
-})
-```
-
-</details>
-
-<details>
-<summary>Service 테스트 (Kotlin + Kotest + MockK)</summary>
-
-```kotlin
-class ProductServiceTest : BehaviorSpec({
-
-    val productRepository = mockk<ProductRepository>()
-    val productService = ProductService(productRepository)
-
-    Given("상품 생성 요청이 주어졌을 때") {
-        val request = ProductRequest(name = "테스트 상품", price = 10000)
-        val product = Product(id = 1L, name = "테스트 상품", price = 10000)
-
-        every { productRepository.save(any()) } returns product
-
-        When("상품을 생성하면") {
-            val response = productService.create(request)
-
-            Then("상품이 정상적으로 생성된다") {
-                response.name shouldBe "테스트 상품"
-                verify(exactly = 1) { productRepository.save(any()) }
-            }
-        }
-    }
-})
-```
-
-</details>
-
-<details>
-<summary>Controller 테스트 (Kotlin + Kotest + MockMvc)</summary>
-
-Kotest 스타일로 작성하면 더 표현력 있는 테스트가 가능하다.
+**Kotlin + Kotest DescribeSpec**
 
 ```kotlin
 @WebMvcTest(ProductController::class)
@@ -791,155 +625,50 @@ class ProductControllerKotestTest(
             }
         }
     }
-
-    describe("GET /api/v1/products/{productId}") {
-        context("존재하는 상품 ID로 조회하면") {
-            it("200 OK와 상품 정보를 반환한다") {
-                val response = FindProductDetailResponse(
-                    id = 1L,
-                    name = "테스트 상품",
-                    price = 10000,
-                    category = ProductCategoryType.FOOD,
-                    enabled = true,
-                    createdAt = LocalDateTime.now()
-                )
-                every { productService.findProductDetail(1L) } returns response
-
-                mockMvc.perform(get("/api/v1/products/1"))
-                    .andExpect(status().isOk)
-                    .andExpect(jsonPath("$.data.name").value("테스트 상품"))
-            }
-        }
-
-        context("존재하지 않는 상품 ID로 조회하면") {
-            it("404 Not Found를 반환한다") {
-                every { productService.findProductDetail(999L) } throws NotFoundException()
-
-                mockMvc.perform(get("/api/v1/products/999"))
-                    .andExpect(status().isNotFound)
-            }
-        }
-    }
 })
 ```
 
-</details>
-
-> **Tip**: Kotlin에서 MockMvc 테스트 시 `@MockkBean`을 사용하려면 `spring-mockk` 의존성이 필요하다.
+> <strong>참고</strong>: Kotlin MockMvc 테스트에서 `@MockkBean`을 사용하려면 `spring-mockk` 의존성이 필요하다.
 >
 > ```kotlin
 > // build.gradle.kts
 > testImplementation("com.ninja-squad:springmockk:4.0.2")
 > ```
 
-### 5. Spring Security 테스트
+### 4.4 참고: Kotlin + Kotest BDD 스타일 — Spec 유형 선택
 
-인증이 필요한 API 테스트 시 다음 방법을 사용한다.
+<strong>Kotest</strong>는 Kotlin에서 사용하는 테스트 프레임워크로, JUnit과 달리 다양한 Spec 스타일을 제공한다.
 
-<details>
-<summary>@WithMockUser 사용</summary>
+| Spec | 스타일 | 적합한 상황 |
+|------|--------|-----------|
+| `FunSpec` | `test("name") { }` | Repository처럼 단순한 단위 테스트 |
+| `BehaviorSpec` | Given-When-Then | Service처럼 시나리오 기반 테스트 |
+| `DescribeSpec` | describe-context-it | Controller처럼 API 엔드포인트 그룹화 |
+| `StringSpec` | `"name" { }` | 매우 단순한 테스트 |
 
-```java
-@WebMvcTest(UserController.class)
-class UserControllerTest {
+Kotest를 도입하는 시점은 주로 <strong>Kotlin 프로젝트에서 BDD 스타일의 표현력이 필요할 때</strong>다.
 
-    @Autowired
-    private MockMvc mockMvc;
+`@DataJpaTest`와 `@WebMvcTest`는 Kotest Spec과도 잘 통합된다.
 
-    @Test
-    @WithMockUser(username = "test@test.com", roles = {"USER"})
-    void getUserProfile() throws Exception {
-        mockMvc.perform(get("/api/users/me"))
-            .andExpect(status().isOk());
-    }
-}
-```
+---
 
-</details>
+## 5. Testcontainers — 운영 DB와 동일한 검증
 
-<details>
-<summary>SecurityContextHolder 직접 설정 (Kotlin)</summary>
+### 5.1 H2의 한계 — MySQL/PostgreSQL 방언 차이가 가리는 버그
 
-```kotlin
-@BeforeEach
-fun setUp() {
-    SecurityContextHolder.getContext().authentication =
-        PreAuthenticatedAuthenticationToken(
-            "test@test.com",
-            null,
-            listOf(SimpleGrantedAuthority("ROLE_USER"))
-        )
-}
-```
+H2는 빠르고 설정이 간단하지만, MySQL이나 PostgreSQL과 완전히 동일하지 않다. 다음 상황에서는 H2 테스트가 통과해도 운영에서 터진다.
 
-</details>
+| 상황 | 예시 |
+|------|------|
+| 네이티브 쿼리 | `SELECT * FROM product USE INDEX (idx_name)` — H2에서 무시됨 |
+| DB 전용 함수 | `DATE_FORMAT()`, `JSON_EXTRACT()` — H2 미지원 |
+| Full-text search | `MATCH AGAINST` — H2 미지원 |
+| `ON DUPLICATE KEY UPDATE` | MySQL 전용 문법 |
+| 인덱스 힌트·쿼리 플랜 | H2에서 실행 계획이 다름 |
 
-<details>
-<summary>TestSecurityConfig 사용</summary>
+### 5.2 Testcontainers 설정
 
-```java
-@TestConfiguration
-public class TestSecurityConfig {
-
-    @Bean
-    public SecurityFilterChain testSecurityFilterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(AbstractHttpConfigurer::disable)
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-            .build();
-    }
-}
-```
-
-```java
-@WebMvcTest(UserController.class)
-@Import(TestSecurityConfig.class)
-class UserControllerTest {
-    // 테스트 코드
-}
-```
-
-</details>
-
-### 6. Testcontainers (선택)
-
-실제 DB와 동일한 환경에서 테스트가 필요한 경우 Testcontainers를 사용한다.
-
-<details>
-<summary>💬 H2 vs Testcontainers 선택 기준</summary>
-
-**H2 인메모리 DB**
-
-| 장점 | 단점 |
-|-----|-----|
-| 빠른 실행 속도 | 실제 DB와 문법/기능 차이 |
-| 별도 설정 불필요 | MySQL/PostgreSQL 전용 기능 테스트 불가 |
-| CI/CD에서 추가 설정 없음 | 호환 모드도 100% 호환은 아님 |
-
-**Testcontainers**
-
-| 장점 | 단점 |
-|-----|-----|
-| 실제 DB와 동일한 환경 | Docker 필요 |
-| DB 전용 기능 테스트 가능 | 컨테이너 시작 시간 소요 |
-| 운영 환경과 동일한 쿼리 검증 | CI/CD에서 Docker 설정 필요 |
-
-**선택 가이드**
-
-- **H2 사용**: 대부분의 CRUD, 과제, 빠른 피드백이 필요한 경우
-- **Testcontainers 사용**:
-  - 네이티브 쿼리나 DB 전용 함수 사용 시
-  - JSON 컬럼, Full-text search 등 특정 기능 테스트
-  - 운영 환경과 동일한 쿼리 플랜 검증이 필요한 경우
-
-**과제에서의 권장**
-
-대부분의 과제에서는 **H2로 충분** 하다. 특별히 MySQL/PostgreSQL 전용 기능을 사용하는 경우에만 Testcontainers를 고려한다.
-
-</details>
-
-<details>
-<summary>Testcontainers 설정</summary>
+**의존성 (build.gradle)**
 
 ```groovy
 dependencies {
@@ -949,10 +678,12 @@ dependencies {
 }
 ```
 
+**테스트 클래스 설정**
+
 ```java
 @SpringBootTest
 @Testcontainers
-class IntegrationTest {
+class ProductIntegrationTest {
 
     @Container
     static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
@@ -966,56 +697,59 @@ class IntegrationTest {
         registry.add("spring.datasource.username", mysql::getUsername);
         registry.add("spring.datasource.password", mysql::getPassword);
     }
+
+    @Test
+    void 네이티브_쿼리_검증() {
+        // 실제 MySQL에서만 동작하는 쿼리 테스트
+    }
 }
 ```
 
-</details>
+### 5.3 적용 기준 — 항상 vs 핵심만
+
+Testcontainers는 컨테이너 기동 시간 때문에 슬라이스 테스트보다 훨씬 느리다. 다음 기준으로 적용 범위를 결정한다.
+
+| 기준 | H2로 충분 | Testcontainers 필요 |
+|------|:---------:|:------------------:|
+| CRUD, 단순 JPQL | ✅ | — |
+| 네이티브 쿼리, DB 전용 함수 | — | ✅ |
+| JSON 컬럼, Full-text search | — | ✅ |
+| 운영과 동일한 쿼리 플랜 검증 | — | ✅ |
+| 사전과제 수준 CRUD | ✅ | — |
+
+> <strong>참고</strong>: CI에서 Testcontainers를 쓰려면 Docker가 필요하다.
+> GitHub Actions의 `ubuntu-latest` 러너에는 Docker가 기본 설치되어 있어 별도 설정 없이 동작한다.
 
 ---
 
 ## 정리
 
-| 항목 | 개발 환경 | 테스트 환경 |
-|------|----------|------------|
-| **DB** | Docker RDB 또는 H2 | H2 (권장) 또는 Testcontainers |
-| **Profile** | `default` 또는 `local` | `test` |
-| **설정 파일** | `application.yml` | `application-test.yml` |
+- <strong>환경별 DB와 ddl-auto는 분리하라</strong> — `application-{profile}.yml`로 환경마다 DB와 ddl-auto 정책을 다르게 가져간다. 운영에서 `create`나 `update`는 절대 금지다.
+- <strong>Memory Repository는 JPA를 흉내 내야 한다</strong> — `AtomicLong` ID 생성, 방어적 복사, 페이징 직접 구현까지 빠뜨리지 않는다.
+- <strong>Test Pyramid를 따르면 테스트가 빠르고 유지 가능해진다</strong> — Repository는 `@DataJpaTest`, Controller는 `@WebMvcTest`, 순수 로직은 `@ExtendWith(MockitoExtension.class)`. `@SpringBootTest`는 E2E 한두 개로 제한한다.
+- <strong>Mock은 경계에만, Fake는 내부 Repository 의존에</strong> — 외부 API·시간처럼 제어 불가능한 것만 Mock하고, 내부 Repository 의존은 Fake로 실제 저장·조회 동작을 검증한다.
+- <strong>H2가 숨기는 버그는 Testcontainers로 잡는다</strong> — 네이티브 쿼리나 DB 전용 기능을 쓴다면 `@DynamicPropertySource`로 실제 MySQL/PostgreSQL 컨테이너를 연결한다.
 
-### 체크리스트
+3편에서는 API 문서화(Swagger/OpenAPI), AOP를 이용한 횡단 관심사 처리, 로깅 기반 설정을 다룬다.
 
-- [ ] DB 연결 설정이 올바른가?
-- [ ] 테스트용 H2 설정이 분리되어 있는가?
-- [ ] 테스트에서 롤백이 정상 동작하는가?
-- [ ] Mock 객체 사용이 적절한가?
-- [ ] Security 설정이 테스트를 방해하지 않는가?
+Swagger UI가 단순 어노테이션 이상인 이유, `@Around` AOP로 로깅과 성능 측정을 어떻게 분리하는지를 살핀다.
 
-<details>
-<summary>💡 테스트 커버리지, 얼마나 해야 할까?</summary>
+[이전: 1편 - Core Application Layer](/blog/spring-boot-pre-interview-guide-1) | [다음: 3편 - Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
 
-**커버리지 목표치 논쟁**
+---
 
-- **100% 추구파**: 모든 코드가 테스트되어야 안전하다
-- **실용주의파**: 중요한 비즈니스 로직만 테스트하면 충분하다
+## 부록
 
-**실무에서의 현실**
+### 의미 있는 테스트 vs 의미 없는 테스트
 
-| 항목 | 일반적인 목표 | 비고 |
-|-----|-------------|-----|
-| 전체 커버리지 | 60~80% | 팀/프로젝트마다 다름 |
-| 비즈니스 로직 (Service) | 80~90% | 핵심 로직은 반드시 테스트 |
-| Repository | 필요시 | 복잡한 쿼리만 테스트 |
-| Controller | 주요 시나리오 | Happy path + 주요 예외 |
-| Config/Util | 선택적 | 복잡한 로직이 있는 경우만 |
+테스트가 없는 것보다는 낫지만, 의미 없는 테스트는 유지 비용만 높인다.
 
-**과제에서의 권장**
-
-시간이 제한된 과제에서 **모든 코드를 테스트할 필요는 없다**. 다음 우선순위로 작성:
-
-1. **필수**: Service 레이어의 핵심 비즈니스 로직
-2. **권장**: 복잡한 Querydsl 쿼리, 예외 상황 처리
-3. **선택**: Controller 테스트, 단순 CRUD
-
-**테스트가 없는 것보다 낫지만**, 의미 없는 테스트(getter/setter 테스트 등)는 오히려 마이너스다.
+| 구분 | 예시 | 이유 |
+|------|------|------|
+| 의미 없음 | getter/setter 호출 후 값 일치 확인 | 컴파일러가 이미 보장함 |
+| 의미 없음 | `new Product("test", 1000)` 후 `getName()` 확인 | 로직이 없음 |
+| 의미 있음 | 재고 부족 시 예외 발생 여부 | 비즈니스 규칙을 검증 |
+| 의미 있음 | 동일 이름 상품 저장 시 유니크 제약 위반 | DB 제약조건을 검증 |
 
 ```java
 // ❌ 의미 없는 테스트
@@ -1034,11 +768,25 @@ void 재고가_부족하면_예외가_발생한다() {
 }
 ```
 
+### 커버리지 가이드
+
+<details>
+<summary><strong>더 자세히 — 커버리지 목표와 사전과제 우선순위</strong></summary>
+
+커버리지는 팀과 프로젝트마다 다르다. 일반적인 기준은 다음과 같다.
+
+| 레이어 | 일반적인 목표 | 비고 |
+|--------|------------|------|
+| Service (비즈니스 로직) | 80~90% | 핵심 로직은 반드시 |
+| Repository | 복잡한 쿼리만 | 단순 CRUD는 선택 |
+| Controller | 주요 시나리오 | Happy path + 주요 예외 |
+| Config / Util | 선택적 | 복잡한 로직이 있는 경우만 |
+| 전체 | 60~80% | 팀 합의에 따라 다름 |
+
+사전과제에서 시간이 제한적이라면 다음 우선순위를 따른다.
+
+1. <strong>필수</strong>: Service 레이어의 핵심 비즈니스 로직 (예외 경로 포함)
+2. <strong>권장</strong>: 복잡한 Querydsl 쿼리, 예외 상황 처리
+3. <strong>선택</strong>: Controller, 단순 CRUD Repository
+
 </details>
-
----
-
-다음 편에서는 **API 문서화(Swagger)**, **로깅 전략**, **AOP 활용** 에 대해 다룹니다.
-
-👉 [이전: 1편 - Core Application Layer](/blog/spring-boot-pre-interview-guide-1)
-👉 [다음: 3편 - Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
