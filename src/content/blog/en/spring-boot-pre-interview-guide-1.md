@@ -793,6 +793,108 @@ public class ProductService {
 - <strong>Accept Command objects as parameters, not Request DTOs</strong>
 
 <details>
+<summary><strong>Single-entity deletion — 4 approaches and the deleteById myth</strong></summary>
+
+Two approaches usually come to mind for deleting a single entity — `deleteById(id)` and `findById + delete(entity)`. Between them sits a common myth, plus two lesser-known variants worth knowing.
+
+<strong>Myth — "deleteById skips the SELECT and is faster"</strong>
+
+Almost untrue. Spring Data's `SimpleJpaRepository.deleteById()` actually does this:
+
+```java
+@Override
+@Transactional
+public void deleteById(ID id) {
+    Assert.notNull(id, "...");
+    findById(id).ifPresent(this::delete);   // ← it calls findById internally
+}
+```
+
+JPA needs the entity in the persistence context to honor cascade and `@PreRemove`/`@PostRemove`, so it can't just fire a single DELETE. <strong>SELECT + DELETE — two queries — happens regardless</strong>.
+
+<strong>Comparison of the four approaches</strong>
+
+| Approach | Queries | Missing-entity behavior | Business validation | cascade · @PreRemove | When |
+|------|:---:|------|:---:|:---:|------|
+| 1. `deleteById(id)` | 2 (SELECT + DELETE) | silently ignored | ✗ | ✓ | almost never |
+| <strong>2. `findById` + `delete`</strong> | 2 | <strong>throws an exception</strong> | <strong>✓</strong> | ✓ | <strong>industry standard</strong> |
+| 3. `@Modifying @Query DELETE` | 1 | returns affected rows | ✗ | <strong>✗</strong> | bulk only — wrong for single |
+| 4. Domain method | 2 (SELECT + UPDATE) | throws an exception | <strong>✓</strong> | ✓ | <strong>soft delete</strong> |
+
+<strong>Approach 1 — why `deleteById` is rarely used</strong>
+
+```java
+productRepository.deleteById(productId);   // one line, but...
+```
+
+In modern Spring Data, calling it with a non-existent ID throws nothing. The caller can't tell whether anything was actually deleted, which becomes a <strong>silent entry point for bugs</strong>. It also leaves no room for pre-deletion checks ("can't delete an order that's already paid") or audit logging.
+
+<strong>Approach 2 — the standard (findById + delete)</strong>
+
+```java
+@Transactional
+public void deleteProduct(Long productId) {
+    Product product = productRepository.findById(productId)
+        .orElseThrow(NotFoundException::new);
+
+    // domain validation or event publishing fits here
+    productRepository.delete(product);
+}
+```
+
+Same query count as `deleteById`, but with <strong>an explicit 404 and a place to insert validation</strong>. It also lines up with the rest of Part 1's pattern of "the Service pulls the domain object and operates on it."
+
+<strong>Approach 3 — a shortcut with serious traps</strong>
+
+```java
+@Modifying(clearAutomatically = true)   // ← omit this and the persistence context goes stale
+@Query("DELETE FROM Product p WHERE p.id = :id")
+int deleteByIdInBulk(@Param("id") Long id);
+```
+
+A single DELETE is fired, but:
+- <strong>`@PreRemove`·`@PostRemove` are skipped</strong>
+- <strong>cascade is bypassed</strong> → child entities can remain and violate FK constraints
+- <strong>persistence context goes stale</strong> → re-querying within the same transaction can return cached data
+
+Not worth using for a single entity. Only useful for `WHERE id IN (...)` style bulk deletes of tens of thousands of rows.
+
+<strong>Approach 4 — the canonical soft delete</strong>
+
+```java
+// Service
+@Transactional
+public void deleteProduct(Long productId) {
+    Product product = productRepository.findById(productId)
+        .orElseThrow(NotFoundException::new);
+    product.softDelete();   // Dirty Checking emits the UPDATE
+}
+
+// Entity
+public void softDelete() {
+    if (this.deletedAt != null) {
+        throw new BadRequestException(ErrorCode.ALREADY_DELETED);
+    }
+    this.deletedAt = LocalDateTime.now();
+}
+```
+
+The domain owns the "can this be deleted now?" rule, and the UPDATE is emitted by Dirty Checking — no explicit save call needed.
+
+<strong>Choosing by requirement</strong>
+
+```text
+Requirement ──┬── plain hard delete                     → Approach 2 (findById + delete)
+              ├── hard delete with validation/audit     → Approach 2 + a domain method
+              ├── soft delete                           → Approach 4 (domain method)
+              └── tens of thousands at once (batch)     → Approach 3 (@Modifying)
+```
+
+<strong>"deleteById is almost never used"</strong> is the takeaway. It's short, but its silent success is consistently the door to silent bugs.
+
+</details>
+
+<details>
 <summary><strong>deleteAll() vs deleteAllInBatch()</strong></summary>
 
 <strong>deleteAll()</strong>
@@ -822,9 +924,11 @@ public class ProductService {
 - Saves storage space
 
 <strong>Soft Delete</strong>
-- Logical deletion using a `deleted` flag or `deletedAt` column
+- Logical deletion using a `deletedAt` (timestamp, nullable) column — null means alive, a value means deleted at that moment
 - Data recovery possible, easier auditing
 - Always requires a deletion-status condition in queries (`@Where`, `@SQLRestriction`)
+
+> <strong>Column choice</strong>: `deletedAt` (timestamp) is the standard, not `deleted` (boolean). It packs "when was it deleted" into the same column, and the method name reads naturally — `findByIdAndDeletedAtIsNull` ("the one whose deletedAt is null" = "the live one"). A boolean `deleted` produces awkward names like `findByIdAndDeletedFalse` and forces a separate column for the deletion timestamp.
 
 <strong>In practice</strong>
 
@@ -838,9 +942,95 @@ Most production projects use Soft Delete. Especially when:
 If not specified in the requirements, Hard Delete is fine. If you implement Soft Delete, don't forget to filter out deleted data in the query logic.
 
 ```java
-// Example query method when implementing Soft Delete
-Optional<Product> findByIdAndDeletedFalse(Long id);
+// Example query method when implementing Soft Delete (deletedAt column)
+Optional<Product> findByIdAndDeletedAtIsNull(Long id);
 ```
+
+</details>
+
+<details>
+<summary><strong>Soft Delete performance myths and 5 alternative patterns</strong></summary>
+
+At scale, a simple `deletedAt` flag isn't always enough. Let's bust a common myth first, then walk through real-world patterns.
+
+<strong>Myth: "deletedAt is faster than boolean"</strong>
+
+Almost untrue. Both columns have cardinality of effectively 2 (alive vs deleted), and in production alive rows make up ~99% of the table. Indexing this column alone amounts to "scan most of the table" from the optimizer's view — so by itself it doesn't help much.
+
+The real performance differentiator is <strong>partial / filtered indexes</strong>:
+
+```sql
+-- PostgreSQL — index only the alive rows
+CREATE INDEX idx_products_alive ON products (category)
+WHERE deleted_at IS NULL;
+```
+
+Partial indexes work with both boolean and timestamp, but `IS NULL` reads more naturally in the index definition. Even so, the gap is small — when real performance pressure arrives, you move on to archive tables.
+
+<strong>Five-pattern comparison</strong>
+
+| Pattern | Core structure | When |
+|---------|---------------|------|
+| <strong>A. `deletedAt` flag</strong> | Nullable timestamp on the live table | Assignments, small-to-mid scale (default) |
+| <strong>B. `status` enum</strong> | Multiple lifecycle states | Orders, content with several states |
+| <strong>C. Archive table</strong> | Move rows to a separate table on delete | Live table at tens of millions to hundreds of millions of rows |
+| <strong>D. Hard delete + audit log</strong> | Actually delete + record in a separate audit table | User PII, GDPR/CCPA |
+| <strong>E. Event sourcing</strong> | Every change is an append-only event | Finance, healthcare, regulated audit trail |
+
+<strong>Pattern B — status enum</strong>
+
+When deletion isn't a single boolean but part of a lifecycle:
+
+```java
+public enum OrderStatus { PENDING, PAID, CANCELLED, REFUNDED, DELETED }
+
+@Entity
+public class Order {
+    @Enumerated(EnumType.STRING)   // ORDINAL breaks when the enum is reordered or extended
+    @Column(nullable = false)
+    private OrderStatus status;
+}
+```
+
+Query as `status != 'DELETED'` or `IN (...)`. <strong>Always use `EnumType.STRING`</strong> — with `ORDINAL`, adding or reordering enum values silently invalidates existing rows.
+
+<strong>Pattern C — archive table</strong>
+
+```sql
+-- Inside the delete transaction
+INSERT INTO products_archive
+SELECT *, NOW() AS archived_at FROM products WHERE id = ?;
+
+DELETE FROM products WHERE id = ?;
+```
+
+The live table stays lean and indexes remain meaningful. To restore, copy back from the archive. Standard at large-scale SaaS.
+
+<strong>Pattern D — hard delete + audit log</strong>
+
+When GDPR "right to be forgotten" applies:
+
+```java
+@Transactional
+public void deleteUser(Long userId) {
+    User user = userRepository.findById(userId).orElseThrow(NotFoundException::new);
+
+    auditLogRepository.save(AuditLog.of(user, "DELETE"));  // trace stays in audit
+    userRepository.delete(user);                            // row actually goes
+}
+```
+
+Live table stays smallest, the audit trail lives in a dedicated table. Effectively required for any domain holding personal data.
+
+<strong>Pattern E — event sourcing</strong>
+
+"Delete" becomes an event written to an append-only log; current state is derived by replay. Used in finance, healthcare, and regulated industries — but it's a complexity step up and <strong>almost never makes sense for a pre-interview assignment</strong>.
+
+<strong>How to phrase it in an interview</strong>
+
+> "I went with a `deletedAt` timestamp. It carries more information than a boolean and pairs naturally with partial indexes. At higher scale the standard move is an archive table, and for user PII a hard delete with an audit log is more appropriate due to GDPR."
+
+That level of nuance signals "this person actually understands soft-delete patterns at scale."
 
 </details>
 
@@ -864,6 +1054,14 @@ class ProductService(
         )
 
         return product.id!!
+    }
+
+    @Transactional
+    fun deleteProduct(productId: Long) {
+        val product = productRepository.findById(productId)
+            ?: throw NotFoundException()
+
+        productRepository.delete(product)
     }
 
     @Transactional
@@ -900,6 +1098,14 @@ public class ProductService {
         product.update(command.name(), command.category());
 
         return product.getId();
+    }
+
+    @Transactional
+    public void deleteProduct(Long productId) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(NotFoundException::new);
+
+        productRepository.delete(product);
     }
 
     @Transactional
@@ -1043,7 +1249,7 @@ spring:
 
 ```kotlin
 interface ProductRepository : JpaRepository<Product, Long>, ProductRepositoryCustom {
-    fun findByIdAndDeletedFalse(id: Long): Product?
+    fun findByIdAndDeletedAtIsNull(id: Long): Product?
     fun findAllByIdIn(ids: Collection<Long>): List<Product>
 }
 
@@ -1109,7 +1315,7 @@ class ProductRepositoryImpl(
 public interface ProductRepository extends JpaRepository<Product, Long>,
         ProductRepositoryCustom {
 
-    Optional<Product> findByIdAndDeletedFalse(Long id);
+    Optional<Product> findByIdAndDeletedAtIsNull(Long id);
     List<Product> findAllByIdIn(Collection<Long> ids);
 }
 

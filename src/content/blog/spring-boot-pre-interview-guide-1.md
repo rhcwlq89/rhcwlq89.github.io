@@ -797,6 +797,108 @@ public class ProductService {
 - <strong>Request DTO가 아닌 Command 객체를 파라미터로 받는다</strong>
 
 <details>
+<summary><strong>단일 엔티티 삭제 — 4가지 방법과 deleteById 미신</strong></summary>
+
+단일 엔티티를 지우는 데에는 보통 두 가지가 떠오른다 — `deleteById(id)`와 `findById + delete(entity)`. 그 사이에 자주 듣는 미신과 잘 안 알려진 두 변형까지 같이 본다.
+
+<strong>미신 — "deleteById는 SELECT 안 해서 빠르다"</strong>
+
+거의 사실이 아니다. Spring Data의 `SimpleJpaRepository.deleteById()` 실제 구현은 다음과 같다.
+
+```java
+@Override
+@Transactional
+public void deleteById(ID id) {
+    Assert.notNull(id, "...");
+    findById(id).ifPresent(this::delete);   // ← 내부에서 findById부터 호출
+}
+```
+
+JPA가 영속성 컨텍스트에서 엔티티를 관리해야 cascade와 `@PreRemove`/`@PostRemove`를 보장할 수 있어서, 그냥 DELETE 한 방으로 못 보낸다. <strong>SELECT + DELETE 두 쿼리</strong>가 똑같이 나간다.
+
+<strong>4가지 방법 비교</strong>
+
+| 방법 | 쿼리 수 | 미존재 처리 | 비즈니스 검증 | cascade · @PreRemove | 권장 |
+|------|:---:|------|:---:|:---:|------|
+| 1. `deleteById(id)` | 2 (SELECT + DELETE) | 조용히 무시 | ✗ | ✓ | 거의 안 씀 |
+| <strong>2. `findById` + `delete`</strong> | 2 | <strong>예외 던지기</strong> | <strong>✓</strong> | ✓ | <strong>실무 표준</strong> |
+| 3. `@Modifying @Query DELETE` | 1 | 영향 row 수 반환 | ✗ | <strong>✗</strong> | 단일엔 부적합 (bulk용) |
+| 4. 도메인 메서드 | 2 (SELECT + UPDATE) | 예외 던지기 | <strong>✓</strong> | ✓ | <strong>soft delete</strong> |
+
+<strong>방법 1 — `deleteById`가 거의 쓰이지 않는 이유</strong>
+
+```java
+productRepository.deleteById(productId);   // 한 줄, 그러나
+```
+
+modern Spring Data에선 미존재 ID로 호출해도 예외가 안 난다. 호출자 입장에선 "정말 지웠는지" 알 길이 없어서 <strong>버그를 조용히 숨기는 입구</strong>가 된다. 또 삭제 전 검증("이미 결제된 주문은 삭제 못 함")이나 audit 로그를 끼우기도 어렵다.
+
+<strong>방법 2 — 실무 표준 (findById + delete)</strong>
+
+```java
+@Transactional
+public void deleteProduct(Long productId) {
+    Product product = productRepository.findById(productId)
+        .orElseThrow(NotFoundException::new);
+
+    // 여기서 도메인 검증·이벤트 발행 가능
+    productRepository.delete(product);
+}
+```
+
+쿼리 수는 deleteById와 같고, 대신 <strong>404를 명확히 던지고 검증을 끼울 수 있다</strong>. 1편에서 일관되게 쓴 "Service가 도메인을 꺼내서 작업한다"는 흐름과도 맞물린다.
+
+<strong>방법 3 — 함정이 큰 단축경로</strong>
+
+```java
+@Modifying(clearAutomatically = true)   // ← 빠뜨리면 영속성 컨텍스트가 stale
+@Query("DELETE FROM Product p WHERE p.id = :id")
+int deleteByIdInBulk(@Param("id") Long id);
+```
+
+DELETE 한 방이 나가지만:
+- <strong>`@PreRemove`·`@PostRemove` 미실행</strong>
+- <strong>cascade 미적용</strong> → 자식 엔티티 남아 FK 제약 위반 가능
+- <strong>영속성 컨텍스트 stale</strong> → 같은 트랜잭션에서 다시 조회 시 옛 캐시가 나옴
+
+단일 엔티티에 쓸 가치가 없고, "WHERE id IN (...)"으로 수만 건 일괄 삭제할 때만 의미 있다.
+
+<strong>방법 4 — soft delete의 정석</strong>
+
+```java
+// Service
+@Transactional
+public void deleteProduct(Long productId) {
+    Product product = productRepository.findById(productId)
+        .orElseThrow(NotFoundException::new);
+    product.softDelete();   // Dirty Checking이 UPDATE 발행
+}
+
+// Entity
+public void softDelete() {
+    if (this.deletedAt != null) {
+        throw new BadRequestException(ErrorCode.ALREADY_DELETED);
+    }
+    this.deletedAt = LocalDateTime.now();
+}
+```
+
+도메인이 "삭제 가능 여부"의 책임을 가지고, 명시적 save 호출 없이 Dirty Checking으로 UPDATE가 나간다.
+
+<strong>요구사항별 선택</strong>
+
+```text
+요구사항 ─┬─ 그냥 hard delete                    → 방법 2 (findById + delete)
+          ├─ 검증·audit 필요한 hard delete       → 방법 2 + 도메인 메서드 호출
+          ├─ Soft delete                        → 방법 4 (도메인 메서드)
+          └─ 수만 건 일괄 (배치)                  → 방법 3 (@Modifying)
+```
+
+<strong>"deleteById는 거의 안 쓴다"</strong>가 결론. 짧긴 하지만 "조용한 성공"이 거의 항상 버그의 입구가 된다.
+
+</details>
+
+<details>
 <summary><strong>deleteAll() vs deleteAllInBatch() 차이</strong></summary>
 
 <strong>deleteAll()</strong>
@@ -826,9 +928,11 @@ public class ProductService {
 - 저장 공간 절약
 
 <strong>Soft Delete</strong>
-- `deleted` 플래그나 `deletedAt` 컬럼으로 논리 삭제
+- `deletedAt`(timestamp, nullable) 컬럼으로 논리 삭제 — null이면 살아있음, 값이 있으면 그 시점에 삭제
 - 데이터 복구 가능, 감사(Audit) 용이
 - 조회 시 항상 삭제 여부 조건 필요 (`@Where`, `@SQLRestriction`)
+
+> <strong>컬럼 선택</strong>: `deletedAt`(timestamp)이 `deleted`(boolean)보다 표준이다. 언제 삭제됐는지가 한 컬럼에 담기고, 메서드명도 `findByIdAndDeletedAtIsNull`("deletedAt이 null인 것 = 살아있는 것")로 자연스럽게 읽힌다. boolean `deleted`는 `findByIdAndDeletedFalse`처럼 어순이 어색해지고, 삭제 시점도 따로 컬럼을 둬야 한다.
 
 <strong>실무에서의 선택</strong>
 
@@ -842,9 +946,95 @@ public class ProductService {
 요구사항에 명시되지 않았다면 Hard Delete로 구현해도 무방하다. Soft Delete를 구현한다면 조회 로직에서 삭제된 데이터를 필터링하는 것을 잊지 말아야 한다.
 
 ```java
-// Soft Delete 구현 시 조회 메서드 예시
-Optional<Product> findByIdAndDeletedFalse(Long id);
+// Soft Delete 구현 시 조회 메서드 예시 (deletedAt 컬럼 기준)
+Optional<Product> findByIdAndDeletedAtIsNull(Long id);
 ```
+
+</details>
+
+<details>
+<summary><strong>Soft Delete 성능 미신과 대안 패턴 5가지</strong></summary>
+
+규모가 커지면 단순 `deletedAt` 플래그만으로는 부족해진다. 먼저 자주 듣는 미신부터 깨고, 실무 패턴들을 정리한다.
+
+<strong>미신: "boolean보다 deletedAt이 빠르다"</strong>
+
+거의 사실이 아니다. 두 컬럼 모두 cardinality가 사실상 2(살아있음/삭제됨)이고, 실서비스에서는 살아있는 행이 99%를 차지한다. 이 컬럼만 단독 인덱싱하는 건 옵티마이저 입장에선 "거의 모든 행을 도는 조건"이라 큰 의미가 없다.
+
+진짜 성능이 갈리는 지점은 <strong>부분 인덱스(partial index, filtered index)</strong>에 있다.
+
+```sql
+-- PostgreSQL — 살아있는 행만 인덱싱
+CREATE INDEX idx_products_alive ON products (category)
+WHERE deleted_at IS NULL;
+```
+
+부분 인덱스는 boolean이든 timestamp든 정의할 수 있지만, `IS NULL`이 정의에 더 자연스럽게 어울린다. 다만 이 차이도 미미하고, 진짜 성능 압박이 오면 다음 단계(아카이브 테이블)로 넘어가야 한다.
+
+<strong>5가지 패턴 비교</strong>
+
+| 패턴 | 핵심 구조 | 적합한 상황 |
+|------|----------|------------|
+| <strong>A. `deletedAt` 플래그</strong> | live 테이블에 nullable timestamp | 사전과제·중소 규모 (기본) |
+| <strong>B. `status` enum</strong> | 다중 lifecycle 상태 | 주문·콘텐츠처럼 상태가 여럿 |
+| <strong>C. Archive 테이블</strong> | 삭제 시점에 별도 테이블로 이관 | live 테이블이 수천만~수억 행 |
+| <strong>D. Hard Delete + Audit Log</strong> | 실제 삭제 + 별도 audit 테이블 기록 | 사용자 개인정보, GDPR/CCPA |
+| <strong>E. Event Sourcing</strong> | 모든 변경을 append-only 이벤트로 | 금융·의료·감사 추적 필수 |
+
+<strong>패턴 B — status enum</strong>
+
+삭제가 단일 boolean이 아닌, lifecycle 일부일 때:
+
+```java
+public enum OrderStatus { PENDING, PAID, CANCELLED, REFUNDED, DELETED }
+
+@Entity
+public class Order {
+    @Enumerated(EnumType.STRING)   // ORDINAL은 enum 추가/순서 변경 시 마이그레이션이 깨진다
+    @Column(nullable = false)
+    private OrderStatus status;
+}
+```
+
+조회는 `status != 'DELETED'` 또는 `IN (...)`. <strong>반드시 `EnumType.STRING`</strong> — `ORDINAL`은 enum 값이 추가되거나 순서가 바뀌면 기존 데이터의 의미가 통째로 어긋난다.
+
+<strong>패턴 C — Archive 테이블</strong>
+
+```sql
+-- 삭제 트랜잭션에서
+INSERT INTO products_archive
+SELECT *, NOW() AS archived_at FROM products WHERE id = ?;
+
+DELETE FROM products WHERE id = ?;
+```
+
+live 테이블이 항상 lean하게 유지되어 인덱스가 의미 있게 동작한다. 복원이 필요하면 archive에서 다시 INSERT. 대규모 SaaS의 표준.
+
+<strong>패턴 D — Hard Delete + Audit Log</strong>
+
+GDPR "잊혀질 권리"에 대응할 때:
+
+```java
+@Transactional
+public void deleteUser(Long userId) {
+    User user = userRepository.findById(userId).orElseThrow(NotFoundException::new);
+
+    auditLogRepository.save(AuditLog.of(user, "DELETE"));  // 흔적은 audit에
+    userRepository.delete(user);                            // 실제로 지움
+}
+```
+
+live 테이블이 가장 가볍고, 감사 흔적은 별도 테이블에. 사용자 개인정보가 들어 있는 도메인이면 사실상 필수.
+
+<strong>패턴 E — Event Sourcing</strong>
+
+"삭제"라는 이벤트 자체를 append-only로 기록하고, 현재 상태는 이벤트 재생으로 derive. 금융·의료·규제 산업에서 쓰지만 복잡도가 한 단계 뛰는 패턴이라 <strong>사전과제 수준에선 거의 안 한다</strong>.
+
+<strong>면접에서 답할 때</strong>
+
+> "기본은 `deletedAt` timestamp로 했습니다. boolean보다 정보량이 많고 부분 인덱스도 자연스럽습니다. 다만 규모가 커지면 archive 테이블로 이관하는 패턴이 표준이고, 사용자 개인정보면 GDPR 때문에 hard delete + audit log가 더 적합합니다."
+
+이 정도까지 짚으면 "soft delete 패턴을 깊게 이해하고 있다"는 신호가 된다.
 
 </details>
 
@@ -868,6 +1058,14 @@ class ProductService(
         )
 
         return product.id!!
+    }
+
+    @Transactional
+    fun deleteProduct(productId: Long) {
+        val product = productRepository.findById(productId)
+            ?: throw NotFoundException()
+
+        productRepository.delete(product)
     }
 
     @Transactional
@@ -904,6 +1102,14 @@ public class ProductService {
         product.update(command.name(), command.category());
 
         return product.getId();
+    }
+
+    @Transactional
+    public void deleteProduct(Long productId) {
+        Product product = productRepository.findById(productId)
+            .orElseThrow(NotFoundException::new);
+
+        productRepository.delete(product);
     }
 
     @Transactional
@@ -1047,7 +1253,7 @@ spring:
 
 ```kotlin
 interface ProductRepository : JpaRepository<Product, Long>, ProductRepositoryCustom {
-    fun findByIdAndDeletedFalse(id: Long): Product?
+    fun findByIdAndDeletedAtIsNull(id: Long): Product?
     fun findAllByIdIn(ids: Collection<Long>): List<Product>
 }
 
@@ -1113,7 +1319,7 @@ class ProductRepositoryImpl(
 public interface ProductRepository extends JpaRepository<Product, Long>,
         ProductRepositoryCustom {
 
-    Optional<Product> findByIdAndDeletedFalse(Long id);
+    Optional<Product> findByIdAndDeletedAtIsNull(Long id);
     List<Product> findAllByIdIn(Collection<Long> ids);
 }
 
