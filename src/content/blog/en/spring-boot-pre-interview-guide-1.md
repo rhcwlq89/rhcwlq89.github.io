@@ -1,48 +1,92 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 1: Core Application Layer"
-description: "Core implementation guide for REST API, Service, Repository, and Domain layers"
-pubDate: "2026-01-09T10:00:00+09:00"
+title: "Spring Boot Pre-Interview Guide Part 1: Core Application Layer — Controller, Service, Repository, Domain"
+description: "The four-layer design points evaluators repeatedly flag in Spring Boot pre-interview assignments — Controller/Service/Repository/Domain responsibility split, Request → Command conversion, what @Transactional(readOnly=true) actually does, and the three-tier priority of GlobalExceptionHandler. Series Part 1."
+pubDate: "2026-04-29T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "REST API", "Backend", "Interview", "Practical Guide"]
-heroImage: "../../../assets/PreinterviewTaskGuide.png"
----
-
-## Series Navigation
-
-| Previous | Current | Next |
-|:---:|:---:|:---:|
-| - | **Part 1: Core Layer** | [Part 2: DB & Testing](/en/blog/spring-boot-pre-interview-guide-2) |
-
-> **Full Roadmap**: See [Spring Boot Pre-Interview Guide Roadmap](/en/blog/spring-boot-pre-interview-guide-1)
-
+heroImage: "../../../assets/SpringBootPreInterviewGuide1.png"
 ---
 
 ## Introduction
 
-This series is a guide compiled from recurring feedback points gathered through multiple rounds of submitting and reviewing Spring Boot-based pre-interview assignments.
+"How well does my Spring Boot pre-interview assignment have to be done to actually impress?"
 
-**What Part 1 covers:**
-- REST API Design (Presentation Layer)
-- Business Logic Separation (Service Layer)
-- Data Access (Repository Layer)
-- Domain Design (Entity Layer)
-- Global Exception Handling
+After submitting and reviewing pre-interview assignments many times, the same feedback points keep coming up. Most of them don't start with "the feature works" — they start with <strong>"the layer responsibilities are mixed up."</strong> This series collects those points from an evaluator's perspective.
 
-### Table of Contents
+Part 1 starts where it should: the <strong>Controller · Service · Repository · Domain</strong> four-layer architecture. We cover how to divide responsibilities, why Request DTOs should not be passed directly to the Service but converted into Commands, what `@Transactional(readOnly = true)` actually does, and why GlobalExceptionHandler is more than a simple catch-all.
 
-- [REST API (Presentation Layer)](#rest-api-presentation-layer)
-- [Business Logic (Service Layer)](#business-logic-service-layer)
-- [DB/Query (Repository Layer)](#dbquery-repository-layer)
-- [Domain (Entity Layer)](#domain-entity-layer)
-- [Summary](#summary)
+The target reader is a junior backend engineer who knows Spring but isn't sure where evaluators are looking. After reading, you should no longer hesitate about what belongs in which layer.
+
+- <strong>Part 1 — Core Application Layer (this post)</strong>
+- Part 2 — [Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation &amp; AOP](/en/blog/spring-boot-pre-interview-guide-3)
+- Part 4 — [Logging](/en/blog/spring-boot-pre-interview-guide-4)
+- Part 5 — [Authentication &amp; Validation](/en/blog/spring-boot-pre-interview-guide-5)
+- Part 6 — [Performance](/en/blog/spring-boot-pre-interview-guide-6)
+- Part 7 — [Production Readiness](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
-## REST API (Presentation Layer)
+## TL;DR
 
-### 1. CRUD and HTTP Method Mapping
+- <strong>Half of the evaluation is layer-responsibility separation</strong> — Controller does HTTP only, Service owns transactions and business logic, Repository owns queries, Domain owns state and invariants. Mixed responsibilities cost points.
+- <strong>Request DTO ≠ Service input</strong> — Request DTOs live only in the Controller; convert them to Commands before passing to the Service. The point is to keep web dependencies out of Service tests.
+- <strong>`@Transactional(readOnly = true)` is not "no transaction"</strong> — A transaction does start, but Dirty Checking and auto-flush are off, and it can serve as a Read Replica routing hint. The standard pattern: declare it at the class level and override only on write methods.
+- <strong>Entities expose business methods, not setters</strong> — `update(name, category)` instead of `setName()`. This blocks indiscriminate state changes and makes invariants visible in code. Default constructor stays `protected`.
+- <strong>GlobalExceptionHandler is three-tiered</strong> — `CommonException` (intentional business errors) → `MethodArgumentNotValidException` (validation failures) → `Exception` (fallback). Without the fallback, the Whitelabel page leaks — which is itself a deduction.
 
-While you can distinguish PUT for full updates and PATCH for partial updates, it's best to avoid mixing them and stick with one consistent approach.
+---
+
+## 1. Four Layers at a Glance
+
+### 1.1 Request Flow
+
+The path a single request takes from arrival to response, and where each layer sits, looks like this.
+
+```mermaid
+flowchart TB
+    Client([Client])
+
+    subgraph App["Spring Boot Application"]
+        Controller["Controller<br/>@RestController"]
+        Service["Service<br/>@Service · @Transactional"]
+        Repository["Repository<br/>JpaRepository · Querydsl"]
+        Entity["Entity<br/>Domain Model"]
+        Handler["GlobalExceptionHandler<br/>@RestControllerAdvice"]
+    end
+
+    DB[("Database")]
+
+    Client -->|HTTP Request| Controller
+    Controller -->|Command| Service
+    Service -->|use| Repository
+    Service -->|operate on| Entity
+    Repository --> DB
+    Service -.throws.-> Handler
+    Handler -.JSON.-> Client
+    Controller -.JSON.-> Client
+```
+
+The arrows point in one direction for a reason. <strong>The Controller knows only the Service, the Service knows the Repository and Entity, and the Repository knows only the DB.</strong> Reverse dependencies — a Service that knows HTTP, an Entity that knows DTOs — are anti-patterns.
+
+### 1.2 Responsibility per Layer
+
+| Layer | Responsibility | What it must never do |
+|------|------|--------------------|
+| <strong>Controller</strong> | HTTP mapping, validation, DTO ↔ Command conversion | Business logic, transactions |
+| <strong>Service</strong> | Transactions, business rules, DTO conversion | Depend on HTTP annotations |
+| <strong>Repository</strong> | Queries, pagination | Business branching |
+| <strong>Domain</strong> | State and invariants, business methods | Expose setters |
+
+> <strong>Note</strong>: Don't collapse layers just because the assignment is small. "The Service has only one line, why not move it to the Controller?" is a trap — evaluators are looking at the separation itself.
+
+---
+
+## 2. Presentation Layer (Controller)
+
+### 2.1 CRUD and HTTP Method Mapping
+
+You can distinguish PUT for full updates and PATCH for partial updates, but the better move is to commit to one approach instead of mixing.
 
 | Operation | HTTP Method |
 |------|-------------|
@@ -52,40 +96,39 @@ While you can distinguish PUT for full updates and PATCH for partial updates, it
 | Delete | DELETE |
 
 <details>
-<summary>PUT vs PATCH Debate</summary>
+<summary><strong>PUT vs PATCH Debate</strong></summary>
 
-**REST Principle Distinction**
+<strong>REST principle distinction</strong>
 - `PUT`: Replaces the entire resource (guarantees idempotency)
 - `PATCH`: Modifies only part of the resource
 
-**Reality in Practice**
+<strong>Reality in practice</strong>
 
-In most real-world projects, teams either **use only PATCH** or **use only PUT**.
+In most real-world projects, teams either use only PATCH or only PUT.
 
-- **PATCH-only approach**: Most modifications are partial updates, and full replacements are rarely needed
-- **PUT-only approach**: The team convention is standardized on PUT, or the frontend always sends the complete data
+- <strong>PATCH only</strong>: Most modifications are partial updates, and full replacements are rarely needed.
+- <strong>PUT only</strong>: The team convention standardizes on PUT, or the frontend always sends the complete payload.
 
-**Recommendation for Assignments**
+<strong>Recommendation for assignments</strong>
 
-For assignments, **stick with one approach** and explain your reasoning in the README. Mixing both approaches without a clear rationale can actually hurt your evaluation.
+Stick with one approach and explain your reasoning in the README. Mixing both without a clear rule actually hurts the evaluation.
 
 </details>
 
-### 2. URI Design Principles
+### 2.2 URI Design Principles
 
-- **Plural nouns**: `/orders`, `/users`, `/products`
-- **Ownership relationships**: `/users/{userId}/orders`
-- **Actions**: `/orders/{orderId}/cancel`
+- <strong>Plural nouns</strong>: `/orders`, `/users`, `/products`
+- <strong>Ownership</strong>: `/users/{userId}/orders`
+- <strong>Actions</strong>: `/orders/{orderId}/cancel`
 
-> **Tip**: Action URIs like cancel may or may not be acceptable depending on the domain.
-> For simple CRUD assignments, consider expressing state changes via PATCH instead.
+> <strong>Tip</strong>: Action URIs like `cancel` may or may not be acceptable depending on the domain. For simple CRUD assignments, consider expressing state changes via PATCH instead.
 
-### 3. Avoiding Hardcoded URIs
+### 2.3 Avoiding Hardcoded URIs
 
 Manage frequently used URIs as constants.
 
 <details>
-<summary>ApiPaths (Kotlin)</summary>
+<summary><strong>ApiPaths (Kotlin)</strong></summary>
 
 ```kotlin
 object ApiPaths {
@@ -98,7 +141,7 @@ object ApiPaths {
 </details>
 
 <details>
-<summary>ApiPaths (Java)</summary>
+<summary><strong>ApiPaths (Java)</strong></summary>
 
 ```java
 public final class ApiPaths {
@@ -112,38 +155,38 @@ public final class ApiPaths {
 
 </details>
 
-### 4. Common Response Class
+### 2.4 Common Response Class
 
 Typically composed of a response code, response message, and data section.
 
-- **HTTP Status**: Protocol semantics (200, 400, 500, etc.)
-- **code**: Business error classification (ERR001, ERR002, etc.)
+- <strong>HTTP Status</strong>: Protocol semantics (200, 400, 500, etc.)
+- <strong>code</strong>: Business error classification (ERR001, ERR002, etc.)
 
-> **Exceptions**: File downloads, streaming APIs, and HealthCheck endpoints should not use the common response class.
+> <strong>Exceptions</strong>: File downloads, streaming APIs, and HealthCheck endpoints should not be wrapped in the common response.
 
 <details>
-<summary>Is a Common Response Class Really Necessary?</summary>
+<summary><strong>Is a common response class really necessary?</strong></summary>
 
-**Arguments For**
+<strong>For</strong>
 - Clients can predict the response format, making parsing easier
 - Business errors can be subdivided through error codes
 - Provides a consistent interface for frontend collaboration
 
-**Arguments Against**
-- HTTP Status Codes alone are sufficient to distinguish errors
+<strong>Against</strong>
+- HTTP status codes alone are usually enough to distinguish errors
 - Unnecessary wrapping increases response size
-- According to REST principles, HTTP Status should indicate success/failure
+- Per REST principles, HTTP status should already indicate success/failure
 
-**Practical Tips**
+<strong>Practical tip</strong>
 
-Most companies use a common response class. It's especially useful for legacy systems or when supporting multiple clients (web, mobile app, external integrations).
+Most teams in the field do use a common response class. It's especially useful for legacy systems or when supporting multiple clients (web, mobile, external integrations).
 
-**For assignments**, if not explicitly specified in the requirements, using a common response class is the safer choice. However, make sure to set appropriate HTTP Status codes as well (e.g., 201 Created, 404 Not Found).
+<strong>For assignments</strong>, if not specified in the requirements, using a common response class is the safer choice. Just make sure to set appropriate HTTP status codes too (e.g., 201 Created, 404 Not Found).
 
 </details>
 
 <details>
-<summary>CommonResponse (Kotlin)</summary>
+<summary><strong>CommonResponse (Kotlin)</strong></summary>
 
 ```kotlin
 data class CommonResponse<T>(
@@ -169,7 +212,7 @@ data class CommonResponse<T>(
 </details>
 
 <details>
-<summary>CommonResponse (Java)</summary>
+<summary><strong>CommonResponse (Java)</strong></summary>
 
 ```java
 public record CommonResponse<T>(
@@ -196,47 +239,46 @@ public record CommonResponse<T>(
 
 </details>
 
-### 5. DTO Validation
+### 2.5 DTO Validation and Command Conversion
 
 - Use `@Valid`, `@NotBlank`, `@Size`, `@NotNull`, etc.
 - Apply `@Valid` to nested DTOs as well
 - Handle validation exceptions in ExceptionHandler
-- **Request DTOs should only be used in the Controller; convert them to Command objects before passing to the Service**
+- <strong>Request DTOs only live in the Controller; convert them to Command objects before passing to the Service</strong>
 
-> **Tip**: Passing Request DTOs directly to the Service increases coupling between the Presentation Layer and Business Layer.
-> Using Command objects clearly separates layer responsibilities and allows Service tests to run without web-related dependencies.
+> <strong>Tip</strong>: Passing Request DTOs directly to the Service tightly couples the Presentation Layer to the Business Layer. Using Command objects clearly separates layer responsibilities and lets Service tests run without web-related dependencies.
 
 <details>
-<summary>Is the Command Pattern Always Necessary?</summary>
+<summary><strong>Is the Command pattern always necessary?</strong></summary>
 
-**Arguments For**
+<strong>For</strong>
 - Clear separation of dependencies between layers
 - No web annotation dependencies in Service tests
-- Changes to Request DTOs don't affect the Service
-- Multiple Controllers can call the same Service method in different ways
+- Changes to Request DTOs don't ripple into the Service
+- Multiple Controllers can call the same Service method differently
 
-**Arguments Against**
-- Over-engineering for simple CRUD operations
-- Additional conversion code increases boilerplate
-- Request and Command are often nearly identical
+<strong>Against</strong>
+- Over-engineering for simple CRUD
+- Conversion code adds boilerplate
+- Request and Command often look almost identical
 - Unnecessary complexity for small projects like assignments
 
-**Practical Tips**
+<strong>Practical tip</strong>
 
-- **Large-scale projects**: Command pattern recommended. Especially when domain logic is complex or the same logic is called from multiple channels (API, batch, message queue)
-- **Small projects/assignments**: Passing Request DTOs directly is fine. Just be consistent with one approach
+- <strong>Large-scale projects</strong>: Use the Command pattern. Especially when domain logic is complex or the same logic is invoked from multiple channels (API, batch, message queue).
+- <strong>Small projects / assignments</strong>: Passing Request DTOs directly is fine — just be consistent with one approach.
 
-**Recommendation for Assignments**
+<strong>Recommendation for assignments</strong>
 
-If you have enough time, using the Command pattern demonstrates your understanding of layer separation. However, if time is limited, using Request DTOs directly is not a penalty.
+If you have time, the Command pattern signals that you understand layer separation. If not, using Request DTOs directly isn't a deduction.
 
 </details>
 
 <details>
-<summary>Request DTO & Command (Kotlin)</summary>
+<summary><strong>Request DTO &amp; Command (Kotlin)</strong></summary>
 
 ```kotlin
-// Request DTO - Used for validation in the Controller
+// Request DTO - used for validation in the Controller
 data class RegisterProductRequest(
     @field:NotBlank
     @field:Size(max = 100)
@@ -279,7 +321,7 @@ data class ModifyProductRequest(
     )
 }
 
-// Command - Pure data object used in the Service Layer
+// Command - pure data object used in the Service Layer
 data class RegisterProductCommand(
     val name: String,
     val details: List<ProductDetailCommand>
@@ -303,10 +345,10 @@ enum class ProductCategoryType {
 </details>
 
 <details>
-<summary>Request DTO & Command (Java)</summary>
+<summary><strong>Request DTO &amp; Command (Java)</strong></summary>
 
 ```java
-// Request DTO - Used for validation in the Controller
+// Request DTO - used for validation in the Controller
 public record RegisterProductRequest(
     @NotBlank
     @Size(max = 100)
@@ -351,7 +393,7 @@ public record ModifyProductRequest(
     }
 }
 
-// Command - Pure data object used in the Service Layer
+// Command - pure data object used in the Service Layer
 public record RegisterProductCommand(
     String name,
     List<ProductDetailCommand> details
@@ -374,12 +416,12 @@ public enum ProductCategoryType {
 
 </details>
 
-### 6. Controller Implementation
+### 2.6 Controller Implementation
 
-The Controller should not contain business logic. **Request DTOs are converted to Commands in the Controller before being passed to the Service.**
+The Controller contains no business logic. <strong>Convert the Request DTO to a Command and delegate to the Service — that's the whole job.</strong>
 
 <details>
-<summary>Pagination Configuration (application.yml)</summary>
+<summary><strong>Pagination Configuration (application.yml)</strong></summary>
 
 ```yaml
 spring:
@@ -392,7 +434,7 @@ spring:
 </details>
 
 <details>
-<summary>Controller (Kotlin)</summary>
+<summary><strong>Controller (Kotlin)</strong></summary>
 
 ```kotlin
 @RestController
@@ -444,7 +486,7 @@ class ProductController(
 </details>
 
 <details>
-<summary>Controller (Java)</summary>
+<summary><strong>Controller (Java)</strong></summary>
 
 ```java
 @RestController
@@ -494,38 +536,39 @@ public class ProductController {
 
 ---
 
-## Business Logic (Service Layer)
+## 3. Business Layer (Service)
 
-### 1. Transaction Management
+### 3.1 Transaction Management
 
 - Separate read transactions with `readOnly = true` to prevent unnecessary Dirty Checking
+- Declare `@Transactional(readOnly = true)` at the class level and override write methods with `@Transactional`
 - Verify transaction behavior through logging configuration
 
 <details>
-<summary>Actual Effects of readOnly = true</summary>
+<summary><strong>Actual effects of readOnly = true</strong></summary>
 
-**How It Works**
-1. **Dirty Checking disabled**: No entity change detection, saving snapshot storage costs
-2. **Flush mode changed**: Set to `FlushMode.MANUAL`, preventing automatic flushes
-3. **DB hint propagation**: Some databases (e.g., MySQL Read Replica routing) utilize read-only hints
+<strong>How it works</strong>
+1. <strong>Dirty Checking disabled</strong>: No entity change detection, saving snapshot storage cost
+2. <strong>Flush mode changed</strong>: Set to `FlushMode.MANUAL`, preventing automatic flushes
+3. <strong>DB hint propagation</strong>: Some databases (e.g., MySQL Read Replica routing) use the read-only hint
 
-**Caveats**
-- Even with `readOnly = true`, **a transaction is still started** (it's not No Transaction)
-- Modifying an entity will be **silently ignored** without throwing an exception (be careful)
+<strong>Caveats</strong>
+- Even with `readOnly = true`, <strong>a transaction is still started</strong> — it's not "no transaction"
+- Modifying an entity is <strong>silently ignored</strong> without throwing an exception (be careful)
 - If OSIV is enabled, lazy loading still works
 
-**FlushMode Types**
+<strong>FlushMode types</strong>
 
-| Mode | Description | Use Case |
+| Mode | Description | Use case |
 |------|------|----------|
 | `AUTO` | Automatic flush before query execution and before commit (default) | Normal transactions |
 | `COMMIT` | Flush only on commit | Bulk read operations |
-| `MANUAL` | Only on explicit `flush()` call | Automatically set when `readOnly = true` |
+| `MANUAL` | Only on explicit `flush()` call | Set automatically when `readOnly = true` |
 | `ALWAYS` | Flush before every query | Rarely used |
 
-**OSIV (Open Session In View)**
+<strong>OSIV (Open Session In View)</strong>
 
-OSIV is a setting that extends the lifecycle of the persistence context to cover the entire HTTP request.
+OSIV extends the lifecycle of the persistence context to cover the entire HTTP request.
 
 ```yaml
 # Spring Boot default: true
@@ -534,25 +577,23 @@ spring:
     open-in-view: true  # OSIV enabled (default)
 ```
 
-| OSIV State | Persistence Context Scope | Pros | Cons |
+| OSIV state | Persistence context scope | Pros | Cons |
 |----------|-------------------|------|------|
-| `true` (default) | Request start ~ Response complete | Lazy loading available in Controller | DB connection held for a long time |
+| `true` (default) | Request start ~ response complete | Lazy loading available in Controller | DB connection held for a long time |
 | `false` | Within transaction scope | Faster connection release | `LazyInitializationException` possible in Controller |
 
-**Recommendation**: In production, set `open-in-view: false` and pre-load required data in the Service layer.
+<strong>Recommendation</strong>: In production, set `open-in-view: false` and pre-load required data in the Service layer.
 
-**Practical Tip**
-
-A common pattern is to declare `@Transactional(readOnly = true)` at the class level and override with `@Transactional` only on write methods.
+<strong>Standard pattern</strong>
 
 ```java
 @Service
-@Transactional(readOnly = true)  // Default: read-only
+@Transactional(readOnly = true)  // default: read-only
 public class ProductService {
 
     public Product findById(Long id) { ... }  // readOnly = true applied
 
-    @Transactional  // Write operation: overrides to readOnly = false
+    @Transactional  // write operation: overrides to readOnly = false
     public Long save(Product product) { ... }
 }
 ```
@@ -560,7 +601,7 @@ public class ProductService {
 </details>
 
 <details>
-<summary>Transaction Logging Level Configuration (application.yml)</summary>
+<summary><strong>Transaction Logging Level (application.yml)</strong></summary>
 
 ```yaml
 logging:
@@ -573,12 +614,12 @@ logging:
 
 </details>
 
-### 2. Custom Exception Definition
+### 3.2 Custom Exception Definition
 
-Handle expected exceptions using Custom Exceptions.
+Throw business-rule violations as Custom Exceptions and pin the HTTP status code and error code into each exception. This lets the handler map them straight into a response without branching.
 
 <details>
-<summary>Custom Exception (Kotlin)</summary>
+<summary><strong>Custom Exception (Kotlin)</strong></summary>
 
 ```kotlin
 enum class ErrorCode(
@@ -605,7 +646,7 @@ class NotFoundException(errorCode: ErrorCode = ErrorCode.ERR002)
 </details>
 
 <details>
-<summary>Custom Exception (Java)</summary>
+<summary><strong>Custom Exception (Java)</strong></summary>
 
 ```java
 @Getter
@@ -644,175 +685,13 @@ public class NotFoundException extends CommonException {
 
 </details>
 
-### 3. GlobalExceptionHandler
+### 3.3 Nullable Handling
 
-Use `@RestControllerAdvice` to handle exceptions consistently across the entire application.
-
-#### Exception Handling Priority
-
-Spring matches the **most specific handler** first based on the exception class hierarchy.
-
-| Priority | Handler | Target |
-|:---:|--------|----------|
-| 1 | `CommonException.class` | Exceptions intentionally thrown from business logic |
-| 2 | `MethodArgumentNotValidException.class` | Exceptions thrown when `@Valid` validation fails |
-| 3 | `Exception.class` | All unhandled exceptions (Fallback) |
-
-#### Role of Each Handler
-
-**CommonException Handler**
-
-Handles exceptions explicitly thrown from service logic. Used for business rule violations such as `NotFoundException` and `BadRequestException`, responding with the HTTP status code and error code defined in the exception.
-
-**MethodArgumentNotValidException Handler**
-
-Triggered when `@Valid` validation fails in the Controller. Extracts which field failed and why, then delivers the message to the client.
-
-**Exception Handler (Fallback)**
-
-The last line of defense that catches **all exceptions** not handled by the above handlers.
-
-- **Security**: Prevents internal information such as NPE messages, DB connection errors, or stack traces from being exposed to the client
-- **Logging**: Records the full stack trace in server logs for debugging (logging will be covered in more detail later)
-- **Consistency**: Returns unexpected errors in the `CommonResponse` format
-
-> **Note**: Without this handler, Spring's default error page (Whitelabel Error Page) or stack traces will be exposed.
-> If such screens are visible during assignment evaluation, it may result in penalties for insufficient exception handling.
+- Kotlin: use `?:` (Elvis operator) and nullable types
+- Java: use `Optional` and `orElseThrow()`
 
 <details>
-<summary>GlobalExceptionHandler (Kotlin)</summary>
-
-```kotlin
-@RestControllerAdvice
-class GlobalExceptionHandler {
-
-    private val log = LoggerFactory.getLogger(javaClass)
-
-    /**
-     * Business exception handler
-     * - Handles exceptions intentionally thrown from the service
-     * - Uses the HTTP status code and error code defined in the exception as-is
-     */
-    @ExceptionHandler(CommonException::class)
-    fun handleCommonException(e: CommonException): ResponseEntity<CommonResponse<Unit>> {
-        val response = CommonResponse.error<Unit>(
-            e.errorCode.code,
-            e.errorCode.message
-        )
-        return ResponseEntity(response, e.statusCode)
-    }
-
-    /**
-     * Validation exception handler
-     * - Triggered when @Valid validation fails
-     * - Extracts the failed field name and message for the response
-     */
-    @ExceptionHandler(MethodArgumentNotValidException::class)
-    fun handleValidationException(
-        e: MethodArgumentNotValidException
-    ): ResponseEntity<CommonResponse<Unit>> {
-        val fieldError = e.bindingResult.fieldErrors.firstOrNull()
-        val message = fieldError?.let { "${it.field}: ${it.defaultMessage}" }
-            ?: "Validation failed"
-
-        val response = CommonResponse.error<Unit>(ErrorCode.ERR001.code, message)
-        return ResponseEntity(response, HttpStatus.BAD_REQUEST)
-    }
-
-    /**
-     * Unexpected exception handler (Fallback)
-     * - Catches all exceptions not handled by the above handlers
-     * - Returns a generic message to prevent internal information exposure
-     * - Records the full stack trace in server logs for debugging
-     */
-    @ExceptionHandler(Exception::class)
-    fun handleException(e: Exception): ResponseEntity<CommonResponse<Unit>> {
-        log.error("Unexpected error occurred", e)
-
-        val response = CommonResponse.error<Unit>(
-            ErrorCode.ERR000.code,
-            ErrorCode.ERR000.message
-        )
-        return ResponseEntity(response, HttpStatus.INTERNAL_SERVER_ERROR)
-    }
-}
-```
-
-</details>
-
-<details>
-<summary>GlobalExceptionHandler (Java)</summary>
-
-```java
-@Slf4j
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-
-    /**
-     * Business exception handler
-     * - Handles exceptions intentionally thrown from the service
-     * - Uses the HTTP status code and error code defined in the exception as-is
-     */
-    @ExceptionHandler(CommonException.class)
-    public ResponseEntity<CommonResponse<Void>> handleCommonException(CommonException e) {
-        CommonResponse<Void> response = CommonResponse.error(
-            e.getErrorCode().getCode(),
-            e.getErrorCode().getMessage()
-        );
-        return ResponseEntity.status(e.getStatusCode()).body(response);
-    }
-
-    /**
-     * Validation exception handler
-     * - Triggered when @Valid validation fails
-     * - Extracts the failed field name and message for the response
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<CommonResponse<Void>> handleValidationException(
-            MethodArgumentNotValidException e) {
-        FieldError fieldError = e.getBindingResult().getFieldErrors().stream()
-            .findFirst()
-            .orElse(null);
-
-        String message = fieldError != null
-            ? fieldError.getField() + ": " + fieldError.getDefaultMessage()
-            : "Validation failed";
-
-        CommonResponse<Void> response = CommonResponse.error(
-            ErrorCode.ERR001.getCode(),
-            message
-        );
-        return ResponseEntity.badRequest().body(response);
-    }
-
-    /**
-     * Unexpected exception handler (Fallback)
-     * - Catches all exceptions not handled by the above handlers
-     * - Returns a generic message to prevent internal information exposure
-     * - Records the full stack trace in server logs for debugging
-     */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<CommonResponse<Void>> handleException(Exception e) {
-        log.error("Unexpected error occurred", e);
-
-        CommonResponse<Void> response = CommonResponse.error(
-            ErrorCode.ERR000.getCode(),
-            ErrorCode.ERR000.getMessage()
-        );
-        return ResponseEntity.internalServerError().body(response);
-    }
-}
-```
-
-</details>
-
-### 4. Nullable Handling
-
-- Kotlin: Use `?:` (Elvis operator) and nullable types
-- Java: Use `Optional` and `orElseThrow()`
-
-<details>
-<summary>Service Query (Kotlin)</summary>
+<summary><strong>Service Query (Kotlin)</strong></summary>
 
 ```kotlin
 @Service
@@ -832,7 +711,7 @@ class ProductService(
 </details>
 
 <details>
-<summary>Service Query (Java)</summary>
+<summary><strong>Service Query (Java)</strong></summary>
 
 ```java
 @Service
@@ -853,56 +732,56 @@ public class ProductService {
 
 </details>
 
-### 5. Service Implementation Principles
+### 3.4 Service Implementation Principles
 
-- Do not return Domain Models directly; convert them to response-specific DTOs
-- Use Streams for repetitive logic while maintaining readability
-- **Accept Command objects as parameters, not Request DTOs**
+- Don't return Domain Models directly; convert them to response-specific DTOs
+- Use Streams for repetitive logic while preserving readability
+- <strong>Accept Command objects as parameters, not Request DTOs</strong>
 
 <details>
-<summary>deleteAll() vs deleteAllInBatch() Differences</summary>
+<summary><strong>deleteAll() vs deleteAllInBatch()</strong></summary>
 
-**deleteAll()**
+<strong>deleteAll()</strong>
 - Queries and deletes entities one by one (N+1 query issue)
 - JPA callbacks like `@PreRemove`, `@PostRemove` are executed
 - Cascade deletion works
 
-**deleteAllInBatch()**
+<strong>deleteAllInBatch()</strong>
 - Bulk deletion with a single DELETE query
 - JPA callbacks are not executed
 - Cascade deletion does not work (potential FK constraint violations)
 
-**Practical Tips**
+<strong>Practical tip</strong>
 
 - Use `deleteAll()` when there are related entities or deletion callbacks are needed
 - Use `deleteAllInBatch()` for bulk deletion without relationships
-- For assignments, **`deleteAll()` is the safe choice**
+- For assignments, <strong>`deleteAll()` is the safe choice</strong>
 
 </details>
 
 <details>
-<summary>Soft Delete vs Hard Delete</summary>
+<summary><strong>Soft Delete vs Hard Delete</strong></summary>
 
-**Hard Delete**
-- Actually deletes the data
+<strong>Hard Delete</strong>
+- Actually removes the data
 - Simple and straightforward implementation
 - Saves storage space
 
-**Soft Delete**
+<strong>Soft Delete</strong>
 - Logical deletion using a `deleted` flag or `deletedAt` column
 - Data recovery possible, easier auditing
-- Always requires deletion status condition in queries (`@Where`, `@SQLRestriction`)
+- Always requires a deletion-status condition in queries (`@Where`, `@SQLRestriction`)
 
-**Choosing in Practice**
+<strong>In practice</strong>
 
-Most production projects use **Soft Delete**. Especially when:
+Most production projects use Soft Delete. Especially when:
 - Legal data retention is required (finance, healthcare, etc.)
-- Undo deletion functionality is needed
-- Deleted data is used for statistics/analysis
+- Undo-deletion functionality is needed
+- Deleted data is used for statistics/analytics
 
-**Recommendation for Assignments**
+<strong>Recommendation for assignments</strong>
 
-If not specified in the requirements, implementing **Hard Delete** is fine. If you implement Soft Delete, don't forget to filter out deleted data in query logic.
+If not specified in the requirements, Hard Delete is fine. If you implement Soft Delete, don't forget to filter out deleted data in the query logic.
 
 ```java
 // Example query method when implementing Soft Delete
@@ -912,7 +791,7 @@ Optional<Product> findByIdAndDeletedFalse(Long id);
 </details>
 
 <details>
-<summary>Service (Kotlin)</summary>
+<summary><strong>Service (Kotlin)</strong></summary>
 
 ```kotlin
 @Service
@@ -949,7 +828,7 @@ class ProductService(
 </details>
 
 <details>
-<summary>Service (Java)</summary>
+<summary><strong>Service (Java)</strong></summary>
 
 ```java
 @Service
@@ -986,21 +865,21 @@ public class ProductService {
 
 ---
 
-## DB/Query (Repository Layer)
+## 4. Data Access Layer (Repository)
 
-### 1. Basic Principles
+### 4.1 Basic Principles
 
-- **Nullable handling**: Java uses Optional, Kotlin uses Nullable
-- **Simple queries**: Use JPA Query Methods
-- **Complex queries**: Use Querydsl
-- **When using Querydsl**: Explicitly declare `@Transactional`
+- <strong>Nullable handling</strong>: Java uses Optional, Kotlin uses Nullable
+- <strong>Simple queries</strong>: use JPA Query Methods
+- <strong>Complex queries</strong>: use Querydsl
+- <strong>When using Querydsl</strong>: explicitly declare `@Transactional`
 
-### 2. Pagination
+### 4.2 Pagination
 
-Using `PageableExecutionUtils.getPage()` provides a performance benefit by skipping the count query on the last page.
+`PageableExecutionUtils.getPage()` provides a performance benefit by skipping the count query on the last page.
 
 <details>
-<summary>Repository (Kotlin)</summary>
+<summary><strong>Repository (Kotlin)</strong></summary>
 
 ```kotlin
 interface ProductRepository : JpaRepository<Product, Long>, ProductRepositoryCustom {
@@ -1064,7 +943,7 @@ class ProductRepositoryImpl(
 </details>
 
 <details>
-<summary>Repository (Java)</summary>
+<summary><strong>Repository (Java)</strong></summary>
 
 ```java
 public interface ProductRepository extends JpaRepository<Product, Long>,
@@ -1123,35 +1002,36 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 
 ---
 
-## Domain (Entity Layer)
+## 5. Domain Layer (Entity)
 
-### 1. Design Principles
+### 5.1 Design Principles
 
-- **Business methods instead of setters**: `updateName()`, `activate()`, etc.
-- **Default constructor should be protected**: Satisfies JPA spec + prevents indiscriminate object creation
-- **Separate related Entities**: Split child Entities when needed
-- **Fixed values**: Use Enums
+- <strong>Business methods instead of setters</strong>: `updateName()`, `activate()`, etc.
+- <strong>Default constructor should be protected</strong>: satisfies the JPA spec and prevents indiscriminate object creation
+- <strong>Separate related entities</strong>: split child entities when needed
+- <strong>Fixed values</strong>: use Enums
 
 <details>
-<summary>Using Lombok in Entities -- Is It Safe?</summary>
+<summary><strong>Using Lombok in entities — is it safe?</strong></summary>
 
-**Annotations That Require Caution**
+<strong>Annotations that require caution</strong>
 
-| Annotation | Risk Level | Reason |
+| Annotation | Risk | Reason |
 |-----------|:---:|------|
-| `@Data` | High | Includes `@EqualsAndHashCode` - infinite loop with bidirectional relationships |
+| `@Data` | High | Includes `@EqualsAndHashCode` — infinite loop with bidirectional relationships |
 | `@EqualsAndHashCode` | High | StackOverflow when including related entities |
-| `@ToString` | Medium | Forces lazy loading proxy initialization, infinite loop |
+| `@ToString` | Medium | Forces lazy-loading proxy initialization, infinite loop |
 | `@AllArgsConstructor` | Medium | Bugs possible when field order changes |
 | `@Setter` | Low | Unintended state changes possible |
 | `@Getter` | Safe | Generally no issues |
 | `@NoArgsConstructor` | Safe | Recommended with `access = PROTECTED` |
 | `@Builder` | Safe | But be careful when combined with `@AllArgsConstructor` |
 
-**@Builder + @AllArgsConstructor Combination Caution**
+<strong>@Builder + @AllArgsConstructor combination caution</strong>
+
+❌ Potentially problematic pattern
 
 ```java
-// Potentially problematic pattern
 @Entity
 @Builder
 @AllArgsConstructor
@@ -1171,8 +1051,9 @@ Product product = Product.builder()
     .build();
 ```
 
+✅ Recommended pattern — apply `@Builder` directly to a constructor
+
 ```java
-// Recommended pattern - Apply @Builder directly to the constructor
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -1190,33 +1071,33 @@ public class Product {
 }
 ```
 
-Applying `@Builder` to the constructor allows you to explicitly specify only the required fields and is safe against field order changes.
+Applying `@Builder` to the constructor lets you specify only the required fields and is safe against field-order changes.
 
-**Recommended Pattern for Production**
+<strong>Recommended production pattern</strong>
 
 ```java
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product {
-    // Do not use @Setter - change state through business methods
-    // @ToString - if needed, implement manually excluding related entities
-    // @EqualsAndHashCode - implement ID-based manually or don't use
+    // No @Setter — change state through business methods
+    // @ToString — if needed, implement manually excluding related entities
+    // @EqualsAndHashCode — implement ID-based manually or don't use it
 }
 ```
 
-**Recommendation for Assignments**
+<strong>Recommendation for assignments</strong>
 
 Use only `@Getter` and `@NoArgsConstructor(access = PROTECTED)`, and implement everything else manually. Never use `@Data`.
 
 </details>
 
-### 2. BaseEntity
+### 5.2 BaseEntity
 
 Separate common fields like creation time and modification time into a BaseEntity.
 
 <details>
-<summary>BaseEntity (Kotlin)</summary>
+<summary><strong>BaseEntity (Kotlin)</strong></summary>
 
 ```kotlin
 @MappedSuperclass
@@ -1252,7 +1133,7 @@ abstract class BaseEntityWithAuditor : BaseEntity() {
 </details>
 
 <details>
-<summary>BaseEntity (Java)</summary>
+<summary><strong>BaseEntity (Java)</strong></summary>
 
 ```java
 @MappedSuperclass
@@ -1285,10 +1166,10 @@ public abstract class BaseEntityWithAuditor extends BaseEntity {
 
 </details>
 
-### 3. Entity Implementation
+### 5.3 Entity Implementation
 
 <details>
-<summary>Entity (Kotlin)</summary>
+<summary><strong>Entity (Kotlin)</strong></summary>
 
 ```kotlin
 @Entity
@@ -1327,7 +1208,7 @@ class Product(
 </details>
 
 <details>
-<summary>Entity (Java)</summary>
+<summary><strong>Entity (Java)</strong></summary>
 
 ```java
 @Entity
@@ -1374,29 +1255,184 @@ public class Product extends BaseEntity {
 
 ---
 
-## Summary
+## 6. Global Exception Handling
+
+Use `@RestControllerAdvice` to handle exceptions consistently across the entire application. It's not a generic catch-all — <strong>different exception types branch to different response shapes</strong>.
+
+### 6.1 Handler Priority
+
+Spring matches the <strong>most specific handler</strong> first based on the exception class hierarchy.
+
+| Priority | Handler | Target |
+|:---:|--------|----------|
+| 1 | `CommonException.class` | Exceptions intentionally thrown from business logic |
+| 2 | `MethodArgumentNotValidException.class` | Exceptions thrown when `@Valid` validation fails |
+| 3 | `Exception.class` | All unhandled exceptions (Fallback) |
+
+### 6.2 Role of Each Handler
+
+- <strong>CommonException handler</strong> — handles exceptions explicitly thrown from service logic (`NotFoundException`, `BadRequestException`, etc.). Responds with the HTTP status code and error code defined in the exception.
+- <strong>MethodArgumentNotValidException handler</strong> — fires when `@Valid` validation fails in the Controller. Extracts which field failed and why, then sends that message to the client.
+- <strong>Exception handler (Fallback)</strong> — the last line of defense for everything the prior two handlers don't catch. Internal information (NPE messages, DB connection errors, etc.) must never leak to the client; only the server log gets the full stack trace.
+
+> <strong>Note</strong>: Without a fallback handler, Spring's default error page (Whitelabel Error Page) or a stack trace will be exposed. Surfacing that during evaluation is itself a deduction for insufficient exception handling.
+
+### 6.3 GlobalExceptionHandler Implementation
+
+<details>
+<summary><strong>GlobalExceptionHandler (Kotlin)</strong></summary>
+
+```kotlin
+@RestControllerAdvice
+class GlobalExceptionHandler {
+
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * Business exception handler
+     * - Handles exceptions intentionally thrown from the service
+     * - Uses the HTTP status code and error code defined in the exception as-is
+     */
+    @ExceptionHandler(CommonException::class)
+    fun handleCommonException(e: CommonException): ResponseEntity<CommonResponse<Unit>> {
+        val response = CommonResponse.error<Unit>(
+            e.errorCode.code,
+            e.errorCode.message
+        )
+        return ResponseEntity(response, e.statusCode)
+    }
+
+    /**
+     * Validation exception handler
+     * - Triggered when @Valid validation fails
+     * - Extracts the failed field name and message for the response
+     */
+    @ExceptionHandler(MethodArgumentNotValidException::class)
+    fun handleValidationException(
+        e: MethodArgumentNotValidException
+    ): ResponseEntity<CommonResponse<Unit>> {
+        val fieldError = e.bindingResult.fieldErrors.firstOrNull()
+        val message = fieldError?.let { "${it.field}: ${it.defaultMessage}" }
+            ?: "Validation failed"
+
+        val response = CommonResponse.error<Unit>(ErrorCode.ERR001.code, message)
+        return ResponseEntity(response, HttpStatus.BAD_REQUEST)
+    }
+
+    /**
+     * Unexpected exception handler (Fallback)
+     * - Catches all exceptions not handled by the above handlers
+     * - Returns a generic message to prevent internal information exposure
+     * - Records the full stack trace in server logs for debugging
+     */
+    @ExceptionHandler(Exception::class)
+    fun handleException(e: Exception): ResponseEntity<CommonResponse<Unit>> {
+        log.error("Unexpected error occurred", e)
+
+        val response = CommonResponse.error<Unit>(
+            ErrorCode.ERR000.code,
+            ErrorCode.ERR000.message
+        )
+        return ResponseEntity(response, HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>GlobalExceptionHandler (Java)</strong></summary>
+
+```java
+@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    /**
+     * Business exception handler
+     */
+    @ExceptionHandler(CommonException.class)
+    public ResponseEntity<CommonResponse<Void>> handleCommonException(CommonException e) {
+        CommonResponse<Void> response = CommonResponse.error(
+            e.getErrorCode().getCode(),
+            e.getErrorCode().getMessage()
+        );
+        return ResponseEntity.status(e.getStatusCode()).body(response);
+    }
+
+    /**
+     * Validation exception handler
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<CommonResponse<Void>> handleValidationException(
+            MethodArgumentNotValidException e) {
+        FieldError fieldError = e.getBindingResult().getFieldErrors().stream()
+            .findFirst()
+            .orElse(null);
+
+        String message = fieldError != null
+            ? fieldError.getField() + ": " + fieldError.getDefaultMessage()
+            : "Validation failed";
+
+        CommonResponse<Void> response = CommonResponse.error(
+            ErrorCode.ERR001.getCode(),
+            message
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    /**
+     * Fallback
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<CommonResponse<Void>> handleException(Exception e) {
+        log.error("Unexpected error occurred", e);
+
+        CommonResponse<Void> response = CommonResponse.error(
+            ErrorCode.ERR000.getCode(),
+            ErrorCode.ERR000.getMessage()
+        );
+        return ResponseEntity.internalServerError().body(response);
+    }
+}
+```
+
+</details>
+
+---
+
+## Recap
+
+- <strong>The four layers depend in one direction</strong> — Controller → Service → Repository → DB. Reverse dependencies are anti-patterns, and that's the first thing evaluators look at.
+- <strong>Request DTOs die in the Controller</strong> — only Commands enter the Service. The signal is that Service tests must run as unit tests without `MockMvc`.
+- <strong>Separate read and write transactions</strong> — `@Transactional(readOnly = true)` on the class, `@Transactional` on write methods. One line, two wins: lower Dirty Checking cost and Read Replica routing potential.
+- <strong>Entities speak through state-changing methods</strong> — `update()`, `enable()`, `disable()` instead of setters. What can change must be visible in code.
+- <strong>Exceptions become responses in the handler</strong> — `CommonException` → intended error response, validation → field message, fallback → hide internals and return a generic message. A missing fallback is itself a deduction.
 
 ### Checklist by Layer
 
 | Layer | Check Points |
 |--------|------------|
-| **Controller** | HTTP Method mapping, URI design, Validation, Common response, Request to Command conversion |
-| **Service** | Transaction management, Exception handling, DTO conversion, Command object usage |
-| **Repository** | Nullable handling, Pagination, Querydsl usage |
-| **Domain** | Business methods, BaseEntity, protected constructor |
+| <strong>Controller</strong> | HTTP method mapping, URI design, validation, common response, Request → Command conversion |
+| <strong>Service</strong> | Transaction management, exception handling, DTO conversion, Command object usage |
+| <strong>Repository</strong> | Nullable handling, pagination, Querydsl usage |
+| <strong>Domain</strong> | Business methods, BaseEntity, protected constructor |
+| <strong>Exception Handler</strong> | Three-tier priority, fallback that blocks internal exposure |
 
-### Quick Checklist
+<details>
+<summary><strong>Pre-submission Quick Checklist</strong></summary>
 
-- [ ] Are CRUD operations correctly mapped to HTTP Methods?
+- [ ] Are CRUD operations correctly mapped to HTTP methods?
 - [ ] Do URIs clearly represent resources?
-- [ ] Is Validation applied to DTOs?
-- [ ] Are Request DTOs converted to Commands before passing to the Service?
+- [ ] Is validation applied to DTOs?
+- [ ] Are Request DTOs converted to Commands before being passed to the Service?
 - [ ] Is `readOnly = true` set for read transactions?
 - [ ] Are exceptions handled consistently in the GlobalExceptionHandler?
-- [ ] Do Entities have business methods instead of setters?
+- [ ] Do entities have business methods instead of setters?
+- [ ] Is the fallback handler (`Exception.class`) defined?
 
----
+</details>
 
-The next part covers **Database Configuration** and **Test Environment**.
+The next part is <strong>Database &amp; Testing</strong>. With the four layers drawn in code, we now look at the database those layers live on and how that code gets verified. Profile-based H2/MySQL separation, JPA mapping pitfalls, and how to split unit, slice, and integration tests so the evaluator walks away thinking, "this person actually writes tests."
 
-[Next: Part 2 - Database & Testing](/en/blog/spring-boot-pre-interview-guide-2)
+[Next: Part 2 — Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2)
