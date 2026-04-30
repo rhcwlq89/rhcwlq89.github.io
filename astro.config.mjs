@@ -48,7 +48,9 @@ export default defineConfig({
 		sitemap({
 			filter(page) {
 				const { pathname } = new URL(page);
-				return !pathname.startsWith('/blog/tags/') && !pathname.startsWith('/en/blog/tags/');
+				if (pathname.startsWith('/blog/tags/') || pathname.startsWith('/en/blog/tags/')) return false;
+				if (pathname === '/novi-note/' || pathname === '/en/novi-note/') return false;
+				return true;
 			},
 			i18n: {
 				defaultLocale: 'ko',
