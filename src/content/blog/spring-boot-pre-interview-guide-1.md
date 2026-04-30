@@ -1,7 +1,7 @@
 ---
 title: "스프링 사전과제 가이드 1편: Core Application Layer — Controller·Service·Repository·Domain 4계층"
 description: "Spring Boot 사전과제에서 평가자가 반복적으로 지적하는 4계층 설계 포인트만 추렸다. Controller·Service·Repository·Domain 책임 분리, Request → Command 변환, @Transactional(readOnly=true)의 실제 효과, GlobalExceptionHandler 3단 우선순위까지 — 시리즈 1편."
-pubDate: 2026-04-29T10:00:00+09:00
+pubDate: 2026-01-09T10:00:00+09:00
 tags:
   - Spring Boot
   - REST API

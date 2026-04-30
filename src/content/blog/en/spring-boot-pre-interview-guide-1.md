@@ -1,7 +1,7 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 1: Core Application Layer — Controller, Service, Repository, Domain"
 description: "The four-layer design points evaluators repeatedly flag in Spring Boot pre-interview assignments — Controller/Service/Repository/Domain responsibility split, Request → Command conversion, what @Transactional(readOnly=true) actually does, and the three-tier priority of GlobalExceptionHandler. Series Part 1."
-pubDate: "2026-04-29T10:00:00+09:00"
+pubDate: "2026-01-09T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "REST API", "Backend", "Interview", "Practical Guide"]
 heroImage: "../../../assets/SpringBootPreInterviewGuide1.png"
