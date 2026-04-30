@@ -123,6 +123,73 @@ Stick with one approach and explain your reasoning in the README. Mixing both wi
 
 > <strong>Tip</strong>: Action URIs like `cancel` may or may not be acceptable depending on the domain. For simple CRUD assignments, consider expressing state changes via PATCH instead.
 
+<details>
+<summary><strong>How to fill the URL when expressing an action as PATCH</strong></summary>
+
+The rule: <strong>don't put verbs in the URL — keep the resource path as-is and let the body carry the intent.</strong>
+
+```http
+# Action URI style (RPC-ish)
+POST /api/v1/orders/{orderId}/cancel
+
+# PATCH style — verb disappears from the URL, intent moves to body
+PATCH /api/v1/orders/{orderId}
+Content-Type: application/json
+
+{ "status": "CANCELLED" }
+```
+
+<strong>Three variants seen in the field</strong>
+
+| Pattern | URL | Body | When |
+|------|-----|------|------|
+| Action URI | `POST /orders/{id}/cancel` | empty / small | Domain verb is a first-class concept (payment, refund, approval) |
+| Resource PATCH | `PATCH /orders/{id}` | `{"status":"CANCELLED"}` | Simple state machine — recommended for assignments |
+| Sub-resource | `PUT /orders/{id}/status` | `{"value":"CANCELLED"}` | Modeling status itself as a resource |
+
+<strong>Spring Boot shape (Java)</strong>
+
+```java
+// Controller — no "cancel" in the URL
+@PatchMapping("/{orderId}")
+public CommonResponse<Long> modifyOrder(
+        @PathVariable Long orderId,
+        @Valid @RequestBody ModifyOrderRequest request) {
+    return CommonResponse.success(orderService.modifyOrder(orderId, request.toCommand()));
+}
+
+// Service — delegate state transition to the domain method
+@Transactional
+public Long modifyOrder(Long orderId, ModifyOrderCommand command) {
+    Order order = orderRepository.findById(orderId)
+        .orElseThrow(NotFoundException::new);
+
+    if (command.status() == OrderStatus.CANCELLED) {
+        order.cancel();   // transition validity is the Entity's job
+    }
+    return order.getId();
+}
+
+// Entity — same business-method + invariant pattern as Section 5
+public void cancel() {
+    if (this.status == OrderStatus.COMPLETED) {
+        throw new BadRequestException(ErrorCode.ORDER_ALREADY_COMPLETED);
+    }
+    this.status = OrderStatus.CANCELLED;
+    this.cancelledAt = LocalDateTime.now();
+}
+```
+
+<strong>Pitfalls when standardizing on PATCH</strong>
+
+- <strong>Risk of accepting fields beyond the transition</strong> — if `ModifyOrderRequest` accepts status, name, and address all together, a cancel call can accidentally rewrite other fields. Either split DTOs per action or expose a dedicated status endpoint.
+- <strong>Intent ambiguity</strong> — `{"status":"CANCELLED"}` doesn't reveal whether it's "user cancellation" or "admin force-change" in audit logs.
+- <strong>Actions with bundled side effects</strong> — when cancellation triggers "refund + stock restoration + notification," PATCH feels too lightweight. `POST /orders/{id}/cancel` is more honest here.
+
+In short: simple state changes go through resource PATCH; workflows where the domain verb is the main event use the action URI. Don't mix the two — just document the choice in the README.
+
+</details>
+
 ### 2.3 Avoiding Hardcoded URIs
 
 Manage frequently used URIs as constants.

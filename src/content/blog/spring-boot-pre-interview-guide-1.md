@@ -127,6 +127,73 @@ PUT은 전체 수정, PATCH는 부분 수정으로 구분하는 것도 방법이
 
 > <strong>Tip</strong>: cancel 같은 행위 URI는 도메인 성격에 따라 허용 여부가 갈릴 수 있다. 단순 CRUD 과제에서는 상태 변경(PATCH)으로 표현하는 것도 고려해볼 것.
 
+<details>
+<summary><strong>행위를 PATCH로 표현할 때 URL을 어떻게 채우나</strong></summary>
+
+핵심은 <strong>URL에는 동사를 박지 않고, 리소스 경로 그대로 두고 "무엇을 바꿀지"는 body에 담는다</strong>는 것.
+
+```http
+# 행위 URI 스타일 (RPC-ish)
+POST /api/v1/orders/{orderId}/cancel
+
+# PATCH 스타일 — URL에서 동사가 사라지고, 의도는 body로
+PATCH /api/v1/orders/{orderId}
+Content-Type: application/json
+
+{ "status": "CANCELLED" }
+```
+
+<strong>실무에서 보이는 세 가지 변형</strong>
+
+| 패턴 | URL | Body | 쓸 때 |
+|------|-----|------|------|
+| 행위 URI | `POST /orders/{id}/cancel` | 없음/소량 | 도메인 동사가 1급 시민(결제·환불·승인) |
+| 리소스 PATCH | `PATCH /orders/{id}` | `{"status":"CANCELLED"}` | 단순 상태 머신 — 사전과제 권장 |
+| 서브리소스 | `PUT /orders/{id}/status` | `{"value":"CANCELLED"}` | status를 별도 리소스로 모델링 |
+
+<strong>Spring Boot에서의 모양 (Java)</strong>
+
+```java
+// Controller — URL에는 cancel 안 들어간다
+@PatchMapping("/{orderId}")
+public CommonResponse<Long> modifyOrder(
+        @PathVariable Long orderId,
+        @Valid @RequestBody ModifyOrderRequest request) {
+    return CommonResponse.success(orderService.modifyOrder(orderId, request.toCommand()));
+}
+
+// Service — 상태 전이는 도메인 메서드에 위임
+@Transactional
+public Long modifyOrder(Long orderId, ModifyOrderCommand command) {
+    Order order = orderRepository.findById(orderId)
+        .orElseThrow(NotFoundException::new);
+
+    if (command.status() == OrderStatus.CANCELLED) {
+        order.cancel();   // 전이 가능 여부 검증은 Entity 책임
+    }
+    return order.getId();
+}
+
+// Entity — 5장의 비즈니스 메서드 + 불변식 패턴 그대로
+public void cancel() {
+    if (this.status == OrderStatus.COMPLETED) {
+        throw new BadRequestException(ErrorCode.ORDER_ALREADY_COMPLETED);
+    }
+    this.status = OrderStatus.CANCELLED;
+    this.cancelledAt = LocalDateTime.now();
+}
+```
+
+<strong>PATCH로 통일했을 때의 함정</strong>
+
+- <strong>전이 외 필드까지 받을 위험</strong> — `ModifyOrderRequest`가 status, name, address를 다 받으면 cancel 하려다 다른 필드까지 같이 바뀔 수 있다. DTO를 행위별로 분리하거나 status 전용 엔드포인트로 가는 게 안전.
+- <strong>의도 모호</strong> — `{"status":"CANCELLED"}`는 "사용자가 취소"인지 "관리자가 강제 변경"인지 감사 로그에서 안 드러난다.
+- <strong>부수 효과가 묶인 동작</strong> — 취소가 "환불 + 재고 복구 + 알림"을 트리거하면 PATCH는 너무 가볍다. 이런 케이스는 `POST /orders/{id}/cancel`이 더 정직.
+
+요약: 단순 상태 변경은 리소스 PATCH로, 도메인 동사가 핵심인 워크플로는 행위 URI로. 둘을 섞지 말고 README에 선택 이유만 적으면 된다.
+
+</details>
+
 ### 2.3 URI 하드코딩 방지
 
 반복적으로 사용되는 URI는 상수로 관리한다.
