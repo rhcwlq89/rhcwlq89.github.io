@@ -1175,6 +1175,72 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 - <strong>고정 값</strong>: Enum 활용
 
 <details>
+<summary><strong>왜 protected인가 — JPA 스펙·프록시·캡슐화</strong></summary>
+
+엄밀히는 <strong>꼭 protected여야 하는 건 아니다</strong>. JPA 2.1 스펙(§2.1)은 무인자 생성자의 접근제한자를 <strong>"public or protected"</strong>로 명시하므로 public도 동작한다. 그럼에도 protected가 표준이 된 이유는 세 가지 압력이 모두 그쪽으로 수렴하기 때문이다.
+
+<strong>1. public을 피하는 이유 — 불완전한 객체 생성 방지</strong>
+
+```java
+@Entity
+@NoArgsConstructor  // public이 기본
+public class Product extends BaseEntity {
+    @Column(nullable = false)
+    private String name;
+
+    public Product(String name) { this.name = name; }
+}
+
+// 어디서든 가능
+Product p = new Product();    // name이 null인 좀비 객체
+productRepository.save(p);    // DB에 NULL 박힐 때까지 안 들킨다
+```
+
+Entity는 Setter를 없애고 생성자 + 비즈니스 메서드로만 상태가 바뀌도록 설계하는데, public 무인자 생성자가 열려 있으면 이 원칙이 즉시 무너진다.
+
+<strong>2. private을 피하는 이유 — Hibernate 프록시가 부모 생성자를 호출해야 함</strong>
+
+Hibernate는 지연 로딩을 위해 Entity의 <strong>서브클래스(프록시)를 런타임에 생성</strong>한다. 프록시가 부모(우리 Entity)의 무인자 생성자를 호출해야 하므로, 자식 클래스가 그 생성자를 볼 수 있어야 한다.
+
+| 접근제한자 | 프록시가 호출 가능? |
+|------------|:---:|
+| `public` | ✓ |
+| `protected` | ✓ (서브클래스이므로) |
+| `package-private` | △ (같은 패키지면 가능) |
+| `private` | ✗ |
+
+private이어도 reflection으로 우회는 가능하지만 JPA 스펙 위반이고, 일부 바이트코드 enhancement 환경에서는 실제로 깨진다.
+
+<strong>3. protected가 두 압력의 교집합</strong>
+
+- JPA / Hibernate에는 충분히 보임 (스펙 만족, 프록시 가능)
+- 애플리케이션 코드에는 안 보임 (`new Product()` 차단)
+
+```java
+@Entity
+@NoArgsConstructor(access = AccessLevel.PROTECTED)  // ← 표준 한 줄
+public class Product extends BaseEntity {
+    public Product(String name) { this.name = name; }
+}
+
+new Product();   // ❌ 컴파일 에러 — protected access
+```
+
+<strong>Kotlin은 사정이 다르다</strong>
+
+```kotlin
+// build.gradle.kts
+plugins {
+    kotlin("plugin.jpa") version "..."     // @Entity에 무인자 생성자 자동 합성
+    kotlin("plugin.allopen") version "..." // @Entity 클래스의 final 해제 (프록시용)
+}
+```
+
+`kotlin-jpa` 플러그인이 컴파일 시점에 `@Entity` 클래스의 무인자 생성자를 자동으로 합성하므로, Kotlin에서는 직접 protected 생성자를 쓸 일이 거의 없다. 1편 Kotlin 예시에 명시적 protected 생성자가 없는데도 동작하는 게 그 이유다.
+
+</details>
+
+<details>
 <summary><strong>Entity에서 Lombok 사용, 괜찮은가?</strong></summary>
 
 <strong>주의가 필요한 어노테이션</strong>

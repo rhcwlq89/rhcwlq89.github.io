@@ -1171,6 +1171,72 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 - <strong>Fixed values</strong>: use Enums
 
 <details>
+<summary><strong>Why protected — JPA spec, proxies, and encapsulation</strong></summary>
+
+Strictly speaking, <strong>protected isn't mandatory</strong>. The JPA 2.1 spec (§2.1) states that the no-arg constructor must be <strong>"public or protected"</strong>, so public also works. Yet protected became the standard because three pressures all converge on it.
+
+<strong>1. Why not public — preventing incomplete objects</strong>
+
+```java
+@Entity
+@NoArgsConstructor  // defaults to public
+public class Product extends BaseEntity {
+    @Column(nullable = false)
+    private String name;
+
+    public Product(String name) { this.name = name; }
+}
+
+// Anyone can do this
+Product p = new Product();    // a zombie object with name = null
+productRepository.save(p);    // you won't notice until DB rejects NULL
+```
+
+Entities are designed to remove setters and have state changed only via constructors and business methods. A public no-arg constructor breaks that principle the moment it exists.
+
+<strong>2. Why not private — Hibernate proxies need to call the parent constructor</strong>
+
+For lazy loading, Hibernate generates <strong>subclass proxies of your Entity at runtime</strong>. The proxy must call the parent's (your Entity's) no-arg constructor, which means the child class must be able to see it.
+
+| Access modifier | Proxy can call? |
+|------------|:---:|
+| `public` | ✓ |
+| `protected` | ✓ (proxy is a subclass) |
+| `package-private` | △ (only within the same package) |
+| `private` | ✗ |
+
+Private can be worked around via reflection, but it violates the JPA spec and breaks under certain bytecode-enhancement setups.
+
+<strong>3. protected sits at the intersection of both pressures</strong>
+
+- Visible enough for JPA / Hibernate (spec-compliant, proxy-able)
+- Invisible to application code (`new Product()` is blocked)
+
+```java
+@Entity
+@NoArgsConstructor(access = AccessLevel.PROTECTED)  // ← the standard one-liner
+public class Product extends BaseEntity {
+    public Product(String name) { this.name = name; }
+}
+
+new Product();   // compile error — protected access
+```
+
+<strong>Kotlin is different</strong>
+
+```kotlin
+// build.gradle.kts
+plugins {
+    kotlin("plugin.jpa") version "..."     // synthesizes no-arg ctor on @Entity
+    kotlin("plugin.allopen") version "..." // opens @Entity classes for proxying
+}
+```
+
+The `kotlin-jpa` plugin synthesizes a no-arg constructor on `@Entity` classes at compile time, so you rarely write `protected` explicitly in Kotlin. That's why the Kotlin examples in Part 1 work without an explicit protected constructor.
+
+</details>
+
+<details>
 <summary><strong>Using Lombok in entities — is it safe?</strong></summary>
 
 <strong>Annotations that require caution</strong>
