@@ -147,7 +147,7 @@ Content-Type: application/json
 
 | 패턴 | URL | Body | 쓸 때 |
 |------|-----|------|------|
-| 행위 URI | `POST /orders/{id}/cancel` | 없음/소량 | 도메인 동사가 1급 시민(결제·환불·승인) |
+| 행위 URI | `POST /orders/{id}/cancel` | 없음/소량 | 행위 자체가 핵심 동작일 때(결제·환불·승인) |
 | 리소스 PATCH | `PATCH /orders/{id}` | `{"status":"CANCELLED"}` | 단순 상태 머신 — 사전과제 권장 |
 | 서브리소스 | `PUT /orders/{id}/status` | `{"value":"CANCELLED"}` | status를 별도 리소스로 모델링 |
 
@@ -492,19 +492,6 @@ public enum ProductCategoryType {
 Controller는 비즈니스 로직을 포함하지 않는다. <strong>Request DTO를 Command로 변환한 뒤 Service에 위임하는 게 전부</strong>다.
 
 <details>
-<summary><strong>페이지네이션 설정 (application.yml)</strong></summary>
-
-```yaml
-spring:
-  data:
-    web:
-      pageable:
-        max-page-size: 100
-```
-
-</details>
-
-<details>
 <summary><strong>Controller (Kotlin)</strong></summary>
 
 ```kotlin
@@ -561,7 +548,7 @@ class ProductController(
 
 ```java
 @RestController
-@RequestMapping(ApiPaths.API + ApiPaths.V1 + ApiPaths.PRODUCTS)
+@RequestMapping(API + V1 + PRODUCTS)   // import static com.example.config.ApiPaths.*;
 @RequiredArgsConstructor
 public class ProductController {
 
@@ -1037,7 +1024,23 @@ public interface ProductMapper {
 
 ### 4.2 페이징 처리
 
-`PageableExecutionUtils.getPage()`를 사용하면 마지막 페이지일 경우 count 쿼리를 생략하여 성능상 이점이 있다.
+`PageableExecutionUtils.getPage()`를 사용하면 마지막 페이지일 경우 count 쿼리를 생략하여 성능상 이점이 있다. 그리고 한 가지 잊기 쉬운 것 — Spring Data는 클라이언트가 `?size=10000` 같은 큰 페이지를 요청하면 그대로 받아준다. <strong>전역 상한을 application.yml에 박아두지 않으면 메모리·DB 부하의 입구가 된다.</strong>
+
+<details>
+<summary><strong>페이징 전역 설정 (application.yml)</strong></summary>
+
+```yaml
+spring:
+  data:
+    web:
+      pageable:
+        default-page-size: 20    # @PageableDefault 누락 시 기본
+        max-page-size: 100       # 상한 — 이걸 넘는 size 요청은 잘림
+```
+
+`max-page-size`는 Controller에서 `Pageable`을 받는 모든 엔드포인트에 자동 적용된다. Controller마다 따로 검증할 필요가 없어서 빠뜨리기 쉬운 보호막이다.
+
+</details>
 
 <details>
 <summary><strong>Repository (Kotlin)</strong></summary>

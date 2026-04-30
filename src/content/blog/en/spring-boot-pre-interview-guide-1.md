@@ -143,7 +143,7 @@ Content-Type: application/json
 
 | Pattern | URL | Body | When |
 |------|-----|------|------|
-| Action URI | `POST /orders/{id}/cancel` | empty / small | Domain verb is a first-class concept (payment, refund, approval) |
+| Action URI | `POST /orders/{id}/cancel` | empty / small | When the action itself is the core operation (payment, refund, approval) |
 | Resource PATCH | `PATCH /orders/{id}` | `{"status":"CANCELLED"}` | Simple state machine — recommended for assignments |
 | Sub-resource | `PUT /orders/{id}/status` | `{"value":"CANCELLED"}` | Modeling status itself as a resource |
 
@@ -488,19 +488,6 @@ public enum ProductCategoryType {
 The Controller contains no business logic. <strong>Convert the Request DTO to a Command and delegate to the Service — that's the whole job.</strong>
 
 <details>
-<summary><strong>Pagination Configuration (application.yml)</strong></summary>
-
-```yaml
-spring:
-  data:
-    web:
-      pageable:
-        max-page-size: 100
-```
-
-</details>
-
-<details>
 <summary><strong>Controller (Kotlin)</strong></summary>
 
 ```kotlin
@@ -557,7 +544,7 @@ class ProductController(
 
 ```java
 @RestController
-@RequestMapping(ApiPaths.API + ApiPaths.V1 + ApiPaths.PRODUCTS)
+@RequestMapping(API + V1 + PRODUCTS)   // import static com.example.config.ApiPaths.*;
 @RequiredArgsConstructor
 public class ProductController {
 
@@ -1033,7 +1020,23 @@ Pros: compile-time mapping verification and runtime performance. Cons: extra dep
 
 ### 4.2 Pagination
 
-`PageableExecutionUtils.getPage()` provides a performance benefit by skipping the count query on the last page.
+`PageableExecutionUtils.getPage()` provides a performance benefit by skipping the count query on the last page. And one easy-to-forget detail — Spring Data accepts `?size=10000` as-is unless you cap it. <strong>Without a global ceiling in application.yml, that becomes a backdoor for memory and DB pressure.</strong>
+
+<details>
+<summary><strong>Pagination global config (application.yml)</strong></summary>
+
+```yaml
+spring:
+  data:
+    web:
+      pageable:
+        default-page-size: 20    # used when @PageableDefault is missing
+        max-page-size: 100       # ceiling — bigger size requests are clamped
+```
+
+`max-page-size` applies automatically to every endpoint that receives a `Pageable`. It's a safety net that's easy to forget because it doesn't need per-Controller code.
+
+</details>
 
 <details>
 <summary><strong>Repository (Kotlin)</strong></summary>
