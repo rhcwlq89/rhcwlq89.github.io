@@ -934,6 +934,96 @@ public class ProductService {
 
 </details>
 
+### 3.5 Response DTO 변환 패턴
+
+Service는 Entity를 그대로 반환하지 않고 Response DTO로 변환한다. 변환 코드를 어디에 두느냐로 세 가지 패턴이 갈린다.
+
+| 패턴 | 변환 코드 위치 | 적합 |
+|------|--------------|------|
+| <strong>정적 팩토리</strong> | DTO의 `from(entity)` 메서드 | 사전과제 권장 |
+| 생성자 변환 | DTO 생성자가 Entity를 받음 | 매핑이 한 줄로 끝날 때 |
+| MapStruct | 별도 Mapper 자동 생성 | 매핑이 많거나 그래프가 깊을 때 |
+
+핵심은 <strong>변환 책임을 DTO 쪽에 둔다</strong>는 점이다. Entity가 DTO 모양을 알면 도메인이 표현 계층에 끌려다닌다.
+
+<details>
+<summary><strong>정적 팩토리 (Java)</strong></summary>
+
+```java
+public record FindProductDetailResponse(
+    Long id,
+    String name,
+    ProductCategoryType category,
+    boolean enabled,
+    LocalDateTime createdAt
+) {
+    public static FindProductDetailResponse from(Product product) {
+        return new FindProductDetailResponse(
+            product.getId(),
+            product.getName(),
+            product.getCategory(),
+            product.isEnabled(),
+            product.getCreatedAt()
+        );
+    }
+}
+
+// Service에서 사용
+public FindProductDetailResponse findProductDetail(Long productId) {
+    Product product = productRepository.findById(productId)
+        .orElseThrow(NotFoundException::new);
+    return FindProductDetailResponse.from(product);
+}
+```
+
+컬렉션 응답은 `entities.stream().map(Response::from).toList()`. 페이지 응답은 `page.map(Response::from)` — Spring Data `Page`가 `map`을 직접 지원한다.
+
+</details>
+
+<details>
+<summary><strong>정적 팩토리 (Kotlin)</strong></summary>
+
+```kotlin
+data class FindProductDetailResponse(
+    val id: Long,
+    val name: String,
+    val category: ProductCategoryType,
+    val enabled: Boolean,
+    val createdAt: LocalDateTime
+) {
+    companion object {
+        fun from(product: Product) = FindProductDetailResponse(
+            id = product.id!!,
+            name = product.name,
+            category = product.category,
+            enabled = product.enabled,
+            createdAt = product.createdAt
+        )
+    }
+}
+```
+
+확장 함수(`fun Product.toResponse()`)도 가능하지만, 정적 팩토리가 다른 코드 스타일과 더 일관된다.
+
+</details>
+
+<details>
+<summary><strong>MapStruct 대안</strong></summary>
+
+DTO가 많거나 그래프가 깊으면(Order → OrderItems → Product) 보일러플레이트를 크게 줄여준다.
+
+```java
+@Mapper(componentModel = "spring")
+public interface ProductMapper {
+    FindProductDetailResponse toDetailResponse(Product product);
+    List<FindProductResponse> toListResponse(List<Product> products);
+}
+```
+
+장점은 컴파일 타임 매핑 검증과 성능. 단점은 의존성과 어노테이션 학습 비용. <strong>사전과제처럼 도메인이 작으면 정적 팩토리가 더 빠르고 평가자가 읽기도 쉽다.</strong>
+
+</details>
+
 ---
 
 ## 4. Data Access Layer (Repository)
@@ -1070,6 +1160,8 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 ```
 
 </details>
+
+> <strong>참고</strong>: 페이지네이션 심화(Page vs Slice, 커서 기반 페이지네이션)는 [4편 — Performance](/blog/spring-boot-pre-interview-guide-4)에서, Querydsl 의존성과 설정은 [2편 — Database &amp; Testing](/blog/spring-boot-pre-interview-guide-2)에서 다룬다.
 
 ---
 
@@ -1324,6 +1416,109 @@ public class Product extends BaseEntity {
 
 </details>
 
+### 5.4 연관관계 매핑
+
+사전과제 도메인은 거의 항상 연관관계를 가진다(주문-상품, 회원-주문 등). 평가에서 가장 자주 지적되는 두 가지가 <strong>fetch 타입 미지정</strong>과 <strong>양방향 매핑 남용</strong>이다.
+
+핵심 원칙 세 가지:
+
+- <strong>fetch는 항상 LAZY로 명시</strong> — `@ManyToOne`/`@OneToOne`의 기본값이 EAGER라서 명시 안 하면 N+1의 단골손님이 된다.
+- <strong>양방향은 꼭 필요할 때만</strong> — 양쪽에서 다 탐색해야 하는 경우가 아니면 단방향(`@ManyToOne` 한쪽만)이 안전하다.
+- <strong>Cascade는 ALL을 피하고 필요한 것만</strong> — 자식 lifecycle이 부모와 정말 동일한 경우에만 `PERSIST`/`REMOVE` 명시.
+
+<details>
+<summary><strong>단방향 @ManyToOne (Java) — 가장 안전한 기본형</strong></summary>
+
+```java
+@Entity
+@Table(name = "orders")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Order extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderStatus status = OrderStatus.PENDING;
+
+    public Order(User user) {
+        this.user = user;
+    }
+}
+```
+
+`fetch = LAZY` 명시는 거의 마법 주문 — 빠뜨리면 Order 조회마다 User까지 SELECT가 따라붙는다.
+
+</details>
+
+<details>
+<summary><strong>양방향 @OneToMany (Java) — 진짜 필요할 때만</strong></summary>
+
+```java
+@Entity
+public class Order extends BaseEntity {
+    // ...
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItem> items = new ArrayList<>();
+
+    // 연관관계 편의 메서드 — 양쪽 동기화는 도메인 책임
+    public void addItem(OrderItem item) {
+        this.items.add(item);
+        item.assignTo(this);
+    }
+}
+
+@Entity
+@Table(name = "order_items")
+public class OrderItem {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false)
+    private Order order;
+
+    void assignTo(Order order) {
+        this.order = order;
+    }
+}
+```
+
+양방향에선 <strong>"연관관계의 주인"</strong>이 한쪽이고(보통 `@ManyToOne` 쪽), 반대편은 `mappedBy`로 읽기 전용임을 표시. cascade는 자식 lifecycle이 부모와 같을 때만(`OrderItem`은 `Order` 없으면 의미 없음).
+
+</details>
+
+<details>
+<summary><strong>fetch / cascade 빠른 가이드</strong></summary>
+
+| 어노테이션 | 기본 fetch | 권장 |
+|------|:---:|:---:|
+| `@ManyToOne` | EAGER | <strong>LAZY 명시</strong> |
+| `@OneToOne` | EAGER | <strong>LAZY 명시</strong> |
+| `@OneToMany` | LAZY | LAZY 유지 |
+| `@ManyToMany` | LAZY | <strong>중간 엔티티로 풀기</strong> |
+
+| Cascade | 의미 | 언제 |
+|---------|------|------|
+| `PERSIST` | 부모 저장 시 자식도 저장 | 자식 단독 저장이 의미 없을 때 |
+| `REMOVE` | 부모 삭제 시 자식도 삭제 | lifecycle 동일 |
+| `ALL` | 모든 cascade 활성 | 거의 쓰지 말 것 |
+| (없음) | 명시적 save 필요 | <strong>기본값 — 가장 안전</strong> |
+
+`@ManyToMany`는 거의 함정 — 중간 엔티티(`OrderItem` 같은)로 풀면 추가 컬럼(quantity, price)도 자연스럽게 들어간다.
+
+</details>
+
+> <strong>참고</strong>: 연관관계가 만드는 N+1, fetch join, `@EntityGraph` 같은 심화 기법은 [4편 — Performance](/blog/spring-boot-pre-interview-guide-4)에서 다룬다.
+
 ---
 
 ## 6. Global Exception Handling
@@ -1470,6 +1665,8 @@ public class GlobalExceptionHandler {
 
 </details>
 
+> <strong>참고</strong>: Spring Security가 던지는 인증/인가 예외(`AuthenticationException`, `AccessDeniedException`)를 같은 핸들러 형식으로 통합하는 방법은 [5편 — Security](/blog/spring-boot-pre-interview-guide-5)에서 다룬다.
+
 ---
 
 ## 정리
@@ -1485,9 +1682,9 @@ public class GlobalExceptionHandler {
 | 레이어 | 체크 포인트 |
 |--------|------------|
 | <strong>Controller</strong> | HTTP Method 매핑, URI 설계, Validation, 공통 응답, Request → Command 변환 |
-| <strong>Service</strong> | 트랜잭션 처리, 예외 처리, DTO 변환, Command 객체 사용 |
+| <strong>Service</strong> | 트랜잭션 분리, 예외 처리, Response DTO 정적 팩토리, Command 입력 |
 | <strong>Repository</strong> | Nullable 처리, 페이징, Querydsl 활용 |
-| <strong>Domain</strong> | 비즈니스 메서드, BaseEntity, protected 생성자 |
+| <strong>Domain</strong> | 비즈니스 메서드, BaseEntity, protected 생성자, 연관관계 fetch=LAZY |
 | <strong>Exception Handler</strong> | 우선순위 3단, Fallback의 정보 노출 차단 |
 
 <details>
@@ -1498,6 +1695,9 @@ public class GlobalExceptionHandler {
 - [ ] DTO에 Validation이 적용되어 있는가?
 - [ ] Request DTO를 Command로 변환하여 Service에 전달하는가?
 - [ ] 조회 트랜잭션에 `readOnly = true`가 설정되어 있는가?
+- [ ] Entity → Response DTO 변환이 `from()` 정적 팩토리 패턴인가?
+- [ ] `@ManyToOne` / `@OneToOne`의 fetch가 `LAZY`로 명시되어 있는가?
+- [ ] 양방향 매핑이 정말 필요한 경우에만 사용되었는가?
 - [ ] 예외 처리가 GlobalExceptionHandler에서 일관되게 처리되는가?
 - [ ] Entity에 setter 대신 비즈니스 메서드가 있는가?
 - [ ] Fallback 핸들러(`Exception.class`)가 정의되어 있는가?

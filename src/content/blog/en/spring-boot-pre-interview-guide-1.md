@@ -930,6 +930,96 @@ public class ProductService {
 
 </details>
 
+### 3.5 Response DTO Conversion Patterns
+
+The Service doesn't return Entities directly — it converts them into Response DTOs. Where the conversion code lives splits into three patterns.
+
+| Pattern | Where the conversion lives | Best for |
+|------|--------------|------|
+| <strong>Static factory</strong> | `from(entity)` method on the DTO | Recommended for assignments |
+| Constructor conversion | DTO constructor takes the Entity | When mapping is one line |
+| MapStruct | Auto-generated separate Mapper | Many DTOs or deep object graphs |
+
+The key principle: <strong>conversion responsibility belongs to the DTO side</strong>. If the Entity knows the DTO shape, the domain gets dragged around by the presentation layer.
+
+<details>
+<summary><strong>Static factory (Java)</strong></summary>
+
+```java
+public record FindProductDetailResponse(
+    Long id,
+    String name,
+    ProductCategoryType category,
+    boolean enabled,
+    LocalDateTime createdAt
+) {
+    public static FindProductDetailResponse from(Product product) {
+        return new FindProductDetailResponse(
+            product.getId(),
+            product.getName(),
+            product.getCategory(),
+            product.isEnabled(),
+            product.getCreatedAt()
+        );
+    }
+}
+
+// In the Service
+public FindProductDetailResponse findProductDetail(Long productId) {
+    Product product = productRepository.findById(productId)
+        .orElseThrow(NotFoundException::new);
+    return FindProductDetailResponse.from(product);
+}
+```
+
+For collection responses, use `entities.stream().map(Response::from).toList()`. For paged responses, use `page.map(Response::from)` — Spring Data's `Page` supports `map` directly.
+
+</details>
+
+<details>
+<summary><strong>Static factory (Kotlin)</strong></summary>
+
+```kotlin
+data class FindProductDetailResponse(
+    val id: Long,
+    val name: String,
+    val category: ProductCategoryType,
+    val enabled: Boolean,
+    val createdAt: LocalDateTime
+) {
+    companion object {
+        fun from(product: Product) = FindProductDetailResponse(
+            id = product.id!!,
+            name = product.name,
+            category = product.category,
+            enabled = product.enabled,
+            createdAt = product.createdAt
+        )
+    }
+}
+```
+
+An extension function (`fun Product.toResponse()`) is also possible, but the static factory stays more consistent with the rest of the code style.
+
+</details>
+
+<details>
+<summary><strong>MapStruct alternative</strong></summary>
+
+When you have many DTOs or deep graphs (Order → OrderItems → Product), MapStruct cuts the boilerplate substantially.
+
+```java
+@Mapper(componentModel = "spring")
+public interface ProductMapper {
+    FindProductDetailResponse toDetailResponse(Product product);
+    List<FindProductResponse> toListResponse(List<Product> products);
+}
+```
+
+Pros: compile-time mapping verification and runtime performance. Cons: extra dependency and learning curve. <strong>For a small assignment domain, the static factory is faster to write and easier for the evaluator to read.</strong>
+
+</details>
+
 ---
 
 ## 4. Data Access Layer (Repository)
@@ -1066,6 +1156,8 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 ```
 
 </details>
+
+> <strong>Note</strong>: Pagination depth (Page vs Slice, cursor-based pagination) is covered in [Part 4 — Performance](/en/blog/spring-boot-pre-interview-guide-4); Querydsl dependencies and setup live in [Part 2 — Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2).
 
 ---
 
@@ -1320,6 +1412,109 @@ public class Product extends BaseEntity {
 
 </details>
 
+### 5.4 Associations
+
+Assignment domains almost always involve associations (order-product, user-order, etc.). The two things evaluators flag most are <strong>missing fetch type</strong> and <strong>overuse of bidirectional mapping</strong>.
+
+Three core principles:
+
+- <strong>Always declare fetch as LAZY</strong> — the default for `@ManyToOne`/`@OneToOne` is EAGER, and forgetting to override it makes you a regular customer of the N+1 problem.
+- <strong>Bidirectional only when truly needed</strong> — unless you must traverse from both sides, unidirectional (just `@ManyToOne` on one side) is safer.
+- <strong>Avoid Cascade ALL; opt in to specific ones</strong> — only declare `PERSIST`/`REMOVE` when the child's lifecycle truly matches the parent's.
+
+<details>
+<summary><strong>Unidirectional @ManyToOne (Java) — the safe default</strong></summary>
+
+```java
+@Entity
+@Table(name = "orders")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Order extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderStatus status = OrderStatus.PENDING;
+
+    public Order(User user) {
+        this.user = user;
+    }
+}
+```
+
+Specifying `fetch = LAZY` is almost a magic incantation — without it, every Order query drags a User SELECT along.
+
+</details>
+
+<details>
+<summary><strong>Bidirectional @OneToMany (Java) — only when truly needed</strong></summary>
+
+```java
+@Entity
+public class Order extends BaseEntity {
+    // ...
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItem> items = new ArrayList<>();
+
+    // Convenience method — keeping both sides in sync is the domain's job
+    public void addItem(OrderItem item) {
+        this.items.add(item);
+        item.assignTo(this);
+    }
+}
+
+@Entity
+@Table(name = "order_items")
+public class OrderItem {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false)
+    private Order order;
+
+    void assignTo(Order order) {
+        this.order = order;
+    }
+}
+```
+
+In a bidirectional mapping, one side is the <strong>"owner of the relationship"</strong> (usually the `@ManyToOne` side), and the other declares `mappedBy` to mark itself read-only. Cascade is only justified when the child's lifecycle matches the parent's (`OrderItem` is meaningless without `Order`).
+
+</details>
+
+<details>
+<summary><strong>fetch / cascade quick reference</strong></summary>
+
+| Annotation | Default fetch | Recommendation |
+|------|:---:|:---:|
+| `@ManyToOne` | EAGER | <strong>Declare LAZY</strong> |
+| `@OneToOne` | EAGER | <strong>Declare LAZY</strong> |
+| `@OneToMany` | LAZY | Keep LAZY |
+| `@ManyToMany` | LAZY | <strong>Resolve into a join entity</strong> |
+
+| Cascade | Meaning | When |
+|---------|------|------|
+| `PERSIST` | Save child when parent is saved | Child can't exist independently |
+| `REMOVE` | Delete child when parent is deleted | Lifecycle matches |
+| `ALL` | Activate every cascade | Almost never use |
+| (none) | Explicit save required | <strong>Default — the safest</strong> |
+
+`@ManyToMany` is mostly a trap — resolving it into a join entity (like `OrderItem`) lets you naturally add columns like quantity and price.
+
+</details>
+
+> <strong>Note</strong>: N+1 problems caused by associations, fetch joins, and `@EntityGraph` are covered in [Part 4 — Performance](/en/blog/spring-boot-pre-interview-guide-4).
+
 ---
 
 ## 6. Global Exception Handling
@@ -1466,6 +1661,8 @@ public class GlobalExceptionHandler {
 
 </details>
 
+> <strong>Note</strong>: How to integrate Spring Security's authentication/authorization exceptions (`AuthenticationException`, `AccessDeniedException`) into the same handler shape is covered in [Part 5 — Security](/en/blog/spring-boot-pre-interview-guide-5).
+
 ---
 
 ## Recap
@@ -1481,9 +1678,9 @@ public class GlobalExceptionHandler {
 | Layer | Check Points |
 |--------|------------|
 | <strong>Controller</strong> | HTTP method mapping, URI design, validation, common response, Request → Command conversion |
-| <strong>Service</strong> | Transaction management, exception handling, DTO conversion, Command object usage |
+| <strong>Service</strong> | Transaction split, exception handling, Response DTO static factory, Command input |
 | <strong>Repository</strong> | Nullable handling, pagination, Querydsl usage |
-| <strong>Domain</strong> | Business methods, BaseEntity, protected constructor |
+| <strong>Domain</strong> | Business methods, BaseEntity, protected constructor, associations with fetch=LAZY |
 | <strong>Exception Handler</strong> | Three-tier priority, fallback that blocks internal exposure |
 
 <details>
@@ -1494,6 +1691,9 @@ public class GlobalExceptionHandler {
 - [ ] Is validation applied to DTOs?
 - [ ] Are Request DTOs converted to Commands before being passed to the Service?
 - [ ] Is `readOnly = true` set for read transactions?
+- [ ] Does Entity → Response DTO conversion use a `from()` static factory?
+- [ ] Are `@ManyToOne` / `@OneToOne` declared with `fetch = LAZY`?
+- [ ] Is bidirectional mapping used only when truly necessary?
 - [ ] Are exceptions handled consistently in the GlobalExceptionHandler?
 - [ ] Do entities have business methods instead of setters?
 - [ ] Is the fallback handler (`Exception.class`) defined?
