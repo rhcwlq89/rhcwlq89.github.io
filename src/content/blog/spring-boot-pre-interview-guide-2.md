@@ -303,16 +303,69 @@ Q-Class는 빌드 시 `kapt`가 엔티티 클래스를 스캔하여 자동 생�
 
 ### 2.3 참고: `@Configuration(proxyBeanMethods = false)`의 의미
 
-<strong>`proxyBeanMethods = false`</strong>는 CGLIB 프록시 생성을 끄는 옵션이다.
+<strong>`proxyBeanMethods`</strong>는 Spring이 `@Configuration` 클래스를 CGLIB으로 감쌀지를 결정하는 플래그다. 기본값은 `true`(Full mode)이고, `false`로 끄면 Lite mode로 동작한다. 이름만 보면 단순한 최적화 스위치 같지만, 실제로는 `@Bean` 메서드 호출의 의미 자체를 바꾸는 설정이다.
 
-Spring의 `@Configuration`은 기본적으로 CGLIB 프록시를 통해 싱글톤을 보장한다. `@Bean` 메서드가 서로를 호출하지 않는 경우 프록시는 불필요하다.
+<strong>Full mode(기본) — CGLIB 프록시가 하는 일</strong>
 
-`proxyBeanMethods = false`로 설정하면:
+`@Configuration` 클래스는 컨텍스트 기동 시 CGLIB이 런타임에 동적으로 상속받은 서브클래스를 만든다. 이 서브클래스가 모든 `@Bean` 메서드를 오버라이드해서 호출을 가로챈다. 오버라이드된 메서드는 다음과 같이 동작한다.
 
-- 프록시 생성 비용이 줄어 애플리케이션 시작 시간이 단축된다.
-- 메모리 사용량이 감소한다.
+1. BeanFactory에 같은 이름의 싱글톤이 이미 등록돼 있으면, 원본을 호출하지 않고 캐시된 인스턴스를 반환한다.
+2. 등록돼 있지 않으면 `super.<beanMethod>()`로 원본을 한 번 호출하고, 결과를 BeanFactory에 등록한 뒤 반환한다.
 
-단순히 빈을 등록만 하는 설정 클래스에서 권장하며, Spring Boot 자체 auto-configuration 대부분도 이 옵션을 사용한다.
+덕분에 `@Bean` 메서드끼리 서로를 호출해도(inter-bean method reference) 싱글톤이 깨지지 않는다.
+
+```kotlin
+@Configuration  // proxyBeanMethods = true (기본값)
+class AppConfig {
+    @Bean fun repo(): Repo = Repo()
+    @Bean fun service(): Service = Service(repo())  // ← 프록시가 가로채서 캐시된 Repo 반환
+}
+```
+
+`service()` 안의 `repo()`는 일반 메서드 호출처럼 보이지만, 실제로는 CGLIB 서브클래스의 오버라이드된 `repo()`로 라우팅된다. 그래서 `repo()`를 몇 번 호출하든 같은 인스턴스가 돌아온다.
+
+<strong>Lite mode(`proxyBeanMethods = false`) — 프록시를 만들지 않는다</strong>
+
+`@Bean` 메서드는 그냥 정적 팩토리 메서드처럼 컨테이너가 한 번씩 호출할 뿐이다. 클래스 안에서 다른 `@Bean` 메서드를 직접 호출하면, 그건 진짜 자기 자신의 메서드 호출이고 매번 새 인스턴스가 만들어진다.
+
+```kotlin
+@Configuration(proxyBeanMethods = false)
+class AppConfig {
+    @Bean fun repo(): Repo = Repo()
+    @Bean fun service(): Service = Service(repo())  // ← 프록시 없음 → 새 Repo 생성!
+}
+```
+
+이 코드는 컨테이너가 등록하는 `repo` 빈과, `service()` 내부에서 직접 호출돼 만들어진 또 다른 `Repo`가 공존하게 된다. inter-bean 호출이 있을 때 Lite mode를 쓰면 안 되는 이유다.
+
+대신 의존성은 매개변수로 주입받으면 안전하다.
+
+```kotlin
+@Configuration(proxyBeanMethods = false)
+class AppConfig {
+    @Bean fun repo(): Repo = Repo()
+    @Bean fun service(repo: Repo): Service = Service(repo)  // ← 컨테이너가 주입
+}
+```
+
+<strong>Full vs Lite 비교</strong>
+
+| 항목 | Full mode (기본값) | Lite mode (`false`) |
+|------|-------------------|---------------------|
+| CGLIB 프록시 | 생성 | 생성 안 함 |
+| inter-bean 메서드 호출 | 싱글톤 보장 | 매번 새 인스턴스 |
+| 클래스 제약 | `final` 불가, 인자 없는 생성자 필요 | 제약 없음 (`final`, `data class`, `private constructor` 모두 가능) |
+| 시작 시간 | 프록시 생성 비용 만큼 느림 | 더 빠름 |
+| 메모리 | 클래스당 추가 서브클래스 | 추가 없음 |
+| 권장 시점 | @Bean끼리 호출이 있는 전통적 설정 | 단순 빈 등록, 매개변수 주입 사용 시 |
+
+<strong>언제 `false`로 둘 수 있는가</strong>
+
+- @Bean 메서드 사이에 직접 호출이 없다.
+- 또는 의존성을 매개변수로만 주입받는다.
+- @Bean이 한두 개뿐이라 inter-bean 호출이 발생할 여지가 없다.
+
+위 `QuerydslConfig`는 @Bean이 하나뿐이라 자명하게 안전하다. Spring Boot의 auto-configuration이 거의 전부 `proxyBeanMethods = false`를 쓰는 이유도 같다 — 각 설정 클래스가 보통 한두 개 빈만 등록하고, 의존성은 매개변수로 받기 때문이다. 시작 시간 단축 효과는 클래스 하나로는 미미하지만, 수백 개의 auto-configuration 클래스가 누적되면 의미 있는 차이가 된다.
 
 ---
 
