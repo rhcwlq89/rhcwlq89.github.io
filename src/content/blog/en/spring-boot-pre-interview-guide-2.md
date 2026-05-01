@@ -1,6 +1,6 @@
 ---
 title: "Spring Boot Pre-Interview Guide Part 2: Database & Testing — Environment Split · Test Pyramid · Testcontainers"
-description: "Environment-specific DB selection and ddl-auto policies, Memory Repository pitfalls, Test Pyramid annotation choices, Mock vs Fake vs real object trade-offs, and using Testcontainers to catch bugs that H2 dialect differences hide — the second most-flagged area in Spring Boot pre-interview submissions, covered in one post."
+description: "Environment-specific DB selection and ddl-auto policies, Memory Repository pitfalls, Test Pyramid annotation choices, choosing between test doubles (Dummy, Stub, Spy, Mock, Fake), and using Testcontainers to catch bugs that H2 dialect differences hide — the second most-flagged area in Spring Boot pre-interview submissions, covered in one post."
 pubDate: "2026-01-11T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "JPA", "Testing", "Backend", "Pre-interview"]
@@ -383,13 +383,65 @@ The most common mistake in pre-interview submissions is writing every test with 
 
 Both `@DataJpaTest` and `@WebMvcTest` apply `@Transactional` by default, rolling back after each test.
 
-### 3.3 Mock vs Fake vs Real Object
+### 3.3 Test Doubles — Dummy, Stub, Spy, Mock, Fake
 
-<strong>Mock</strong>: an object that intercepts calls and returns pre-configured values. Use at uncontrollable boundaries — external APIs, time, email dispatch.
+The first principle of testing: <strong>use the real object whenever you can.</strong> When a real dependency cannot be used (external APIs, time, message queues, email delivery, etc.), substitute a stand-in — collectively known as <strong>test doubles</strong>. People casually say "Mock" for all of them, but there are actually five distinct kinds with different uses.
 
-<strong>Fake</strong>: a real implementation of the interface that operates in memory. Best for Services with heavy Repository dependencies.
+| Kind | One-line definition | Typical example |
+|------|---------------------|-----------------|
+| Dummy | Object that only fills a parameter slot, never invoked | `null`, an empty placeholder |
+| Stub | Returns canned values | Mockito `when().thenReturn()` |
+| Spy | Wraps a real object; records calls and lets you stub a subset | Mockito `@Spy`, `spy()` |
+| Mock | Verifies calls themselves (count, arguments) | Mockito `@Mock` + `verify()` |
+| Fake | A simplified working implementation (in-memory, etc.) | Hand-written `FakeProductRepository` |
 
-<strong>Real object</strong>: validate Repositories with `@DataJpaTest` + real H2 or Testcontainers.
+<strong>Stub vs Mock — same library, different intent</strong>
+
+Mockito's `mock()` does not distinguish between Stub and Mock at the library level. The distinction comes from whether you call `verify()`.
+
+- Define the return value but do not assert on calls → <strong>Stub</strong>
+- Use `verify()` to assert call count and arguments → <strong>Mock</strong>
+
+```kotlin
+// Stub — freezes time. We don't care that it was called.
+val clock = mock<Clock>()
+whenever(clock.now()).thenReturn(Instant.parse("2026-01-01T00:00:00Z"))
+
+// Mock — the point is that the email was sent with these exact arguments
+val mailer = mock<Mailer>()
+service.signUp(request)
+verify(mailer).send(eq("welcome"), eq(request.email))
+```
+
+Side-effect boundaries — external APIs, mail delivery, message queues — naturally fit Mocks. Pure value-fetching dependencies are usually fine as Stubs.
+
+<strong>Spy — wraps a real object and intercepts only part of it</strong>
+
+A Spy keeps the real object's behavior while letting you override a subset of its methods or assert on call history. If a Mock is "an empty shell from the start," a Spy is "a thin layer of fakery laid over a real object."
+
+```kotlin
+val realRepo = JpaProductRepository(em)
+val spy = spy(realRepo)
+
+doReturn(emptyList<Product>()).whenever(spy).findAll()  // stub a subset
+spy.save(product)                                        // remaining methods stay real
+verify(spy).save(product)                                // call history is also verifiable
+```
+
+When a Spy fits:
+
+- Legacy code where you want to replace just one or two methods and let the rest behave normally.
+- You need call-history verification, but mocking the whole class would explode the stub setup.
+
+> <strong>Caution</strong>: if Spies show up frequently in new code, that's a design smell. The class likely has too many responsibilities or its dependency boundaries are wrong. First consider extracting an interface and substituting a Mock or Fake, or splitting the responsibilities.
+
+<strong>Fake — a simplified working implementation</strong>
+
+Implements the interface for real, but backed by memory (or a simple data structure). For dependencies with many calls and read-after-write semantics — like a Repository — a Fake usually beats a Mock. The anti-pattern below shows why.
+
+<strong>Real object</strong>
+
+Validate Repositories with `@DataJpaTest` + real H2 or Testcontainers. Domain layer value objects and entities should almost always be tested as themselves.
 
 **Anti-pattern: excessive mocking**
 
@@ -407,6 +459,30 @@ assertThat(found.getId()).isEqualTo(saved.getId());
 ```
 
 **Fixed with a Fake Repository**
+
+First, what `FakeProductRepository` actually is. It implements the same JPA Repository interface, but it's backed by a `Map` instead of a database.
+
+```java
+class FakeProductRepository implements ProductRepository {
+    private final Map<Long, Product> store = new HashMap<>();
+    private long sequence = 0L;
+
+    @Override
+    public Product save(Product product) {
+        long id = product.getId() != null ? product.getId() : ++sequence;
+        Product saved = new Product(id, product.getName(), product.getPrice());
+        store.put(id, saved);
+        return saved;
+    }
+
+    @Override
+    public Optional<Product> findById(Long id) {
+        return Optional.ofNullable(store.get(id));
+    }
+}
+```
+
+This fake honors the real Repository's core contract without a database — <strong>save assigns an ID, and reading by that ID returns the same data back</strong>. Wiring it into the Service test:
 
 ```java
 // Good — exercises actual save/find behavior
@@ -432,12 +508,31 @@ class ProductServiceTest {
 }
 ```
 
+What the test actually exercises:
+
+1. `service.create(request)` → calls `repository.save(product)` → the Fake assigns an ID, puts the entity in `store`, returns the saved Product → Service hands the ID back to the caller.
+2. `service.findById(savedId)` → calls `repository.findById(savedId)` → the Fake pulls the same entry out of `store`.
+3. The retrieved Product's `name` is asserted to match the original `"Product"`.
+
+For the assertion to pass, `ProductService` has to do all three of the following correctly:
+
+- (a) Carry `request.name` into the new Product on the way in.
+- (b) Pull the ID out of the `save` result and return it to the caller.
+- (c) Pass the same ID through to `findById`.
+
+Drop any of the three and the test breaks. If the Service accidentally stored an empty string for the name, the final `assertThat` would fail.
+
+The Mock version above, in contrast, has both `save()` and `findById()` stubbed to return the same pre-built `product`. That means even if `ProductService` ignored the request entirely and constructed an empty Product, the test would still pass. <strong>This is concretely what "only verifies implementation details" means — when the Mock's return value is already the answer, the actual logic can do anything and the test reaches the same result.</strong>
+
 | Test target | Recommended approach |
 |------------|---------------------|
 | Repository | Real DB (`@DataJpaTest` or Testcontainers) |
 | Service | Fake Repository or `@SpringBootTest` |
 | Controller | Mock Service (`@WebMvcTest`) |
 | External API | Mock (WireMock, Mockito) |
+| Time / randomness | Stub (inject `Clock`, `Random` and pin the values) |
+| Domain objects (VOs, entities) | Real object |
+| Legacy partial replacement | Spy (temporary — refactor toward Mock/Fake) |
 
 ---
 

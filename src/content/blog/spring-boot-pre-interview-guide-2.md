@@ -1,6 +1,6 @@
 ---
 title: "스프링 사전과제 가이드 2편: Database & Testing — 환경 분리·테스트 피라미드·Testcontainers"
-description: "환경별 DB 선택과 ddl-auto 정책, Memory Repository 구현 시 주의사항, Test Pyramid에 따른 어노테이션 선택 기준, Mock vs Fake vs 실제 객체 트레이드오프, Testcontainers로 H2 방언 차이가 가리는 버그를 잡는 법까지 — 사전과제 평가자가 두 번째로 자주 지적하는 Database & Testing 영역을 한 편으로 정리했다."
+description: "환경별 DB 선택과 ddl-auto 정책, Memory Repository 구현 시 주의사항, Test Pyramid에 따른 어노테이션 선택 기준, 테스트 대역(Dummy·Stub·Spy·Mock·Fake) 선택 기준, Testcontainers로 H2 방언 차이가 가리는 버그를 잡는 법까지 — 사전과제 평가자가 두 번째로 자주 지적하는 Database & Testing 영역을 한 편으로 정리했다."
 pubDate: 2026-01-11T10:00:00+09:00
 tags:
   - Spring Boot
@@ -400,13 +400,65 @@ flowchart TB
 
 `@DataJpaTest`와 `@WebMvcTest`는 각각 `@Transactional`이 기본 적용되어 테스트 종료 후 자동 롤백된다.
 
-### 3.3 Mock vs Fake vs 실제 객체
+### 3.3 테스트 대역(Test Double) — Dummy·Stub·Spy·Mock·Fake
 
-<strong>Mock</strong>: 호출을 가로채 미리 정의한 값을 반환하는 대역 객체다. 외부 API, 시간, 이메일 발송처럼 제어할 수 없는 경계에 쓴다.
+테스트의 첫 원칙: <strong>가능하면 실제 객체를 쓴다.</strong> 실제 객체로 다룰 수 없는 의존성(외부 API, 시간, 메시지 큐, 메일 발송 등)을 위해 가짜 객체를 쓰며, 이 가짜 객체들을 통틀어 <strong>테스트 대역(Test Double)</strong>이라고 한다. 흔히 "Mock"으로 뭉뚱그려 부르지만 실제로는 다섯 종류로 나뉘고 쓰임이 다르다.
 
-<strong>Fake</strong>: 실제 인터페이스를 구현하지만 메모리로 동작하는 단순한 구현체다. Repository 의존성이 많은 Service 테스트에 적합하다.
+| 종류 | 한 줄 정의 | 대표 예시 |
+|------|-----------|----------|
+| Dummy | 호출되지 않을 인자 자리만 채우는 객체 | `null`, 빈 더미 객체 |
+| Stub | 정해진 값만 돌려주는 단순 대역 | Mockito `when().thenReturn()` |
+| Spy | 실제 객체를 감싸 호출 기록·일부만 가로챔 | Mockito `@Spy`, `spy()` |
+| Mock | 호출 자체(횟수·인자)를 검증하는 대역 | Mockito `@Mock` + `verify()` |
+| Fake | 단순화된 진짜 구현체 (메모리 등) | 직접 구현한 `FakeProductRepository` |
 
-<strong>실제 객체</strong>: Repository는 `@DataJpaTest` + 실제 H2 또는 Testcontainers로 검증한다.
+<strong>Stub vs Mock — 라이브러리는 같지만 의도가 다르다</strong>
+
+Mockito의 `mock()`은 라이브러리 레벨에서 Stub과 Mock을 구분하지 않는다. 둘을 가르는 건 사용자가 `verify()`를 쓰느냐다.
+
+- 호출 결과만 정의하고 호출 여부를 검증하지 않으면 → <strong>Stub</strong>
+- `verify()`로 호출 횟수·인자를 단언하면 → <strong>Mock</strong>
+
+```kotlin
+// Stub — 시간 고정. 호출 자체는 신경 쓰지 않음
+val clock = mock<Clock>()
+whenever(clock.now()).thenReturn(Instant.parse("2026-01-01T00:00:00Z"))
+
+// Mock — 메일이 정확히 이 인자로 발송됐는지가 본질
+val mailer = mock<Mailer>()
+service.signUp(request)
+verify(mailer).send(eq("welcome"), eq(request.email))
+```
+
+외부 API, 메일 발송, 메시지 큐처럼 사이드 이펙트가 있는 경계는 Mock이 자연스럽다. 단순히 "값 하나 받아오는" 의존성은 Stub으로 충분하다.
+
+<strong>Spy — 실제 객체를 감싸고 일부만 가로챈다</strong>
+
+Spy는 실제 객체의 동작을 그대로 유지하면서, 일부 메서드만 stub으로 덮거나 호출 이력을 검증할 수 있게 해 주는 대역이다. Mock이 "처음부터 빈 껍데기"라면, Spy는 "진짜 객체 위에 부분 가짜를 덧씌운 것"에 가깝다.
+
+```kotlin
+val realRepo = JpaProductRepository(em)
+val spy = spy(realRepo)
+
+doReturn(emptyList<Product>()).whenever(spy).findAll()  // 일부 메서드만 stub
+spy.save(product)                                        // 나머지는 실제 동작 그대로
+verify(spy).save(product)                                // 호출도 검증
+```
+
+Spy가 적합한 상황:
+
+- 레거시 코드에서 일부 메서드만 가짜로 바꾸고 나머지는 실제 동작을 유지해야 할 때.
+- 호출 이력은 검증하고 싶지만 전체를 Mock으로 바꾸면 stub 설정이 과도하게 늘어날 때.
+
+> <strong>주의</strong>: 새 코드에서 Spy를 자주 쓰고 있다면 설계 신호일 수 있다. 클래스의 책임이 너무 크거나 의존성 주입 경계가 잘못 잡혀 있을 가능성이 높다. 인터페이스를 분리해 Mock 또는 Fake로 대체하거나, 책임을 쪼개는 리팩터링을 먼저 검토한다.
+
+<strong>Fake — 단순화된 진짜 구현체</strong>
+
+인터페이스를 그대로 구현하되 메모리(또는 단순 자료구조)로 동작한다. Repository처럼 호출이 많고 결과를 다음 단계에서 다시 읽어야 하는 의존성에는 Mock보다 Fake가 적합하다. 이유는 아래 안티패턴에서 본다.
+
+<strong>실제 객체</strong>
+
+Repository는 `@DataJpaTest` + 실제 H2 또는 Testcontainers로 검증한다. 도메인 계층의 값 객체(VO)·엔티티는 거의 항상 실제 객체를 그대로 쓴다.
 
 **과도한 Mock 사용의 안티패턴**
 
@@ -424,6 +476,30 @@ assertThat(found.getId()).isEqualTo(saved.getId());
 ```
 
 **Fake Repository로 개선**
+
+먼저 `FakeProductRepository`의 정체를 명확히 해 두자. JPA Repository 인터페이스를 그대로 구현하되, DB 대신 `Map`으로 동작한다.
+
+```java
+class FakeProductRepository implements ProductRepository {
+    private final Map<Long, Product> store = new HashMap<>();
+    private long sequence = 0L;
+
+    @Override
+    public Product save(Product product) {
+        long id = product.getId() != null ? product.getId() : ++sequence;
+        Product saved = new Product(id, product.getName(), product.getPrice());
+        store.put(id, saved);
+        return saved;
+    }
+
+    @Override
+    public Optional<Product> findById(Long id) {
+        return Optional.ofNullable(store.get(id));
+    }
+}
+```
+
+이 가짜 객체는 JPA 없이도 실제 Repository의 핵심 계약 — <strong>저장하면 ID가 부여되고, 그 ID로 다시 조회하면 같은 데이터가 나온다</strong> — 을 그대로 따른다. 이걸로 Service를 검증하면:
 
 ```java
 // ✅ Fake Repository 사용 — 실제 저장·조회 동작을 검증
@@ -449,12 +525,31 @@ class ProductServiceTest {
 }
 ```
 
+테스트 흐름은 다음과 같다.
+
+1. `service.create(request)` → 내부에서 `repository.save(product)`를 호출 → Fake가 ID를 부여하고 `store`에 넣은 뒤 저장된 Product를 반환 → Service가 그 ID를 호출자에게 돌려준다.
+2. `service.findById(savedId)` → `repository.findById(savedId)` 호출 → Fake가 `store`에서 같은 인스턴스를 꺼내 온다.
+3. 돌아온 Product의 `name`이 처음 요청한 `"상품"`과 같은지 검증.
+
+이 테스트가 통과하려면 ProductService가 다음 세 가지를 모두 제대로 해야 한다.
+
+- (a) `request.name`을 새 Product에 옮겨 담기.
+- (b) `save`의 결과에서 ID를 추출해 호출자에게 반환.
+- (c) `findById`에 같은 ID를 그대로 전달.
+
+셋 중 하나라도 빠지면 테스트가 깨진다. 예컨대 Service가 실수로 빈 문자열을 이름으로 넣어 저장한다면 마지막 `assertThat`이 실패한다.
+
+반면 위쪽 Mock 버전은 `save()`와 `findById()`가 모두 사전에 만들어 둔 `product` 객체를 그대로 돌려주도록 stub돼 있어서, ProductService가 request를 통째로 무시하고 빈 Product를 만들어도 테스트는 그대로 통과한다. <strong>"구현 세부사항만 검증한다"는 말의 구체적 의미가 이것이다 — Mock이 돌려주는 값이 이미 정답이므로, 실제 로직이 무엇을 하든 테스트는 항상 같은 답에 도달한다.</strong>
+
 | 테스트 대상 | 권장 방식 |
 |------------|----------|
 | Repository | 실제 DB (`@DataJpaTest` 또는 Testcontainers) |
 | Service | Fake Repository 또는 `@SpringBootTest` |
 | Controller | Mock Service (`@WebMvcTest`) |
 | 외부 API 연동 | Mock (WireMock, Mockito) |
+| 시간·랜덤 | Stub (`Clock`, `Random` 주입 후 고정값) |
+| 도메인 객체 (VO·엔티티) | 실제 객체 |
+| 레거시 부분 교체 | Spy (임시 — 리팩터링 후 Mock/Fake로) |
 
 ---
 
