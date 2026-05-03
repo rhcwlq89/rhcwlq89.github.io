@@ -109,7 +109,27 @@ Title pattern for series posts: `"<Series Title> Part N: <Topic> — <subtitle>"
 | Cross-section refs (EN) | `§4.3` | `Section 4.3` |
 | Diagrams allowed | `flowchart TB/LR/TD`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `stateDiagram`, `gantt` | Anything else |
 
-### 5. `<details>` discipline
+### 5. Tell a story, don't dump code
+
+This is the most common failure mode of pre-renewed posts and the easiest to recreate by accident: page after page of code blocks with no narrative connecting them. A reader who can copy-paste your snippets but can't tell *why* they exist has not been served. Renewal must convert "코드 나열" into "스토리".
+
+**For every code block, the post must establish — *before* the code:**
+- <strong>What</strong> the code is (one-sentence definition).
+- <strong>Why</strong> it exists — what concrete pain or requirement makes this code worth writing.
+- <strong>Where</strong> it sits in the bigger picture — how it connects to the surrounding architecture or the problem flow.
+
+**For every H2/H3 section that introduces a concept**, the section opens with a framing paragraph (or short bullet block) that defines the concept, names the problem it solves, and sets up the reader's expectations — *before* the first code block, table, or diagram.
+
+**Concrete checks during a pass:**
+- If a subsection starts with a code fence (` ``` `), that's almost always a code-dump signal. Insert framing prose first.
+- If two or more code blocks appear back-to-back with no prose between, ask whether the second block needs its own framing sentence ("그럼 …는 어떻게 다루나" / "Now, the wiring side …").
+- If a new term (e.g., `Aspect`, `Pointcut`, `MDC`, `JoinPoint`) appears in code without ever being defined in prose, add a short glossary or one-line definition at the section's first mention.
+- If the section's main claim is implicit ("here's a Filter" — but *why*?), surface it as a one-sentence thesis at the top.
+- Section order should follow a story arc: <strong>problem → concept → mechanism → code → tradeoffs</strong>. Code is the third or fourth beat, never the first.
+
+**Smell test for an entire section**: read only the prose, skipping every fenced block. If the prose alone leaves the reader knowing what the section is about and why they'd care, you're good. If the prose collapses into "다음과 같이 구현한다 / The implementation follows" and then a wall of code, framing is missing.
+
+### 6. `<details>` discipline
 
 Fold:
 - Advanced edge cases, long derivations, reinforcing examples a first-time reader can skip
@@ -122,7 +142,7 @@ Summary text should preview content and invite the click:
 - ✅ `<summary><strong>More detail — AZ failure behavior, why not one ALB per AZ</strong></summary>`
 - ❌ `<summary>More info</summary>`
 
-### 6. Diagrams — always Mermaid
+### 7. Diagrams — always Mermaid
 
 If the original post has ASCII art topology/flow in ` ```text ` blocks, **convert to Mermaid**. Common patterns:
 
@@ -133,7 +153,7 @@ If the original post has ASCII art topology/flow in ` ```text ` blocks, **conver
 
 `\`\`\`text` is fine for CLI output, file trees, log snippets, config — anything that is real monospaced text rather than hand-drawn art.
 
-### 7. Pre-publish self-check (run on both KO and EN before reporting done)
+### 8. Pre-publish self-check (run on both KO and EN before reporting done)
 
 ```bash
 for FILE in src/content/blog/<slug>.md src/content/blog/en/<slug>.md; do
@@ -163,7 +183,7 @@ npm run build
 
 Build must complete without errors.
 
-### 8. Hero image (when requested)
+### 9. Hero image (when requested)
 
 A new hero image deserves a new asset and a new prompt. Per CLAUDE.md's hero image style guide:
 
@@ -172,7 +192,7 @@ A new hero image deserves a new asset and a new prompt. Per CLAUDE.md's hero ima
 - Prompt requirements: ≥5 lines, dark navy isometric, blue/cyan glow, no text, ends with `Isometric 2.5D style, dark navy background, blue/cyan glow effects, no text. Aspect ratio 3:2 (1536x1024).`
 - If the user pushes back that the image looks "휑하다 / sparse / empty", **densify**: add more floating UI panels (result cards, query snippets, console lines), more accent objects (gears, shields, code brackets), richer connection web, secondary glow accents — but keep the dominant element clearly dominant. Don't crowd the center.
 
-### 9. Delegation
+### 10. Delegation
 
 For posts > 800 lines, delegate the actual rewrite to an `executor` subagent with:
 - Both target file paths
