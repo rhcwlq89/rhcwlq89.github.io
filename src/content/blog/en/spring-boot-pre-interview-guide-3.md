@@ -1,107 +1,74 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 3: Documentation & AOP"
-description: "API documentation with Swagger/SpringDoc, SLF4J logging, and cross-cutting concerns with AOP"
+title: "Spring Boot Pre-Interview Guide Part 3: Documentation & AOP — Swagger · MDC · Aspect"
+description: "SpringDoc setup and annotation discipline, MDC-based request tracing and sensitive-data masking, AOP for cross-cutting concerns — all the documentation, logging, and AOP decisions that separate a passing submission from a scoring one."
 pubDate: "2026-01-13T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "Swagger", "AOP", "Logging", "Interview", "Practical Guide"]
-heroImage: "../../../assets/PreinterviewTaskGuide.png"
----
-
-## Series Navigation
-
-| Previous | Current | Next |
-|:---:|:---:|:---:|
-| [Part 2: DB & Testing](/en/blog/spring-boot-pre-interview-guide-2) | **Part 3: Documentation & AOP** | [Part 4: Performance](/en/blog/spring-boot-pre-interview-guide-4) |
-
-> **Full Roadmap**: See [Spring Boot Pre-Interview Guide Roadmap](/en/blog/spring-boot-pre-interview-guide-1)
-
+tags: ["Spring Boot", "Swagger", "Logging", "AOP", "Backend", "Pre-interview"]
+heroImage: "../../../assets/SpringBootPreInterviewGuide3.png"
 ---
 
 ## Introduction
 
-After covering core feature implementation in Parts 1-2, this part addresses API documentation and cross-cutting concerns.
+Documentation, logging, and AOP are where pre-interview submissions visibly diverge. A working Swagger UI, request IDs in every log line, and AOP-separated cross-cutting concerns signal operational awareness. Stale Springfox dependencies, blanket-INFO logging, or AOP misused for business branching signal the opposite.
 
-**What Part 3 covers:**
-- API Documentation (Swagger, REST Docs)
-- Logging Strategy (SLF4J, MDC)
-- AOP Usage (Separation of cross-cutting concerns)
+Parts 1 and 2 covered the four-layer architecture and database/testing strategy. Part 3 covers the observability and operational layer on top — the signals that tell an evaluator "this developer understands production."
 
+Target reader: a junior backend developer who knows Spring but isn't sure how evaluators read this area.
 
-### Table of Contents
+See the [previous post](/blog/en/spring-boot-pre-interview-guide-2) for Database & Testing.
 
-- [API Documentation (SpringDoc/Swagger)](#api-documentation-springdocswagger)
-- [Logging Strategy](#logging-strategy)
-- [AOP Usage](#aop-usage)
-- [Summary](#summary)
+- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
+- <strong>Part 3 — Documentation & AOP (this post)</strong>
+- Part 4 — [Logging](/blog/en/spring-boot-pre-interview-guide-4)
+- Part 5 — [Authentication & Validation](/blog/en/spring-boot-pre-interview-guide-5)
+- Part 6 — [Performance](/blog/en/spring-boot-pre-interview-guide-6)
+- Part 7 — [Production Readiness](/blog/en/spring-boot-pre-interview-guide-7)
 
 ---
 
-## API Documentation (SpringDoc/Swagger)
+## TL;DR
 
-API documentation is not mandatory in pre-interview tasks, but having it allows evaluators to quickly understand your APIs, leaving a good impression.
+- <strong>Minimal SpringDoc is enough to score</strong> — `@Tag`, `@Operation(summary)`, and key `@ApiResponse` annotations cover the evaluator's needs. Filling every field with `@Schema` wastes task time.
+- <strong>Drop the logging-performance myths</strong> — `{}` placeholders are the default. `isDebugEnabled()` guards are only needed around expensive `toString()` calls or logging inside loops.
+- <strong>MDC handles single-app request tracing</strong> — drop a request ID into thread-local and Logback's `%X{key}` pattern stamps it on every log line automatically. Distributed tracing is out of scope for pre-interview tasks.
+- <strong>AOP belongs on cross-cutting concerns only</strong> — logging, transactions, and retry are correct targets. Using AOP for business branching makes the code untraceable.
+- <strong>Know the self-invocation trap</strong> — calling a `@Retry` method from within the same class bypasses the proxy, so the advice never fires. The fix is to move the dependency to a separate bean.
 
-> **SpringDoc vs Springfox**
-> - Springfox is no longer recommended due to compatibility issues with Spring Boot 2.6+
-> - Using SpringDoc OpenAPI is the current standard
+---
 
-<details>
-<summary>How far should you go with Swagger documentation?</summary>
+## 1. API Documentation — SpringDoc/Swagger
 
-**Minimal Documentation (Recommended)**
-- API title, description, version info (`OpenApiConfig`)
-- `@Operation` for key APIs (summary level)
-- Error response codes (`@ApiResponse`)
+### 1.1 How SpringDoc Works and Basic Setup
 
-**Excessive Documentation (Not Recommended)**
-- Detailed `@Schema` descriptions for every field
-- Writing example values for everything
-- Documenting every error case
+<strong>SpringDoc OpenAPI scans annotations at startup, builds an OpenAPI JSON spec, and serves it so Swagger UI can render a live playground.</strong>
 
-**Reality in Practice**
+At runtime, SpringDoc scans `@Tag`, `@Operation`, and `@Schema`, produces the spec at `/v3/api-docs` (or a custom path), and Swagger UI at `/swagger-ui.html` consumes that JSON to render the interactive UI.
 
-In most projects, Swagger documentation is **done diligently only at the beginning**, and afterward it often falls out of sync with the code.
-
-**Solutions When Documentation Falls Behind**
-
-| Approach | Description | Effect |
-|------|------|------|
-| **Switch to Spring REST Docs** | Test-based documentation -> docs fail when tests fail | Enforces code-doc synchronization |
-| **Minimal documentation principle** | Maintain only `@Tag`, `@Operation(summary)` | Reduces maintenance burden |
-| **Leverage auto-generation** | Rely on what SpringDoc generates automatically | Minimizes additional work |
-| **CI validation** | Require review when OpenAPI spec changes | Prevents unintended changes |
-
-**Recommendations for Pre-Interview Tasks**
-
-1. Set up basic configuration so Swagger UI works
-2. Add detailed documentation to only 1-2 complex APIs
-3. Leave the rest to default auto-generation
-
-```kotlin
-// Good - appropriate level
-@Operation(summary = "Register product")
-@PostMapping
-fun registerProduct(...)
-
-// Bad - excessive documentation (waste of time)
-@Operation(
-    summary = "Register product",
-    description = "Registers a new product. Product name must be within 100 characters...",
-    responses = [
-        ApiResponse(responseCode = "201", description = "...", content = [...]),
-        ApiResponse(responseCode = "400", description = "...", content = [...]),
-        ApiResponse(responseCode = "500", description = "...", content = [...])
-    ]
-)
+```mermaid
+flowchart LR
+    A["Controller annotations\n@Tag · @Operation · @Schema"] --> B["SpringDoc scanner\n(runtime)"]
+    B --> C["OpenAPI spec JSON\n/v3/api-docs"]
+    C --> D["Swagger UI\n/swagger-ui.html"]
+    D --> E["Browser playground"]
 ```
 
-</details>
+> <strong>Note</strong>: Springfox has compatibility issues with Spring Boot 2.6+ and is no longer maintained. SpringDoc OpenAPI is the current standard.
 
-### 1. Adding Dependencies
+**Dependency (Kotlin DSL)**
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
+}
+```
 
 <details>
-<summary>build.gradle</summary>
+<summary><strong>More detail — Groovy DSL dependency</strong></summary>
 
 ```groovy
+// build.gradle
 dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
 }
@@ -109,47 +76,28 @@ dependencies {
 
 </details>
 
-<details>
-<summary>build.gradle.kts</summary>
+**Core application.yml options**
 
-```kotlin
-dependencies {
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
-}
-```
-
-</details>
-
-### 2. Basic Configuration
-
-<details>
-<summary>application.yml</summary>
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `api-docs.path` | OpenAPI JSON spec path | `/v3/api-docs` |
+| `swagger-ui.path` | Swagger UI path | `/swagger-ui.html` |
+| `tags-sorter` | Controller sort (`alpha`, declaration order) | Declaration order |
+| `operations-sorter` | API sort (`alpha`, `method`) | Declaration order |
 
 ```yaml
 springdoc:
   api-docs:
-    path: /api-docs                          # OpenAPI JSON spec path (accessible at /api-docs)
+    path: /api-docs
   swagger-ui:
-    path: /swagger-ui.html                   # Swagger UI access path
-    tags-sorter: alpha                       # Sort Tags (Controllers) alphabetically
-    operations-sorter: alpha                 # Sort API methods alphabetically (method: by HTTP method)
-  default-consumes-media-type: application/json   # Default request Content-Type
-  default-produces-media-type: application/json   # Default response Content-Type
-  # packages-to-scan: com.example.api.controller  # Scan specific packages only (optional)
-  # paths-to-match: /api/**                       # Document specific paths only (optional)
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
 ```
 
-| Setting | Description | Default |
-|------|------|--------|
-| `api-docs.path` | OpenAPI JSON spec path | `/v3/api-docs` |
-| `swagger-ui.path` | Swagger UI path | `/swagger-ui.html` |
-| `tags-sorter` | Controller sorting (`alpha`, declaration order) | Declaration order |
-| `operations-sorter` | API sorting (`alpha`, `method`) | Declaration order |
-
-</details>
-
-<details>
-<summary>OpenAPI Config (Kotlin)</summary>
+**OpenApiConfig (Kotlin)**
 
 ```kotlin
 @Configuration
@@ -163,25 +111,15 @@ class OpenApiConfig {
                     .title("Product API")
                     .description("Product Management API Documentation")
                     .version("v1.0.0")
-                    .contact(
-                        Contact()
-                            .name("Developer")
-                            .email("dev@example.com")
-                    )
+                    .contact(Contact().name("Developer").email("dev@example.com"))
             )
-            .servers(
-                listOf(
-                    Server().url("http://localhost:8080").description("Local Server")
-                )
-            )
+            .servers(listOf(Server().url("http://localhost:8080").description("Local Server")))
     }
 }
 ```
 
-</details>
-
 <details>
-<summary>OpenAPI Config (Java)</summary>
+<summary><strong>More detail — OpenApiConfig (Java)</strong></summary>
 
 ```java
 @Configuration
@@ -194,9 +132,7 @@ public class OpenApiConfig {
                 .title("Product API")
                 .description("Product Management API Documentation")
                 .version("v1.0.0")
-                .contact(new Contact()
-                    .name("Developer")
-                    .email("dev@example.com")))
+                .contact(new Contact().name("Developer").email("dev@example.com")))
             .servers(List.of(
                 new Server().url("http://localhost:8080").description("Local Server")
             ));
@@ -206,29 +142,25 @@ public class OpenApiConfig {
 
 </details>
 
-### 3. Controller Documentation
+### 1.2 Controller and DTO Annotations — Minimal vs Excessive
 
-Key annotations:
-- `@Tag`: Specifies API group
-- `@Operation`: API description
-- `@Parameter`: Parameter description
-- `@ApiResponse`: Response description
-- `@Schema`: Model field description
+<strong>Verdict: `@Tag`, `@Operation(summary)`, and key `@ApiResponse` annotations are sufficient for evaluation.</strong> Every minute spent filling out `@Schema` on every field is a minute not spent on core feature completeness.
 
-<details>
-<summary>Controller Documentation (Kotlin)</summary>
+| Area | Minimal (recommended) | Excessive (not recommended) |
+|------|-----------------------|----------------------------|
+| API description | `@Operation(summary = "…")` | `description`, every error case in `@ApiResponse` |
+| Parameters | `@Parameter` on path variables only | Full description on every query param |
+| DTO fields | Class-level `@Schema(description)` | Per-field `@Schema(example, minimum, maxLength)` |
+
+**Controller example (Kotlin)**
 
 ```kotlin
 @Tag(name = "Product", description = "Product Management API")
 @RestController
 @RequestMapping("/api/v1/products")
-class ProductController(
-    private val productService: ProductService
-) {
-    @Operation(
-        summary = "Get product details",
-        description = "Retrieves detailed product information by product ID."
-    )
+class ProductController(private val productService: ProductService) {
+
+    @Operation(summary = "Get product details")
     @ApiResponses(
         ApiResponse(responseCode = "200", description = "Successfully retrieved"),
         ApiResponse(responseCode = "404", description = "Product not found")
@@ -241,45 +173,21 @@ class ProductController(
         return CommonResponse.success(productService.findProductDetail(productId))
     }
 
-    @Operation(
-        summary = "Get product list",
-        description = "Retrieves a paginated list of products matching the given conditions."
-    )
-    @GetMapping
-    fun findProducts(
-        @Parameter(description = "Product name (partial match)")
-        @RequestParam(required = false) name: String?,
-        @Parameter(description = "Enabled status")
-        @RequestParam(required = false) enabled: Boolean?,
-        @ParameterObject pageable: Pageable
-    ): CommonResponse<Page<FindProductResponse>> {
-        return CommonResponse.success(
-            productService.findProducts(name, enabled, pageable)
-        )
-    }
-
-    @Operation(
-        summary = "Register product",
-        description = "Registers a new product."
-    )
+    @Operation(summary = "Register product")
     @ApiResponses(
         ApiResponse(responseCode = "201", description = "Successfully registered"),
         ApiResponse(responseCode = "400", description = "Bad request")
     )
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun registerProduct(
-        @RequestBody request: RegisterProductRequest
-    ): CommonResponse<Long> {
+    fun registerProduct(@RequestBody request: RegisterProductRequest): CommonResponse<Long> {
         return CommonResponse.success(productService.registerProduct(request))
     }
 }
 ```
 
-</details>
-
 <details>
-<summary>Controller Documentation (Java)</summary>
+<summary><strong>More detail — Controller example (Java)</strong></summary>
 
 ```java
 @Tag(name = "Product", description = "Product Management API")
@@ -290,10 +198,7 @@ public class ProductController {
 
     private final ProductService productService;
 
-    @Operation(
-        summary = "Get product details",
-        description = "Retrieves detailed product information by product ID."
-    )
+    @Operation(summary = "Get product details")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Successfully retrieved"),
         @ApiResponse(responseCode = "404", description = "Product not found")
@@ -305,34 +210,14 @@ public class ProductController {
         return CommonResponse.success(productService.findProductDetail(productId));
     }
 
-    @Operation(
-        summary = "Get product list",
-        description = "Retrieves a paginated list of products matching the given conditions."
-    )
-    @GetMapping
-    public CommonResponse<Page<FindProductResponse>> findProducts(
-            @Parameter(description = "Product name (partial match)")
-            @RequestParam(required = false) String name,
-            @Parameter(description = "Enabled status")
-            @RequestParam(required = false) Boolean enabled,
-            @ParameterObject Pageable pageable) {
-        return CommonResponse.success(
-            productService.findProducts(name, enabled, pageable)
-        );
-    }
-
-    @Operation(
-        summary = "Register product",
-        description = "Registers a new product."
-    )
+    @Operation(summary = "Register product")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Successfully registered"),
         @ApiResponse(responseCode = "400", description = "Bad request")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CommonResponse<Long> registerProduct(
-            @RequestBody RegisterProductRequest request) {
+    public CommonResponse<Long> registerProduct(@RequestBody RegisterProductRequest request) {
         return CommonResponse.success(productService.registerProduct(request));
     }
 }
@@ -340,45 +225,24 @@ public class ProductController {
 
 </details>
 
-### 4. DTO Documentation
+**Price field type tradeoffs**
 
-Use the `@Schema` annotation to add field descriptions.
-
-<details>
-<summary>Request DTO (Kotlin)</summary>
-
-> **Tip: Use BigDecimal for price fields**
->
-> For financial/pricing data, using `BigDecimal` instead of `Int`/`Long` is the industry standard.
->
-> | Type | Pros | Cons | Recommended For |
-> |------|------|------|----------|
-> | `Int`/`Long` | Simple, good performance | No decimals, overflow risk | Simple counts, IDs |
-> | `BigDecimal` | Precision guaranteed, decimal handling | Complex operations | Amounts, prices, ratios |
->
-> ```kotlin
-> // Using Int (for simple tasks)
-> @field:Positive
-> @Schema(description = "Price", example = "10000")
-> val price: Int?
->
-> // Using BigDecimal (recommended for production)
-> @field:DecimalMin(value = "0", inclusive = false)
-> @Schema(description = "Price", example = "10000.00")
-> val price: BigDecimal?
-> ```
+| Type | Pros | Cons | Use when |
+|------|------|------|----------|
+| `Int`/`Long` | Simple, fast | No decimals, overflow risk | Counts, IDs |
+| `BigDecimal` | Precision guaranteed, decimal support | Verbose operations, serialization care | Prices, amounts, ratios |
 
 ```kotlin
 @Schema(description = "Product registration request")
 data class RegisterProductRequest(
     @field:NotBlank
     @field:Size(max = 100)
-    @Schema(description = "Product name", example = "Delicious Apple", maxLength = 100)
+    @Schema(description = "Product name", example = "Fresh Apple")
     val name: String?,
 
     @field:NotNull
     @field:DecimalMin(value = "0", inclusive = false)
-    @Schema(description = "Price", example = "10000.00", minimum = "0.01")
+    @Schema(description = "Price", example = "10000.00")
     val price: BigDecimal?,
 
     @field:NotNull
@@ -387,113 +251,9 @@ data class RegisterProductRequest(
 )
 ```
 
-</details>
+### 1.3 Allowing Swagger Paths in Spring Security
 
-<details>
-<summary>Request DTO (Java)</summary>
-
-```java
-@Schema(description = "Product registration request")
-public record RegisterProductRequest(
-    @NotBlank
-    @Size(max = 100)
-    @Schema(description = "Product name", example = "Delicious Apple", maxLength = 100)
-    String name,
-
-    @NotNull
-    @Positive
-    @Schema(description = "Price", example = "10000", minimum = "1")
-    Integer price,
-
-    @NotNull
-    @Schema(description = "Category", example = "FOOD")
-    ProductCategoryType category
-) {}
-```
-
-</details>
-
-<details>
-<summary>Response DTO (Kotlin)</summary>
-
-```kotlin
-@Schema(description = "Product detail response")
-data class FindProductDetailResponse(
-    @Schema(description = "Product ID", example = "1")
-    val id: Long,
-
-    @Schema(description = "Product name", example = "Delicious Apple")
-    val name: String,
-
-    @Schema(description = "Price", example = "10000")
-    val price: Int,
-
-    @Schema(description = "Category", example = "FOOD")
-    val category: ProductCategoryType,
-
-    @Schema(description = "Enabled status", example = "true")
-    val enabled: Boolean,
-
-    @Schema(description = "Created at", example = "2024-01-01T10:00:00")
-    val createdAt: LocalDateTime
-) {
-    companion object {
-        fun from(product: Product): FindProductDetailResponse {
-            return FindProductDetailResponse(
-                id = product.id!!,
-                name = product.name,
-                price = product.price,
-                category = product.category,
-                enabled = product.enabled,
-                createdAt = product.createdAt
-            )
-        }
-    }
-}
-```
-
-</details>
-
-### 5. Common Response Documentation
-
-<details>
-<summary>CommonResponse Documentation (Kotlin)</summary>
-
-```kotlin
-@Schema(description = "Common response")
-data class CommonResponse<T>(
-    @Schema(description = "Response code", example = "SUC200")
-    val code: String = CODE_SUCCESS,
-
-    @Schema(description = "Response message", example = "success")
-    val message: String = MSG_SUCCESS,
-
-    @Schema(description = "Response data")
-    val data: T? = null
-) {
-    companion object {
-        const val CODE_SUCCESS = "SUC200"
-        const val MSG_SUCCESS = "success"
-
-        fun <T> success(data: T? = null): CommonResponse<T> {
-            return CommonResponse(CODE_SUCCESS, MSG_SUCCESS, data)
-        }
-
-        fun <T> error(code: String, message: String): CommonResponse<T> {
-            return CommonResponse(code, message, null)
-        }
-    }
-}
-```
-
-</details>
-
-### 6. Swagger Configuration with Security
-
-When using Spring Security, you need to allow access to Swagger paths.
-
-<details>
-<summary>SecurityConfig (Kotlin)</summary>
+When `SecurityConfig` is present, `/swagger-ui/**` and `/v3/api-docs/**` return 401/403. If the evaluator cannot reach Swagger UI, the documentation work is invisible.
 
 ```kotlin
 @Configuration
@@ -506,14 +266,12 @@ class SecurityConfig {
             .csrf { it.disable() }
             .authorizeHttpRequests { auth ->
                 auth
-                    // Allow Swagger UI
                     .requestMatchers(
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/api-docs/**",
                         "/v3/api-docs/**"
                     ).permitAll()
-                    // All other requests
                     .anyRequest().authenticated()
             }
             .build()
@@ -521,10 +279,10 @@ class SecurityConfig {
 }
 ```
 
-</details>
-
 <details>
-<summary>With JWT Authentication (Kotlin)</summary>
+<summary><strong>More detail — Adding bearerAuth scheme for JWT environments</strong></summary>
+
+In a JWT-secured app, add a `bearerAuth` security scheme so the evaluator can paste a token directly in Swagger UI.
 
 ```kotlin
 @Configuration
@@ -539,102 +297,37 @@ class OpenApiConfig {
             .`in`(SecurityScheme.In.HEADER)
             .name("Authorization")
 
-        val securityRequirement = SecurityRequirement()
-            .addList("bearerAuth")
+        val securityRequirement = SecurityRequirement().addList("bearerAuth")
 
         return OpenAPI()
-            .info(
-                Info()
-                    .title("Product API")
-                    .version("v1.0.0")
-            )
+            .info(Info().title("Product API").version("v1.0.0"))
             .addSecurityItem(securityRequirement)
-            .components(
-                Components().addSecuritySchemes("bearerAuth", securityScheme)
-            )
+            .components(Components().addSecuritySchemes("bearerAuth", securityScheme))
     }
 }
 ```
 
 </details>
 
-### 7. Spring REST Docs (Alternative)
+### 1.4 Aside: SpringDoc vs REST Docs — Decision Criteria
 
-Instead of Swagger, this approach generates API documentation **based on tests**. Since documentation is only generated when tests pass, **synchronization between docs and code is guaranteed**.
+<strong>For a pre-interview task, SpringDoc is the right call.</strong> Setup is minimal and the Try it out feature lets the evaluator test APIs immediately without curl.
 
-<details>
-<summary>Swagger vs REST Docs</summary>
+REST Docs generates documentation only when tests pass, enforcing code-doc synchronization. That guarantee matters in financial and public-sector APIs where accuracy is the core requirement.
 
-| Comparison | Swagger (SpringDoc) | REST Docs |
-|----------|---------------------|-----------|
-| **Doc generation method** | Annotation-based | Test-based |
-| **Doc-code sync** | Manual management required | Automatically guaranteed when tests pass |
-| **Runtime dependency** | Yes (included in production deployment) | No (used only at build time) |
-| **Try it out feature** | Built-in | Requires separate implementation |
-| **Learning curve** | Low | High |
-| **Production code intrusion** | Requires adding annotations | None (exists only in test code) |
-
-**When Swagger is appropriate**
-- Rapid prototyping
-- When Try it out functionality is needed
-- When there's heavy frontend collaboration
-
-**When REST Docs is appropriate**
-- When documentation accuracy is critical (financial, public APIs, etc.)
-- When you want to keep production code clean
-- Projects with high test coverage
-
-**For pre-interview tasks**, Swagger is more appropriate. The setup is simple and the Try it out feature allows evaluators to test immediately.
-
-</details>
+| Criterion | SpringDoc (Swagger) | REST Docs |
+|-----------|---------------------|-----------|
+| Doc generation | Annotation-based | Test-based |
+| Code-doc sync | Manual | Enforced by failing tests |
+| Runtime dependency | Yes (ships in production) | No (build-time only) |
+| Try it out | Built-in | Requires separate setup |
+| Learning curve | Low | High |
+| Production code intrusion | Annotations required | None (test code only) |
 
 <details>
-<summary>Adding Dependencies (build.gradle)</summary>
+<summary><strong>More detail — REST Docs dependencies, test code, and AsciiDoc template</strong></summary>
 
-```groovy
-plugins {
-    id 'org.asciidoctor.jvm.convert' version '3.3.2'
-}
-
-configurations {
-    asciidoctorExt
-}
-
-dependencies {
-    asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
-    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
-}
-
-ext {
-    snippetsDir = file('build/generated-snippets')
-}
-
-test {
-    outputs.dir snippetsDir
-}
-
-asciidoctor {
-    inputs.dir snippetsDir
-    configurations 'asciidoctorExt'
-    dependsOn test
-}
-
-// Copy generated docs to static folder
-tasks.register('copyDocument', Copy) {
-    dependsOn asciidoctor
-    from file("build/docs/asciidoc")
-    into file("src/main/resources/static/docs")
-}
-
-build {
-    dependsOn copyDocument
-}
-```
-
-</details>
-
-<details>
-<summary>Adding Dependencies (build.gradle.kts)</summary>
+**Dependencies (build.gradle.kts)**
 
 ```kotlin
 plugins {
@@ -649,9 +342,7 @@ dependencies {
     testImplementation("org.springframework.restdocs:spring-restdocs-mockmvc")
 }
 
-tasks.test {
-    outputs.dir(snippetsDir)
-}
+tasks.test { outputs.dir(snippetsDir) }
 
 tasks.asciidoctor {
     inputs.dir(snippetsDir)
@@ -665,47 +356,29 @@ tasks.register<Copy>("copyDocument") {
     into(file("src/main/resources/static/docs"))
 }
 
-tasks.build {
-    dependsOn("copyDocument")
-}
+tasks.build { dependsOn("copyDocument") }
 ```
 
-</details>
+**Test code (Kotlin)**
 
-<details>
-<summary>Test Code (Java)</summary>
-
-```java
-@WebMvcTest(ProductController.class)
-@AutoConfigureRestDocs  // REST Docs auto configuration
+```kotlin
+@WebMvcTest(ProductController::class)
+@AutoConfigureRestDocs
 class ProductControllerDocsTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
-    private ProductService productService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Autowired private lateinit var mockMvc: MockMvc
+    @MockkBean private lateinit var productService: ProductService
 
     @Test
     @DisplayName("Get product detail API")
-    void findProductDetail() throws Exception {
-        // given
-        FindProductDetailResponse response = new FindProductDetailResponse(
-            1L, "Delicious Apple", 10000, ProductCategoryType.FOOD, true, LocalDateTime.now()
-        );
-        given(productService.findProductDetail(1L)).willReturn(response);
+    fun findProductDetail() {
+        val response = FindProductDetailResponse(1L, "Fresh Apple", 10000, ProductCategoryType.FOOD, true, LocalDateTime.now())
+        every { productService.findProductDetail(1L) } returns response
 
-        // when & then
-        mockMvc.perform(get("/api/v1/products/{productId}", 1L)
-                .accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk())
-            .andDo(document("product-detail",  // Document identifier
-                pathParameters(
-                    parameterWithName("productId").description("Product ID")
-                ),
+        mockMvc.perform(get("/api/v1/products/{productId}", 1L).accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk)
+            .andDo(document("product-detail",
+                pathParameters(parameterWithName("productId").description("Product ID")),
                 responseFields(
                     fieldWithPath("code").description("Response code"),
                     fieldWithPath("message").description("Response message"),
@@ -716,245 +389,12 @@ class ProductControllerDocsTest {
                     fieldWithPath("data.enabled").description("Enabled status"),
                     fieldWithPath("data.createdAt").description("Created at")
                 )
-            ));
-    }
-
-    @Test
-    @DisplayName("Register product API")
-    void registerProduct() throws Exception {
-        // given
-        RegisterProductRequest request = new RegisterProductRequest(
-            "Delicious Apple", 10000, ProductCategoryType.FOOD
-        );
-        given(productService.registerProduct(any())).willReturn(1L);
-
-        // when & then
-        mockMvc.perform(post("/api/v1/products")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isCreated())
-            .andDo(document("product-create",
-                requestFields(
-                    fieldWithPath("name").description("Product name"),
-                    fieldWithPath("price").description("Price"),
-                    fieldWithPath("category").description("Category (FOOD, HOTEL)")
-                ),
-                responseFields(
-                    fieldWithPath("code").description("Response code"),
-                    fieldWithPath("message").description("Response message"),
-                    fieldWithPath("data").description("Created product ID")
-                )
-            ));
+            ))
     }
 }
 ```
 
-</details>
-
-<details>
-<summary>Test Code (Kotlin - JUnit Style)</summary>
-
-```kotlin
-@WebMvcTest(ProductController::class)
-@AutoConfigureRestDocs
-class ProductControllerDocsTest {
-
-    @Autowired
-    private lateinit var mockMvc: MockMvc
-
-    @MockkBean
-    private lateinit var productService: ProductService
-
-    @Autowired
-    private lateinit var objectMapper: ObjectMapper
-
-    @Test
-    @DisplayName("Get product detail API")
-    fun findProductDetail() {
-        // given
-        val response = FindProductDetailResponse(
-            id = 1L,
-            name = "Delicious Apple",
-            price = 10000,
-            category = ProductCategoryType.FOOD,
-            enabled = true,
-            createdAt = LocalDateTime.now()
-        )
-        every { productService.findProductDetail(1L) } returns response
-
-        // when & then
-        mockMvc.perform(
-            get("/api/v1/products/{productId}", 1L)
-                .accept(MediaType.APPLICATION_JSON)
-        )
-            .andExpect(status().isOk)
-            .andDo(
-                document(
-                    "product-detail",
-                    pathParameters(
-                        parameterWithName("productId").description("Product ID")
-                    ),
-                    responseFields(
-                        fieldWithPath("code").description("Response code"),
-                        fieldWithPath("message").description("Response message"),
-                        fieldWithPath("data.id").description("Product ID"),
-                        fieldWithPath("data.name").description("Product name"),
-                        fieldWithPath("data.price").description("Price"),
-                        fieldWithPath("data.category").description("Category"),
-                        fieldWithPath("data.enabled").description("Enabled status"),
-                        fieldWithPath("data.createdAt").description("Created at")
-                    )
-                )
-            )
-    }
-
-    @Test
-    @DisplayName("Register product API")
-    fun registerProduct() {
-        // given
-        val request = RegisterProductRequest(
-            name = "Delicious Apple",
-            price = 10000,
-            category = ProductCategoryType.FOOD
-        )
-        every { productService.registerProduct(any()) } returns 1L
-
-        // when & then
-        mockMvc.perform(
-            post("/api/v1/products")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-        )
-            .andExpect(status().isCreated)
-            .andDo(
-                document(
-                    "product-create",
-                    requestFields(
-                        fieldWithPath("name").description("Product name"),
-                        fieldWithPath("price").description("Price"),
-                        fieldWithPath("category").description("Category (FOOD, HOTEL)")
-                    ),
-                    responseFields(
-                        fieldWithPath("code").description("Response code"),
-                        fieldWithPath("message").description("Response message"),
-                        fieldWithPath("data").description("Created product ID")
-                    )
-                )
-            )
-    }
-}
-```
-
-</details>
-
-<details>
-<summary>Test Code (Kotlin - Kotest DescribeSpec Style)</summary>
-
-> **What is Kotest?** A Kotlin-specific testing framework that provides BDD-style `DescribeSpec`. It offers clear test structure and excellent readability.
-
-```kotlin
-// Add dependencies to build.gradle.kts
-// testImplementation("io.kotest:kotest-runner-junit5:5.8.0")
-// testImplementation("io.kotest.extensions:kotest-extensions-spring:1.1.3")
-
-@WebMvcTest(ProductController::class)
-@AutoConfigureRestDocs
-class ProductControllerDocsTest : DescribeSpec() {
-
-    @Autowired
-    private lateinit var mockMvc: MockMvc
-
-    @MockkBean
-    private lateinit var productService: ProductService
-
-    @Autowired
-    private lateinit var objectMapper: ObjectMapper
-
-    init {
-        describe("Product API") {
-            context("when retrieving product details") {
-                it("returns product information") {
-                    // given
-                    val response = FindProductDetailResponse(
-                        id = 1L,
-                        name = "Delicious Apple",
-                        price = 10000,
-                        category = ProductCategoryType.FOOD,
-                        enabled = true,
-                        createdAt = LocalDateTime.now()
-                    )
-                    every { productService.findProductDetail(1L) } returns response
-
-                    // when & then
-                    mockMvc.perform(
-                        get("/api/v1/products/{productId}", 1L)
-                            .accept(MediaType.APPLICATION_JSON)
-                    )
-                        .andExpect(status().isOk)
-                        .andDo(
-                            document(
-                                "product-detail",
-                                pathParameters(
-                                    parameterWithName("productId").description("Product ID")
-                                ),
-                                responseFields(
-                                    fieldWithPath("code").description("Response code"),
-                                    fieldWithPath("message").description("Response message"),
-                                    fieldWithPath("data.id").description("Product ID"),
-                                    fieldWithPath("data.name").description("Product name"),
-                                    fieldWithPath("data.price").description("Price"),
-                                    fieldWithPath("data.category").description("Category"),
-                                    fieldWithPath("data.enabled").description("Enabled status"),
-                                    fieldWithPath("data.createdAt").description("Created at")
-                                )
-                            )
-                        )
-                }
-            }
-
-            context("when registering a product") {
-                it("returns the created product ID") {
-                    // given
-                    val request = RegisterProductRequest(
-                        name = "Delicious Apple",
-                        price = 10000,
-                        category = ProductCategoryType.FOOD
-                    )
-                    every { productService.registerProduct(any()) } returns 1L
-
-                    // when & then
-                    mockMvc.perform(
-                        post("/api/v1/products")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request))
-                    )
-                        .andExpect(status().isCreated)
-                        .andDo(
-                            document(
-                                "product-create",
-                                requestFields(
-                                    fieldWithPath("name").description("Product name"),
-                                    fieldWithPath("price").description("Price"),
-                                    fieldWithPath("category").description("Category (FOOD, HOTEL)")
-                                ),
-                                responseFields(
-                                    fieldWithPath("code").description("Response code"),
-                                    fieldWithPath("message").description("Response message"),
-                                    fieldWithPath("data").description("Created product ID")
-                                )
-                            )
-                        )
-                }
-            }
-        }
-    }
-}
-```
-
-</details>
-
-<details>
-<summary>AsciiDoc Template (src/docs/asciidoc/index.adoc)</summary>
+**AsciiDoc template (src/docs/asciidoc/index.adoc)**
 
 ```asciidoc
 = Product API Documentation
@@ -963,186 +403,41 @@ class ProductControllerDocsTest : DescribeSpec() {
 :source-highlighter: highlightjs
 :toc: left
 :toclevels: 2
-:sectlinks:
 
-[[overview]]
-== Overview
-
-Product Management API Documentation.
-
-[[Product-API]]
 == Product API
 
-[[Product-Detail]]
 === Get Product Details
 
 operation::product-detail[snippets='path-parameters,response-fields,curl-request,http-response']
-
-[[Product-Register]]
-=== Register Product
-
-operation::product-create[snippets='request-fields,response-fields,curl-request,http-response']
-```
-
-</details>
-
-<details>
-<summary>REST Docs Practical Tips</summary>
-
-**Reduce duplication with test abstraction**
-
-```java
-// Use common configuration via inheritance
-@Import(RestDocsConfig.class)
-public abstract class RestDocsTestSupport {
-    @Autowired
-    protected MockMvc mockMvc;
-
-    @Autowired
-    protected ObjectMapper objectMapper;
-}
-
-@TestConfiguration
-public class RestDocsConfig {
-    @Bean
-    public RestDocumentationResultHandler restDocs() {
-        return MockMvcRestDocumentation.document(
-            "{class-name}/{method-name}",  // Auto-naming
-            Preprocessors.preprocessRequest(Preprocessors.prettyPrint()),
-            Preprocessors.preprocessResponse(Preprocessors.prettyPrint())
-        );
-    }
-}
-```
-
-**Documenting field constraints**
-
-```java
-// Include validation annotation info in documentation
-requestFields(
-    fieldWithPath("name")
-        .description("Product name")
-        .attributes(key("constraints").value("Required, max 100 characters")),
-    fieldWithPath("price")
-        .description("Price")
-        .attributes(key("constraints").value("Required, positive number"))
-)
-```
-
-**Documenting error responses**
-
-```java
-@Test
-void findProductDetail_notFound() throws Exception {
-    given(productService.findProductDetail(999L))
-        .willThrow(new NotFoundException());
-
-    mockMvc.perform(get("/api/v1/products/{productId}", 999L))
-        .andExpect(status().isNotFound())
-        .andDo(document("product-detail-error",
-            responseFields(
-                fieldWithPath("code").description("Error code"),
-                fieldWithPath("message").description("Error message"),
-                fieldWithPath("data").description("null")
-            )
-        ));
-}
 ```
 
 </details>
 
 ---
 
-## Logging Strategy
+## 2. Logging Strategy — SLF4J · MDC · Masking
 
-Logging is an important element in pre-interview tasks from both debugging and operational perspectives. Proper logging enhances code quality.
+### 2.1 Logback Configuration and Profile Splitting
 
-<details>
-<summary>Myths and Facts About Logging Performance</summary>
+<strong>Spring Boot's default logging implementation is Logback — it ships with `spring-boot-starter`, no extra dependency needed.</strong>
 
-**Common Mistakes**
-
-```java
-// Bad - string concatenation executes even when DEBUG level is off
-log.debug("User " + userId + " requested " + itemCount + " items");
-
-// Good - string concatenation is skipped when DEBUG level is off
-log.debug("User {} requested {} items", userId, itemCount);
-```
-
-**When isDebugEnabled() Check is Needed**
-
-```java
-// No check needed for simple variable substitution
-log.debug("User {} logged in", userId);
-
-// Check only when expensive operations are involved
-if (log.isDebugEnabled()) {
-    log.debug("Request details: {}", expensiveJsonSerialization(request));
-}
-```
-
-**Practical Tips**
-
-- In most cases, `{}` placeholders are sufficient
-- Only use `isDebugEnabled()` check for objects with expensive `toString()`
-- Level checking is recommended for logging inside loops
-
-</details>
-
-<details>
-<summary>MDC vs Distributed Tracing Systems</summary>
-
-**MDC (Mapped Diagnostic Context)**
-- Tracks requests within a single application
-- Requires manual implementation
-- Difficult to trace across microservices
-
-**Distributed Tracing Systems (Zipkin, Jaeger, AWS X-Ray, etc.)**
-- Tracks requests across multiple services
-- Provides visual dashboards
-- Requires setup and infrastructure
-
-**Selection Criteria**
-
-| Scenario | Recommended |
-|-----|-----|
-| Single application, pre-interview tasks | MDC |
-| Microservices | Distributed tracing system |
-| When quick implementation is needed | MDC |
-
-**For pre-interview tasks**, MDC is more than sufficient. Distributed tracing systems require infrastructure setup, which often exceeds the scope of the task.
-
-</details>
-
-### 1. Logback Basic Configuration
-
-Spring Boot uses Logback by default.
-
-<details>
-<summary>application.yml (Basic Logging Configuration)</summary>
+For quick setup, configure levels and pattern in `application.yml`. Add `logback-spring.xml` when you need profile branching and rolling file policies.
 
 ```yaml
+# application.yml — basic logging
 logging:
   level:
     root: INFO
     com.example.app: DEBUG
-    org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{requestId}] %-5level %logger{36} - %msg%n"
 ```
-
-</details>
-
-<details>
-<summary>logback-spring.xml (Detailed Configuration)</summary>
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Profile-specific configuration -->
     <springProfile name="local">
         <property name="LOG_LEVEL" value="DEBUG"/>
     </springProfile>
@@ -1150,14 +445,12 @@ logging:
         <property name="LOG_LEVEL" value="INFO"/>
     </springProfile>
 
-    <!-- Console Appender -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{requestId}] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- File Appender -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/application.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
@@ -1172,27 +465,118 @@ logging:
         </encoder>
     </appender>
 
-    <!-- Root Logger -->
     <root level="${LOG_LEVEL:-INFO}">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
     </root>
 
-    <!-- Package-level log levels -->
     <logger name="com.example.app" level="DEBUG"/>
-    <logger name="org.springframework.web" level="INFO"/>
     <logger name="org.hibernate.SQL" level="DEBUG"/>
 </configuration>
 ```
 
-</details>
+### 2.2 Log Level Selection
 
-### 2. MDC (Mapped Diagnostic Context)
+<strong>One-line rule: INFO for business events, DEBUG for debugging detail, ERROR only for things that need immediate action.</strong>
 
-Using MDC, you can assign a unique ID to each request, making log tracing much easier.
+| Level | Purpose | Examples |
+|-------|---------|---------|
+| <strong>ERROR</strong> | Needs immediate response | DB connection failure, external API outage |
+| <strong>WARN</strong> | Potential issue, monitor | Retry triggered, threshold approaching |
+| <strong>INFO</strong> | Key business events | Order placed, payment succeeded |
+| <strong>DEBUG</strong> | Development/debugging detail | Method entry, parameter values |
+| <strong>TRACE</strong> | Very fine-grained detail | Per-iteration values inside loops |
+
+```kotlin
+@Service
+class ProductService(private val productRepository: ProductRepository) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @Transactional
+    fun registerProduct(command: RegisterProductCommand): Long {
+        log.debug("Register product request: name={}, price={}", command.name, command.price)
+
+        val saved = productRepository.save(Product(command.name, command.price, command.category))
+        log.info("Product registered: productId={}", saved.id)
+
+        return saved.id!!
+    }
+
+    fun findProductDetail(productId: Long): FindProductDetailResponse {
+        log.debug("Find product: productId={}", productId)
+
+        val product = productRepository.findById(productId)
+            ?: run {
+                log.warn("Product not found: productId={}", productId)
+                throw NotFoundException()
+            }
+
+        return FindProductDetailResponse.from(product)
+    }
+}
+```
 
 <details>
-<summary>MDC Filter (Kotlin)</summary>
+<summary><strong>More detail — ProductService logging example (Java)</strong></summary>
+
+```java
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ProductService {
+
+    private final ProductRepository productRepository;
+
+    @Transactional
+    public Long registerProduct(RegisterProductCommand command) {
+        log.debug("Register product request: name={}, price={}", command.name(), command.price());
+
+        Product saved = productRepository.save(
+            new Product(command.name(), command.price(), command.category()));
+        log.info("Product registered: productId={}", saved.getId());
+
+        return saved.getId();
+    }
+
+    public FindProductDetailResponse findProductDetail(Long productId) {
+        log.debug("Find product: productId={}", productId);
+
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> {
+                log.warn("Product not found: productId={}", productId);
+                return new NotFoundException();
+            });
+
+        return FindProductDetailResponse.from(product);
+    }
+}
+```
+
+</details>
+
+### 2.3 MDC for Request Tracing
+
+<strong>MDC (Mapped Diagnostic Context) = store key-value pairs in thread-local storage; Logback's `%X{key}` pattern then stamps them on every log line automatically.</strong>
+
+Assign a unique request ID per request, and you can grep all logs for a single request in one pass.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant MdcFilter
+    participant MDC
+    participant Controller
+    participant Service
+    participant Logger
+
+    Client->>MdcFilter: HTTP request (X-Request-ID: abc123)
+    MdcFilter->>MDC: put("requestId", "abc123")
+    MdcFilter->>Controller: filterChain.doFilter()
+    Controller->>Service: business call
+    Service->>Logger: log.info("Product registered: …")
+    Logger-->>Client: [abc123] Product registered: … (auto-stamped)
+    Note over MdcFilter: finally MDC.clear()
+```
 
 ```kotlin
 @Component
@@ -1222,10 +606,8 @@ class MdcFilter : OncePerRequestFilter() {
 }
 ```
 
-</details>
-
 <details>
-<summary>MDC Filter (Java)</summary>
+<summary><strong>More detail — MdcFilter (Java)</strong></summary>
 
 ```java
 @Component
@@ -1258,107 +640,11 @@ public class MdcFilter extends OncePerRequestFilter {
 
 </details>
 
-### 3. Logging Level Guide
+> <strong>Note</strong>: MDC handles tracing within a single application. Cross-service distributed tracing (Zipkin, Jaeger, AWS X-Ray) requires infrastructure setup and is out of scope for pre-interview tasks.
 
-| Level | Purpose | Examples |
-|------|------|------|
-| **ERROR** | Errors requiring immediate attention | DB connection failure, external API outage |
-| **WARN** | Potential issues, attention needed | Retries occurring, approaching thresholds |
-| **INFO** | Major business events | Order completed, payment successful |
-| **DEBUG** | Detailed info for development/debugging | Method entry/exit, parameter values |
-| **TRACE** | Very detailed information | Value changes within loops |
+### 2.4 Sensitive Data Masking
 
-<details>
-<summary>Logging Examples (Kotlin)</summary>
-
-```kotlin
-@Service
-class ProductService(
-    private val productRepository: ProductRepository
-) {
-    private val log = LoggerFactory.getLogger(javaClass)
-
-    @Transactional
-    fun registerProduct(request: RegisterProductRequest): Long {
-        log.debug("Product registration request: name={}, price={}", request.name, request.price)
-
-        val product = Product(
-            name = request.name!!,
-            price = request.price!!,
-            category = request.category!!
-        )
-
-        val saved = productRepository.save(product)
-        log.info("Product registration complete: productId={}", saved.id)
-
-        return saved.id!!
-    }
-
-    fun findProductDetail(productId: Long): FindProductDetailResponse {
-        log.debug("Product lookup: productId={}", productId)
-
-        val product = productRepository.findById(productId)
-            ?: run {
-                log.warn("Product not found: productId={}", productId)
-                throw NotFoundException()
-            }
-
-        return FindProductDetailResponse.from(product)
-    }
-}
-```
-
-</details>
-
-<details>
-<summary>Logging Examples (Java)</summary>
-
-```java
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
-    @Transactional
-    public Long registerProduct(RegisterProductRequest request) {
-        log.debug("Product registration request: name={}, price={}", request.name(), request.price());
-
-        Product product = new Product(
-            request.name(),
-            request.price(),
-            request.category()
-        );
-
-        Product saved = productRepository.save(product);
-        log.info("Product registration complete: productId={}", saved.getId());
-
-        return saved.getId();
-    }
-
-    public FindProductDetailResponse findProductDetail(Long productId) {
-        log.debug("Product lookup: productId={}", productId);
-
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> {
-                log.warn("Product not found: productId={}", productId);
-                return new NotFoundException();
-            });
-
-        return FindProductDetailResponse.from(product);
-    }
-}
-```
-
-</details>
-
-### 4. Sensitive Information Masking
-
-Be careful not to expose sensitive information in logs.
-
-<details>
-<summary>Masking Utility (Kotlin)</summary>
+<strong>Rule: mask only at log output time. Business logic always operates on the original data.</strong>
 
 ```kotlin
 object MaskingUtils {
@@ -1382,136 +668,100 @@ object MaskingUtils {
 }
 ```
 
-</details>
-
-<details>
-<summary>Masking Utility Usage Examples</summary>
-
 ```kotlin
-@Service
-@RequiredArgsConstructor
-class MemberService(
-    private val memberRepository: MemberRepository
-) {
-    private val log = LoggerFactory.getLogger(javaClass)
+// Usage
+fun findMemberDetail(memberId: Long): MemberDetailResponse {
+    val member = memberRepository.findById(memberId)
+        .orElseThrow { NotFoundException("Member not found") }
 
-    fun findMemberDetail(memberId: Long): MemberDetailResponse {
-        val member = memberRepository.findById(memberId)
-            .orElseThrow { NotFoundException("Member not found") }
+    log.info(
+        "Member lookup complete: memberId={}, email={}, phone={}",
+        member.id,
+        MaskingUtils.maskEmail(member.email),   // ho***@example.com
+        MaskingUtils.maskPhone(member.phone)    // 010****1234
+    )
 
-        // Only masked information is logged
-        log.info(
-            "Member lookup complete: memberId={}, email={}, phone={}",
-            member.id,
-            MaskingUtils.maskEmail(member.email),    // ho***@example.com
-            MaskingUtils.maskPhone(member.phone)     // 010****1234
-        )
-
-        return MemberDetailResponse.from(member)
-    }
-
-    fun processPayment(memberId: Long, cardNumber: String, amount: Int) {
-        // Log before payment processing
-        log.info(
-            "Payment request: memberId={}, card={}, amount={}",
-            memberId,
-            MaskingUtils.maskCardNumber(cardNumber),  // ************1234
-            amount
-        )
-
-        // Payment processing logic...
-    }
+    return MemberDetailResponse.from(member)
 }
 ```
 
-**Practical tip**: Apply masking **only at the log output point**, and use the original data in actual business logic. Never use masked data for comparisons or processing.
+### 2.5 Aside: Logging Performance Myths
 
-</details>
+**Myth 1 — String concatenation equals `{}` placeholders**
+
+```kotlin
+// Anti-pattern — concatenation runs even when DEBUG is off
+log.debug("User " + userId + " requested " + itemCount + " items")
+
+// Correct — concatenation is skipped when DEBUG is disabled
+log.debug("User {} requested {} items", userId, itemCount)
+```
+
+**Myth 2 — `isDebugEnabled()` guards are always needed**
+
+Guards are only necessary in two situations.
+
+```kotlin
+// Case 1 — expensive toString()
+if (log.isDebugEnabled) {
+    log.debug("Request details: {}", expensiveJsonSerialization(request))
+}
+
+// Case 2 — logging inside a loop
+items.forEach { item ->
+    if (log.isDebugEnabled) {
+        log.debug("Processing item: {}", item.toDetailString())
+    }
+}
+
+// Unnecessary — {} defers evaluation already
+if (log.isDebugEnabled) {
+    log.debug("User {} logged in", userId)  // guard adds no value here
+}
+```
 
 ---
 
-## AOP Usage
+## 3. AOP — Separating Cross-Cutting Concerns
 
-AOP allows you to cleanly separate cross-cutting concerns (logging, performance measurement, etc.).
+### 3.1 Filter vs Interceptor vs AOP — Decision Criteria
 
-<details>
-<summary>Caution: Avoid AOP Overuse</summary>
+<strong>All three handle cross-cutting logic, but their application boundaries differ.</strong> Putting logic in the wrong layer creates dependency leaks or loses access to Spring context.
 
-**When AOP is appropriate**
-- Logging, monitoring
-- Transaction management
-- Security/authorization checks
-- Caching
+```mermaid
+flowchart TB
+    Client([Client])
 
-**When AOP is inappropriate**
-- Business logic implementation
-- Complex conditional branching
-- Logic that applies to only specific methods
+    subgraph Servlet["Servlet Container"]
+        Filter["Filter Chain\n(encoding, CORS, MDC, auth)"]
+    end
 
-**Caveats**
+    subgraph Spring["Spring MVC"]
+        DS["DispatcherServlet"]
+        Inter["Interceptor\n(preHandle / postHandle)"]
+        Ctrl["Controller\n(@RestController)"]
+        AOP["AOP Advice\n(@Around, @Before, @AfterReturning)"]
+        Svc["Service / Repository"]
+    end
 
-1. **Debugging difficulty**: Logic handled by AOP is not directly visible in code, making debugging harder
-2. **Performance overhead**: Applying Aspects to every method can degrade performance
-3. **Ordering issues**: When multiple Aspects exist, execution order management is needed (`@Order`)
-4. **Self-invocation problem**: AOP is not applied when calling methods within the same class
-
-```java
-@Service
-public class ProductService {
-
-    public void methodA() {
-        methodB();  // AOP NOT applied (self-invocation)
-    }
-
-    @ExecutionTime
-    public void methodB() { ... }
-}
+    Client --> Filter --> DS --> Inter --> Ctrl
+    Ctrl --> AOP --> Svc
 ```
 
-**Recommendations for Pre-Interview Tasks**
+| Type | Scope | Fires when | Typical use |
+|------|-------|-----------|-------------|
+| <strong>Filter</strong> | Servlet | Before/after DispatcherServlet | Encoding, CORS, MDC, token parsing |
+| <strong>Interceptor</strong> | Spring MVC | Before/after Controller | Auth checks, common response headers |
+| <strong>AOP</strong> | Spring Bean | Before/after method | Transactions, execution timing, retry |
 
-- Request/response logging AOP can leave a good impression
-- Too many AOPs actually increase complexity
-- If you use AOP, add an explanation in the README
+Decision rules in one line each:
+- Dealing with the raw HTTP request/response → Filter
+- Pre/post processing around the Controller → Interceptor
+- Logic inside Service or Repository → AOP
 
-</details>
+### 3.2 Request/Response Logging Aspect
 
-<details>
-<summary>AOP vs Filter vs Interceptor</summary>
-
-| Type | Scope | Execution Timing | Use Cases |
-|-----|----------|----------|----------|
-| **Filter** | Servlet | Before/after DispatcherServlet | Encoding, CORS, Authentication |
-| **Interceptor** | Spring MVC | Before/after Controller | Authentication, Logging, Authorization |
-| **AOP** | Spring Bean | Before/after method execution | Transactions, Logging, Caching |
-
-**Selection Guide**
-
-- **Handling HTTP request/response itself**: Filter
-- **Pre/post Controller processing**: Interceptor
-- **Business logic in Service/Repository, etc.**: AOP
-
-**For pre-interview tasks**, using just AOP or Interceptor alone is usually sufficient. There's no need to use all three.
-
-</details>
-
-### 1. Adding Dependencies
-
-<details>
-<summary>build.gradle</summary>
-
-```groovy
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-aop'
-}
-```
-
-</details>
-
-### 2. Request/Response Logging AOP
-
-<details>
-<summary>RequestLoggingAspect (Kotlin)</summary>
+MDC already stamps the request ID, so `RequestLoggingAspect` only needs to capture method name, URI, and duration on a single line. `[REQUEST]`/`[RESPONSE]`/`[ERROR]` prefixes make grep straightforward.
 
 ```kotlin
 @Aspect
@@ -1529,28 +779,16 @@ class RequestLoggingAspect {
 
     @Around("restController()")
     fun logAround(joinPoint: ProceedingJoinPoint): Any? {
-        val request = (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)
-            ?.request
-
-        val methodName = joinPoint.signature.name
+        val request = (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request
         val className = joinPoint.target.javaClass.simpleName
+        val methodName = joinPoint.signature.name
 
-        // Request logging
-        log.info(
-            "[REQUEST] {} {} - {}.{}",
-            request?.method,
-            request?.requestURI,
-            className,
-            methodName
-        )
+        log.info("[REQUEST] {} {} - {}.{}", request?.method, request?.requestURI, className, methodName)
 
         if (log.isDebugEnabled) {
-            val args = joinPoint.args
-                .filterNotNull()
+            val args = joinPoint.args.filterNotNull()
                 .filter { it !is HttpServletRequest && it !is HttpServletResponse }
-            if (args.isNotEmpty()) {
-                log.debug("[REQUEST BODY] {}", toJson(args))
-            }
+            if (args.isNotEmpty()) log.debug("[REQUEST BODY] {}", toJson(args))
         }
 
         val startTime = System.currentTimeMillis()
@@ -1558,47 +796,26 @@ class RequestLoggingAspect {
         return try {
             val result = joinPoint.proceed()
             val duration = System.currentTimeMillis() - startTime
-
-            // Response logging
-            log.info(
-                "[RESPONSE] {} {} - {}ms",
-                request?.method,
-                request?.requestURI,
-                duration
-            )
-
-            if (log.isDebugEnabled && result != null) {
-                log.debug("[RESPONSE BODY] {}", toJson(result))
-            }
-
+            log.info("[RESPONSE] {} {} - {}ms", request?.method, request?.requestURI, duration)
+            if (log.isDebugEnabled && result != null) log.debug("[RESPONSE BODY] {}", toJson(result))
             result
         } catch (e: Exception) {
             val duration = System.currentTimeMillis() - startTime
-            log.error(
-                "[ERROR] {} {} - {}ms - {}",
-                request?.method,
-                request?.requestURI,
-                duration,
-                e.message
-            )
+            log.error("[ERROR] {} {} - {}ms - {}", request?.method, request?.requestURI, duration, e.message)
             throw e
         }
     }
 
-    private fun toJson(obj: Any): String {
-        return try {
-            objectMapper.writeValueAsString(obj)
-        } catch (e: Exception) {
-            obj.toString()
-        }
+    private fun toJson(obj: Any): String = try {
+        objectMapper.writeValueAsString(obj)
+    } catch (e: Exception) {
+        obj.toString()
     }
 }
 ```
 
-</details>
-
 <details>
-<summary>RequestLoggingAspect (Java)</summary>
+<summary><strong>More detail — RequestLoggingAspect (Java)</strong></summary>
 
 ```java
 @Aspect
@@ -1619,64 +836,27 @@ public class RequestLoggingAspect {
 
     @Around("restController()")
     public Object logAround(ProceedingJoinPoint joinPoint) throws Throwable {
-        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder
-            .getRequestAttributes()).getRequest();
-
-        String methodName = joinPoint.getSignature().getName();
+        HttpServletRequest request = ((ServletRequestAttributes)
+            RequestContextHolder.getRequestAttributes()).getRequest();
         String className = joinPoint.getTarget().getClass().getSimpleName();
+        String methodName = joinPoint.getSignature().getName();
 
-        // Request logging
         log.info("[REQUEST] {} {} - {}.{}",
-            request.getMethod(),
-            request.getRequestURI(),
-            className,
-            methodName);
-
-        if (log.isDebugEnabled()) {
-            Object[] args = Arrays.stream(joinPoint.getArgs())
-                .filter(Objects::nonNull)
-                .filter(arg -> !(arg instanceof HttpServletRequest))
-                .filter(arg -> !(arg instanceof HttpServletResponse))
-                .toArray();
-
-            if (args.length > 0) {
-                log.debug("[REQUEST BODY] {}", toJson(args));
-            }
-        }
+            request.getMethod(), request.getRequestURI(), className, methodName);
 
         long startTime = System.currentTimeMillis();
 
         try {
             Object result = joinPoint.proceed();
             long duration = System.currentTimeMillis() - startTime;
-
-            // Response logging
             log.info("[RESPONSE] {} {} - {}ms",
-                request.getMethod(),
-                request.getRequestURI(),
-                duration);
-
-            if (log.isDebugEnabled() && result != null) {
-                log.debug("[RESPONSE BODY] {}", toJson(result));
-            }
-
+                request.getMethod(), request.getRequestURI(), duration);
             return result;
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("[ERROR] {} {} - {}ms - {}",
-                request.getMethod(),
-                request.getRequestURI(),
-                duration,
-                e.getMessage());
+                request.getMethod(), request.getRequestURI(), duration, e.getMessage());
             throw e;
-        }
-    }
-
-    private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            return obj.toString();
         }
     }
 }
@@ -1684,23 +864,15 @@ public class RequestLoggingAspect {
 
 </details>
 
-### 3. Execution Time Measurement AOP
+### 3.3 Execution Time Aspect
 
-Used when you want to measure the execution time of specific methods.
-
-<details>
-<summary>ExecutionTime Annotation (Kotlin)</summary>
+Mark any method with `@ExecutionTime` to log its runtime. <strong>When duration exceeds 1000ms, a WARN fires so slow methods surface immediately.</strong>
 
 ```kotlin
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class ExecutionTime
 ```
-
-</details>
-
-<details>
-<summary>ExecutionTimeAspect (Kotlin)</summary>
 
 ```kotlin
 @Aspect
@@ -1711,9 +883,8 @@ class ExecutionTimeAspect {
 
     @Around("@annotation(com.example.app.common.annotation.ExecutionTime)")
     fun measureExecutionTime(joinPoint: ProceedingJoinPoint): Any? {
-        val methodName = joinPoint.signature.name
         val className = joinPoint.target.javaClass.simpleName
-
+        val methodName = joinPoint.signature.name
         val startTime = System.currentTimeMillis()
 
         return try {
@@ -1721,7 +892,6 @@ class ExecutionTimeAspect {
         } finally {
             val duration = System.currentTimeMillis() - startTime
             log.info("[EXECUTION TIME] {}.{} - {}ms", className, methodName, duration)
-
             if (duration > 1000) {
                 log.warn("[SLOW EXECUTION] {}.{} took {}ms", className, methodName, duration)
             }
@@ -1730,72 +900,19 @@ class ExecutionTimeAspect {
 }
 ```
 
-</details>
-
-<details>
-<summary>Usage Example (Kotlin)</summary>
-
 ```kotlin
+// Usage
 @Service
-class ProductService(
-    private val productRepository: ProductRepository
-) {
+class ProductService(private val productRepository: ProductRepository) {
+
     @ExecutionTime
     fun findAllProducts(): List<FindProductResponse> {
-        return productRepository.findAll()
-            .map { FindProductResponse.from(it) }
+        return productRepository.findAll().map { FindProductResponse.from(it) }
     }
 }
 ```
 
-</details>
-
-### 4. Transaction Logging AOP
-
-Logs transaction start/commit/rollback events.
-
-<details>
-<summary>TransactionLoggingAspect (Kotlin)</summary>
-
-```kotlin
-@Aspect
-@Component
-class TransactionLoggingAspect {
-
-    private val log = LoggerFactory.getLogger(javaClass)
-
-    @Before("@annotation(transactional)")
-    fun logTransactionStart(joinPoint: JoinPoint, transactional: Transactional) {
-        val methodName = joinPoint.signature.name
-        val readOnly = if (transactional.readOnly) "(readOnly)" else ""
-        log.debug("[TX START{}] {}", readOnly, methodName)
-    }
-
-    @AfterReturning("@annotation(org.springframework.transaction.annotation.Transactional)")
-    fun logTransactionCommit(joinPoint: JoinPoint) {
-        val methodName = joinPoint.signature.name
-        log.debug("[TX COMMIT] {}", methodName)
-    }
-
-    @AfterThrowing(
-        pointcut = "@annotation(org.springframework.transaction.annotation.Transactional)",
-        throwing = "ex"
-    )
-    fun logTransactionRollback(joinPoint: JoinPoint, ex: Exception) {
-        val methodName = joinPoint.signature.name
-        log.warn("[TX ROLLBACK] {} - {}", methodName, ex.message)
-    }
-}
-```
-
-</details>
-
-### 5. Retry Logic AOP
-
-Used when retry logic is needed, such as for external API calls.
-
-<details>
-<summary>Retry Annotation (Kotlin)</summary>
+### 3.4 Retry Aspect and the Self-Invocation Trap
 
 ```kotlin
 @Target(AnnotationTarget.FUNCTION)
@@ -1805,11 +922,6 @@ annotation class Retry(
     val delay: Long = 1000
 )
 ```
-
-</details>
-
-<details>
-<summary>RetryAspect (Kotlin)</summary>
 
 ```kotlin
 @Aspect
@@ -1833,10 +945,7 @@ class RetryAspect {
                 lastException = e
                 log.warn("[RETRY FAILED] {} - attempt {}/{} - {}",
                     methodName, attempt + 1, retry.maxAttempts, e.message)
-
-                if (attempt < retry.maxAttempts - 1) {
-                    Thread.sleep(retry.delay)
-                }
+                if (attempt < retry.maxAttempts - 1) Thread.sleep(retry.delay)
             }
         }
 
@@ -1846,61 +955,111 @@ class RetryAspect {
 }
 ```
 
-</details>
+**The self-invocation trap — this is a common interview question**
+
+<strong>Spring AOP is proxy-based.</strong> When a method calls another method on the same class, it bypasses the proxy, so the advice never fires.
+
+```kotlin
+@Service
+class ExternalApiService {
+
+    fun callWithFallback() {
+        callApi()  // AOP NOT applied — direct call, no proxy
+    }
+
+    @Retry(maxAttempts = 3)
+    fun callApi() {
+        // external API call
+    }
+}
+```
+
+Three workarounds:
+
+| Approach | Example | Recommended |
+|----------|---------|-------------|
+| Extract to a separate bean | Create an `ApiCaller` bean and inject it | Yes — cleanest |
+| `AopContext.currentProxy()` | `(AopContext.currentProxy() as ExternalApiService).callApi()` | No — pollutes code |
+| Self-injection | `@Autowired private lateinit var self: ExternalApiService` | Use with care (same pattern as `@Transactional`) |
+
+In production code, prefer Spring Retry (`@Retryable`) or Resilience4j over a hand-rolled `RetryAspect` — they provide exception-type filtering, backoff strategies, and Circuit Breaker integration out of the box.
+
+### 3.5 Aside: Transaction Logging Aspect and `@Transactional` Limits
+
+`@Before`/`@AfterReturning`/`@AfterThrowing` can capture TX START/COMMIT/ROLLBACK log lines around `@Transactional` methods.
+
+```kotlin
+@Aspect
+@Component
+class TransactionLoggingAspect {
+
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @Before("@annotation(transactional)")
+    fun logTransactionStart(joinPoint: JoinPoint, transactional: Transactional) {
+        val readOnly = if (transactional.readOnly) "(readOnly)" else ""
+        log.debug("[TX START{}] {}", readOnly, joinPoint.signature.name)
+    }
+
+    @AfterReturning("@annotation(org.springframework.transaction.annotation.Transactional)")
+    fun logTransactionCommit(joinPoint: JoinPoint) {
+        log.debug("[TX COMMIT] {}", joinPoint.signature.name)
+    }
+
+    @AfterThrowing(
+        pointcut = "@annotation(org.springframework.transaction.annotation.Transactional)",
+        throwing = "ex"
+    )
+    fun logTransactionRollback(joinPoint: JoinPoint, ex: Exception) {
+        log.warn("[TX ROLLBACK] {} - {}", joinPoint.signature.name, ex.message)
+    }
+}
+```
+
+> <strong>Note</strong>: This Aspect wraps the annotated method, not the actual DB transaction boundary. Spring's `TransactionInterceptor` decides the real commit/rollback, so these log lines don't always align exactly with the DB transaction. For precise TX event hooks, use `TransactionSynchronizationManager`.
 
 ---
 
-## Summary
+## Recap
 
-### Key Points
+- <strong>Minimal Swagger is the goal</strong> — `@Tag`, `@Operation(summary)`, and Security path allowance so the evaluator can test immediately. Nothing more is needed to score well.
+- <strong>Profile-split Logback is the baseline</strong> — local runs DEBUG, prod runs INFO. `<springProfile>` in `logback-spring.xml` handles the switch without code changes.
+- <strong>MDC completes single-app request tracing</strong> — `MdcFilter` sets the request ID; `%X{requestId}` stamps it on every line. Distributed tracing is out of scope.
+- <strong>AOP for cross-cutting only</strong> — logging, execution timing, and retry are the right targets. Business branching in AOP produces code that cannot be traced or debugged.
+- <strong>Self-invocation is a proxy question</strong> — the answer is always "the call bypasses the proxy." The fix is to extract the behavior into a separate Spring bean.
 
-| Topic | Checkpoints |
-|------|------------|
-| **API Documentation** | SpringDoc setup, annotation usage, Security path allowance |
-| **Logging** | Appropriate log levels, MDC usage, sensitive information masking |
-| **AOP** | Request/response logging, execution time measurement, cross-cutting concern separation |
+The next parts cover authentication/authorization, validation, and back-end performance topics. The observability layer established here — structured logging, request tracing, and aspect-based instrumentation — makes the performance and security arguments much more credible when they arrive.
 
-### Checklist
+---
 
-- [ ] Is Swagger UI accessible? (`/swagger-ui.html`)
-- [ ] Does the API documentation include descriptions and examples?
-- [ ] Do logs include request IDs for traceability?
-- [ ] Are sensitive data (passwords, card numbers, etc.) not exposed in logs?
-- [ ] Are appropriate log levels being used?
-- [ ] Can slow queries/methods be identified?
+## Appendix
 
-<details>
-<summary>Elements That Give You an Edge in Pre-Interview Tasks</summary>
+### Pre-Submission Quick Checklist
 
-**Bonus Elements (If Time Permits)**
+- [ ] Is Swagger UI reachable at `/swagger-ui.html`?
+- [ ] If using Spring Security, are `/swagger-ui/**` and `/v3/api-docs/**` permitted?
+- [ ] Do logs include a request ID for tracing?
+- [ ] Are sensitive fields (passwords, card numbers, etc.) masked before logging?
+- [ ] Are log levels used correctly across ERROR / WARN / INFO / DEBUG?
+- [ ] If AOP is used, is it explained in the README?
+- [ ] Are there any self-invocation cases? If so, is the dependency extracted to a separate bean?
 
-| Item | Effect | Difficulty |
-|-----|-----|:---:|
-| Swagger UI accessible | Evaluator can test immediately | Low |
-| Request ID logging (MDC) | Easy log tracing | Medium |
-| Execution time logging AOP | Demonstrates performance awareness | Medium |
-| API versioning (`/v1/`) | Shows scalability consideration | Low |
-| Profile separation (local/test) | Environment management competency | Low |
+### What Scores Points vs What to Skip
 
-**Priorities When Time is Short**
-
-1. **Complete core features** - Working code is the top priority
-2. **Test code** - At least 1-2 tests for key logic
-3. **Exception handling** - GlobalExceptionHandler is essential
-4. **README** - How to run, design rationale
-
-**What You Don't Need to Do**
-
-- 100% test coverage
-- Detailed Swagger documentation for every API
-- Complex AOP structures
-- Excessive design pattern application
-
-</details>
+| Item | Effect | Worth doing |
+|------|--------|:-----------:|
+| Swagger UI accessible | Evaluator can test immediately | Yes |
+| Request ID logging (MDC) | Traceable logs | Yes |
+| Execution time logging AOP | Demonstrates performance awareness | Yes |
+| API versioning (`/v1/`) | Shows scalability thinking | Yes |
+| Detailed `@Schema` on every field | Low ROI for time spent | No |
+| REST Docs setup | Overkill for task scope | No |
+| Distributed tracing (Zipkin, etc.) | Infrastructure required, out of scope | No |
+| 100% test coverage | Core feature completeness matters more | No |
 
 ### File Structure Example
 
-```
+```text
 src/main/kotlin/com/example/app/
 ├── common/
 │   ├── annotation/
@@ -1909,7 +1068,8 @@ src/main/kotlin/com/example/app/
 │   ├── aop/
 │   │   ├── RequestLoggingAspect.kt
 │   │   ├── ExecutionTimeAspect.kt
-│   │   └── RetryAspect.kt
+│   │   ├── RetryAspect.kt
+│   │   └── TransactionLoggingAspect.kt
 │   ├── filter/
 │   │   └── MdcFilter.kt
 │   └── util/
@@ -1919,10 +1079,3 @@ src/main/kotlin/com/example/app/
 │   └── SecurityConfig.kt
 └── ...
 ```
-
----
-
-The next part covers **N+1 problem resolution**, **pagination**, and **caching strategies**.
-
-[Previous: Part 2 - Database & Testing](/en/blog/spring-boot-pre-interview-guide-2)
-[Next: Part 4 - Performance & Optimization](/en/blog/spring-boot-pre-interview-guide-4)
