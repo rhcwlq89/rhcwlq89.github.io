@@ -119,6 +119,8 @@ springdoc:
 
 **OpenApiConfig (Kotlin)**
 
+A single bean that collects the API metadata — title, version, contact, server URL — in one place. Once registered, SpringDoc picks it up automatically and embeds it in the generated OpenAPI spec. SpringDoc works without this bean, but a Swagger UI with an empty title and version reads as "left at defaults," so it's worth wiring up this one config.
+
 ```kotlin
 @Configuration
 class OpenApiConfig {
@@ -173,6 +175,8 @@ public class OpenApiConfig {
 | DTO fields | Class-level `@Schema(description)` | Per-field `@Schema(example, minimum, maxLength)` |
 
 **Controller example (Kotlin)**
+
+This is the "Minimum" column from the table above, applied directly. One `@Tag` on the class, one `@Operation(summary)` per method with two or three key `@ApiResponse` entries, and a single-line `@Parameter` on each path variable. That much already gives Swagger UI clean grouping, summaries, and response codes.
 
 ```kotlin
 @Tag(name = "Product", description = "Product Management API")
@@ -251,6 +255,8 @@ public class ProductController {
 |------|------|------|----------|
 | `Int`/`Long` | Simple, fast | No decimals, overflow risk | Counts, IDs |
 | `BigDecimal` | Precision guaranteed, decimal support | Verbose operations, serialization care | Prices, amounts, ratios |
+
+The DTO below shows the `BigDecimal` choice from the table, with `@Schema` applied at §1.2's "Minimum" level — one annotation on the class and one short one per field. Filling in `example`, `minimum`, `maxLength` for every field was deliberately skipped.
 
 ```kotlin
 @Schema(description = "Product registration request")
@@ -443,6 +449,8 @@ operation::product-detail[snippets='path-parameters,response-fields,curl-request
 
 For quick setup, configure levels and pattern in `application.yml`. Add `logback-spring.xml` when you need profile branching and rolling file policies.
 
+The design carries three intentions. <strong>(1)</strong> `<springProfile>` splits log levels per environment so prod isn't drowned in DEBUG noise. <strong>(2)</strong> The `CONSOLE` appender writes to stdout, letting the container log collector (Docker/Kubernetes) handle the rest. <strong>(3)</strong> The `FILE` appender rolls every 100 MB and keeps 30 days, capping disk usage. Together they pre-empt the two operational failures you actually run into: noisy production logs and a full disk.
+
 ```yaml
 # application.yml — basic logging
 logging:
@@ -519,6 +527,8 @@ You don't need this for the task itself, but mentioning in the README that you c
 | <strong>INFO</strong> | Key business events | Order placed, payment succeeded |
 | <strong>DEBUG</strong> | Development/debugging detail | Method entry, parameter values |
 | <strong>TRACE</strong> | Very fine-grained detail | Per-iteration values inside loops |
+
+Applied per method, the table fixes a natural pattern — <strong>log parameters with `debug` right after entry, log the completed business event with `info`, and use `warn` for normal-but-attention branches like not-found.</strong> The `ProductService` below follows that pattern.
 
 ```kotlin
 import org.springframework.data.repository.findByIdOrNull
@@ -615,6 +625,8 @@ sequenceDiagram
     Note over MdcFilter: finally MDC.clear()
 ```
 
+The `MdcFilter` below is the second box in that diagram. Extending `OncePerRequestFilter` guarantees one execution per request, and `@Order(HIGHEST_PRECEDENCE)` puts it ahead of every other filter so every downstream log line carries the `requestId`. The `try-finally` is the critical part: the response *must* call `MDC.clear()` — otherwise the next request reused on the same thread inherits a stale ID and writes it under the wrong correlation tag.
+
 ```kotlin
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -705,6 +717,8 @@ object MaskingUtils {
 }
 ```
 
+At the call site, business logic still works against the raw `member` object — only the arguments going into `log.info(...)` are wrapped through `MaskingUtils`. The example below shows that shape.
+
 ```kotlin
 // Usage
 fun findMemberDetail(memberId: Long): MemberDetailResponse {
@@ -760,6 +774,47 @@ if (log.isDebugEnabled) {
 ---
 
 ## 3. AOP — Separating Cross-Cutting Concerns
+
+<strong>AOP (Aspect-Oriented Programming) is a technique for pulling non-business code — logging, transactions, retries, authorization checks — that wraps around business methods into separate objects.</strong> The "code that wraps around many methods" is called a <strong>cross-cutting concern</strong>.
+
+The pain point is how often this code shows up. Adding entry/exit logs to a Service with 30 methods means 30 `log.info(...)` lines at each method's start and end — 60 lines of boilerplate that have nothing to do with the actual business logic. Changing the log format means editing 30 places at once.
+
+```kotlin
+// Without AOP — the same pattern repeats in every method
+fun registerProduct(...): Long {
+    log.info("[START] registerProduct")                       // ← boilerplate
+    val start = System.currentTimeMillis()                    // ← boilerplate
+    try {
+        val saved = repository.save(...)                      // ← actual business logic
+        log.info("[END] registerProduct - {}ms", elapsed())   // ← boilerplate
+        return saved.id!!
+    } catch (e: Exception) {
+        log.error("[ERROR] registerProduct - {}", e.message)  // ← boilerplate
+        throw e
+    }
+}
+
+// With AOP — only the business logic remains
+@Loggable   // ← one annotation handles start/end/error logs across all 30 methods
+fun registerProduct(...): Long {
+    val saved = repository.save(...)
+    return saved.id!!
+}
+```
+
+`@Loggable` is a hypothetical annotation here, but the real Aspects we'll build in §3.2–§3.5 (`RequestLoggingAspect`, `@ExecutionTime`, `@Retry`) follow exactly this shape. Changing the log format means editing the Aspect once.
+
+<strong>Core terms</strong>
+
+| Term | Definition |
+|------|------------|
+| <strong>Aspect</strong> | A class collecting cross-cutting concerns (declared with `@Aspect`) |
+| <strong>JoinPoint</strong> | A point where Advice can run. In Spring AOP, the only JoinPoint is method execution |
+| <strong>Pointcut</strong> | An expression that picks which JoinPoints get Advice (`@annotation(...)`, `within(...)`, etc.) |
+| <strong>Advice</strong> | The action to run at a JoinPoint: `@Before`, `@Around`, `@AfterReturning`, `@AfterThrowing` |
+| <strong>Weaving</strong> | Wiring Aspects into target beans. Spring weaves at runtime by generating proxies |
+
+<strong>Spring AOP is runtime-proxy based.</strong> When the context starts, Spring wraps each target bean in either a CGLIB subclass (for classes) or a JDK Dynamic Proxy (for interfaces), and hands those proxies — not the originals — to other beans during injection. Method calls that match a Pointcut are intercepted by the proxy, which runs the Advice and then delegates to the original method. This "must go through the proxy" rule is the root cause of the self-invocation trap in §3.4.
 
 ### 3.1 Filter vs Interceptor vs AOP — Decision Criteria
 
@@ -951,6 +1006,8 @@ class ProductService(private val productRepository: ProductRepository) {
 
 ### 3.4 Retry Aspect and the Self-Invocation Trap
 
+External API calls and transient network failures are the classic "fails once, succeeds the second time" scenario. Embedding the retry logic inside business methods as try-catch blocks repeats the same pattern across every callsite and buries the real logic. Pulling it out behind an annotation is one of AOP's most natural fits.
+
 ```kotlin
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
@@ -1023,7 +1080,9 @@ In production code, prefer Spring Retry (`@Retryable`) or Resilience4j over a ha
 
 ### 3.5 Aside: Transaction Logging Aspect and `@Transactional` Limits
 
-`@Before`/`@AfterReturning`/`@AfterThrowing` can capture TX START/COMMIT/ROLLBACK log lines around `@Transactional` methods.
+<strong>`@Transactional` opens, commits, and rolls back transactions, but it doesn't record any of that in the log.</strong> In production, when you need to confirm "did this request open a transaction, did it commit, did it roll back?", you have to add the logs yourself. An Aspect that wraps `@Transactional` methods with START/COMMIT/ROLLBACK markers gives you that visibility.
+
+Combining `@Before`, `@AfterReturning`, and `@AfterThrowing` lets you trace each transaction boundary:
 
 ```kotlin
 @Aspect

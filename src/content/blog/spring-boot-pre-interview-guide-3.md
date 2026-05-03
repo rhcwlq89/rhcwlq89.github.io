@@ -130,6 +130,8 @@ springdoc:
 
 **OpenApiConfig (Kotlin)**
 
+API의 메타데이터(제목·버전·연락처·서버 URL)를 한 곳에 모아 두는 빈이다. 시작 시 컨테이너에 등록되면 SpringDoc이 자동으로 픽업해 OpenAPI 스펙에 박는다. 별도 설정이 없어도 SpringDoc은 동작하지만, 평가자가 Swagger UI를 열었을 때 비어 있는 제목·버전을 보면 "기본만 켜뒀다"는 인상을 주므로 이 빈 한 짝은 박아 두는 게 좋다.
+
 ```kotlin
 @Configuration
 class OpenApiConfig {
@@ -184,6 +186,8 @@ public class OpenApiConfig {
 | DTO 필드 | 클래스 레벨 `@Schema(description)` | 모든 필드 `@Schema(example, minimum, maxLength)` |
 
 **Controller 예시 (Kotlin)**
+
+위 표의 "최소" 컬럼을 그대로 적용한 모습이다. 클래스에 `@Tag` 한 번, 메서드마다 `@Operation(summary)`와 핵심 `@ApiResponse` 두세 개, 경로 변수에는 `@Parameter`를 한 줄씩만 붙인다. 이만큼이면 Swagger UI에서 그룹·요약·응답 코드까지 깔끔하게 보인다.
 
 ```kotlin
 @Tag(name = "Product", description = "상품 관리 API")
@@ -264,6 +268,8 @@ public class ProductController {
 |------|------|------|----------|
 | `Int`/`Long` | 단순, 성능 우수 | 소수점 불가, 오버플로우 위험 | 단순 개수, ID |
 | `BigDecimal` | 정밀도 보장, 소수점 처리 | 연산 복잡, 직렬화 주의 | 금액, 가격, 비율 |
+
+아래 DTO는 표에서 `BigDecimal`을 골랐을 때의 예시이고, `@Schema`도 1.2절의 "최소" 원칙대로 클래스 레벨 한 줄 + 필드 레벨 한 줄씩만 붙였다. 모든 필드에 `example`·`minimum`·`maxLength`까지 채우는 일은 의도적으로 피했다.
 
 ```kotlin
 @Schema(description = "상품 등록 요청")
@@ -470,6 +476,8 @@ logging:
 
 `logback-spring.xml`은 프로파일 분기와 파일 롤링 정책이 필요할 때 사용한다.
 
+설계 의도는 세 가지다. <strong>(1)</strong> `<springProfile>`로 local/prod 환경별 로그 레벨을 분리해 운영 환경에서 DEBUG 노이즈를 차단한다. <strong>(2)</strong> `CONSOLE` appender는 stdout으로 흘려보내 컨테이너 로그 수집기(Docker/Kubernetes)가 받아 처리하게 한다. <strong>(3)</strong> `FILE` appender는 100MB 단위로 회전하고 30일치만 보관해 디스크 폭주를 막는다. 운영에서 흔히 마주치는 두 가지 사고(과다 로그·디스크 풀)를 설정 시점에 미리 차단하는 구조다.
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
@@ -534,6 +542,8 @@ logging:
 | <strong>INFO</strong> | 주요 비즈니스 이벤트 | 주문 완료, 결제 성공 |
 | <strong>DEBUG</strong> | 개발/디버깅용 상세 | 메서드 진입, 파라미터 값 |
 | <strong>TRACE</strong> | 매우 상세한 정보 | 루프 내 값 변화 |
+
+이 표를 메서드별로 적용하면 패턴이 자연스럽게 정해진다 — <strong>입력을 받은 직후 `debug`로 파라미터를 남기고, 비즈니스 이벤트가 완료된 시점에 `info`로 기록하고, 정상이지만 주의가 필요한 분기(예: not-found)에서 `warn`을 찍는다.</strong> 아래 ProductService가 그 패턴이다.
 
 ```kotlin
 import org.springframework.data.repository.findByIdOrNull
@@ -630,6 +640,8 @@ sequenceDiagram
     Note over MdcFilter: finally MDC.clear()
 ```
 
+아래 `MdcFilter`가 다이어그램의 두 번째 박스다. `OncePerRequestFilter`를 상속해 한 요청에 한 번만 실행되도록 보장하고, `@Order(HIGHEST_PRECEDENCE)`로 다른 모든 Filter보다 먼저 실행되게 해서 이후 단계의 모든 로그가 `requestId`를 갖게 한다. `try-finally`로 감싸 응답 후 반드시 `MDC.clear()`를 호출하는 것이 핵심이다 — 스레드 풀이 이 스레드를 재사용할 때 이전 요청의 ID가 남아 있으면 다른 요청 로그에 잘못된 ID가 찍힌다.
+
 ```kotlin
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -720,6 +732,8 @@ object MaskingUtils {
 }
 ```
 
+호출 측에서는 비즈니스 로직은 원본 `member` 객체로 처리하고, `log.info(...)`에 들어가는 인자만 `MaskingUtils`로 한 번 감싼다. 다음 예시가 그 형태다.
+
 ```kotlin
 // 사용 예시
 fun findMemberDetail(memberId: Long): MemberDetailResponse {
@@ -775,6 +789,47 @@ if (log.isDebugEnabled) {
 ---
 
 ## 3. AOP — 횡단 관심사 분리
+
+<strong>AOP(Aspect-Oriented Programming) = 본질이 다른 코드(로깅·트랜잭션·재시도·권한 체크)가 비즈니스 로직 메서드 앞뒤에 반복적으로 끼어드는 것을 별도 객체로 떼어내는 기법이다.</strong> 이렇게 "여러 메서드에 공통으로 끼어드는 코드"를 <strong>횡단 관심사(cross-cutting concern)</strong>라고 부른다.
+
+문제는 이런 코드의 발생 빈도다. 메서드 30개짜리 Service에 시작·종료 로그를 박으려면 각 메서드 첫 줄과 끝 줄에 `log.info(...)`가 들어간다. 60줄이 비즈니스 로직과 무관한 보일러플레이트로 채워지고, 로그 포맷을 한 번 바꾸려면 30곳을 동시에 고쳐야 한다.
+
+```kotlin
+// AOP 없이 — 메서드마다 같은 패턴이 반복된다
+fun registerProduct(...): Long {
+    log.info("[START] registerProduct")                       // ← boilerplate
+    val start = System.currentTimeMillis()                    // ← boilerplate
+    try {
+        val saved = repository.save(...)                      // ← 진짜 비즈니스 로직
+        log.info("[END] registerProduct - {}ms", elapsed())   // ← boilerplate
+        return saved.id!!
+    } catch (e: Exception) {
+        log.error("[ERROR] registerProduct - {}", e.message)  // ← boilerplate
+        throw e
+    }
+}
+
+// AOP로 분리 — 비즈니스 로직만 남는다
+@Loggable   // ← 이 어노테이션 하나가 30개 메서드의 시작·종료·에러 로그를 일괄 처리
+fun registerProduct(...): Long {
+    val saved = repository.save(...)
+    return saved.id!!
+}
+```
+
+`@Loggable`은 예시용 가상 어노테이션이지만, 3.2~3.5절에서 만들 실제 Aspect들(`RequestLoggingAspect`, `@ExecutionTime`, `@Retry`)이 정확히 이 형태다. 로그 포맷을 바꾸려면 Aspect 한 곳만 고치면 된다.
+
+<strong>핵심 용어</strong>
+
+| 용어 | 정의 |
+|------|------|
+| <strong>Aspect</strong> | 횡단 관심사를 모은 클래스 (`@Aspect`로 선언) |
+| <strong>JoinPoint</strong> | Advice가 실행될 수 있는 지점. 스프링 AOP에서는 "메서드 실행"이 유일한 JoinPoint다 |
+| <strong>Pointcut</strong> | 어떤 JoinPoint에 Advice를 적용할지 고르는 표현식 (`@annotation(...)`, `within(...)` 등) |
+| <strong>Advice</strong> | JoinPoint에서 실행할 동작. `@Before` / `@Around` / `@AfterReturning` / `@AfterThrowing` |
+| <strong>Weaving</strong> | Aspect를 대상 빈에 엮는 과정. 스프링은 런타임에 프록시를 만들어 weave한다 |
+
+<strong>스프링 AOP는 런타임 프록시 기반이다.</strong> 컨텍스트가 뜰 때 CGLIB(클래스) 또는 JDK Dynamic Proxy(인터페이스)로 대상 빈을 감싼 객체를 만들고, 다른 빈에 주입할 때 원본 대신 이 프록시를 넘긴다. Pointcut에 매칭되는 메서드 호출은 프록시가 가로채 Advice를 실행한 뒤 원본 메서드로 위임한다. 이 "프록시를 거쳐야만 동작한다"는 사실이 3.4절 self-invocation 함정의 근원이 된다.
 
 ### 3.1 Filter vs Interceptor vs AOP — 선택 기준
 
@@ -966,6 +1021,8 @@ class ProductService(private val productRepository: ProductRepository) {
 
 ### 3.4 재시도 Aspect와 self-invocation 함정
 
+외부 API 호출이나 일시적인 네트워크 실패는 "한 번 실패해도 다시 시도하면 성공할 수 있는" 시나리오다. 이 재시도 로직을 비즈니스 메서드 안에 try-catch로 박으면 메서드마다 같은 패턴이 반복되고 진짜 로직이 묻힌다. 어노테이션 한 줄로 분리하는 게 AOP가 잘 어울리는 전형적인 케이스다.
+
 ```kotlin
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
@@ -1038,7 +1095,9 @@ class ExternalApiService {
 
 ### 3.5 참고: 트랜잭션 로깅 Aspect와 `@Transactional` 한계
 
-`@Before`/`@AfterReturning`/`@AfterThrowing`으로 TX START/COMMIT/ROLLBACK을 찍는 Aspect를 만들 수 있다.
+<strong>`@Transactional`은 트랜잭션을 시작·커밋·롤백 시키지만, 그 사실을 로그로 남기지는 않는다.</strong> 운영 환경에서 "이 요청이 트랜잭션을 열었는가, 커밋됐는가 롤백됐는가"를 확인하려면 직접 로그를 찍어야 한다. AOP로 `@Transactional`이 붙은 메서드 주변에 START/COMMIT/ROLLBACK 마커 로그를 추가하면 이 가시성을 얻을 수 있다.
+
+`@Before`/`@AfterReturning`/`@AfterThrowing`을 조합해 트랜잭션 경계를 따라 로그를 찍는 Aspect는 다음과 같이 만든다.
 
 ```kotlin
 @Aspect
