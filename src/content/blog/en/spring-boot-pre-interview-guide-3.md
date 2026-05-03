@@ -861,7 +861,7 @@ MDC already stamps the request ID, so `RequestLoggingAspect` only needs to captu
 class RequestLoggingAspect {
 
     private val log = LoggerFactory.getLogger(javaClass)
-    private val objectMapper = ObjectMapper().apply {
+    private val jsonWriter = ObjectMapper().apply {
         registerModule(JavaTimeModule())
         configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
     }
@@ -899,7 +899,7 @@ class RequestLoggingAspect {
     }
 
     private fun toJson(obj: Any): String = try {
-        objectMapper.writeValueAsString(obj)
+        jsonWriter.writeValueAsString(obj)
     } catch (e: Exception) {
         obj.toString()
     }
@@ -915,12 +915,12 @@ class RequestLoggingAspect {
 @Slf4j
 public class RequestLoggingAspect {
 
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper jsonWriter;
 
     public RequestLoggingAspect() {
-        this.objectMapper = new ObjectMapper();
-        this.objectMapper.registerModule(new JavaTimeModule());
-        this.objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        this.jsonWriter = new ObjectMapper();
+        this.jsonWriter.registerModule(new JavaTimeModule());
+        this.jsonWriter.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
     }
 
     @Pointcut("within(@org.springframework.web.bind.annotation.RestController *)")
