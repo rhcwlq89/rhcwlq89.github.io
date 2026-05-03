@@ -303,7 +303,9 @@ Q-Class는 빌드 시 `kapt`가 엔티티 클래스를 스캔하여 자동 생�
 
 ### 2.3 참고: `@Configuration(proxyBeanMethods = false)`의 의미
 
-<strong>`proxyBeanMethods`</strong>는 Spring이 `@Configuration` 클래스를 CGLIB으로 감쌀지를 결정하는 플래그다. 기본값은 `true`(Full mode)이고, `false`로 끄면 Lite mode로 동작한다. 이름만 보면 단순한 최적화 스위치 같지만, 실제로는 `@Bean` 메서드 호출의 의미 자체를 바꾸는 설정이다.
+> <strong>결론</strong>: 새로 작성하는 설정 클래스는 기본적으로 `proxyBeanMethods = false`로 둔다. default(`true`)는 "한 `@Bean` 메서드 본문이 같은 클래스의 다른 `@Bean` 메서드를 직접 호출"할 때만 필요한데, 그런 코드 자체가 안티패턴이다. 의존성은 매개변수로 주입받는 게 정답이고, 그렇게 쓰면 `false`가 항상 안전하면서 더 가볍다. Spring Boot의 모든 auto-configuration이 `false`를 쓰는 이유다.
+
+<strong>`proxyBeanMethods`</strong>는 Spring이 `@Configuration` 클래스를 CGLIB으로 감쌀지를 결정하는 플래그다. 기본값은 `true`(Full mode)이고, `false`로 끄면 Lite mode로 동작한다. 이름은 단순한 최적화 스위치 같지만, 실제로는 `@Bean` 메서드 호출의 의미 자체를 바꾸는 설정이다. 아래에서 그 의미를 따라가 본다.
 
 <strong>Full mode(기본) — CGLIB 프록시가 하는 일</strong>
 
@@ -359,13 +361,17 @@ class AppConfig {
 | 메모리 | 클래스당 추가 서브클래스 | 추가 없음 |
 | 권장 시점 | @Bean끼리 호출이 있는 전통적 설정 | 단순 빈 등록, 매개변수 주입 사용 시 |
 
-<strong>언제 `false`로 둘 수 있는가</strong>
+<strong>그래서 어떻게 쓰면 되는가</strong>
 
-- @Bean 메서드 사이에 직접 호출이 없다.
-- 또는 의존성을 매개변수로만 주입받는다.
-- @Bean이 한두 개뿐이라 inter-bean 호출이 발생할 여지가 없다.
+| 상황 | 설정 |
+|------|------|
+| 새 코드를 쓸 때 | <strong>`proxyBeanMethods = false`</strong>로 시작. 의존성은 매개변수로 주입. |
+| `@Bean` 본문에서 다른 `@Bean`을 직접 호출해야만 하는 드문 경우 | default(`true`) — 다만 매개변수 주입으로 리팩터링하는 쪽이 거의 항상 더 낫다 |
+| 이미 inter-bean 호출이 있는 레거시 설정 클래스 | default(`true`) — `false`로 바꾸려면 호출 구조부터 매개변수 주입으로 변환 |
 
-위 `QuerydslConfig`는 @Bean이 하나뿐이라 자명하게 안전하다. Spring Boot의 auto-configuration이 거의 전부 `proxyBeanMethods = false`를 쓰는 이유도 같다 — 각 설정 클래스가 보통 한두 개 빈만 등록하고, 의존성은 매개변수로 받기 때문이다. 시작 시간 단축 효과는 클래스 하나로는 미미하지만, 수백 개의 auto-configuration 클래스가 누적되면 의미 있는 차이가 된다.
+<strong>한 줄 판정</strong>: 같은 클래스 안에서 `@Bean` 메서드끼리 본문에서 직접 호출하는 줄이 있는가? 없으면(=거의 모든 경우) `false`. 있으면 default 또는 리팩터링.
+
+위 `QuerydslConfig`는 `@Bean`이 하나뿐이라 자명하게 안전하다. Spring Boot의 auto-configuration이 거의 전부 `proxyBeanMethods = false`를 쓰는 이유도 같다 — 각 설정 클래스가 보통 한두 개 빈만 등록하고, 의존성은 매개변수로 받기 때문이다. 시작 시간 단축 효과는 클래스 하나로는 미미하지만, 수백 개의 auto-configuration 클래스가 누적되면 의미 있는 차이가 된다.
 
 ---
 
