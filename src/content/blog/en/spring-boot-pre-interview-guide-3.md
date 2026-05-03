@@ -55,12 +55,26 @@ flowchart LR
 
 > <strong>Note</strong>: Springfox has compatibility issues with Spring Boot 2.6+ and is no longer maintained. SpringDoc OpenAPI is the current standard.
 
+<strong>Versions — pick the SpringDoc line that matches your Spring Boot</strong>
+
+SpringDoc ships separate lines per Spring Boot major. Check the Spring Boot version your task is built on first, then pick the matching SpringDoc line.
+
+| Spring Boot | SpringDoc line | Latest (May 2026) | Notes |
+|-------------|----------------|-------------------|-------|
+| 4.x | `3.x` | <strong>3.0.3</strong> | Java 17+, Jakarta EE 9, OpenAPI 3.1 support |
+| 3.x (LTS) | `2.x` | <strong>2.8.17</strong> | BOM available since 2.8.7, still actively maintained |
+| 2.x | `1.x` | 1.8.0 | Legacy — unlikely on a new task |
+
 **Dependency (Kotlin DSL)**
 
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
+    // Spring Boot 4.x
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
+
+    // Spring Boot 3.x (LTS) — when the codebase is pinned to LTS
+    // implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17")
 }
 ```
 
@@ -70,11 +84,17 @@ dependencies {
 ```groovy
 // build.gradle
 dependencies {
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+    // Spring Boot 4.x
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+    // Spring Boot 3.x (LTS)
+    // implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
 }
 ```
 
 </details>
+
+> <strong>Note</strong>: For WebFlux, swap in `springdoc-openapi-starter-webflux-ui`. Only the artifact name changes — same line, same version.
 
 **Core application.yml options**
 

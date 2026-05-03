@@ -66,12 +66,26 @@ flowchart LR
 
 > <strong>참고</strong>: Springfox는 Spring Boot 2.6+부터 호환 이슈가 생겨 더 이상 사용하지 않는다. SpringDoc OpenAPI가 현재 표준이다.
 
+<strong>버전 — Spring Boot에 맞춰 SpringDoc 라인을 고른다</strong>
+
+SpringDoc은 Spring Boot 메이저 버전에 따라 별도 라인으로 배포된다. 과제 환경의 Spring Boot 버전을 먼저 확인하고 거기에 맞춰 잡는다.
+
+| Spring Boot | SpringDoc 라인 | 최신 버전 (2026-05) | 비고 |
+|-------------|---------------|--------------------|------|
+| 4.x | `3.x` | <strong>3.0.3</strong> | Java 17+, Jakarta EE 9, OpenAPI 3.1 지원 |
+| 3.x (LTS) | `2.x` | <strong>2.8.17</strong> | 2.8.7부터 BOM 제공, 여전히 활발히 유지보수 |
+| 2.x | `1.x` | 1.8.0 | 레거시 — 신규 과제에서 만날 일은 거의 없음 |
+
 **의존성 추가 (Kotlin DSL)**
 
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
+    // Spring Boot 4.x
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
+
+    // Spring Boot 3.x (LTS) — 회사 코드베이스가 LTS에 묶여 있는 경우
+    // implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17")
 }
 ```
 
@@ -81,11 +95,17 @@ dependencies {
 ```groovy
 // build.gradle
 dependencies {
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+    // Spring Boot 4.x
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+    // Spring Boot 3.x (LTS)
+    // implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
 }
 ```
 
 </details>
+
+> <strong>참고</strong>: WebFlux 환경이라면 `springdoc-openapi-starter-webflux-ui`로 교체한다. artifact 이름만 바뀔 뿐 같은 라인의 같은 버전을 그대로 쓴다.
 
 **application.yml 주요 옵션**
 
