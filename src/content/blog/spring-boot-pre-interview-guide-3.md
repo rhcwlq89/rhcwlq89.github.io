@@ -364,7 +364,7 @@ REST Docs는 테스트를 통과해야만 문서가 생성되므로 코드-문�
 
 ```kotlin
 plugins {
-    id("org.asciidoctor.jvm.convert") version "3.3.2"
+    id("org.asciidoctor.jvm.convert") version "4.0.5"
 }
 
 val asciidoctorExt: Configuration by configurations.creating
@@ -523,6 +523,8 @@ logging:
 | <strong>TRACE</strong> | 매우 상세한 정보 | 루프 내 값 변화 |
 
 ```kotlin
+import org.springframework.data.repository.findByIdOrNull
+
 @Service
 class ProductService(private val productRepository: ProductRepository) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -540,7 +542,7 @@ class ProductService(private val productRepository: ProductRepository) {
     fun findProductDetail(productId: Long): FindProductDetailResponse {
         log.debug("상품 조회: productId={}", productId)
 
-        val product = productRepository.findById(productId)
+        val product = productRepository.findByIdOrNull(productId)
             ?: run {
                 log.warn("상품을 찾을 수 없음: productId={}", productId)
                 throw NotFoundException()
@@ -550,6 +552,8 @@ class ProductService(private val productRepository: ProductRepository) {
     }
 }
 ```
+
+> <strong>참고</strong>: `JpaRepository.findById(id)`는 `Optional<T>`를 반환하므로 `?: run { … }`이 작동하지 않는다. Spring Data가 제공하는 Kotlin 확장 `findByIdOrNull(id)`을 쓰면 `T?`를 돌려받아 elvis 연산자(`?:`)와 자연스럽게 결합된다. Optional을 그대로 쓰고 싶다면 Java 예시처럼 `.orElseThrow { … }`를 쓴다.
 
 <details>
 <summary><strong>More detail — ProductService 로깅 예시 (Java)</strong></summary>

@@ -351,7 +351,7 @@ REST Docs generates documentation only when tests pass, enforcing code-doc synch
 
 ```kotlin
 plugins {
-    id("org.asciidoctor.jvm.convert") version "3.3.2"
+    id("org.asciidoctor.jvm.convert") version "4.0.5"
 }
 
 val asciidoctorExt: Configuration by configurations.creating
@@ -508,6 +508,8 @@ logging:
 | <strong>TRACE</strong> | Very fine-grained detail | Per-iteration values inside loops |
 
 ```kotlin
+import org.springframework.data.repository.findByIdOrNull
+
 @Service
 class ProductService(private val productRepository: ProductRepository) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -525,7 +527,7 @@ class ProductService(private val productRepository: ProductRepository) {
     fun findProductDetail(productId: Long): FindProductDetailResponse {
         log.debug("Find product: productId={}", productId)
 
-        val product = productRepository.findById(productId)
+        val product = productRepository.findByIdOrNull(productId)
             ?: run {
                 log.warn("Product not found: productId={}", productId)
                 throw NotFoundException()
@@ -535,6 +537,8 @@ class ProductService(private val productRepository: ProductRepository) {
     }
 }
 ```
+
+> <strong>Note</strong>: `JpaRepository.findById(id)` returns `Optional<T>`, so `?: run { … }` won't fire. Spring Data ships a Kotlin extension `findByIdOrNull(id)` that returns `T?`, which composes naturally with the elvis operator (`?:`). If you'd rather keep the `Optional`, use `.orElseThrow { … }` like the Java example.
 
 <details>
 <summary><strong>More detail — ProductService logging example (Java)</strong></summary>
