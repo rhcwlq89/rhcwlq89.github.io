@@ -510,6 +510,19 @@ logging:
 </configuration>
 ```
 
+<strong>JSON 구조화 로그 — Spring Boot 3.4+ 네이티브 지원</strong>
+
+운영 환경에서 ELK/Loki 같은 로그 수집 파이프라인에 들어가려면 JSON 포맷이 표준이다. 예전에는 `logstash-logback-encoder` 같은 외부 encoder를 logback-spring.xml에 직접 끼워야 했지만, Spring Boot 3.4부터 별도 의존성 없이 한 줄로 켤 수 있다. 4.0에서는 포맷 옵션이 더 늘었다.
+
+```yaml
+logging:
+  structured:
+    format:
+      console: logstash   # 또는 ecs, gelf — 수집기 스펙에 맞춰 선택
+```
+
+사전과제에서 굳이 켤 필요는 없지만, "운영 시 로그 수집 파이프라인을 고려했다"는 신호로 README에 한 줄 언급하는 정도는 가점 요소가 된다.
+
 ### 2.2 로그 레벨 선택 기준
 
 <strong>기준 한 줄: INFO에 비즈니스 이벤트, DEBUG에 디버깅용 상세, ERROR는 즉시 대응이 필요한 것만.</strong>

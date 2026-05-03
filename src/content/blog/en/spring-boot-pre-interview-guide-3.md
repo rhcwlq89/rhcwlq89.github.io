@@ -495,6 +495,19 @@ logging:
 </configuration>
 ```
 
+<strong>Structured JSON logs — native support since Spring Boot 3.4</strong>
+
+In production, anything feeding ELK/Loki/etc. wants JSON-formatted logs. Previously you wired in `logstash-logback-encoder` (or a similar encoder) inside `logback-spring.xml`. Since Spring Boot 3.4 you can flip it on with a single property — no extra dependency. Spring Boot 4.0 expanded the format options further.
+
+```yaml
+logging:
+  structured:
+    format:
+      console: logstash   # also: ecs, gelf — pick what your collector expects
+```
+
+You don't need this for the task itself, but mentioning in the README that you considered the log-collection pipeline scores easy bonus points.
+
 ### 2.2 Log Level Selection
 
 <strong>One-line rule: INFO for business events, DEBUG for debugging detail, ERROR only for things that need immediate action.</strong>
