@@ -206,6 +206,37 @@ L7 영역에서 가장 흔하게 헷갈리는 두 가지를 정리하면:
 - <strong>ALB vs API Gateway HTTP API</strong>: 트래픽이 일정 수준 이상으로 꾸준하면 ALB가 싸다(상시 비용은 있어도 요청당이 사실상 0). 트래픽이 적거나 spiky하면 API Gateway가 싸다(상시 비용 0, 요청당만). 분기점은 대략 <strong>월 200만 요청 근처</strong>. 비용 외에 인증·쓰로틀이 필요하면 API Gateway, 컨테이너·gRPC·WebSocket이면 ALB.
 - <strong>CloudFront vs 다른 둘</strong>: CloudFront는 대안이 아니라 <strong>위에 얹는 레이어</strong>다. "ALB냐 CloudFront냐"가 아니라 "CloudFront + ALB냐 ALB만이냐".
 
+### 2.6 참고: AWS API Gateway 외에도 — Kong·Spring Cloud Gateway와 어떻게 다른가
+
+여기까지는 AWS 안에서의 결정이었다. "API Gateway"라는 카테고리 자체는 더 넓다 — <strong>Kong·Spring Cloud Gateway(Zuul 후속) 같은 자체 호스팅 대안</strong>이 같은 자리에 있다. 이걸 짚고 가야 1편의 결정 트리가 "AWS 환경 한정"임을 의식하고, 회사 제약에 맞게 확장해서 읽을 수 있다.
+
+<strong>카테고리는 같다</strong>. 셋 다 외부 진입 + path/host 라우팅 + 인증·쓰로틀 + 요청/응답 변환 + 로깅을 책임진다. "API Gateway"라는 추상 개념의 세 가지 구현체로 보면 된다.
+
+차이는 운영 모델·생태계·통합 깊이에서 갈린다.
+
+| | AWS API Gateway | Kong | Spring Cloud Gateway (Zuul 후속) |
+| --- | --- | --- | --- |
+| 운영 | <strong>AWS 매니지드</strong> (인프라 0) | <strong>자체 호스팅</strong> (컨테이너/VM 직접 운영) | <strong>자체 호스팅</strong> (JVM 프로세스) |
+| 기술 스택 | AWS proprietary | Nginx + OpenResty (Lua) | Java + Netty (Reactor) |
+| 확장 메커니즘 | Lambda Authorizer · VTL · OpenAPI 임포트 | Plugin (Lua/Go/JS), 풍부한 생태계 | Java Filter |
+| 클라우드 종속 | <strong>AWS 전용</strong> | <strong>포터블</strong> (멀티클라우드·온프렘) | <strong>포터블</strong> |
+| 비용 모델 | 요청당 ($1~3.50/100만) | 서버 비용 (24/7) | 서버 비용 (24/7) |
+| AWS 서비스 통합 | <strong>네이티브</strong> (Lambda·DynamoDB·SQS 직결) | 일반 HTTP 백엔드만 | 일반 HTTP 백엔드 |
+| Latency 오버헤드 | ~10~30ms (매니지드) | 낮음 (Nginx 기반) | 중간 (JVM warm-up) |
+
+언제 무엇을 고르는가:
+
+| 상황 | 선택 |
+| --- | --- |
+| AWS 위에서만 굴림, 서버리스(Lambda) 백엔드, 운영 부담 회피 | <strong>AWS API Gateway</strong> |
+| 멀티클라우드·온프렘, 고성능, 플러그인 커스터마이징 | <strong>Kong</strong> |
+| Spring Cloud 마이크로서비스 스택, Java 중심 팀 | <strong>Spring Cloud Gateway</strong> |
+| 단순 라우팅만, 운영 최소화 | ALB + path-based routing (Gateway 불필요) |
+
+> <strong>참고</strong>: Zuul 1은 Netflix가 만들었지만 Spring Cloud Gateway(Reactor + Netty 기반)로 사실상 대체됐다. 새 프로젝트에서 Zuul 1을 쓰는 경우는 거의 없고, "Zuul"이라고 해도 보통 Spring Cloud Gateway를 가리킨다.
+
+<strong>1편 결정 트리와의 관계</strong>: 4절의 결정 트리는 <strong>"AWS 안에서 어떤 진입점을 고를 것인가"</strong>의 결정이다. 회사가 멀티클라우드를 쓰거나, EKS/Kubernetes 기반 마이크로서비스 인프라를 운영하거나, Spring Cloud 스택에 익숙한 팀이라면 — 결정 트리에서 "API Gateway"가 나오는 모든 분기에 "Kong이나 Spring Cloud Gateway도 후보"라고 읽어야 한다. 본 글의 결정 트리는 AWS 종속이라는 전제를 깔고 있다.
+
 ---
 
 ## 3. L4 진입점 — NLB / Global Accelerator

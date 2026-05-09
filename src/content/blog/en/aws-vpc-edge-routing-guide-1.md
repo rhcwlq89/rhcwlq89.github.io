@@ -199,6 +199,37 @@ The two confusions that come up most often:
 - <strong>ALB vs API Gateway HTTP API</strong>: Steady traffic above some threshold → ALB is cheaper (idle cost exists, but per-request is essentially zero). Low or spiky traffic → API Gateway is cheaper (no idle, only per-request). The crossover is roughly <strong>~2M requests/month</strong>. Beyond cost, pick API Gateway when you need auth/throttling, ALB when you need containers/gRPC/WebSocket.
 - <strong>CloudFront vs the other two</strong>: CloudFront is not an alternative — it's <strong>a layer you put on top</strong>. The question isn't "ALB or CloudFront", it's "CloudFront + ALB or just ALB."
 
+### 2.6 Aside: AWS API Gateway alongside Kong / Spring Cloud Gateway
+
+Everything above stayed inside AWS. The "API Gateway" category itself is broader — <strong>Kong and Spring Cloud Gateway (Zuul's successor) sit in the same role as self-hosted alternatives</strong>. Calling this out makes it explicit that this guide's decision tree is "AWS-bound," and lets you extend it to fit your organization's constraints.
+
+<strong>The category is the same.</strong> All three handle external ingress + path/host routing + auth/throttling + request/response transforms + logging. Three implementations of the same "API Gateway" abstraction.
+
+The differences are in operating model, ecosystem, and integration depth.
+
+| | AWS API Gateway | Kong | Spring Cloud Gateway (Zuul successor) |
+| --- | --- | --- | --- |
+| Operations | <strong>AWS-managed</strong> (zero infra) | <strong>Self-hosted</strong> (you run containers/VMs) | <strong>Self-hosted</strong> (JVM process) |
+| Stack | AWS proprietary | Nginx + OpenResty (Lua) | Java + Netty (Reactor) |
+| Extension | Lambda Authorizer / VTL / OpenAPI import | Plugins (Lua/Go/JS), large ecosystem | Java filters |
+| Cloud lock-in | <strong>AWS only</strong> | <strong>Portable</strong> (multi-cloud / on-prem) | <strong>Portable</strong> |
+| Cost model | Per-request ($1~3.50 / million) | Server cost (24/7) | Server cost (24/7) |
+| AWS service integration | <strong>Native</strong> (Lambda / DynamoDB / SQS direct) | HTTP backends only | HTTP backends only |
+| Latency overhead | ~10~30ms (managed) | Low (Nginx-based) | Medium (JVM warm-up) |
+
+When to pick which:
+
+| Situation | Pick |
+| --- | --- |
+| AWS-only, serverless (Lambda) backends, want to avoid running infra | <strong>AWS API Gateway</strong> |
+| Multi-cloud / on-prem, high throughput, plugin customization | <strong>Kong</strong> |
+| Spring Cloud microservices stack, Java-centric team | <strong>Spring Cloud Gateway</strong> |
+| Simple routing only, minimize ops | ALB + path-based routing (no gateway needed) |
+
+> <strong>Note</strong>: Zuul 1 was Netflix's gateway, but it's effectively been replaced by Spring Cloud Gateway (Reactor + Netty). New projects rarely use Zuul 1; "Zuul" usually means Spring Cloud Gateway today.
+
+<strong>How this fits the decision tree</strong>: The tree in §4 is <strong>"which entry point to pick within AWS"</strong>. If your company is multi-cloud, runs an existing EKS/Kubernetes microservices stack, or has a Spring-Cloud-savvy team — anywhere "API Gateway" appears in the tree, "Kong or Spring Cloud Gateway are also candidates." This guide's tree assumes AWS lock-in as a premise.
+
 ---
 
 ## 3. L4 entry points — NLB / Global Accelerator
