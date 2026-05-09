@@ -150,6 +150,7 @@ This blog has a consistent visual identity across all hero images. Every hero im
 - Dark navy gradient background (#0a1628 at edges → #1a2744 at center)
 - Subtle grid or network pattern visible in the deep background (like a tech floor or circuit board)
 - Light particle effects scattered across the scene (small glowing dots, like stars or data particles)
+- **Background must NOT be empty** — fill ambient space with faint clouds, distant translucent platforms, far-away node clusters, additional grid layers, or floating circuit fragments
 - Overall feel: a dark, futuristic command center or data center environment
 
 **Illustration Style:**
@@ -158,38 +159,91 @@ This blog has a consistent visual identity across all hero images. Every hero im
 - Objects have subtle shadows, reflections, and glass-like transparency
 - Items appear to float on or above dark surfaces with gentle elevation
 
+**Density & Layering (CRITICAL — most-violated rule):**
+- The composition MUST populate three depth layers — foreground, midground, background — none empty.
+- <strong>Foreground</strong>: small auxiliary objects close to the camera (small server nodes, laptops, mobile devices, satellites, signal towers, drifting cubes/spheres, individual user icons)
+- <strong>Midground</strong>: the main subject (central platform, hub, hexagonal slab) with its 3-5 supporting elements
+- <strong>Background</strong>: clouds, distant network grids, floating data fragments, additional faint platforms/datacenters, particle fields, holographic UI panels
+- <strong>Avoid empty corners</strong> — every quadrant of the image should contain at least secondary detail. Empty dark voids signal a sparse, weak composition.
+- Smell test: if you mentally delete the central subject, the remaining canvas should still feel populated with ambient richness.
+- Reference benchmarks for density: EKS Production Setup, Private EC2 Guide 1, Bastion Setting Guide — these are correctly populated. Aim for that level.
+
+**Cluster Patterns (key technique for richness):**
+- Server racks should be rendered as <strong>clusters of small cubes</strong> (5-15 stacked / arranged on a platform), not single monolithic boxes. This is what makes EKS / Kubernetes / Private EC2 hero images feel rich.
+- Multiple small node-like cubes scattered on or near platforms suggest distributed systems and add visual texture.
+- Vary cube colors within a cluster (mostly cyan, accented with green/orange/yellow cubes) to break monotony.
+- For abstract concepts (gateways, services), still surround the main icon with a cluster of supporting cubes/spheres.
+
 **Lighting & Glow:**
 - Primary glow: Blue and cyan (#00b4d8, #48cae4) — used for connections, outlines, and ambient light
-- Secondary glow: Depends on context (red/coral for danger, gold for premium/tokens, green/teal for success, orange for warnings)
-- Glow effects on key objects: soft halos, light rays, or energy lines connecting elements
+- Glow effects on key objects: soft halos, light rays, energy lines connecting elements
 - Neon-style edge lighting on important elements (servers, shields, logos)
 
+**Color Semantics (READ THIS FIRST — color must carry meaning):**
+- <strong>Color is not decoration. Every color in the scene must encode a state, role, or argument from the post.</strong>
+- Bad approach: "Each of the 5 candidates gets a different color so the image is varied." → produces an arbitrary rainbow that signals nothing. AI-generated flat.
+- Good approach: "Cyan = baseline / unselected, amber = the active / selected path, coral = rejected / anti-pattern, gold = destination reached." → every color earns its place.
+- Reference benchmarks: DB Deadlock uses orange/red specifically for the deadlock cycle, gold for the locks, red for timeout — each color tells a part of the story. Private EC2 Guide 1 uses red for attack vectors, gold for the protective shield — color encodes the threat-vs-defense narrative.
+- <strong>Before picking colors, write down the post's narrative roles</strong> (what is "selected," what is "rejected," what is "in progress," what is "the goal," what is "warning"). Then map each role to a color from the palette.
+- If you can't explain in one sentence what each color in the image MEANS, the palette is wrong.
+
+**Color Diversity (CRITICAL — most-violated rule, alongside Density):**
+- Cyan/blue alone makes images look flat and monotonous. Reference benchmark images (EKS Production Setup, Private EC2 Guide 1, DB Deadlock, Bastion) use <strong>3-4 distinct colors visibly across the scene</strong>, not "cyan plus one accent."
+- Standard palette to draw from:
+  - <strong>Cyan / blue</strong> (#00b4d8, #48cae4) — primary, always present
+  - <strong>Amber / orange</strong> (#ff9500, #ffb84d) — warnings, on-prem, legacy, active/selected paths
+  - <strong>Coral / red</strong> (#ef4444, #f87171) — threats, attacks, blocked traffic, alerts
+  - <strong>Green / teal</strong> (#10b981, #14b8a6) — success, health checks, AWS-managed services, accepted state
+  - <strong>Gold / yellow</strong> (#fbbf24, #fcd34d) — premium, tokens, status lights, static IP
+  - <strong>Magenta / purple</strong> (#a855f7, #c084fc) — special states, edge/CDN, custom
+- <strong>Mandatory color recipe</strong>: every image must blend at least <strong>three colors visibly</strong>:
+  - Primary cyan/blue (60-70% of glow volume)
+  - Strong secondary accent (20% — applied to a major element or path)
+  - Tertiary accent (10% — particles, status lights, small details, individual cubes)
+- <strong>Multi-colored cube clusters are mandatory</strong> — when rendering server racks or node groups as cube clusters, mix in green, orange, and yellow cubes alongside the dominant cyan ones. A monochromatic cyan cube cluster is the #1 cause of "flat / boring" hero images.
+- Picking a palette per topic:
+  - "Defense / security" → cyan + coral attack vectors + gold shield + green safe zone
+  - "Cluster / distributed" → cyan + green status + amber + yellow node lights mixed in cube clusters
+  - "Hybrid cloud" → cyan AWS + amber on-prem + green PrivateLink + gold accents
+  - "Decision / routing" → cyan baseline + amber active path + green selected option + coral rejected option + yellow markers
+  - "CDN / edge / global" → cyan + magenta edges + green hit-cache + amber miss
+- Without 3+ visible colors the image looks weak and "AI-generated flat." Pick the palette first, then weave each color into specific elements before describing geometry.
+
 **Common Elements (use as appropriate):**
-- Server racks, database cylinders, laptop screens showing code or dashboards
-- Cloud icons, shield/lock icons, gear/cog icons
-- Arrows and flow lines showing data movement (glowing, directional)
-- Small spheres or cubes representing data, users, or requests
-- Floating platforms that objects rest on
+- Server racks rendered as cube clusters, database cylinders, laptop screens showing code or dashboards
+- Cloud icons, shield/lock icons, gear/cog icons, satellite/antenna shapes
+- Arrows and flow lines showing data movement (glowing, directional, with traveling motion particles)
+- Many small spheres or cubes representing data, users, or requests — scatter liberally for ambient richness
+- Floating platforms at varying heights and sizes (multiple, not just one large central one)
+- Holographic decorative elements (faint UI charts, network maps, world maps in background consoles)
+- Side consoles or terminal monitors at the lower corners (NOC / command center feel)
 
 **Composition:**
 - Centered main subject with supporting elements arranged around it
-- Clear visual hierarchy — one dominant element, 3-5 supporting elements
-- Not overly crowded — maintain breathing room between elements
+- Clear visual hierarchy — one dominant element, 3-5 supporting elements, plus 5+ ambient/background elements for richness
+- <strong>Use the full canvas — corner-to-corner detail.</strong> Save breathing room for between objects, not for empty void areas of the canvas.
 - Professional and polished, suitable for a senior backend engineering blog
 
 **Strict Rules:**
 - NEVER use white or light backgrounds
 - NEVER include text, labels, or watermarks in the image
 - NEVER use flat/minimal style or cartoon style
+- NEVER leave any quadrant of the image visually empty
 - ALWAYS maintain the dark navy isometric aesthetic
+- ALWAYS include at least one secondary accent color besides cyan/blue
+- ALWAYS render server-rack-like elements as cube clusters, not single boxes
 
 ### Hero Image Prompt Requirements
 
 When writing a hero image prompt for a blog post:
-- The prompt must be at least 5 lines (sentences) long
-- Line 1: Describe the overall scene and background atmosphere
-- Line 2-3: Describe the main subject and its visual treatment (glow, color, position)
-- Line 4: Describe supporting elements and their arrangement around the main subject
-- Line 5+: Describe lighting, flow/movement, and any contextual details that convey the post's topic
-- Always end with: "Isometric 2.5D style, dark navy background, blue/cyan glow effects, no text. Aspect ratio 3:2 (1536x1024)."
-- Reference specific existing blog images if helpful (e.g., "similar composition to the SAML guide image")
+- The prompt must be at least <strong>8 lines (sentences) long</strong> to ensure all layers AND the color palette are described.
+- <strong>Before writing the prompt, decide the color palette AND its semantics</strong> — pick 3 or 4 colors and assign each one a specific narrative role from the post (selected/rejected/baseline/destination/warning/etc.). If you can't articulate what each color MEANS in one sentence, the palette isn't ready. Then weave each color into specific elements as you describe geometry.
+- Line 1: Overall scene and background atmosphere — set the dark navy stage with depth, ambient particles, faint grids
+- Line 2: <strong>Background layer</strong> — distant clouds, faint grids, far-away platforms, particle fields, holographic UI panels, side consoles (with at least one secondary color in this layer)
+- Line 3-4: <strong>Midground main subject</strong> — central platform/hub/hex slab and its visual treatment (glow, edge neon, glass transparency, surrounding multi-colored cube cluster — mix green, orange, yellow with cyan)
+- Line 5: <strong>Supporting elements at midground</strong> — 3-5 secondary objects, each given its OWN distinctive accent color where the topic allows differentiation (e.g., one element amber, another magenta, another green)
+- Line 6: <strong>Foreground layer</strong> — small auxiliary objects close to camera (laptops, mobile devices, small node cubes, satellites, towers, drifting spheres) with status-light accents in mixed colors
+- Line 7: <strong>Motion and connections</strong> — flow arrows with motion particles, with active path glowing in one accent color (amber or gold) and rejected/inactive paths in another (coral or muted blue)
+- Line 8: <strong>Color palette summary line</strong> — explicitly name the 3-4 colors and where they appear, e.g., "primary cyan glow on the central VPC, amber/orange highlights on the active path and on-prem rack, green status lights on the AWS service cluster, and warm yellow accents in cube clusters"
+- Always end with: "Isometric 2.5D style, dark navy background, vibrant multi-color glow palette (cyan + [secondary] + [tertiary]), no text. Aspect ratio 3:2 (1536x1024)."
+- Reference specific existing blog images if helpful — e.g., "similar density and color richness to the EKS Production Setup hero image, with multi-colored cube-cluster server racks"
