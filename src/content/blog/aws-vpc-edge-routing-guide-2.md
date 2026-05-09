@@ -1,7 +1,7 @@
 ---
 title: "AWS VPC Edge 라우팅 가이드 2편: VPC를 다른 VPC·AWS 서비스·온프레미스와 어떻게 잇는가? — VPC Endpoint, PrivateLink, Peering, Transit Gateway, Direct Connect 의사결정 트리"
 description: "VPC를 다른 VPC, AWS 관리 서비스, 온프레미스와 잇는 방법은 6가지나 된다. 각 옵션이 어떤 결정 문제를 푸는지, 비용·확장성·전이성(transitivity)에서 어디서 갈리는지, 그리고 흔한 안티패턴까지. 결정 트리 한 장으로 끝내는 실무 가이드. AWS VPC Edge 라우팅 가이드 시리즈 2편."
-pubDate: 2026-05-09T15:00:00+09:00
+pubDate: 2026-05-09T13:00:00+09:00
 tags:
   - AWS
   - VPC

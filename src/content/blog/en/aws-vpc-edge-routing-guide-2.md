@@ -1,7 +1,7 @@
 ---
 title: "AWS VPC Edge Routing Guide Part 2: Connecting a VPC to Other VPCs, AWS Services, and On-Prem — A Decision Tree for VPC Endpoint, PrivateLink, Peering, Transit Gateway, and Direct Connect"
 description: "There are six ways to connect a VPC to another VPC, an AWS-managed service, or on-premises. Which decision problem each one solves, where they split on cost, scalability, and transitivity, and the common anti-patterns. A practical guide that ends in a single decision tree. Part 2 of the AWS VPC Edge Routing Guide series."
-pubDate: "2026-05-09T15:00:00+09:00"
+pubDate: "2026-05-09T13:00:00+09:00"
 tags: ["AWS", "VPC", "VPC Endpoint", "PrivateLink", "Transit Gateway", "VPC Peering", "Direct Connect", "Architecture"]
 heroImage: "../../../assets/AwsVpcEdgeRoutingGuide2.png"
 lang: en
