@@ -114,7 +114,7 @@ API Gateway는 ALB와 같은 L7이지만 <strong>"API 운영에 필요한 부가
 
 > <strong>관리형 통합이 ALB와 다른 결정적 한 가지</strong>: ALB는 받은 HTTP를 <strong>그대로</strong> 뒤의 컴퓨트(EC2·ECS·Lambda)로 던지고, 백엔드 코드가 알아서 처리하는 모델이다. API Gateway의 통합은 받은 HTTP를 <strong>AWS 서비스 API 호출 형식으로 변환해서 직접 호출</strong>하는 모델이라, 단순 CRUD 같은 경우 Lambda·EC2 같은 컴퓨트 자체가 필요 없어진다 — `GET /products/123` 한 줄이 곧 DynamoDB API 호출이 된다는 뜻. 다른 셋(인증·쓰로틀·요금제)이 "받은 요청을 어떻게 검증·제한하느냐"라면 통합은 "그 요청을 누구에게 어떤 형태로 전달하느냐"의 결정이다.
 
-이 네 가지 중 어느 하나라도 "직접 만들기 부담스럽다"면 API Gateway 가격이 정당화된다. 반대로 단순 HTTP 프록시 용도라면 ALB가 거의 항상 더 싸다 — 이게 2.4절 비교의 출발점이다.
+이 네 가지 중 어느 하나라도 "직접 만들기 부담스럽다"면 API Gateway 가격이 정당화된다. 반대로 단순 HTTP 프록시 용도라면 ALB가 거의 항상 더 싸다 — 이게 2.5절 비교의 출발점이다.
 
 타입이 둘이라 자주 혼동된다.
 
@@ -160,7 +160,34 @@ CloudFront가 의미 있는 시나리오는 셋 중 하나다.
 
 여기서 가장 자주 빼먹는 게 <strong>"캐시 레이어"라는 정체성</strong>이다. CloudFront 단독으로는 동적 요청을 처리하지 못한다 — 캐시가 미스나면 origin으로 그대로 돌리는 게 전부고, 그 origin은 결국 ALB든 S3든 누군가가 처리해야 한다.
 
-### 2.4 L7 셋의 비교 표
+### 2.4 참고: Region vs Edge가 뭐가 다른가
+
+2.3절에서 "edge 로케이션"이라는 단어가 등장했고, 다음 절 비교 표에서도 ALB는 "VPC 안 (regional)", CloudFront는 "글로벌 edge", API Gateway REST API는 "regional/edge"로 분류된다. 두 단어의 차이를 한 번 짚고 가야 표가 매끄럽게 읽힌다.
+
+| | Region | Edge Location |
+| --- | --- | --- |
+| 정의 | AWS의 지리적 데이터센터 군집 | 사용자에게 가까운 작은 PoP (Point of Presence) |
+| 수 | 약 30개 (서울·도쿄·버지니아 등) | 600+ (도시 단위) |
+| 사는 것 | EC2·RDS·ALB·VPC 등 모든 컴퓨트·스토리지·DB | CloudFront 캐시·Route 53·TLS 종료점 |
+| 용도 | 무거운 처리, 데이터 영속 | 캐싱·DNS·TLS 종료·anycast 라우팅 |
+
+한 줄로: <strong>Region은 "서비스가 실제로 사는 곳", Edge는 "사용자 가까운 가장자리"</strong>. ALB·EC2 같은 무거운 컴퓨트는 region 안에만 살고, edge에는 캐시·DNS·TLS 같은 가벼운 처리만 들어간다.
+
+<strong>미국 사용자가 서울 region 서비스에 접근</strong>한다고 가정하고 둘의 차이를 보면:
+
+- <strong>Regional만</strong> — 매 요청이 태평양을 건너 서울까지. 평균 RTT ~150ms, TLS 핸드셰이크 누적 ~600ms 들어감.
+- <strong>Edge 포함 (CloudFront 앞단)</strong> — 미국 edge에서 TLS 종료 → AWS 백본으로 서울 origin까지. TLS 핸드셰이크 ~30ms, 정적 자산이면 origin까지 안 감.
+
+<strong>API Gateway REST API의 "regional/edge"</strong>는 endpoint 타입 두 가지를 고를 수 있어서다:
+
+- <strong>Regional endpoint</strong> — 사용자가 직접 해당 region의 API Gateway로. 같은 region 사용자가 주 대상이거나, 자체 CloudFront를 앞에 둘 때.
+- <strong>Edge-optimized endpoint</strong> — AWS가 자동으로 CloudFront edge를 앞에 깐 형태. 글로벌 사용자에게 기본 latency가 짧아진다.
+
+HTTP API는 regional만 지원하고, edge가 필요하면 사용자가 직접 CloudFront를 앞에 두면 된다.
+
+> <strong>결정에의 영향</strong>: 대상 사용자가 한 region에 모여 있으면 regional만으로 충분하다. 전 세계 사용자라면 edge layer(CloudFront 또는 edge-optimized API Gateway)가 거의 필수 — TLS RTT 절감만으로도 체감 latency가 크게 떨어진다. 정적 자산이 많으면 edge 캐시 효과가 결정적.
+
+### 2.5 L7 셋의 비교 표
 
 | | ALB | API Gateway HTTP API | API Gateway REST API | CloudFront |
 | --- | --- | --- | --- | --- |

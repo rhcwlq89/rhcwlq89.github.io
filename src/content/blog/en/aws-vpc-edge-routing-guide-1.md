@@ -107,7 +107,7 @@ These four — <strong>auth, throttling, usage plans, managed integration</stron
 
 > <strong>The one decisive difference between managed integration and ALB</strong>: ALB takes the incoming HTTP and forwards it <strong>as-is</strong> to a compute target (EC2/ECS/Lambda), and your backend code does the work. API Gateway's integration <strong>translates the HTTP into an AWS service API call and invokes it directly</strong>, so for simple CRUD you may not need a compute target at all — `GET /products/123` becomes a DynamoDB call without any Lambda function in between. The other three (auth, throttling, usage plans) decide "how to validate and rate-limit a request"; integration decides "to whom and in what shape we forward it."
 
-If any one of these is "I'd rather not build this myself," API Gateway's price tag is justified. As a plain HTTP proxy without these, ALB is almost always cheaper — that's the starting point for the comparison in §2.4.
+If any one of these is "I'd rather not build this myself," API Gateway's price tag is justified. As a plain HTTP proxy without these, ALB is almost always cheaper — that's the starting point for the comparison in §2.5.
 
 There are two variants and they get confused all the time.
 
@@ -153,7 +153,34 @@ CloudFront pays off in three scenarios:
 
 The mistake people make most often is <strong>forgetting it's a caching layer.</strong> CloudFront on its own can't handle a dynamic request — on a cache miss, it just forwards to the origin, and that origin (ALB, S3, whatever) is the one doing real work.
 
-### 2.4 The L7 comparison table
+### 2.4 Aside: Region vs Edge — what's the difference?
+
+§2.3 introduced "edge locations," and the comparison table in the next section labels ALB as "Inside VPC (regional)," CloudFront as "Global edge," and API Gateway REST API as "regional/edge." It's worth pausing to define the two words so the table reads smoothly.
+
+| | Region | Edge Location |
+| --- | --- | --- |
+| Definition | A geographic cluster of AWS datacenters | A small PoP (Point of Presence) close to users |
+| Count | ~30 (Seoul, Tokyo, Virginia, ...) | 600+ (city level) |
+| What lives there | EC2, RDS, ALB, VPC — all compute / storage / DB | CloudFront cache, Route 53, TLS termination |
+| Purpose | Heavy processing, durable state | Caching, DNS, TLS termination, anycast routing |
+
+In one line: <strong>Region is "where the service actually lives," Edge is "the user-facing rim."</strong> Heavy compute like ALB or EC2 only lives inside a region; edges only do lightweight work — caching, DNS, TLS termination.
+
+Take <strong>a US user reaching a Seoul-region service</strong> and the difference becomes concrete:
+
+- <strong>Regional only</strong> — every request crosses the Pacific to Seoul. RTT ~150ms, TLS handshake adds another ~600ms in cumulative round trips.
+- <strong>With edge (CloudFront in front)</strong> — TLS terminates at a US edge → traffic rides AWS's backbone to the Seoul origin. TLS handshake ~30ms, and static content never reaches origin at all.
+
+<strong>API Gateway REST API's "regional/edge"</strong> means you choose between two endpoint types:
+
+- <strong>Regional endpoint</strong> — the user hits the API Gateway in that region directly. Useful when most users are in the same region or when you put your own CloudFront in front.
+- <strong>Edge-optimized endpoint</strong> — AWS automatically fronts the API Gateway with CloudFront edge. Shorter default latency for globally distributed users.
+
+HTTP API supports only regional; if you want edge, you put CloudFront in front yourself.
+
+> <strong>Decision impact</strong>: If your users cluster in a single region, regional alone is fine. For globally distributed users, an edge layer (CloudFront or edge-optimized API Gateway) is almost mandatory — the TLS-RTT savings alone visibly cut perceived latency. Heavy static assets make the edge-cache effect decisive.
+
+### 2.5 The L7 comparison table
 
 | | ALB | API Gateway HTTP API | API Gateway REST API | CloudFront |
 | --- | --- | --- | --- | --- |
