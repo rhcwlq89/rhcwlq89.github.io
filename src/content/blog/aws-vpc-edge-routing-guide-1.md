@@ -103,6 +103,19 @@ flowchart LR
 
 API Gateway는 ALB와 같은 L7이지만 <strong>"API 운영에 필요한 부가 기능"을 통째로 품은 진입점</strong>이다. 단순한 HTTP 라우터로 보면 안 되고, "인증·쓰로틀·요금제·캐시·custom domain·OpenAPI 임포트"까지 한 박스에 들어 있는 서비스로 봐야 한다.
 
+이 네 가지 — <strong>인증·쓰로틀·요금제·관리형 통합</strong> — 가 결정 기준에 자주 묶여 나오는데, 각자 푸는 문제가 다르다. 백엔드 코드에서 직접 만들면 어떤 스택을 끌어와야 하는지를 같이 두면 감이 잡힌다.
+
+| 부가 기능 | 어떤 문제를 푸나 | 백엔드 코드로 직접 만들면 | API Gateway가 주는 것 |
+| --- | --- | --- | --- |
+| <strong>인증 (Auth)</strong> | "이 요청자가 누구이고, 무엇을 할 권한이 있는지" 백엔드 도달 전에 검증 | Spring Security · Passport · 자체 JWT 검증 미들웨어 | JWT/OIDC 검증, IAM 서명, Cognito User Pool, Lambda Authorizer (임의 검증 로직) |
+| <strong>쓰로틀 (Throttling)</strong> | "초당·분당 N건 이상 못 보내게" — 백엔드 보호 + burst·DDoS 흡수 | Bucket4j · Resilience4j RateLimiter · Redis 토큰 버킷 | account/stage/route 단위 RPS·burst 한도, 초과 시 429 자동 반환 |
+| <strong>요금제 (Usage Plan)</strong> | "Free는 분당 10건, Pro는 분당 1000건" — API Key로 등급 구분 후 한도·과금 적용 | 자체 API Key 발급·검증 + 미터링 시스템 + 결제 연동 | REST API의 Usage Plan + API Key 묶음, 일·월 quota와 rate 한도 |
+| <strong>관리형 통합 (Integration)</strong> | "받은 HTTP를 백엔드 호출로 <strong>변환</strong>해서 보내기" — 예: `GET /products/{id}` → DynamoDB GetItem 직접 호출 (Lambda·EC2 없이) | 자체 SDK 호출 코드 + 요청/응답 매핑 + 재시도·timeout 로직 | DynamoDB·Lambda·SQS·Step Functions·임의 AWS API 통합, VTL로 요청/응답 변환, 재시도·timeout은 설정으로 |
+
+> <strong>관리형 통합이 ALB와 다른 결정적 한 가지</strong>: ALB는 받은 HTTP를 <strong>그대로</strong> 뒤의 컴퓨트(EC2·ECS·Lambda)로 던지고, 백엔드 코드가 알아서 처리하는 모델이다. API Gateway의 통합은 받은 HTTP를 <strong>AWS 서비스 API 호출 형식으로 변환해서 직접 호출</strong>하는 모델이라, 단순 CRUD 같은 경우 Lambda·EC2 같은 컴퓨트 자체가 필요 없어진다 — `GET /products/123` 한 줄이 곧 DynamoDB API 호출이 된다는 뜻. 다른 셋(인증·쓰로틀·요금제)이 "받은 요청을 어떻게 검증·제한하느냐"라면 통합은 "그 요청을 누구에게 어떤 형태로 전달하느냐"의 결정이다.
+
+이 네 가지 중 어느 하나라도 "직접 만들기 부담스럽다"면 API Gateway 가격이 정당화된다. 반대로 단순 HTTP 프록시 용도라면 ALB가 거의 항상 더 싸다 — 이게 2.4절 비교의 출발점이다.
+
 타입이 둘이라 자주 혼동된다.
 
 | | HTTP API | REST API |

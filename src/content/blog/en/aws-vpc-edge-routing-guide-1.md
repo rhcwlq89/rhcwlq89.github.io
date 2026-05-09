@@ -96,6 +96,19 @@ Pricing has two axes: <strong>hourly LB cost + LCU</strong> (Load Balancer Capac
 
 API Gateway is also L7, but it's <strong>an entry point that wraps "everything you need to operate an API"</strong> in one box. Don't think of it as a router — think of it as "auth, throttling, usage plans, response cache, custom domain, OpenAPI import, all in one service."
 
+These four — <strong>auth, throttling, usage plans, managed integration</strong> — show up together in the decision criteria, but each solves a different problem. Pairing each with what you'd otherwise have to build in your backend code makes it concrete.
+
+| Extra | What problem it solves | Building it yourself looks like | What API Gateway gives you |
+| --- | --- | --- | --- |
+| <strong>Auth</strong> | Verify "who is calling and what they can do" before traffic reaches the backend | Spring Security / Passport / custom JWT verification middleware | JWT/OIDC verification, IAM signing, Cognito User Pools, Lambda Authorizer (arbitrary logic) |
+| <strong>Throttling</strong> | Cap requests per second or minute — protect the backend, absorb bursts and DDoS | Bucket4j / Resilience4j RateLimiter / Redis token bucket | RPS and burst limits at account/stage/route level, automatic 429 on overrun |
+| <strong>Usage plans</strong> | Tier customers — "Free: 10 RPM, Pro: 1000 RPM" — by API Key, with quotas and billing | Custom API Key issuance + verification + metering + billing integration | REST API's Usage Plan + API Key pairing, daily/monthly quotas + rate limits |
+| <strong>Managed integration</strong> | <strong>Translate</strong> the incoming HTTP into a backend API call — e.g., `GET /products/{id}` → DynamoDB GetItem directly (no Lambda or EC2 in the middle) | Hand-rolled SDK calls + request/response mapping + retry/timeout logic | Integrations to DynamoDB / Lambda / SQS / Step Functions / arbitrary AWS APIs, VTL request/response transforms, retry and timeout via configuration |
+
+> <strong>The one decisive difference between managed integration and ALB</strong>: ALB takes the incoming HTTP and forwards it <strong>as-is</strong> to a compute target (EC2/ECS/Lambda), and your backend code does the work. API Gateway's integration <strong>translates the HTTP into an AWS service API call and invokes it directly</strong>, so for simple CRUD you may not need a compute target at all — `GET /products/123` becomes a DynamoDB call without any Lambda function in between. The other three (auth, throttling, usage plans) decide "how to validate and rate-limit a request"; integration decides "to whom and in what shape we forward it."
+
+If any one of these is "I'd rather not build this myself," API Gateway's price tag is justified. As a plain HTTP proxy without these, ALB is almost always cheaper — that's the starting point for the comparison in §2.4.
+
 There are two variants and they get confused all the time.
 
 | | HTTP API | REST API |
