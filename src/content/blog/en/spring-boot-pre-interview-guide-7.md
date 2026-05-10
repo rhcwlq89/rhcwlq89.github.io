@@ -1,111 +1,49 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 7: Advanced Patterns"
-description: "Advanced patterns and architecture — events, async processing, file handling, and multi-module"
+title: "Spring Boot Pre-Interview Guide Part 7: Advanced Patterns — Spring Boot 4 · Kotlin 2.3 · Events · Async · Multi-module"
+description: "On Spring Boot 4 with Kotlin 2.3, the patterns that make your assignment stand out. Domain-and-side-effect separation via @TransactionalEventListener, async fan-out with @Async + CompletableFuture, file upload validation, URI versioning, layered vs Hexagonal vs CQRS, and multi-module Option A (DIP) vs Option B (pragmatic) — written without Lombok, using Kotlin primary constructors and val/var."
 pubDate: "2026-01-21T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "Architecture", "Async", "Events", "Interview", "Practical Guide"]
-heroImage: "../../../assets/PreinterviewTaskGuide.png"
----
-
-## Series Navigation
-
-| Previous | Current | Next |
-|:---:|:---:|:---:|
-| [Part 6: DevOps](/en/blog/spring-boot-pre-interview-guide-6) | **Part 7: Advanced Patterns** | [Comprehensive Assignment](/en/blog/spring-boot-pre-interview-assignment) |
-
-> **Full Roadmap**: See the [Spring Boot Pre-Interview Guide Roadmap](/en/blog/spring-boot-pre-interview-guide-1)
-
+tags: ["Spring Boot", "Kotlin", "Event", "Async", "Architecture", "Backend", "Practical Guide"]
+heroImage: "../../../assets/SpringBootPreInterviewGuide7.png"
 ---
 
 ## Introduction
 
-As the final part of the series, we cover advanced patterns that can set you apart. You don't need to apply all of them to every assignment, but using them where appropriate can demonstrate your design capabilities.
+This is the final part of the series. Parts 1–6 covered everything from the Core Application Layer to DevOps & Deployment. Part 7 focuses on the advanced patterns that create a real differentiator. You don't need to apply all of them to a single assignment — the judgment to choose the right pattern for the right situation is itself a signal of design maturity.
 
-**Topics covered in Part 7:**
-- Event-driven architecture
-- Async processing
-- File handling
-- API versioning
-- Architecture patterns
-- Multi-module projects
+Event-driven architecture, async processing, and file handling come up in most assignments in some form. API versioning and architecture patterns are worth documenting in the README even when simple choices are made — explaining *why* you chose an approach tells reviewers as much as the implementation itself. In multi-module projects, maintaining consistent dependency direction after the initial setup matters more than the setup itself.
 
-### Table of Contents
+The target reader is a junior backend developer who has a working Spring Boot assignment and wants to raise the quality bar on design and code structure.
 
-- [Event-Driven Architecture](#event-driven-architecture)
-- [Async Processing](#async-processing)
-- [File Handling](#file-handling)
-- [API Versioning](#api-versioning)
-- [Architecture Patterns](#architecture-patterns)
-- [Multi-Module Projects](#multi-module-projects)
-- [Summary](#summary)
+See the [previous post](/blog/en/spring-boot-pre-interview-guide-6) for DevOps & Deployment.
+
+- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
+- <strong>Part 7 — Advanced Patterns (this post)</strong>
 
 ---
 
-## Event-Driven Architecture
+## TL;DR
 
-### 1. Spring Events Basics
+- <strong>Event-driven architecture</strong> — `@TransactionalEventListener(phase = AFTER_COMMIT)` runs the listener only after the order is durably persisted, separating domain logic from side-effects like notifications.
+- <strong>Async processing</strong> — `@Async` is proxy-based, so self-invocation always runs synchronously; always call from a different bean. `AsyncUncaughtExceptionHandler` is mandatory to catch silent failures.
+- <strong>File handling</strong> — Validate extension, MIME type, and size before saving. Use UUID-based filenames and `normalize()` to defend against path traversal.
+- <strong>API versioning</strong> — URI versioning (`/api/v1/...`) is the clearest choice and the most cache-friendly, test-friendly, and documentation-friendly.
+- <strong>Multi-module</strong> — Pick Option A (DIP) or Option B (pragmatic) and stay consistent. Mixing them breaks dependency direction. In either option, domain → infra dependency is always forbidden.
 
-Using events allows you to separate domain logic from supplementary features (notifications, logging, etc.).
+---
 
-```java
-// Event definition
-public record OrderCreatedEvent(
-    Long orderId,
-    Long memberId,
-    Integer totalAmount,
-    LocalDateTime occurredAt
-) {
-    public OrderCreatedEvent(Order order) {
-        this(order.getId(), order.getMember().getId(),
-             order.getTotalAmount(), LocalDateTime.now());
-    }
-}
-```
+## 1. Event-Driven Architecture — Separating Domain Logic from Side-Effects
 
-```java
-// Event publishing
-@Service
-@RequiredArgsConstructor
-public class OrderService {
+### 1.1 Spring Events Basics
 
-    private final OrderRepository orderRepository;
-    private final ApplicationEventPublisher eventPublisher;
+<strong>Event-driven architecture</strong> reduces coupling between domain logic and supplementary features like notifications and logging. When `OrderService` directly calls `NotificationService`, the two classes become tightly coupled. Placing an event in between means `OrderService` only publishes "an order was created" — what happens next is the listener's responsibility.
 
-    @Transactional
-    public Long createOrder(OrderCreateCommand command) {
-        Order order = Order.create(command);
-        orderRepository.save(order);
-
-        // Publish event
-        eventPublisher.publishEvent(new OrderCreatedEvent(order));
-
-        return order.getId();
-    }
-}
-```
-
-```java
-// Event listener
-@Component
-@RequiredArgsConstructor
-public class OrderEventListener {
-
-    private static final Logger log = LoggerFactory.getLogger(OrderEventListener.class);
-    private final NotificationService notificationService;
-
-    @EventListener
-    public void handleOrderCreated(OrderCreatedEvent event) {
-        log.info("Order created: orderId={}, memberId={}",
-                 event.orderId(), event.memberId());
-
-        // Send notification
-        notificationService.sendOrderConfirmation(event.memberId(), event.orderId());
-    }
-}
-```
-
-<details>
-<summary>Kotlin Version</summary>
+> <strong>Note</strong>: Spring Boot 4 + Kotlin 2.3 project setup (kotlin-spring, kotlin-jpa plugins, etc.) is covered in §1.1 of Part 1. Part 7 focuses on the Advanced Patterns layer that runs on top of that. The Kotlin 2.x line is backward-compatible — the same code works on 2.0 through 2.3.
 
 ```kotlin
 // Event definition
@@ -144,7 +82,7 @@ class OrderService(
 class OrderEventListener(
     private val notificationService: NotificationService
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val log = LoggerFactory.getLogger(this::class.java)
 
     @EventListener
     fun handleOrderCreated(event: OrderCreatedEvent) {
@@ -154,37 +92,53 @@ class OrderEventListener(
 }
 ```
 
-</details>
+### 1.2 @TransactionalEventListener
 
-### 2. @TransactionalEventListener
+`@EventListener` runs inside the same transaction. If the listener throws, the order save rolls back too. Notifications should only fire after the order is durably committed. `@TransactionalEventListener` solves exactly this.
 
-You can control when events are processed based on the transaction state.
-
-```java
+```kotlin
 @Component
-@RequiredArgsConstructor
-public class OrderEventListener {
-
-    private final NotificationService notificationService;
-
+class OrderEventListener(
+    private val notificationService: NotificationService
+) {
     /**
-     * Executes after transaction commit
-     * - Sends notification only after order save is confirmed
+     * Runs after commit — notification only sent after order is confirmed
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handleOrderCreatedAfterCommit(OrderCreatedEvent event) {
-        notificationService.sendOrderConfirmation(event.memberId(), event.orderId());
+    fun handleOrderCreatedAfterCommit(event: OrderCreatedEvent) {
+        notificationService.sendOrderConfirmation(event.memberId, event.orderId)
     }
 
     /**
-     * Executes on transaction rollback
-     * - For failure logging, etc.
+     * Runs on rollback — for failure logging
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_ROLLBACK)
-    public void handleOrderCreatedOnRollback(OrderCreatedEvent event) {
+    fun handleOrderCreatedOnRollback(event: OrderCreatedEvent) {
         // Failure logging
     }
 }
+```
+
+The diagram below shows the `AFTER_COMMIT` flow. `publishEvent` is called inside the transaction, but the listener fires only after commit completes.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant O as OrderService<br/>@Transactional
+    participant DB as Database
+    participant L as OrderEventListener<br/>@TransactionalEventListener
+    participant N as NotificationService
+
+    C->>O: createOrder(command)
+    activate O
+    O->>DB: orderRepository.save(order)
+    O->>O: publishEvent(OrderCreatedEvent)
+    O->>DB: COMMIT
+    deactivate O
+    DB-->>L: AFTER_COMMIT trigger
+    L->>N: sendOrderConfirmation
+    O-->>C: orderId
 ```
 
 | Phase | Description | When to Use |
@@ -194,26 +148,26 @@ public class OrderEventListener {
 | `AFTER_COMPLETION` | Regardless of commit/rollback | Resource cleanup |
 | `BEFORE_COMMIT` | Just before commit | Additional validation |
 
-### 3. Async Event Processing
+### 1.3 Async Event Processing
 
-```java
+If the notification service depends on a slow external system, making the listener `@Async` prevents blocking the main thread.
+
+```kotlin
 @Component
-@RequiredArgsConstructor
-public class OrderEventListener {
-
-    private final NotificationService notificationService;
-
+class OrderEventListener(
+    private val notificationService: NotificationService
+) {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handleOrderCreatedAsync(OrderCreatedEvent event) {
+    fun handleOrderCreatedAsync(event: OrderCreatedEvent) {
         // Runs asynchronously, no impact on the main transaction
-        notificationService.sendOrderConfirmation(event.memberId(), event.orderId());
+        notificationService.sendOrderConfirmation(event.memberId, event.orderId)
     }
 }
 ```
 
 <details>
-<summary>Events vs Direct Calls: Selection Criteria</summary>
+<summary><strong>Events vs Direct Calls: Selection Criteria</strong></summary>
 
 | Scenario | Recommended Approach | Reason |
 |----------|---------------------|--------|
@@ -222,145 +176,125 @@ public class OrderEventListener {
 | External system integration | Events + Async | Main logic unaffected by failures |
 | Multiple modules reacting | Events | Publisher doesn't need to know subscribers |
 
-**Recommended for assignments**: Keep core logic as direct calls and separate notifications/logging into events -- this can be evaluated as good design.
+**Recommended for assignments**: Keep core logic as direct calls and separate notifications/logging into events — this signals good design to reviewers.
 
 </details>
 
 <details>
-<summary>Cautions When Using Events</summary>
+<summary><strong>Cautions When Using Events</strong></summary>
 
-1. **Watch transaction boundaries**
-   - `@EventListener` executes within the same transaction
-   - Exceptions in the listener cause a full rollback
-
-2. **Watch for circular references**
-   - A -> publish event -> B listener -> call A -> infinite loop
-
-3. **Testing challenges**
-   - Need to verify event publishing/subscribing
-   - Use `@SpyBean` or test listeners
-
-4. **Debugging challenges**
-   - Flow tracing is difficult
-   - Ensure thorough logging
+1. **Transaction boundary** — `@EventListener` runs in the same transaction; listener exceptions cause a full rollback.
+2. **Circular references** — A → publish event → B listener → call A → infinite loop.
+3. **Testing challenges** — Event publishing/subscribing needs verification. Use `@SpyBean` or test listeners.
+4. **Debugging difficulty** — Flow tracing is harder with events. Ensure thorough logging.
 
 </details>
 
 ---
 
-## Async Processing
+## 2. Async Processing — @Async and CompletableFuture
 
-### 1. @Async Configuration
+### 2.1 @Async Configuration
 
-```java
+<strong>@Async</strong> runs an annotated method in a separate thread. Add `@EnableAsync` to a `@Configuration` class and implement `AsyncConfigurer` to configure both the thread pool and the exception handler together. Skipping the exception handler means exceptions from void-returning methods disappear silently.
+
+```kotlin
 @Configuration
 @EnableAsync
-public class AsyncConfig implements AsyncConfigurer {
+class AsyncConfig : AsyncConfigurer {
 
-    @Override
-    public Executor getAsyncExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(5);
-        executor.setMaxPoolSize(10);
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("async-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.initialize();
-        return executor;
+    override fun getAsyncExecutor(): Executor {
+        val executor = ThreadPoolTaskExecutor()
+        executor.corePoolSize = 5
+        executor.maxPoolSize = 10
+        executor.setQueueCapacity(100)
+        executor.setThreadNamePrefix("async-")
+        executor.setRejectedExecutionHandler(ThreadPoolExecutor.CallerRunsPolicy())
+        executor.initialize()
+        return executor
     }
 
-    @Override
-    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
-        return (ex, method, params) -> {
-            Logger log = LoggerFactory.getLogger(method.getDeclaringClass());
-            log.error("Async method {} threw exception: {}", method.getName(), ex.getMessage(), ex);
-        };
+    override fun getAsyncUncaughtExceptionHandler(): AsyncUncaughtExceptionHandler {
+        return AsyncUncaughtExceptionHandler { ex, method, _ ->
+            val log = LoggerFactory.getLogger(method.declaringClass)
+            log.error("Async method {} threw exception: {}", method.name, ex.message, ex)
+        }
     }
 }
 ```
 
-### 2. Using @Async
+### 2.2 Using @Async
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class NotificationService {
-
-    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
-    private final EmailSender emailSender;
-    private final SmsSender smsSender;
+class NotificationService(
+    private val emailSender: EmailSender,
+    private val smsSender: SmsSender
+) {
+    private val log = LoggerFactory.getLogger(this::class.java)
 
     @Async
-    public void sendOrderConfirmation(Long memberId, Long orderId) {
-        log.info("Sending order confirmation: memberId={}, orderId={}", memberId, orderId);
-
+    fun sendOrderConfirmation(memberId: Long, orderId: Long) {
+        log.info("Sending order confirmation: memberId={}, orderId={}", memberId, orderId)
         // Email sending (runs asynchronously)
-        emailSender.send(memberId, "Order Confirmation", "Your order has been completed.");
+        emailSender.send(memberId, "Order Confirmation", "Your order has been completed.")
     }
 
     @Async
-    public CompletableFuture<Boolean> sendSmsAsync(String phoneNumber, String message) {
-        boolean result = smsSender.send(phoneNumber, message);
-        return CompletableFuture.completedFuture(result);
+    fun sendSmsAsync(phoneNumber: String, message: String): CompletableFuture<Boolean> {
+        val result = smsSender.send(phoneNumber, message)
+        return CompletableFuture.completedFuture(result)
     }
 }
 ```
 
-### 3. Using CompletableFuture
+### 2.3 Using CompletableFuture
 
-```java
+Running independent queries sequentially adds up their latencies. `CompletableFuture.supplyAsync` parallelizes them so only the slowest one determines the total wait time.
+
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class ProductAggregationService {
-
-    private final ProductService productService;
-    private final ReviewService reviewService;
-    private final InventoryService inventoryService;
-
+class ProductAggregationService(
+    private val productService: ProductService,
+    private val reviewService: ReviewService,
+    private val inventoryService: InventoryService
+) {
     /**
      * Fetch data from multiple services in parallel
      */
-    public ProductDetailResponse getProductDetail(Long productId) {
-        CompletableFuture<Product> productFuture =
-            CompletableFuture.supplyAsync(() -> productService.getProduct(productId));
-
-        CompletableFuture<List<Review>> reviewsFuture =
-            CompletableFuture.supplyAsync(() -> reviewService.getReviews(productId));
-
-        CompletableFuture<Integer> stockFuture =
-            CompletableFuture.supplyAsync(() -> inventoryService.getStock(productId));
+    fun getProductDetail(productId: Long): ProductDetailResponse {
+        val productFuture = CompletableFuture.supplyAsync { productService.getProduct(productId) }
+        val reviewsFuture = CompletableFuture.supplyAsync { reviewService.getReviews(productId) }
+        val stockFuture = CompletableFuture.supplyAsync { inventoryService.getStock(productId) }
 
         // Wait for all async tasks to complete
-        CompletableFuture.allOf(productFuture, reviewsFuture, stockFuture).join();
+        CompletableFuture.allOf(productFuture, reviewsFuture, stockFuture).join()
 
         return ProductDetailResponse.of(
             productFuture.join(),
             reviewsFuture.join(),
             stockFuture.join()
-        );
+        )
     }
 
     /**
      * With timeout
      */
-    public ProductDetailResponse getProductDetailWithTimeout(Long productId) {
-        try {
-            CompletableFuture<ProductDetailResponse> future = CompletableFuture.supplyAsync(() ->
-                getProductDetail(productId)
-            );
-
-            return future.get(5, TimeUnit.SECONDS);
-        } catch (TimeoutException e) {
-            throw new ServiceTimeoutException("Product detail fetch timeout");
-        } catch (Exception e) {
-            throw new ServiceException("Failed to fetch product detail", e);
+    fun getProductDetailWithTimeout(productId: Long): ProductDetailResponse {
+        return try {
+            val future = CompletableFuture.supplyAsync { getProductDetail(productId) }
+            future.get(5, TimeUnit.SECONDS)
+        } catch (e: TimeoutException) {
+            throw ServiceTimeoutException("Product detail fetch timeout")
+        } catch (e: Exception) {
+            throw ServiceException("Failed to fetch product detail", e)
         }
     }
 }
 ```
 
 <details>
-<summary>Sync vs Async: Decision Guide</summary>
+<summary><strong>Sync vs Async: Decision Guide</strong></summary>
 
 | Scenario | Recommended Approach | Reason |
 |----------|---------------------|--------|
@@ -370,301 +304,276 @@ public class ProductAggregationService {
 | Transaction required | Synchronous | Transaction propagation is difficult |
 | Multiple tasks in parallel | Asynchronous | Reduces processing time |
 
-**In assignments**: Processing tasks like notification sending asynchronously (when not needed for the response) can earn a good evaluation.
+**In assignments**: Processing tasks like notification sending asynchronously (when not needed in the response) can earn a good evaluation.
 
 </details>
 
 <details>
-<summary>Cautions When Using @Async</summary>
+<summary><strong>Cautions When Using @Async</strong></summary>
 
-1. **Cannot call within the same class**
-   - Proxy-based, so self-invocation runs synchronously
-   - Must be called from another Bean
-
-2. **Transaction propagation does not work**
-   - `@Async` methods run in a separate thread
-   - Add `@Transactional` if a new transaction is needed
-
-3. **Exception handling**
-   - Exceptions may be silently ignored with void return type
-   - `AsyncUncaughtExceptionHandler` configuration is essential
-
-4. **Thread pool exhaustion**
-   - Set queue capacity and max thread count appropriately
-   - Monitoring is required
+1. **Self-invocation doesn't work** — Proxy-based, so calling `@Async` methods from within the same class runs them synchronously. Always call from a different bean.
+2. **No transaction propagation** — `@Async` methods run in a separate thread. Add `@Transactional` explicitly if a new transaction is needed.
+3. **Exception handling** — Exceptions may be silently ignored with void return type. `AsyncUncaughtExceptionHandler` is essential.
+4. **Thread pool exhaustion** — Set queue capacity and max thread count appropriately. Monitoring is required.
 
 </details>
 
 ---
 
-## File Handling
+## 3. File Handling — Upload, Validation, and Storage Strategy
 
-### 1. File Upload
+### 3.1 File Upload
 
-```java
+<strong>MultipartFile</strong> is Spring's interface for extracting files from HTTP multipart requests. Accept it in the controller, pass it to the service, and validate before saving. Validating in the controller means the service can receive an incomplete file — keep validation in the service.
+
+```kotlin
 @RestController
 @RequestMapping("/api/v1/files")
-@RequiredArgsConstructor
-public class FileController {
-
-    private final FileService fileService;
-
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<FileUploadResponse> uploadFile(
-            @RequestParam("file") MultipartFile file) {
-
-        FileUploadResponse response = fileService.upload(file);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+class FileController(
+    private val fileService: FileService
+) {
+    @PostMapping(consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun uploadFile(@RequestParam("file") file: MultipartFile): ResponseEntity<FileUploadResponse> {
+        val response = fileService.upload(file)
+        return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
 
-    @PostMapping(value = "/multiple", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<List<FileUploadResponse>> uploadFiles(
-            @RequestParam("files") List<MultipartFile> files) {
-
-        List<FileUploadResponse> responses = fileService.uploadMultiple(files);
-        return ResponseEntity.status(HttpStatus.CREATED).body(responses);
+    @PostMapping(value = ["/multiple"], consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun uploadFiles(@RequestParam("files") files: List<MultipartFile>): ResponseEntity<List<FileUploadResponse>> {
+        val responses = fileService.uploadMultiple(files)
+        return ResponseEntity.status(HttpStatus.CREATED).body(responses)
     }
 }
 ```
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class FileService {
+class FileService(
+    @Value("\${file.upload-dir}") private val uploadDir: String
+) {
+    private val log = LoggerFactory.getLogger(this::class.java)
 
-    private static final Logger log = LoggerFactory.getLogger(FileService.class);
-    private static final List<String> ALLOWED_EXTENSIONS = List.of("jpg", "jpeg", "png", "gif", "pdf");
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    companion object {
+        private val ALLOWED_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "pdf")
+        private const val MAX_FILE_SIZE = 10L * 1024 * 1024 // 10MB
+    }
 
-    @Value("${file.upload-dir}")
-    private String uploadDir;
+    fun upload(file: MultipartFile): FileUploadResponse {
+        validateFile(file)
 
-    public FileUploadResponse upload(MultipartFile file) {
-        validateFile(file);
-
-        String originalFilename = file.getOriginalFilename();
-        String extension = getExtension(originalFilename);
-        String storedFilename = UUID.randomUUID() + "." + extension;
-        Path filePath = Paths.get(uploadDir, storedFilename);
+        val originalFilename = file.originalFilename ?: "unknown"
+        val extension = getExtension(originalFilename)
+        val storedFilename = "${UUID.randomUUID()}.$extension"
+        val filePath = Paths.get(uploadDir, storedFilename)
 
         try {
-            Files.createDirectories(filePath.getParent());
-            file.transferTo(filePath);
-
-            log.info("File uploaded: original={}, stored={}", originalFilename, storedFilename);
-
-            return new FileUploadResponse(storedFilename, originalFilename, file.getSize());
-        } catch (IOException e) {
-            throw new FileUploadException("Failed to upload file", e);
+            Files.createDirectories(filePath.parent)
+            file.transferTo(filePath)
+            log.info("File uploaded: original={}, stored={}", originalFilename, storedFilename)
+            return FileUploadResponse(storedFilename, originalFilename, file.size)
+        } catch (e: IOException) {
+            throw FileUploadException("Failed to upload file", e)
         }
     }
 
-    private void validateFile(MultipartFile file) {
-        if (file.isEmpty()) {
-            throw new InvalidFileException("File is empty");
-        }
-
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new InvalidFileException("File size exceeds limit");
-        }
-
-        String extension = getExtension(file.getOriginalFilename());
-        if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase())) {
-            throw new InvalidFileException("File type not allowed: " + extension);
+    private fun validateFile(file: MultipartFile) {
+        if (file.isEmpty) throw InvalidFileException("File is empty")
+        if (file.size > MAX_FILE_SIZE) throw InvalidFileException("File size exceeds limit")
+        val extension = getExtension(file.originalFilename ?: "")
+        if (extension.lowercase() !in ALLOWED_EXTENSIONS) {
+            throw InvalidFileException("File type not allowed: $extension")
         }
     }
 
-    private String getExtension(String filename) {
-        return filename.substring(filename.lastIndexOf(".") + 1);
-    }
+    private fun getExtension(filename: String): String =
+        filename.substringAfterLast(".", "")
 }
 ```
 
-### 2. File Download
+### 3.2 File Download
 
-```java
+The most important security concern in file download is path traversal defense. Call `resolve().normalize()` to canonicalize the path, then verify the result stays inside the upload directory.
+
+```kotlin
 @GetMapping("/{filename}")
-public ResponseEntity<Resource> downloadFile(@PathVariable String filename) {
-    Resource resource = fileService.loadAsResource(filename);
+fun downloadFile(@PathVariable filename: String): ResponseEntity<Resource> {
+    val resource = fileService.loadAsResource(filename)
 
-    String contentDisposition = ContentDisposition.attachment()
+    val contentDisposition = ContentDisposition.attachment()
         .filename(filename, StandardCharsets.UTF_8)
         .build()
-        .toString();
+        .toString()
 
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
         .contentType(MediaType.APPLICATION_OCTET_STREAM)
-        .body(resource);
+        .body(resource)
 }
 ```
 
-```java
-public Resource loadAsResource(String filename) {
-    try {
-        Path filePath = Paths.get(uploadDir).resolve(filename).normalize();
-        Resource resource = new UrlResource(filePath.toUri());
+```kotlin
+fun loadAsResource(filename: String): Resource {
+    val filePath = Paths.get(uploadDir).resolve(filename).normalize()
+    val resource = UrlResource(filePath.toUri())
 
-        if (resource.exists() && resource.isReadable()) {
-            return resource;
-        } else {
-            throw new FileNotFoundException("File not found: " + filename);
-        }
-    } catch (MalformedURLException e) {
-        throw new FileNotFoundException("File not found: " + filename, e);
+    return if (resource.exists() && resource.isReadable) {
+        resource
+    } else {
+        throw FileNotFoundException("File not found: $filename")
     }
 }
 ```
 
-### 3. S3 Integration (AWS)
+### 3.3 External Storage (S3)
 
-```groovy
-// build.gradle
-implementation 'software.amazon.awssdk:s3:2.21.0'
+Local file storage is difficult to share across multiple servers. S3 offers high scalability and durability and integrates easily with CDNs. Showing S3 integration or an interface abstraction earns bonus credit in assignments.
+
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("aws.sdk.s3", "software.amazon.awssdk:s3:2.21.0")
+        }
+    }
+}
 ```
 
-```java
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation(libs.aws.sdk.s3)
+}
+```
+
+```kotlin
 @Configuration
-public class S3Config {
-
-    @Value("${aws.region}")
-    private String region;
-
+class S3Config(
+    @Value("\${aws.region}") private val region: String
+) {
     @Bean
-    public S3Client s3Client() {
-        return S3Client.builder()
-            .region(Region.of(region))
-            .build();
-    }
+    fun s3Client(): S3Client = S3Client.builder()
+        .region(Region.of(region))
+        .build()
 }
 ```
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class S3FileService {
+class S3FileService(
+    private val s3Client: S3Client,
+    @Value("\${aws.s3.bucket}") private val bucket: String
+) {
+    fun upload(file: MultipartFile): String {
+        val key = "uploads/${UUID.randomUUID()}_${file.originalFilename}"
 
-    private final S3Client s3Client;
-
-    @Value("${aws.s3.bucket}")
-    private String bucket;
-
-    public String upload(MultipartFile file) {
-        String key = "uploads/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
-
-        try {
-            PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .contentType(file.getContentType())
-                .build();
-
-            s3Client.putObject(request, RequestBody.fromInputStream(
-                file.getInputStream(), file.getSize()));
-
-            return key;
-        } catch (IOException e) {
-            throw new FileUploadException("Failed to upload to S3", e);
-        }
-    }
-
-    public byte[] download(String key) {
-        GetObjectRequest request = GetObjectRequest.builder()
+        val request = PutObjectRequest.builder()
             .bucket(bucket)
             .key(key)
-            .build();
+            .contentType(file.contentType)
+            .build()
 
-        try (ResponseInputStream<GetObjectResponse> response = s3Client.getObject(request)) {
-            return response.readAllBytes();
-        } catch (IOException e) {
-            throw new FileDownloadException("Failed to download from S3", e);
+        try {
+            s3Client.putObject(request, RequestBody.fromInputStream(file.inputStream, file.size))
+            return key
+        } catch (e: IOException) {
+            throw FileUploadException("Failed to upload to S3", e)
         }
+    }
+
+    fun download(key: String): ByteArray {
+        val request = GetObjectRequest.builder()
+            .bucket(bucket)
+            .key(key)
+            .build()
+
+        return s3Client.getObject(request).use { it.readAllBytes() }
     }
 }
 ```
 
 <details>
-<summary>Local File vs Cloud Storage</summary>
+<summary><strong>Local File vs Cloud Storage</strong></summary>
 
 | Approach | Pros | Cons | When to Use |
 |----------|------|------|-------------|
-| **Local file** | Simple, no network cost | Difficult to share when scaling servers | Single server, development/testing |
+| **Local file** | Simple, no network cost | Difficult to share when scaling | Single server, development/testing |
 | **S3/GCS** | Scalability, durability, CDN integration | Cost, network latency | Production, large-scale |
 
-**Recommended for assignments**:
-- Basic: Implement with local file system
-- Bonus points: S3 integration or S3 interface abstraction
+**Recommended for assignments**: Implement with local file system as the base, and add S3 integration or interface abstraction for bonus credit.
 
 </details>
 
 ---
 
-## API Versioning
+## 4. API Versioning — URI · Header · Accept
 
-### 1. URI Versioning (Most Common)
+### 4.1 URI Versioning (Most Common)
 
-```java
+<strong>URI versioning</strong> includes the version number in the URL path (`/api/v1/...`). The URL itself declares the version, making it easy to document, and browsers, caches, and tests all work without special configuration.
+
+```kotlin
 @RestController
 @RequestMapping("/api/v1/products")
-public class ProductControllerV1 {
+class ProductControllerV1 {
 
     @GetMapping("/{id}")
-    public ProductResponseV1 getProduct(@PathVariable Long id) {
+    fun getProduct(@PathVariable id: Long): ProductResponseV1 {
         // V1 response
     }
 }
 
 @RestController
 @RequestMapping("/api/v2/products")
-public class ProductControllerV2 {
+class ProductControllerV2 {
 
     @GetMapping("/{id}")
-    public ProductResponseV2 getProduct(@PathVariable Long id) {
+    fun getProduct(@PathVariable id: Long): ProductResponseV2 {
         // V2 response (added fields, etc.)
     }
 }
 ```
 
-### 2. Header Versioning
+### 4.2 Header Versioning
 
-```java
+```kotlin
 @RestController
 @RequestMapping("/api/products")
-public class ProductController {
+class ProductController {
 
-    @GetMapping(value = "/{id}", headers = "X-API-VERSION=1")
-    public ProductResponseV1 getProductV1(@PathVariable Long id) {
+    @GetMapping(value = ["/{id}"], headers = ["X-API-VERSION=1"])
+    fun getProductV1(@PathVariable id: Long): ProductResponseV1 {
         // V1 response
     }
 
-    @GetMapping(value = "/{id}", headers = "X-API-VERSION=2")
-    public ProductResponseV2 getProductV2(@PathVariable Long id) {
+    @GetMapping(value = ["/{id}"], headers = ["X-API-VERSION=2"])
+    fun getProductV2(@PathVariable id: Long): ProductResponseV2 {
         // V2 response
     }
 }
 ```
 
-### 3. Accept Header Versioning
+### 4.3 Accept Header Versioning
 
-```java
+```kotlin
 @RestController
 @RequestMapping("/api/products")
-public class ProductController {
+class ProductController {
 
-    @GetMapping(value = "/{id}", produces = "application/vnd.myapp.v1+json")
-    public ProductResponseV1 getProductV1(@PathVariable Long id) {
+    @GetMapping(value = ["/{id}"], produces = ["application/vnd.myapp.v1+json"])
+    fun getProductV1(@PathVariable id: Long): ProductResponseV1 {
         // V1 response
     }
 
-    @GetMapping(value = "/{id}", produces = "application/vnd.myapp.v2+json")
-    public ProductResponseV2 getProductV2(@PathVariable Long id) {
+    @GetMapping(value = ["/{id}"], produces = ["application/vnd.myapp.v2+json"])
+    fun getProductV2(@PathVariable id: Long): ProductResponseV2 {
         // V2 response
     }
 }
 ```
 
 <details>
-<summary>Versioning Strategy Comparison</summary>
+<summary><strong>Versioning Strategy Comparison</strong></summary>
 
 | Approach | Pros | Cons |
 |----------|------|------|
@@ -673,179 +582,171 @@ public class ProductController {
 | **Accept** | RESTful | Complex, harder to understand |
 | **Parameter** | Simple | Confused with optional parameters |
 
-**Recommended for assignments**: URI versioning (`/api/v1/...`) is the most clear and common approach
+**Recommended for assignments**: URI versioning (`/api/v1/...`) is the clearest and most common approach.
 
 </details>
 
 ---
 
-## Architecture Patterns
+## 5. Architecture Patterns — Layered · Hexagonal · CQRS
 
-### 1. Layered Architecture (Default)
+### 5.1 Layered Architecture (Default)
 
-```
-+-----------------------------------------+
-|         Controller (Presentation)       |
-+-----------------------------------------+
-|            Service (Business)           |
-+-----------------------------------------+
-|         Repository (Persistence)        |
-+-----------------------------------------+
-|              Domain (Entity)            |
-+-----------------------------------------+
-```
+<strong>Layered architecture</strong> divides responsibilities across four layers: Controller → Service → Repository → Domain. This is the default structure used in most assignments.
 
-This is the basic structure used in most assignments.
+```mermaid
+flowchart TB
+    Controller["Controller<br/>(Presentation)"]
+    Service["Service<br/>(Business)"]
+    Repository["Repository<br/>(Persistence)"]
+    Domain["Domain<br/>(Entity)"]
 
-### 2. Hexagonal Architecture (Ports and Adapters)
-
-```
-                    +-----------------+
-    Driving         |                 |        Driven
-    Adapters        |    Application  |        Adapters
-                    |      Core       |
-+----------+       |                 |       +----------+
-|Controller|------>|  +-----------+  |------>|Repository|
-+----------+       |  |  Domain   |  |       +----------+
-                    |  |  Service  |  |
-+----------+       |  +-----------+  |       +----------+
-|  Event   |------>|                 |------>| External |
-| Listener |       |                 |       |   API    |
-+----------+       +-----------------+       +----------+
+    Controller --> Service --> Repository --> Domain
 ```
 
+### 5.2 Hexagonal Architecture (Ports and Adapters)
+
+<strong>Hexagonal architecture</strong> places the Application Core at the center and treats external systems (controllers, databases, external APIs) as adapters. The Application Core knows only ports (interfaces) — it has no knowledge of specific technologies.
+
+```mermaid
+flowchart LR
+    subgraph Driving["Driving Adapters"]
+        Ctl[Controller]
+        Lst[Event Listener]
+    end
+
+    subgraph Core["Application Core"]
+        Svc[Domain Service]
+    end
+
+    subgraph Driven["Driven Adapters"]
+        Repo[Repository]
+        Ext[External API]
+    end
+
+    Ctl -->|inbound port| Svc
+    Lst -->|inbound port| Svc
+    Svc -->|outbound port| Repo
+    Svc -->|outbound port| Ext
 ```
-src/main/java/com/example/
+
+```
+src/main/kotlin/com/example/
 ├── application/              # Application Layer
 │   ├── port/
 │   │   ├── in/              # Inbound Ports (Use Cases)
-│   │   │   └── CreateOrderUseCase.java
+│   │   │   └── CreateOrderUseCase.kt
 │   │   └── out/             # Outbound Ports
-│   │       ├── OrderRepository.java
-│   │       └── PaymentGateway.java
+│   │       ├── OrderRepository.kt
+│   │       └── PaymentGateway.kt
 │   └── service/
-│       └── OrderService.java
+│       └── OrderService.kt
 ├── domain/                   # Domain Layer
-│   ├── Order.java
-│   └── OrderItem.java
+│   ├── Order.kt
+│   └── OrderItem.kt
 └── adapter/                  # Adapter Layer
     ├── in/
     │   └── web/
-    │       └── OrderController.java
+    │       └── OrderController.kt
     └── out/
         ├── persistence/
-        │   └── OrderJpaAdapter.java
+        │   └── OrderJpaAdapter.kt
         └── external/
-            └── PaymentGatewayAdapter.java
+            └── PaymentGatewayAdapter.kt
 ```
 
-```java
+```kotlin
 // Inbound Port (Use Case Interface)
-public interface CreateOrderUseCase {
-    Long createOrder(CreateOrderCommand command);
+interface CreateOrderUseCase {
+    fun createOrder(command: CreateOrderCommand): Long
 }
 
 // Outbound Port
-public interface OrderRepository {
-    Order save(Order order);
-    Optional<Order> findById(Long id);
+interface OrderRepository {
+    fun save(order: Order): Order
+    fun findById(id: Long): Optional<Order>
 }
 
 // Application Service
 @Service
-@RequiredArgsConstructor
-public class OrderService implements CreateOrderUseCase {
+class OrderService(
+    private val orderRepository: OrderRepository,  // Uses Port
+    private val paymentGateway: PaymentGateway     // Uses Port
+) : CreateOrderUseCase {
 
-    private final OrderRepository orderRepository;  // Uses Port
-    private final PaymentGateway paymentGateway;    // Uses Port
-
-    @Override
     @Transactional
-    public Long createOrder(CreateOrderCommand command) {
-        Order order = Order.create(command);
-        orderRepository.save(order);
-        paymentGateway.process(order);
-        return order.getId();
+    override fun createOrder(command: CreateOrderCommand): Long {
+        val order = Order.create(command)
+        orderRepository.save(order)
+        paymentGateway.process(order)
+        return order.id!!
     }
 }
 
 // Outbound Adapter
 @Repository
-@RequiredArgsConstructor
-public class OrderJpaAdapter implements OrderRepository {
+class OrderJpaAdapter(
+    private val jpaRepository: OrderJpaRepository
+) : OrderRepository {
 
-    private final OrderJpaRepository jpaRepository;
+    override fun save(order: Order): Order = jpaRepository.save(order)
 
-    @Override
-    public Order save(Order order) {
-        return jpaRepository.save(order);
-    }
-
-    @Override
-    public Optional<Order> findById(Long id) {
-        return jpaRepository.findById(id);
-    }
+    override fun findById(id: Long): Optional<Order> = jpaRepository.findById(id)
 }
 ```
 
-### 3. CQRS (Command Query Responsibility Segregation)
+### 5.3 CQRS (Command Query Responsibility Segregation)
 
-A pattern that separates commands (writes) and queries (reads).
+<strong>CQRS</strong> separates commands (writes) and queries (reads) into distinct models. When a single Service class mixes `@Transactional` and `@Transactional(readOnly = true)`, the read path carries unnecessary write overhead.
 
 ```
-src/main/java/com/example/order/
+src/main/kotlin/com/example/order/
 ├── command/                  # Command (Write)
-│   ├── CreateOrderCommand.java
-│   ├── OrderCommandService.java
-│   └── OrderCommandRepository.java
+│   ├── CreateOrderCommand.kt
+│   ├── OrderCommandService.kt
+│   └── OrderCommandRepository.kt
 └── query/                    # Query (Read)
-    ├── OrderQueryService.java
-    ├── OrderQueryRepository.java
-    └── OrderDetailResponse.java
+    ├── OrderQueryService.kt
+    ├── OrderQueryRepository.kt
+    └── OrderDetailResponse.kt
 ```
 
-```java
+```kotlin
 // Command Service (Write)
 @Service
-@RequiredArgsConstructor
 @Transactional
-public class OrderCommandService {
-
-    private final OrderRepository orderRepository;
-
-    public Long createOrder(CreateOrderCommand command) {
-        Order order = Order.create(command);
-        return orderRepository.save(order).getId();
+class OrderCommandService(
+    private val orderRepository: OrderRepository
+) {
+    fun createOrder(command: CreateOrderCommand): Long {
+        val order = Order.create(command)
+        return orderRepository.save(order).id!!
     }
 
-    public void cancelOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new OrderNotFoundException(orderId));
-        order.cancel();
+    fun cancelOrder(orderId: Long) {
+        val order = orderRepository.findById(orderId)
+            ?: throw OrderNotFoundException(orderId)
+        order.cancel()
     }
 }
 
 // Query Service (Read)
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class OrderQueryService {
+class OrderQueryService(
+    private val queryRepository: OrderQueryRepository
+) {
+    fun getOrderDetail(orderId: Long): OrderDetailResponse =
+        queryRepository.findOrderDetail(orderId)
+            ?: throw OrderNotFoundException(orderId)
 
-    private final OrderQueryRepository queryRepository;
-
-    public OrderDetailResponse getOrderDetail(Long orderId) {
-        return queryRepository.findOrderDetail(orderId)
-            .orElseThrow(() -> new OrderNotFoundException(orderId));
-    }
-
-    public Page<OrderSummaryResponse> getMyOrders(Long memberId, Pageable pageable) {
-        return queryRepository.findOrdersByMemberId(memberId, pageable);
-    }
+    fun getMyOrders(memberId: Long, pageable: Pageable): Page<OrderSummaryResponse> =
+        queryRepository.findOrdersByMemberId(memberId, pageable)
 }
 ```
 
 <details>
-<summary>Beware of Architecture Over-Engineering</summary>
+<summary><strong>Beware of Architecture Over-Engineering</strong></summary>
 
 **Architecture selection for assignments**:
 
@@ -855,39 +756,33 @@ public class OrderQueryService {
 | Complex domain | Layered + DDD elements (domain services, value objects) |
 | Read/write separation needed | Partial CQRS adoption |
 
-**Caution**:
-- Assignments typically need to be completed within 1-2 weeks
-- Excessive abstraction can actually lead to point deductions
-- State your architecture choice rationale in the README
+**Caution**: Assignments typically need to be completed within 1–2 weeks. Excessive abstraction can actually lead to point deductions. State your architecture choice rationale in the README.
 
-**When to apply Hexagonal**:
-- Assignments with many external system integrations
-- Assignments where testability is emphasized
-- When clean architecture is explicitly required
+**When to apply Hexagonal**: Assignments with many external system integrations, where testability is emphasized, or when clean architecture is explicitly required.
 
 </details>
 
 ---
 
-## Multi-Module Projects
+## 6. Multi-Module Projects — Option A vs Option B
 
-### 1. What is Multi-Module?
+### 6.1 What is Multi-Module?
 
-A structure that separates a single project into multiple modules to achieve separation of concerns and clarify dependencies.
+<strong>Multi-module</strong> splits a single Gradle project into sub-modules to separate concerns and enforce dependency direction at the build system level — not just at the code level. That enforcement is what distinguishes it from a single module.
 
 ```
 marketplace/
-├── build.gradle (root)
-├── settings.gradle
+├── build.gradle.kts (root)
+├── settings.gradle.kts
 ├── marketplace-api/           # API module (Controller, execution)
 ├── marketplace-domain/        # Domain module (Entity, Service)
 ├── marketplace-infra/         # Infrastructure module (Repository, external integration)
 └── marketplace-common/        # Common module (Utils, Exception)
 ```
 
-### 2. Multi-Module Structure Options
+### 6.2 Multi-Module Structure Options
 
-There are two approaches to multi-module design.
+There are two approaches to multi-module design. Choose one before starting and apply it consistently — mixing them breaks dependency direction.
 
 | Option | Characteristics | Service Location | Repository Handling |
 |--------|----------------|-----------------|-------------------|
@@ -895,37 +790,22 @@ There are two approaches to multi-module design.
 | **Option B (Simplified)** | Pragmatic approach | api module | Direct JpaRepository usage |
 
 <details>
-<summary>Which option should you choose?</summary>
+<summary><strong>Which option should you choose?</strong></summary>
 
-**When to choose Option A**:
-- When clean architecture is explicitly required
-- When there are many external integrations (payments, notifications) making test isolation important
-- When you want to completely separate domain logic from infrastructure technology
+**When to choose Option A**: Clean architecture is explicitly required; many external integrations (payments, notifications) make test isolation important; domain logic must be fully decoupled from infrastructure technology.
 
-**When to choose Option B**:
-- When you want a pragmatic and simple structure
-- When you want to use JPA/QueryDSL directly in the domain layer
-- When the Repository wrapper layer only does simple delegation
+**When to choose Option B**: A pragmatic and simple structure is wanted; JPA/QueryDSL is used directly in the domain layer; the Repository wrapper layer only does simple delegation.
 
 For most assignments, **Option B** is sufficient and helps avoid over-engineering.
 
 </details>
 
-#### settings.gradle
+### 6.3 Gradle Setup (Kotlin DSL)
 
-```groovy
-rootProject.name = 'marketplace'
-
-include 'marketplace-api'
-include 'marketplace-domain'
-include 'marketplace-infra'
-include 'marketplace-common'
-```
-
-<details>
-<summary>Kotlin DSL (settings.gradle.kts)</summary>
+Kotlin doesn't use Lombok. Kotlin primary constructors with `val` parameters naturally replace everything Lombok provides.
 
 ```kotlin
+// settings.gradle.kts
 rootProject.name = "marketplace"
 
 include("marketplace-api")
@@ -934,64 +814,14 @@ include("marketplace-infra")
 include("marketplace-common")
 ```
 
-</details>
-
-#### Root build.gradle
-
-```groovy
-plugins {
-    id 'java'
-    id 'org.springframework.boot' version '3.2.0'
-    id 'io.spring.dependency-management' version '1.1.4'
-}
-
-allprojects {
-    group = 'com.example'
-    version = '1.0.0'
-
-    repositories {
-        mavenCentral()
-    }
-}
-
-subprojects {
-    apply plugin: 'java'
-    apply plugin: 'io.spring.dependency-management'
-
-    java {
-        sourceCompatibility = JavaVersion.VERSION_17
-    }
-
-    dependencies {
-        compileOnly 'org.projectlombok:lombok'
-        annotationProcessor 'org.projectlombok:lombok'
-        testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    }
-
-    dependencyManagement {
-        imports {
-            mavenBom "org.springframework.boot:spring-boot-dependencies:3.2.0"
-        }
-    }
-
-    test {
-        useJUnitPlatform()
-    }
-}
-
-// Root project does not build
-bootJar.enabled = false
-jar.enabled = false
-```
-
-<details>
-<summary>Kotlin DSL (build.gradle.kts)</summary>
-
 ```kotlin
+// build.gradle.kts (root)
 plugins {
-    java
-    id("org.springframework.boot") version "3.2.0"
-    id("io.spring.dependency-management") version "1.1.4"
+    kotlin("jvm") version "2.3" apply false
+    kotlin("plugin.spring") version "2.3" apply false
+    kotlin("plugin.jpa") version "2.3" apply false
+    id("org.springframework.boot") version "4.0.0" apply false
+    id("io.spring.dependency-management") version "1.1.4" apply false
 }
 
 allprojects {
@@ -1004,22 +834,20 @@ allprojects {
 }
 
 subprojects {
-    apply(plugin = "java")
+    apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "io.spring.dependency-management")
 
-    configure<JavaPluginExtension> {
-        sourceCompatibility = JavaVersion.VERSION_17
+    kotlin {
+        jvmToolchain(21)
     }
 
     the<io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension>().apply {
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:3.2.0")
+            mavenBom("org.springframework.boot:spring-boot-dependencies:4.0.0")
         }
     }
 
     dependencies {
-        "compileOnly"("org.projectlombok:lombok")
-        "annotationProcessor"("org.projectlombok:lombok")
         "testImplementation"("org.springframework.boot:spring-boot-starter-test")
     }
 
@@ -1037,14 +865,10 @@ tasks.named<Jar>("jar") {
 }
 ```
 
-</details>
-
-### 3. Module Configuration
-
 #### marketplace-common (Common Module)
 
-```groovy
-// marketplace-common/build.gradle
+```kotlin
+// marketplace-common/build.gradle.kts
 dependencies {
     // Only common utilities
 }
@@ -1052,331 +876,324 @@ dependencies {
 
 ```
 marketplace-common/
-└── src/main/java/com/example/common/
+└── src/main/kotlin/com/example/common/
     ├── exception/
-    │   ├── BusinessException.java
-    │   ├── ErrorCode.java
-    │   └── ErrorResponse.java
+    │   ├── BusinessException.kt
+    │   ├── ErrorCode.kt
+    │   └── ErrorResponse.kt
     └── util/
-        └── DateUtils.java
+        └── DateUtils.kt
 ```
 
 #### marketplace-domain (Domain Module)
 
-```groovy
-// marketplace-domain/build.gradle
+```kotlin
+// marketplace-domain/build.gradle.kts
 dependencies {
-    implementation project(':marketplace-common')
+    implementation(project(":marketplace-common"))
 
     // JPA
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
     // Validation
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation("org.springframework.boot:spring-boot-starter-validation")
 }
 ```
 
 <details>
-<summary>Option A (Canonical) - Entity, Service, Repository Interface</summary>
+<summary><strong>Option A (Canonical) — Entity, Service, Repository Interface</strong></summary>
 
 ```
 marketplace-domain/
-└── src/main/java/com/example/domain/
+└── src/main/kotlin/com/example/domain/
     ├── member/
-    │   ├── Member.java
-    │   ├── MemberRepository.java (interface)
-    │   └── MemberService.java
+    │   ├── Member.kt
+    │   ├── MemberRepository.kt (interface)
+    │   └── MemberService.kt
     ├── product/
-    │   ├── Product.java
-    │   ├── ProductRepository.java (interface)
-    │   └── ProductService.java
+    │   ├── Product.kt
+    │   ├── ProductRepository.kt (interface)
+    │   └── ProductService.kt
     └── order/
-        ├── Order.java
-        ├── OrderRepository.java (interface)
-        └── OrderService.java
+        ├── Order.kt
+        ├── OrderRepository.kt (interface)
+        └── OrderService.kt
 ```
 
 </details>
 
-<details open>
-<summary>Option B (Simplified) - Entity Only</summary>
+<details>
+<summary><strong>Option B (Simplified) — Entity Only</strong></summary>
 
 ```
 marketplace-domain/
-└── src/main/java/com/example/domain/
+└── src/main/kotlin/com/example/domain/
     ├── common/
-    │   └── BaseEntity.java
+    │   └── BaseEntity.kt
     ├── member/
-    │   ├── Member.java
-    │   └── Role.java
+    │   ├── Member.kt
+    │   └── Role.kt
     ├── product/
-    │   ├── Product.java
-    │   ├── ProductImage.java
-    │   └── ProductStatus.java
+    │   ├── Product.kt
+    │   ├── ProductImage.kt
+    │   └── ProductStatus.kt
     ├── order/
-    │   ├── Order.java
-    │   ├── OrderItem.java
-    │   └── OrderStatus.java
+    │   ├── Order.kt
+    │   ├── OrderItem.kt
+    │   └── OrderStatus.kt
     └── category/
-        └── Category.java
+        └── Category.kt
 ```
 
-Services are located in the api module, and Repositories directly use JpaRepository from the infra module.
+Services live in the api module, and Repositories directly use JpaRepository from the infra module.
 
 </details>
 
 #### marketplace-infra (Infrastructure Module)
 
-```groovy
-// marketplace-infra/build.gradle
+QueryDSL follows the kapt pattern from §5.2 of Part 4. Use `kapt` instead of `annotationProcessor` to generate Q-classes from Kotlin source files.
+
+```kotlin
+// marketplace-infra/build.gradle.kts
+plugins {
+    kotlin("kapt") version "2.3"
+}
+
 dependencies {
-    implementation project(':marketplace-common')
-    implementation project(':marketplace-domain')
+    implementation(project(":marketplace-common"))
+    implementation(project(":marketplace-domain"))
 
     // JPA implementation
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    runtimeOnly 'com.h2database:h2'
-    runtimeOnly 'com.mysql:mysql-connector-j'
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    runtimeOnly("com.h2database:h2")
+    runtimeOnly("com.mysql:mysql-connector-j")
 
     // QueryDSL (optional)
-    implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
-    annotationProcessor 'com.querydsl:querydsl-apt:5.0.0:jakarta'
+    implementation("com.querydsl:querydsl-jpa:5.0.0:jakarta")
+    kapt("com.querydsl:querydsl-apt:5.0.0:jakarta")
+    kapt("jakarta.annotation:jakarta.annotation-api")
+    kapt("jakarta.persistence:jakarta.persistence-api")
 
     // Redis (optional)
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
 }
 ```
 
 <details>
-<summary>Option A (Canonical) - Repository Implementation</summary>
+<summary><strong>Option A (Canonical) — Repository Implementation</strong></summary>
 
 ```
 marketplace-infra/
-└── src/main/java/com/example/infra/
+└── src/main/kotlin/com/example/infra/
     ├── persistence/
     │   ├── member/
-    │   │   ├── MemberJpaRepository.java
-    │   │   └── MemberRepositoryImpl.java
+    │   │   ├── MemberJpaRepository.kt
+    │   │   └── MemberRepositoryImpl.kt
     │   ├── product/
-    │   │   └── ProductRepositoryImpl.java
+    │   │   └── ProductRepositoryImpl.kt
     │   └── order/
-    │       └── OrderRepositoryImpl.java
+    │       └── OrderRepositoryImpl.kt
     ├── cache/
-    │   └── RedisCacheConfig.java
+    │   └── RedisCacheConfig.kt
     └── external/
-        └── PaymentGatewayClient.java
+        └── PaymentGatewayClient.kt
 ```
 
 </details>
 
-<details open>
-<summary>Option B (Simplified) - Direct JpaRepository + QueryDSL Usage</summary>
+<details>
+<summary><strong>Option B (Simplified) — Direct JpaRepository + QueryDSL Usage</strong></summary>
 
 ```
 marketplace-infra/
-└── src/main/java/com/example/infra/
+└── src/main/kotlin/com/example/infra/
     ├── member/
-    │   └── MemberJpaRepository.java
+    │   └── MemberJpaRepository.kt
     ├── product/
-    │   ├── ProductJpaRepository.java
-    │   ├── ProductJpaRepositoryCustom.java
-    │   └── ProductJpaRepositoryImpl.java (QueryDSL)
+    │   ├── ProductJpaRepository.kt
+    │   ├── ProductJpaRepositoryCustom.kt
+    │   └── ProductJpaRepositoryImpl.kt (QueryDSL)
     ├── order/
-    │   ├── OrderJpaRepository.java
-    │   ├── OrderJpaRepositoryCustom.java
-    │   └── OrderJpaRepositoryImpl.java (QueryDSL)
+    │   ├── OrderJpaRepository.kt
+    │   ├── OrderJpaRepositoryCustom.kt
+    │   └── OrderJpaRepositoryImpl.kt (QueryDSL)
     └── category/
-        └── CategoryJpaRepository.java
+        └── CategoryJpaRepository.kt
 ```
 
-Using the QueryDSL Custom Repository pattern, complex dynamic queries can also be integrated into the JpaRepository interface.
+Using the QueryDSL Custom Repository pattern integrates complex dynamic queries directly into the JpaRepository interface.
 
 </details>
 
 #### marketplace-api (API Module)
 
-```groovy
-// marketplace-api/build.gradle
+Part 5 adopted the `oauth2-resource-server` pattern for JWT, so multi-module follows the same approach — replace three JJWT dependencies with a single `spring-boot-starter-oauth2-resource-server` dependency.
+
+```kotlin
+// marketplace-api/build.gradle.kts
 plugins {
-    id 'org.springframework.boot'
+    id("org.springframework.boot")
+    kotlin("plugin.spring") version "2.3"
 }
 
 dependencies {
-    implementation project(':marketplace-common')
-    implementation project(':marketplace-domain')
-    implementation project(':marketplace-infra')
+    implementation(project(":marketplace-common"))
+    implementation(project(":marketplace-domain"))
+    implementation(project(":marketplace-infra"))
 
     // Web
-    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation("org.springframework.boot:spring-boot-starter-web")
 
-    // Security
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+    // Security (oauth2-resource-server pattern from Part 5)
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
 
     // Swagger
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
 }
 
-bootJar {
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     enabled = true
-    archiveFileName = 'marketplace-api.jar'
+    archiveFileName.set("marketplace-api.jar")
 }
 ```
 
 <details>
-<summary>Option A (Canonical) - Controller and Security Only</summary>
+<summary><strong>Option A (Canonical) — Controller and Security Only</strong></summary>
 
 ```
 marketplace-api/
-└── src/main/java/com/example/api/
-    ├── MarketplaceApplication.java
+└── src/main/kotlin/com/example/api/
+    ├── MarketplaceApplication.kt
     ├── config/
-    │   ├── SecurityConfig.java
-    │   └── SwaggerConfig.java
+    │   ├── SecurityConfig.kt
+    │   └── SwaggerConfig.kt
     ├── controller/
-    │   ├── MemberController.java
-    │   ├── ProductController.java
-    │   └── OrderController.java
+    │   ├── MemberController.kt
+    │   ├── ProductController.kt
+    │   └── OrderController.kt
     ├── dto/
     │   ├── request/
     │   └── response/
     └── security/
-        ├── JwtTokenProvider.java
-        └── JwtAuthenticationFilter.java
+        └── SecurityConfig.kt
 ```
 
 </details>
 
-<details open>
-<summary>Option B (Simplified) - Controller, Service, and Security Included</summary>
+<details>
+<summary><strong>Option B (Simplified) — Controller, Service, and Security Included</strong></summary>
 
 ```
 marketplace-api/
-└── src/main/java/com/example/api/
-    ├── MarketplaceApplication.java
+└── src/main/kotlin/com/example/api/
+    ├── MarketplaceApplication.kt
     ├── config/
-    │   ├── SecurityConfig.java
-    │   ├── SwaggerConfig.java
-    │   └── DataInitializer.java
+    │   ├── SecurityConfig.kt
+    │   ├── SwaggerConfig.kt
+    │   └── DataInitializer.kt
     ├── member/
-    │   ├── MembersController.java
-    │   ├── AuthController.java
-    │   ├── AuthService.java
-    │   ├── MemberService.java
+    │   ├── MembersController.kt
+    │   ├── AuthController.kt
+    │   ├── AuthService.kt
+    │   ├── MemberService.kt
     │   └── dto/
     ├── product/
-    │   ├── ProductController.java
-    │   ├── ProductService.java
+    │   ├── ProductController.kt
+    │   ├── ProductService.kt
     │   └── dto/
     ├── order/
-    │   ├── OrderController.java
-    │   ├── OrderService.java
+    │   ├── OrderController.kt
+    │   ├── OrderService.kt
     │   ├── dto/
     │   └── event/
     ├── category/
-    │   ├── CategoryController.java
-    │   └── CategoryService.java
+    │   ├── CategoryController.kt
+    │   └── CategoryService.kt
     └── security/
-        ├── JwtTokenProvider.java
-        └── JwtAuthenticationFilter.java
+        └── SecurityConfig.kt
 ```
 
-Since Services are in the api module, organizing by domain package increases cohesion.
+Since Services are in the api module, organizing by domain package keeps cohesion high.
 
 </details>
 
-### 4. Module Dependency Rules
+### 6.4 Module Dependency Rules
 
-#### Option A (Canonical) - Dependency Inversion Applied
+In both options, domain → infra dependency is forbidden. This is the core rule of multi-module design.
 
-```
-+-----------------------+
-|  marketplace-api      |  <- Controller, Security
-+-----------------------+
-|     depends on        |
-+-----------------------+
-| marketplace-domain    |  <- Entity, Service, Repository interface
-+-----------------------+
-| (does not depend)     |  <- domain does NOT depend on infra!
-+-----------------------+
-| marketplace-infra     |  <- Repository implementation (implements domain interfaces)
-+-----------------------+
-|     depends on        |
-+-----------------------+
-| marketplace-common    |  <- Common utils, exceptions
-+-----------------------+
+#### Option A (Canonical) — Dependency Inversion Applied
+
+```mermaid
+flowchart TB
+    Api[marketplace-api<br/>Controller · Security]
+    Domain[marketplace-domain<br/>Entity · Service · Repository interface]
+    Infra[marketplace-infra<br/>Repository implementation]
+    Common[marketplace-common<br/>Common utils · Exceptions]
+
+    Api --> Domain
+    Api --> Infra
+    Infra --> Domain
+    Domain --> Common
+    Infra --> Common
 ```
 
-**Key point**: domain -> infra dependency is prohibited, Repository interface/implementation is separated
+**Key point**: No domain → infra dependency. Arrows always point toward the domain.
 
-#### Option B (Simplified) - Pragmatic Approach
+#### Option B (Simplified) — Pragmatic Approach
 
+```mermaid
+flowchart TB
+    Api[marketplace-api<br/>Controller · Service · Security]
+    Domain[marketplace-domain<br/>Entity only]
+    Infra[marketplace-infra<br/>JpaRepository · QueryDSL]
+    Common[marketplace-common]
+
+    Api --> Domain
+    Api --> Infra
+    Domain --> Common
+    Infra --> Common
+    Infra --> Domain
 ```
-+-----------------------+
-|  marketplace-api      |  <- Controller, Service, Security
-+-----------------------+
-|     depends on        |
-+-----------------------+
-| marketplace-domain    |  <- Entity only
-| marketplace-infra     |  <- JpaRepository, QueryDSL
-+-----------------------+
-|     depends on        |
-+-----------------------+
-| marketplace-common    |  <- Common utils, exceptions
-+-----------------------+
-```
 
-**Key point**: api combines and uses both domain and infra. domain contains only pure Entities
+**Key point**: api combines both domain and infra. domain contains only pure Entities.
 
-### 5. Repository Implementation Patterns
+### 6.5 Repository Implementation Patterns
 
 #### Option A: Interface/Implementation Separation (DIP)
 
-```java
-// marketplace-domain/src/.../ProductRepository.java (interface)
-public interface ProductRepository {
-    Product save(Product product);
-    Optional<Product> findById(Long id);
-    List<Product> findByCategory(Category category);
-    Page<Product> search(ProductSearchCondition condition, Pageable pageable);
+```kotlin
+// marketplace-domain/src/.../ProductRepository.kt (interface)
+interface ProductRepository {
+    fun save(product: Product): Product
+    fun findById(id: Long): Optional<Product>
+    fun findByCategory(category: Category): List<Product>
+    fun search(condition: ProductSearchCondition, pageable: Pageable): Page<Product>
 }
 ```
 
-```java
-// marketplace-infra/src/.../ProductRepositoryImpl.java (implementation)
+```kotlin
+// marketplace-infra/src/.../ProductRepositoryImpl.kt (implementation)
 @Repository
-@RequiredArgsConstructor
-public class ProductRepositoryImpl implements ProductRepository {
+class ProductRepositoryImpl(
+    private val jpaRepository: ProductJpaRepository,
+    private val queryRepository: ProductQueryRepository
+) : ProductRepository {
 
-    private final ProductJpaRepository jpaRepository;
-    private final ProductQueryRepository queryRepository;
+    override fun save(product: Product): Product = jpaRepository.save(product)
 
-    @Override
-    public Product save(Product product) {
-        return jpaRepository.save(product);
-    }
+    override fun findById(id: Long): Optional<Product> = jpaRepository.findById(id)
 
-    @Override
-    public Optional<Product> findById(Long id) {
-        return jpaRepository.findById(id);
-    }
+    override fun findByCategory(category: Category): List<Product> =
+        jpaRepository.findByCategory(category)
 
-    @Override
-    public List<Product> findByCategory(Category category) {
-        return jpaRepository.findByCategory(category);
-    }
-
-    @Override
-    public Page<Product> search(ProductSearchCondition condition, Pageable pageable) {
-        return queryRepository.search(condition, pageable);
-    }
+    override fun search(condition: ProductSearchCondition, pageable: Pageable): Page<Product> =
+        queryRepository.search(condition, pageable)
 }
 
 // JPA Repository (used only within infra)
-interface ProductJpaRepository extends JpaRepository<Product, Long> {
-    List<Product> findByCategory(Category category);
+interface ProductJpaRepository : JpaRepository<Product, Long> {
+    fun findByCategory(category: Category): List<Product>
 }
 ```
 
@@ -1493,7 +1310,7 @@ class ProductService(
 ```
 
 <details>
-<summary>Option A vs Option B Comparison</summary>
+<summary><strong>Option A vs Option B Comparison</strong></summary>
 
 | Criteria | Option A (DIP) | Option B (QueryDSL Custom) |
 |----------|---------------|---------------------------|
@@ -1507,7 +1324,7 @@ class ProductService(
 
 </details>
 
-### 6. Build and Run
+### 6.6 Build and Run
 
 ```bash
 # Full build
@@ -1524,21 +1341,23 @@ class ProductService(
 # -> marketplace-api/build/libs/marketplace-api.jar
 ```
 
-### 7. Docker Configuration (Multi-Module)
+### 6.7 Docker Configuration (Multi-Module)
+
+Follow the multi-stage pattern from Part 6. The Builder stage uses `gradle:8.10-jdk21`, and the build file copy includes `.kts` extensions.
 
 ```dockerfile
 # Dockerfile
-FROM gradle:8.5-jdk17 AS builder
+FROM gradle:8.10-jdk21 AS builder
 
 WORKDIR /app
 
 # Copy Gradle files first (caching)
-COPY build.gradle settings.gradle ./
+COPY build.gradle.kts settings.gradle.kts ./
 COPY gradle ./gradle
-COPY marketplace-common/build.gradle ./marketplace-common/
-COPY marketplace-domain/build.gradle ./marketplace-domain/
-COPY marketplace-infra/build.gradle ./marketplace-infra/
-COPY marketplace-api/build.gradle ./marketplace-api/
+COPY marketplace-common/build.gradle.kts ./marketplace-common/
+COPY marketplace-domain/build.gradle.kts ./marketplace-domain/
+COPY marketplace-infra/build.gradle.kts ./marketplace-infra/
+COPY marketplace-api/build.gradle.kts ./marketplace-api/
 
 RUN gradle dependencies --no-daemon || true
 
@@ -1547,7 +1366,7 @@ COPY . .
 RUN gradle :marketplace-api:bootJar --no-daemon -x test
 
 # Runtime
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 COPY --from=builder /app/marketplace-api/build/libs/marketplace-api.jar app.jar
@@ -1560,7 +1379,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
 <details>
-<summary>Single Module vs Multi-Module</summary>
+<summary><strong>Single Module vs Multi-Module</strong></summary>
 
 | Aspect | Single Module | Multi-Module |
 |--------|--------------|-------------|
@@ -1582,141 +1401,83 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 </details>
 
-<details>
-<summary>Multi-Module Design Tips</summary>
+---
 
-**1. Prevent circular dependencies**
+## Recap
+
+- <strong>Event-driven architecture</strong> — `@TransactionalEventListener(AFTER_COMMIT)` decouples notifications and logging from domain logic, reducing coupling and making each independently testable.
+- <strong>Async processing</strong> — The `@Async` + `AsyncUncaughtExceptionHandler` pair must be configured together so exceptions never disappear silently. Self-invocation always runs synchronously — always call from a different bean.
+- <strong>File handling</strong> — Validation (size, extension, MIME) and path traversal defense (`normalize()`) are always a matched pair. UUID-based filenames prevent overwrite conflicts.
+- <strong>API versioning</strong> — URI versioning is the clearest and most cache-friendly option. Decide the strategy before the first deployment and document the rationale in the README.
+- <strong>Multi-module</strong> — Apply Option A (DIP) or Option B (pragmatic) consistently. Mixing them breaks dependency direction in both directions.
+
+This concludes Part 7 and the series. From the Core Application Layer in Part 1 to Advanced Patterns here in Part 7, we've covered the major areas a pre-interview assignment reviewer examines. The next step is the **Comprehensive Assignment** — applying what you've learned across Parts 1–7 to a real project, and clearly documenting in the README which patterns you chose and why. That final write-up is often what separates a good submission from a great one.
+
+---
+
+## Appendix
+
+### Assignment Plus Alpha Tips
+
+<details>
+<summary><strong>Five Differentiators</strong></summary>
+
+1. **Leverage events** — Separate order completion → notification sending into events. Use `@TransactionalEventListener(AFTER_COMMIT)`.
+2. **Async processing** — Process email/SMS sending with `@Async`. Include thread pool configuration.
+3. **Interface abstraction** — Abstract external integrations (payments, notifications) with interfaces. Use mock implementations for testing.
+4. **Apply multi-module** — Separate into api / domain / infra / common. Ensure testability through dependency inversion. Include a module structure diagram in the README.
+5. **State design intent in README** — Why you chose this architecture, what trade-offs you considered.
+
+</details>
+
+### Common Mistakes in Assignments
+
+<details>
+<summary><strong>Five Frequent Mistakes and How to Avoid Them</strong></summary>
+
+1. **Event overuse** — Processing all logic through events makes the flow hard to follow. Direct calls are clearer for core logic.
+2. **Ignoring async exceptions** — void return + unhandled exceptions means errors go unnoticed. `AsyncUncaughtExceptionHandler` is essential.
+3. **Missing file validation** — Saving without extension/size validation creates security vulnerabilities. Malicious file upload prevention is needed.
+4. **Excessive architecture** — Applying Hexagonal to simple CRUD only increases complexity. Match the architecture to the assignment scale.
+5. **Inconsistent multi-module structure** — Mixing Option A and B causes confusion. Missing Component scan scope configuration is also common.
+
+</details>
+
+### Multi-Module Design Tips and Common Mistakes
+
+<details>
+<summary><strong>Tips and Pitfalls</strong></summary>
+
+**Prevent circular dependencies**:
 ```
 // Wrong example: A -> B -> A
 marketplace-domain -> marketplace-infra (X)
 marketplace-infra -> marketplace-domain (O)
 ```
 
-**2. Prevent common module bloat**
-- Don't put everything in the common module
-- Include only what is truly shared
-- Domain-specific logic belongs in the respective module
+**Prevent common module bloat**: Don't put everything in the common module. Include only what is truly shared. Domain-specific logic belongs in the respective module.
 
-**3. Clarify module responsibilities**
+**Clarify module responsibilities**:
 - api: HTTP request handling, DTO conversion, security
 - domain: Business logic, domain rules
 - infra: Technical implementation (DB, cache, external APIs)
 - common: Utilities, common exceptions
 
-**4. Configuration file location**
-- `application.yml`: Located in the api module
-- If module-specific configuration is needed, separate with `@ConfigurationProperties`
+**Configuration file location**: `application.yml` in the api module. Use `@ConfigurationProperties` for module-specific configuration.
+
+**Component scan setup**:
+```kotlin
+@SpringBootApplication(scanBasePackages = ["com.example"])
+class MarketplaceApplication
+```
+
+**Test setup**: Each module's tests run within that module. Integration tests run in the api module.
 
 </details>
 
-<details>
-<summary>Common Multi-Module Mistakes</summary>
+### External References
 
-1. **Dependency direction violation**
-   - domain depending on infra defeats the purpose
-   - Repository interface/implementation separation is essential
-
-2. **Entity location error**
-   - Entities belong in the domain module
-   - Package configuration in api is needed for `@Entity` scanning
-
-3. **Component scan omission**
-   ```java
-   @SpringBootApplication(scanBasePackages = "com.example")
-   public class MarketplaceApplication { }
-   ```
-
-4. **Test configuration omission**
-   - Each module's tests run within that module
-   - Integration tests run in the api module
-
-5. **Build order issues**
-   - Dependent modules must be built first
-   - Gradle handles this automatically, but fails on circular dependencies
-
-</details>
-
----
-
-## Summary
-
-### Checklist
-
-| Item | Check |
-|------|-------|
-| Are supplementary features (notifications, logging) separated from core logic? | |
-| Is @Async applied where async processing is needed? | |
-| Is file upload validation (size, extension) applied? | |
-| Is the API versioning strategy applied consistently? | |
-| Is the architecture chosen appropriately for the assignment complexity? | |
-| Are dependency directions correct when multi-module is applied? | |
-| Is the chosen option (DIP vs Simplified) applied consistently in multi-module? | |
-
-### Key Points
-
-1. **Events**: Separate supplementary features, control transactions with `@TransactionalEventListener`
-2. **Async**: Separate tasks not needed for the response, thread pool configuration is essential
-3. **File handling**: Validation is essential, consider storage path security
-4. **API versioning**: URI approach is the most clear
-5. **Architecture**: Choose according to assignment scale, beware of over-engineering
-6. **Multi-module**: Dependency Inversion Principle, domain -> infra dependency is prohibited
-
-<details>
-<summary>Assignment Plus Alpha Tips</summary>
-
-1. **Leverage events**
-   - Separate order completion -> notification sending into events
-   - Use `@TransactionalEventListener(AFTER_COMMIT)`
-
-2. **Async processing**
-   - Process email/SMS sending with `@Async`
-   - Include thread pool configuration
-
-3. **Interface abstraction**
-   - Abstract external integrations (payments, notifications) with interfaces
-   - Use mock implementations for testing
-
-4. **Apply multi-module**
-   - Separate into api / domain / infra / common
-   - Ensure testability through dependency inversion
-   - Include module structure diagram in README
-
-5. **State design intent in README**
-   - Why you chose this architecture
-   - What trade-offs you considered
-
-</details>
-
-<details>
-<summary>Common Mistakes in Assignments</summary>
-
-1. **Event overuse**
-   - Processing all logic through events -> difficult to follow the flow
-   - Direct calls are clearer for core logic
-
-2. **Ignoring async exceptions**
-   - void return + unhandled exceptions -> errors go unnoticed
-   - `AsyncUncaughtExceptionHandler` is essential
-
-3. **Missing file validation**
-   - Saving without extension/size validation -> security vulnerability
-   - Malicious file upload prevention is needed
-
-4. **Excessive architecture**
-   - Applying Hexagonal to simple CRUD -> only increases complexity
-   - Appropriate selection matching the assignment scale is needed
-
-5. **Inconsistent multi-module structure**
-   - With Option A: domain depending on infra violates DIP
-   - With Option B: Placing Service in domain makes infra access impossible
-   - Mixing both options causes confusion
-   - Missing Component scan scope configuration
-
-</details>
-
----
-
-The series is complete! Try applying everything from Parts 1-7 in the **Comprehensive Assignment**.
-
--> [Previous: Part 6 - DevOps & Deployment](/en/blog/spring-boot-pre-interview-guide-6)
--> [Next: Comprehensive Assignment](/en/blog/spring-boot-pre-interview-assignment)
+- [Spring Events — ApplicationEventPublisher documentation](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#context-functionality-events)
+- [Spring @Async — official documentation](https://docs.spring.io/spring-framework/docs/current/reference/html/integration.html#scheduling-annotation-support-async)
+- [Spring Multipart — file upload guide](https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-multipart)
+- [springdoc-openapi — OpenAPI 3 automation](https://springdoc.org/)
