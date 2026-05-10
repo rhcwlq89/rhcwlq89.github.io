@@ -20,6 +20,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide1.png"
 
 이 시리즈는 거기서 출발한다. AWS 네트워크 서비스 블록을 <strong>"어떤 결정 문제를 푸는가"</strong>의 관점에서 3편에 걸쳐 정리한다. 1편은 가장 자주 마주치는 결정 — <strong>외부 트래픽을 VPC로 받는 진입점 선택</strong> — 을 다룬다.
 
+- 0편 — [사전편: 네트워크·AWS 기본 개념 정리](/blog/aws-vpc-edge-routing-guide-0)
 - <strong>1편 — 외부 진입점 선택: ALB / NLB / API Gateway / CloudFront / Global Accelerator (이 글)</strong>
 - 2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Transit Gateway / Peering / Direct Connect
 - 3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL

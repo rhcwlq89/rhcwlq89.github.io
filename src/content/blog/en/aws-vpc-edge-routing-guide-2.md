@@ -13,6 +13,7 @@ In the [previous post](/blog/en/aws-vpc-edge-routing-guide-1) we covered picking
 
 This decision goes wrong far more often than Part 1's. There are six candidates, each works on a fundamentally different mechanism, and "looks similar but actually can't do X" comes up everywhere. Building an N×N mesh of VPC Peerings only to rip it out for Transit Gateway a year later, or routing S3 traffic through a NAT Gateway and quietly burning hundreds of dollars a month — both are common.
 
+- Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
 - Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - <strong>Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect (this post)</strong>
 - Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL

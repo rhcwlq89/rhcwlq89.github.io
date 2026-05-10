@@ -13,6 +13,7 @@ lang: en
 
 This series starts there. We walk through AWS network service blocks framed as <strong>"what decision problem does this solve?"</strong>, in three parts. Part 1 covers the most frequent decision — <strong>picking an entry point that fronts your VPC</strong>.
 
+- Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
 - <strong>Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator (this post)</strong>
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Transit Gateway / Peering / Direct Connect
 - Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL

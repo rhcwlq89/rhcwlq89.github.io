@@ -13,6 +13,7 @@ lang: en
 
 This area trips people up more than Parts 1 and 2 combined. It isn't a "pick A or B" decision; it's <strong>four components cooperating to determine the packet's path</strong>, so most engineers first run into it during debugging — "why isn't this working?" Open Security Groups but no response, Route Table edits with no effect, NACL rules that look right but outbound is blocked — every one of those traps comes from the way these four interact.
 
+- Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
 - Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - <strong>Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL (this post)</strong>

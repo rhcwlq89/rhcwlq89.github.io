@@ -20,6 +20,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide3.png"
 
 이 영역은 1편·2편보다 오히려 더 자주 헷갈린다. 후보를 고르는 결정이 아니라 <strong>4개 컴포넌트가 협력해서 패킷 경로를 결정하는 메커니즘</strong>이라, "왜 안 되지?"라는 디버깅 시점에 처음 마주치는 경우가 많기 때문이다. SG는 열어뒀는데 응답이 안 가거나, Route Table을 만졌는데 라우팅이 그대로거나, NACL 규칙은 분명히 맞는데 outbound가 막히는 — 그 모든 함정이 이 4개의 협력 방식에서 비롯된다.
 
+- 0편 — [사전편: 네트워크·AWS 기본 개념 정리](/blog/aws-vpc-edge-routing-guide-0)
 - 1편 — 외부 진입점 선택: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - 2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - <strong>3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL (이 글)</strong>

@@ -20,6 +20,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide2.png"
 
 이 결정은 1편보다 훨씬 자주 틀린다. 후보가 6개고, 각자 동작 원리가 완전히 달라서 "비슷해 보이지만 정작 못 하는 것"이 많기 때문이다. VPC Peering으로 N:N 메시를 만들다 1년 만에 Transit Gateway로 갈아엎거나, NAT Gateway로 S3에 접근하면서 매월 수백 달러를 새는 경우 — 둘 다 흔하다.
 
+- 0편 — [사전편: 네트워크·AWS 기본 개념 정리](/blog/aws-vpc-edge-routing-guide-0)
 - 1편 — 외부 진입점 선택: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - <strong>2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect (이 글)</strong>
 - 3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL
