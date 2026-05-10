@@ -80,19 +80,13 @@ frontmatter
 
 ### 3. Frontmatter rules
 
-**KO**:
-- `pubDate`: must include time (`2026-02-03T15:30:00+09:00`). **Never silently change the existing pubDate** — the user has explicitly flagged accidental pubDate rewrites as a regression.
-- `tags`: multi-line YAML list form
-- `heroImage`: `"../../assets/<File>.png"`
-- No `lang` field
+**KO**: `pubDate` includes time (`2026-02-03T15:30:00+09:00`); `tags` is multi-line YAML; `heroImage` is `"../../assets/<File>.png"`; no `lang`.
 
-**EN**:
-- `pubDate`: quoted, includes time
-- `tags`: inline array form
-- `heroImage`: `"../../../assets/<File>.png"` (extra `../`)
-- `lang: en`
+**EN**: `pubDate` quoted with time; `tags` inline array; `heroImage` is `"../../../assets/<File>.png"` (extra `../`); `lang: en`.
 
-Title pattern for series posts: `"<Series Title> Part N: <Topic> — <subtitle>"`. EN matches with `Part N` not `N편`.
+**Title** for series posts: `"<Series Title> Part N: <Topic> — <subtitle>"` (EN uses `Part N`, not `N편`). When the renewal carries a stack version (Spring Boot 4 / Kotlin 2.3 / Spring Security 7 / etc.), append the stack to the em-dash subtitle so readers can gauge currency at a glance: `"... — Spring Boot 4 · Kotlin 2.3 ..."`. Update the description to surface what's stack-specific (e.g. "Lombok 없이 data class·val/var로 풀이"), and add the new language/framework as a tag without removing the old ones.
+
+**`pubDate` is never updated by a renewal**, including stack migrations. Authorship date stays put unless the user explicitly says otherwise — accidental rewrites have been flagged before.
 
 ### 4. Style rules (non-negotiable, from CLAUDE.md)
 
@@ -111,23 +105,11 @@ Title pattern for series posts: `"<Series Title> Part N: <Topic> — <subtitle>"
 
 ### 5. Tell a story, don't dump code
 
-This is the most common failure mode of pre-renewed posts and the easiest to recreate by accident: page after page of code blocks with no narrative connecting them. A reader who can copy-paste your snippets but can't tell *why* they exist has not been served. Renewal must convert "코드 나열" into "스토리".
+The most common pre-renewal failure mode is page after page of code with no prose connecting them. Renewal must convert "코드 나열" into a story — <strong>problem → concept → mechanism → code → tradeoffs</strong>, in that order. Code is never the first beat of a section.
 
-**For every code block, the post must establish — *before* the code:**
-- <strong>What</strong> the code is (one-sentence definition).
-- <strong>Why</strong> it exists — what concrete pain or requirement makes this code worth writing.
-- <strong>Where</strong> it sits in the bigger picture — how it connects to the surrounding architecture or the problem flow.
+Before each code block, establish three things in prose: <strong>what</strong> the code is (one-sentence definition), <strong>why</strong> it exists (the concrete pain it solves), and <strong>where</strong> it fits in the bigger architecture. Each H2/H3 introducing a concept also opens with a framing paragraph that defines the concept, names the problem, and sets up the reader's expectations.
 
-**For every H2/H3 section that introduces a concept**, the section opens with a framing paragraph (or short bullet block) that defines the concept, names the problem it solves, and sets up the reader's expectations — *before* the first code block, table, or diagram.
-
-**Concrete checks during a pass:**
-- If a subsection starts with a code fence (` ``` `), that's almost always a code-dump signal. Insert framing prose first.
-- If two or more code blocks appear back-to-back with no prose between, ask whether the second block needs its own framing sentence ("그럼 …는 어떻게 다루나" / "Now, the wiring side …").
-- If a new term (e.g., `Aspect`, `Pointcut`, `MDC`, `JoinPoint`) appears in code without ever being defined in prose, add a short glossary or one-line definition at the section's first mention.
-- If the section's main claim is implicit ("here's a Filter" — but *why*?), surface it as a one-sentence thesis at the top.
-- Section order should follow a story arc: <strong>problem → concept → mechanism → code → tradeoffs</strong>. Code is the third or fourth beat, never the first.
-
-**Smell test for an entire section**: read only the prose, skipping every fenced block. If the prose alone leaves the reader knowing what the section is about and why they'd care, you're good. If the prose collapses into "다음과 같이 구현한다 / The implementation follows" and then a wall of code, framing is missing.
+**Smell test**: read only the prose, skipping every code fence. If the prose alone tells you what the section is about and why you'd care, framing is enough. If it collapses into "다음과 같이 구현한다 / The implementation follows" and then a wall of code, add framing. Sub-section starts with a code fence, two code blocks back-to-back without prose, a new term appearing in code without a definition — all signals that the connecting tissue is missing.
 
 ### 6. `<details>` discipline
 
@@ -205,47 +187,22 @@ Then verify the executor's output yourself before reporting back to the user.
 
 ### 11. Stack/Version migrations (when args carry a stack hint)
 
-If the user's `command-args` includes a stack/version hint (e.g. "Spring Boot 4", "Kotlin only", "Spring Security 7", "Spring Security 7 버전 기준", "JJWT → oauth2-resource-server", "Java 21"), the renewal is more than a structural pass — it must also migrate the code to that stack's standard patterns. Treat the hint as a hard requirement, not a suggestion.
+If `command-args` carries a stack/version hint (e.g. "Spring Boot 4", "Kotlin only", "Spring Security 7", "JJWT → oauth2-resource-server"), the renewal must migrate the code to that stack's standard patterns — not just restructure. The hint is a hard requirement.
+
+**Workflow**: detect hints in args; if unsure of a major-version diff, name the uncertainty to the user before guessing; in your plan separate `[구조]` changes from `[Stack]` changes so the user can approve each; for series posts, check sibling posts and if the migration would leave the series asymmetric, ask the user **A** (this post only), **B** (this post + memory note "migration in progress"), or **C** (migrate siblings in this session); when delegating, embed §11.1–§11.2 patterns directly in the prompt.
 
 #### 11.0 Default verified-compatible versions
 
-When the user is silent about specific versions, use these defaults. They are mutually verified-compatible (tested together on this blog's series renewals) and form the baseline stack the canonical reference posts are written against.
+When the user is silent about versions, use these defaults — they are mutually verified-compatible on this blog's series renewals.
 
-| Stack | Default version | Notes |
-|-------|----------------|-------|
-| <strong>Spring Boot</strong> | <strong>4</strong> | Java 21 recommended; Spring Framework 7 base; Jakarta EE 11 |
-| <strong>Spring Security</strong> | <strong>7</strong> | Pairs with Spring Boot 4; `spring-boot-starter-oauth2-resource-server` is the standard JWT path (no JJWT direct implementation) |
+| Stack | Default | Notes |
+|-------|---------|-------|
+| <strong>Spring Boot</strong> | <strong>4</strong> | Java 21 recommended; Framework 7 base; Jakarta EE 11 |
+| <strong>Spring Security</strong> | <strong>7</strong> | Pairs with Spring Boot 4; `spring-boot-starter-oauth2-resource-server` is the standard JWT path (no JJWT direct impl) |
 | <strong>Spring Batch</strong> | <strong>6</strong> | Pairs with Spring Boot 4 / Framework 7; `JobBuilder`/`StepBuilder` style |
-| <strong>Kotlin</strong> | <strong>2.3</strong> | K2 compiler stable; binary-compatible across the 2.x line; Spring Boot 4 + Kotlin 2.3 is a verified pair |
+| <strong>Kotlin</strong> | <strong>2.3</strong> | K2 stable; binary-compatible across 2.x; verified with Spring Boot 4 |
 
-**Plugin pin standard** — every `build.gradle.kts` snippet that touches Kotlin plugins should pin to `2.3`:
-
-```kotlin
-plugins {
-    kotlin("plugin.spring") version "2.3"
-    kotlin("plugin.jpa") version "2.3"
-}
-```
-
-Never write `version "2.x"` as a placeholder. If the user explicitly names a different minor (2.0/2.1/2.2/2.4+) or a different Spring Boot/Security/Batch major, follow the hint — but the table above is the answer when the user is silent.
-
-**Frontmatter title consistency** — when a renewal touches code with these stacks, surface the version in the em-dash subtitle:
-
-- KO: `"... — Spring Boot 4 · Kotlin 2.3 ..."` / `"... — Spring Security 7 ..."` etc.
-- EN: same numbers, English subtitle
-
-The version numbers become part of the post's identity and let readers gauge currency at a glance.
-
-**Workflow when a stack hint is present:**
-
-1. **Detect** — read the args carefully. Stack hints commonly look like "Spring Boot N", "Spring Security N", "Kotlin only / Kotlin으로만", "Java N", or library swaps like "X로 교체" / "X → Y".
-2. **Verify versions** — confirm the named stack/library exists at that version and identify what changed from the previous major. If you're unsure of a 7-vs-6 difference, name it explicitly to the user before guessing.
-3. **Plan-stage disclosure** — in your structure plan to the user, **call out the stack-driven changes separately** from the structural changes. Example: "[구조] H2 8개 그대로 유지 / [Stack] Java 30 블록 → Kotlin, Lombok 제거, record → data class". The user should be able to approve the stack migration distinctly.
-4. **Series consistency check** — if the target post is part of a series, scan sibling posts for the existing language/library. If the migration would leave the series asymmetric (e.g. "1편만 Kotlin, 2~5편은 Java"), surface that to the user with three options before proceeding:
-   - **A**: this post only (asymmetric series, defer the rest)
-   - **B**: this post + a memory note "series migration in progress" (defer siblings explicitly)
-   - **C**: migrate all sibling posts in this session (large work)
-5. **Executor brief** — when delegating, embed the stack patterns from §11.1–§11.3 directly in the prompt. Don't make the executor reinvent the conversion.
+Pin Kotlin plugins to `"2.3"` (`kotlin("plugin.spring") version "2.3"`, `kotlin("plugin.jpa") version "2.3"`) — never the placeholder `"2.x"`. Follow an explicit user hint over the table; the table is for silence.
 
 #### 11.1 Java → Kotlin migration patterns (the most common stack swap)
 
@@ -267,54 +224,30 @@ Use these mappings as the source of truth when an args hint is "Kotlin only" or 
 
 **Other Kotlin-specific moves:**
 
-- **Pin the Kotlin version to `2.3`** in any `build.gradle.kts` snippet you write. Spring Boot 4 + Kotlin 2.3 is the verified-compatible pair (K2 compiler stable; `kotlin-spring`/`kotlin-jpa` plugins work normally; binary-compatible with the rest of the 2.x line). Use `kotlin("plugin.spring") version "2.3"` and `kotlin("plugin.jpa") version "2.3"`, never the placeholder `"2.x"`. If the user explicitly asks for a different Kotlin minor (2.0/2.1/2.2/2.4+), follow that — but the default is `2.3`.
-- In the §1.1 setup callout, frame the post as "Spring Boot 4 + Kotlin 2.3 기준" / "Spring Boot 4 + Kotlin 2.3" (KO/EN). Add a short reassurance that the 2.x series is backward-compatible so the same code runs on 2.0–2.3 — this protects readers stuck on slightly older minors.
-- Add the `kotlin-spring` and `kotlin-jpa` Gradle plugins; mention them in a §1.1 (or equivalent) callout. Don't assume the reader has them.
-- Drop Lombok entirely from the project — no `compileOnly 'org.projectlombok:lombok'`, no `annotationProcessor`. Note in prose that Kotlin doesn't use Lombok.
+- Add the `kotlin-spring` and `kotlin-jpa` Gradle plugins (pinned per §11.0); mention them in a §1.1 (or equivalent) setup callout, framed as "Spring Boot 4 + Kotlin 2.3 기준" / "Spring Boot 4 + Kotlin 2.3" with a one-line reassurance that the 2.x line is backward-compatible.
+- Drop Lombok entirely from the project — no `compileOnly`, no `annotationProcessor`. Note in prose that Kotlin doesn't use Lombok.
 - Use scope functions (`apply`, `let`, `run`) where they shorten code without hiding intent. Don't force them.
-- For exception handlers and similar branching, `when` expressions read more naturally than chained `if/else` — use them when the mapping is exhaustive.
-- In an entity, prefer `var` for mutable JPA fields and `val` for immutable identifiers; surround the no-arg requirement with the plugin instead of a manual `protected constructor()`.
+- For exhaustive branching, prefer `when` expressions over chained `if/else`.
+- In entities, prefer `var` for mutable JPA fields and `val` for the identifier; let the `kotlin-jpa` plugin handle the no-arg requirement instead of writing a manual `protected constructor()`.
 
-#### 11.2 `<details>` fold integration when the main language changes
+#### 11.2 `<details>` fold integration when the main language flips
 
-If the previous version of the post had Java as the main code and Kotlin in `<details>` blocks (or vice versa), and the migration flips that:
+When the migration flips main language vs. fold language, **promote** the previously-folded blocks to be the main code and **delete** the previously-main blocks entirely. Don't keep both "for completeness" — it just makes the post harder to skim. One exception: a single short `<details>` block titled "Lombok → Kotlin mapping" (or similar) is fine if Lombok-trained readers benefit. Keep it tabular and short.
 
-- **Promote** the previously-folded language's blocks to be the main code.
-- **Delete** the previously-main language's blocks entirely. Do not keep them as a new fold "for completeness" — the post becomes harder to skim and longer for no reader benefit.
-- **One exception**: a single `<details>` block titled "Lombok → Kotlin mapping" (or similar) is fine if it helps Lombok-trained readers ramp up. Keep it short and tabular.
-
-#### 11.3 What `pubDate` does NOT change
-
-A stack migration is **not** an update event for the post's authorship date. The `pubDate` stays at its original value. If the user genuinely wants a new published date, they will say so explicitly. This rule has been broken before — re-read §3.
-
-#### 11.4 Frontmatter changes for stack migrations
-
-- **title**: append the stack to the em-dash subtitle when the migration is significant. Example: `"... — Spring Boot 4 · Kotlin 4계층 설계"` (KO) / `"... — Spring Boot 4 · Kotlin Four-Layer Design"` (EN).
-- **description**: surface the stack and what makes it different (e.g. "Lombok 없이 data class·val/var로 자연스럽게 풀이").
-- **tags**: add the new language/framework as a tag. Don't remove the old one if the post still references it for comparison purposes.
-
-#### 11.5 Commit message addendum
-
-In addition to the standard "캐노니컬 스켈레톤 적용" phrasing, mention the stack swap explicitly. Example fragments:
-
-```
-... + Kotlin-only 전면 교체 — Java N개 → Kotlin, Lombok 제거, record → data class, details fold 통합
-... + Spring Security 7 표준화 — JJWT 제거 후 oauth2-resource-server 전면 교체, JwtDecoder/JwtEncoder Bean 한 짝
-```
-
-The reader of the git log should be able to tell from the title alone whether this commit was a structural pass, a stack migration, or both.
+(`pubDate` and frontmatter rules under stack migration: see §3 — they don't change here.)
 
 ## What to commit
 
-- The two restructured `.md` files
-- The new hero image PNG (if generated)
-- **NOT** any planning docs, intermediate scratch files, or this skill itself unless the user asks
+- The two restructured `.md` files and the new hero image PNG (if generated).
+- **Not** planning docs, scratch files, or this skill itself unless the user asks.
 
-Commit message pattern (matches existing style):
+Commit title pattern (the reader of `git log` should tell at a glance whether the commit was a structural pass, a stack migration, or both):
 
 ```
-docs: <시리즈명> N편 리뉴얼 — 캐노니컬 스켈레톤 적용, <섹션 재구성 요약>, <추가된 다이어그램 요약>, 히어로 이미지 교체 (한/영)
+docs: <시리즈명> N편 리뉴얼 — 캐노니컬 스켈레톤 적용, <변경 요약>, 히어로 이미지 교체 (한/영)
 ```
+
+Stack-migration commits add the swap to the title — e.g. `"... + Kotlin-only 전면 교체 — Java N개 → Kotlin, Lombok 제거"` or `"... + Spring Security 7 표준화 — JJWT 제거 후 oauth2-resource-server 전면 교체"`.
 
 ## What NOT to do
 
