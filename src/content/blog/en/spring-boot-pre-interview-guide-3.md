@@ -1,9 +1,9 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 3: Documentation & AOP — Swagger · MDC · Aspect"
-description: "SpringDoc setup and annotation discipline, MDC-based request tracing and sensitive-data masking, AOP for cross-cutting concerns — all the documentation, logging, and AOP decisions that separate a passing submission from a scoring one."
+title: "Spring Boot Pre-Interview Guide Part 3: Documentation & AOP — Spring Boot 4 · Kotlin 2.3 Swagger, MDC, Aspect Operations"
+description: "On a Spring Boot 4 + Kotlin 2.3 stack — SpringDoc/Swagger conventions, MDC-based request tracing with sensitive-data masking, and separating cross-cutting concerns with AOP. The Documentation, Logging, and AOP areas that decide pre-interview score swings, written from an evaluator's perspective. Series Part 3."
 pubDate: "2026-01-13T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "Swagger", "Logging", "AOP", "Backend", "Pre-interview"]
+tags: ["Spring Boot", "Kotlin", "Swagger", "Logging", "AOP", "Backend", "Interview", "Practical Guide"]
 heroImage: "../../../assets/SpringBootPreInterviewGuide3.png"
 ---
 
@@ -55,6 +55,8 @@ flowchart LR
 
 > <strong>Note</strong>: Springfox has compatibility issues with Spring Boot 2.6+ and is no longer maintained. SpringDoc OpenAPI is the current standard.
 
+> <strong>Note</strong>: Spring Boot 4 + Kotlin 2.3 project setup (kotlin-spring · kotlin-jpa plugins) is covered in Part 1 §1.1. This post focuses on the Documentation, Logging, and AOP layers that run on top of that foundation.
+
 <strong>Versions — pick the SpringDoc line that matches your Spring Boot</strong>
 
 SpringDoc ships separate lines per Spring Boot major. Check the Spring Boot version your task is built on first, then pick the matching SpringDoc line.
@@ -79,16 +81,23 @@ dependencies {
 ```
 
 <details>
-<summary><strong>More detail — Groovy DSL dependency</strong></summary>
+<summary><strong>More detail — Version catalog setup</strong></summary>
 
-```groovy
-// build.gradle
+```kotlin
+// settings.gradle.kts (version catalog)
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("springdoc", "org.springdoc", "springdoc-openapi-starter-webmvc-ui").version("3.0.3")
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts (referencing the catalog)
 dependencies {
-    // Spring Boot 4.x
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
-
-    // Spring Boot 3.x (LTS)
-    // implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
+    implementation(libs.springdoc)
 }
 ```
 
@@ -140,29 +149,6 @@ class OpenApiConfig {
 }
 ```
 
-<details>
-<summary><strong>More detail — OpenApiConfig (Java)</strong></summary>
-
-```java
-@Configuration
-public class OpenApiConfig {
-
-    @Bean
-    public OpenAPI openAPI() {
-        return new OpenAPI()
-            .info(new Info()
-                .title("Product API")
-                .description("Product Management API Documentation")
-                .version("v1.0.0")
-                .contact(new Contact().name("Developer").email("dev@example.com")))
-            .servers(List.of(
-                new Server().url("http://localhost:8080").description("Local Server")
-            ));
-    }
-}
-```
-
-</details>
 
 ### 1.2 Controller and DTO Annotations — Minimal vs Excessive
 
@@ -210,44 +196,6 @@ class ProductController(private val productService: ProductService) {
 }
 ```
 
-<details>
-<summary><strong>More detail — Controller example (Java)</strong></summary>
-
-```java
-@Tag(name = "Product", description = "Product Management API")
-@RestController
-@RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
-public class ProductController {
-
-    private final ProductService productService;
-
-    @Operation(summary = "Get product details")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved"),
-        @ApiResponse(responseCode = "404", description = "Product not found")
-    })
-    @GetMapping("/{productId}")
-    public CommonResponse<FindProductDetailResponse> findProductDetail(
-            @Parameter(description = "Product ID", example = "1")
-            @PathVariable Long productId) {
-        return CommonResponse.success(productService.findProductDetail(productId));
-    }
-
-    @Operation(summary = "Register product")
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Successfully registered"),
-        @ApiResponse(responseCode = "400", description = "Bad request")
-    })
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public CommonResponse<Long> registerProduct(@RequestBody RegisterProductRequest request) {
-        return CommonResponse.success(productService.registerProduct(request));
-    }
-}
-```
-
-</details>
 
 **Price field type tradeoffs**
 
@@ -563,43 +511,6 @@ class ProductService(private val productRepository: ProductRepository) {
 
 > <strong>Note</strong>: `JpaRepository.findById(id)` returns `Optional<T>`, so `?: run { … }` won't fire. Spring Data ships a Kotlin extension `findByIdOrNull(id)` that returns `T?`, which composes naturally with the elvis operator (`?:`). If you'd rather keep the `Optional`, use `.orElseThrow { … }` like the Java example.
 
-<details>
-<summary><strong>More detail — ProductService logging example (Java)</strong></summary>
-
-```java
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
-    @Transactional
-    public Long registerProduct(RegisterProductCommand command) {
-        log.debug("Register product request: name={}, price={}", command.name(), command.price());
-
-        Product saved = productRepository.save(
-            new Product(command.name(), command.price(), command.category()));
-        log.info("Product registered: productId={}", saved.getId());
-
-        return saved.getId();
-    }
-
-    public FindProductDetailResponse findProductDetail(Long productId) {
-        log.debug("Find product: productId={}", productId);
-
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> {
-                log.warn("Product not found: productId={}", productId);
-                return new NotFoundException();
-            });
-
-        return FindProductDetailResponse.from(product);
-    }
-}
-```
-
-</details>
 
 ### 2.3 MDC for Request Tracing
 
@@ -655,39 +566,6 @@ class MdcFilter : OncePerRequestFilter() {
 }
 ```
 
-<details>
-<summary><strong>More detail — MdcFilter (Java)</strong></summary>
-
-```java
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
-public class MdcFilter extends OncePerRequestFilter {
-
-    public static final String REQUEST_ID = "requestId";
-
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
-
-        String requestId = request.getHeader("X-Request-ID");
-        if (requestId == null || requestId.isBlank()) {
-            requestId = UUID.randomUUID().toString().substring(0, 8);
-        }
-
-        try {
-            MDC.put(REQUEST_ID, requestId);
-            response.setHeader("X-Request-ID", requestId);
-            filterChain.doFilter(request, response);
-        } finally {
-            MDC.clear();
-        }
-    }
-}
-```
-
-</details>
 
 > <strong>Note</strong>: MDC handles tracing within a single application. Cross-service distributed tracing (Zipkin, Jaeger, AWS X-Ray) requires infrastructure setup and is out of scope for pre-interview tasks.
 
@@ -906,55 +784,6 @@ class RequestLoggingAspect {
 }
 ```
 
-<details>
-<summary><strong>More detail — RequestLoggingAspect (Java)</strong></summary>
-
-```java
-@Aspect
-@Component
-@Slf4j
-public class RequestLoggingAspect {
-
-    private final ObjectMapper jsonWriter;
-
-    public RequestLoggingAspect() {
-        this.jsonWriter = new ObjectMapper();
-        this.jsonWriter.registerModule(new JavaTimeModule());
-        this.jsonWriter.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
-    }
-
-    @Pointcut("within(@org.springframework.web.bind.annotation.RestController *)")
-    public void restController() {}
-
-    @Around("restController()")
-    public Object logAround(ProceedingJoinPoint joinPoint) throws Throwable {
-        HttpServletRequest request = ((ServletRequestAttributes)
-            RequestContextHolder.getRequestAttributes()).getRequest();
-        String className = joinPoint.getTarget().getClass().getSimpleName();
-        String methodName = joinPoint.getSignature().getName();
-
-        log.info("[REQUEST] {} {} - {}.{}",
-            request.getMethod(), request.getRequestURI(), className, methodName);
-
-        long startTime = System.currentTimeMillis();
-
-        try {
-            Object result = joinPoint.proceed();
-            long duration = System.currentTimeMillis() - startTime;
-            log.info("[RESPONSE] {} {} - {}ms",
-                request.getMethod(), request.getRequestURI(), duration);
-            return result;
-        } catch (Exception e) {
-            long duration = System.currentTimeMillis() - startTime;
-            log.error("[ERROR] {} {} - {}ms - {}",
-                request.getMethod(), request.getRequestURI(), duration, e.getMessage());
-            throw e;
-        }
-    }
-}
-```
-
-</details>
 
 ### 3.3 Execution Time Aspect
 

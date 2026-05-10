@@ -1,9 +1,10 @@
 ---
-title: "스프링 사전과제 가이드 3편: Documentation & AOP — Swagger·MDC·Aspect 운용 기준"
-description: "Swagger/SpringDoc 운용 기준, MDC 기반 요청 추적과 민감 정보 마스킹, AOP로 횡단 관심사를 분리하는 방법까지 — 사전과제에서 가점과 감점이 갈리는 문서화·로깅·AOP 영역을 평가자 시점으로 한 편에 정리했다."
+title: "스프링 사전과제 가이드 3편: Documentation & AOP — Spring Boot 4 · Kotlin 2.3 Swagger·MDC·Aspect 운용 기준"
+description: "Spring Boot 4 + Kotlin 2.3 환경에서 Swagger/SpringDoc 운용 기준, MDC 기반 요청 추적과 민감 정보 마스킹, AOP로 횡단 관심사를 분리하는 방법까지 — 사전과제에서 가점과 감점이 갈리는 문서화·로깅·AOP 영역을 평가자 시점으로 한 편에 정리한 시리즈 3편."
 pubDate: 2026-01-13T10:00:00+09:00
 tags:
   - Spring Boot
+  - Kotlin
   - Swagger
   - Logging
   - AOP
@@ -66,6 +67,8 @@ flowchart LR
 
 > <strong>참고</strong>: Springfox는 Spring Boot 2.6+부터 호환 이슈가 생겨 더 이상 사용하지 않는다. SpringDoc OpenAPI가 현재 표준이다.
 
+> <strong>참고</strong>: Spring Boot 4 + Kotlin 2.3 프로젝트 셋업(kotlin-spring·kotlin-jpa plugin) 자체는 1편 1.1절에서 다뤘다. 3편은 그 위에서 도는 Documentation·Logging·AOP 영역에 집중한다.
+
 <strong>버전 — Spring Boot에 맞춰 SpringDoc 라인을 고른다</strong>
 
 SpringDoc은 Spring Boot 메이저 버전에 따라 별도 라인으로 배포된다. 과제 환경의 Spring Boot 버전을 먼저 확인하고 거기에 맞춰 잡는다.
@@ -90,16 +93,23 @@ dependencies {
 ```
 
 <details>
-<summary><strong>More detail — Groovy DSL 의존성</strong></summary>
+<summary><strong>More detail — Gradle 멀티 프로젝트 또는 버전 카탈로그 설정 예시</strong></summary>
 
-```groovy
-// build.gradle
+```kotlin
+// settings.gradle.kts (버전 카탈로그 사용 시)
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("springdoc", "org.springdoc", "springdoc-openapi-starter-webmvc-ui").version("3.0.3")
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts (버전 카탈로그 참조)
 dependencies {
-    // Spring Boot 4.x
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
-
-    // Spring Boot 3.x (LTS)
-    // implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
+    implementation(libs.springdoc)
 }
 ```
 
@@ -151,29 +161,6 @@ class OpenApiConfig {
 }
 ```
 
-<details>
-<summary><strong>More detail — OpenApiConfig (Java)</strong></summary>
-
-```java
-@Configuration
-public class OpenApiConfig {
-
-    @Bean
-    public OpenAPI openAPI() {
-        return new OpenAPI()
-            .info(new Info()
-                .title("Product API")
-                .description("상품 관리 API 문서")
-                .version("v1.0.0")
-                .contact(new Contact().name("Developer").email("dev@example.com")))
-            .servers(List.of(
-                new Server().url("http://localhost:8080").description("Local Server")
-            ));
-    }
-}
-```
-
-</details>
 
 ### 1.2 Controller·DTO 어노테이션 — "최소" vs "과다"
 
@@ -221,44 +208,6 @@ class ProductController(private val productService: ProductService) {
 }
 ```
 
-<details>
-<summary><strong>More detail — Controller 예시 (Java)</strong></summary>
-
-```java
-@Tag(name = "Product", description = "상품 관리 API")
-@RestController
-@RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
-public class ProductController {
-
-    private final ProductService productService;
-
-    @Operation(summary = "상품 상세 조회")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "조회 성공"),
-        @ApiResponse(responseCode = "404", description = "상품을 찾을 수 없음")
-    })
-    @GetMapping("/{productId}")
-    public CommonResponse<FindProductDetailResponse> findProductDetail(
-            @Parameter(description = "상품 ID", example = "1")
-            @PathVariable Long productId) {
-        return CommonResponse.success(productService.findProductDetail(productId));
-    }
-
-    @Operation(summary = "상품 등록")
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "등록 성공"),
-        @ApiResponse(responseCode = "400", description = "잘못된 요청")
-    })
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public CommonResponse<Long> registerProduct(@RequestBody RegisterProductRequest request) {
-        return CommonResponse.success(productService.registerProduct(request));
-    }
-}
-```
-
-</details>
 
 **Request DTO — 가격 타입 트레이드오프**
 
@@ -578,43 +527,6 @@ class ProductService(private val productRepository: ProductRepository) {
 
 > <strong>참고</strong>: `JpaRepository.findById(id)`는 `Optional<T>`를 반환하므로 `?: run { … }`이 작동하지 않는다. Spring Data가 제공하는 Kotlin 확장 `findByIdOrNull(id)`을 쓰면 `T?`를 돌려받아 elvis 연산자(`?:`)와 자연스럽게 결합된다. Optional을 그대로 쓰고 싶다면 Java 예시처럼 `.orElseThrow { … }`를 쓴다.
 
-<details>
-<summary><strong>More detail — ProductService 로깅 예시 (Java)</strong></summary>
-
-```java
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
-    @Transactional
-    public Long registerProduct(RegisterProductCommand command) {
-        log.debug("상품 등록 요청: name={}, price={}", command.name(), command.price());
-
-        Product saved = productRepository.save(
-            new Product(command.name(), command.price(), command.category()));
-        log.info("상품 등록 완료: productId={}", saved.getId());
-
-        return saved.getId();
-    }
-
-    public FindProductDetailResponse findProductDetail(Long productId) {
-        log.debug("상품 조회: productId={}", productId);
-
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> {
-                log.warn("상품을 찾을 수 없음: productId={}", productId);
-                return new NotFoundException();
-            });
-
-        return FindProductDetailResponse.from(product);
-    }
-}
-```
-
-</details>
 
 ### 2.3 MDC로 요청 추적
 
@@ -670,39 +582,6 @@ class MdcFilter : OncePerRequestFilter() {
 }
 ```
 
-<details>
-<summary><strong>More detail — MdcFilter (Java)</strong></summary>
-
-```java
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
-public class MdcFilter extends OncePerRequestFilter {
-
-    public static final String REQUEST_ID = "requestId";
-
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
-
-        String requestId = request.getHeader("X-Request-ID");
-        if (requestId == null || requestId.isBlank()) {
-            requestId = UUID.randomUUID().toString().substring(0, 8);
-        }
-
-        try {
-            MDC.put(REQUEST_ID, requestId);
-            response.setHeader("X-Request-ID", requestId);
-            filterChain.doFilter(request, response);
-        } finally {
-            MDC.clear();
-        }
-    }
-}
-```
-
-</details>
 
 > <strong>참고</strong>: MDC는 단일 앱 요청 추적용이다. Zipkin·Jaeger 같은 분산 추적 시스템은 인프라 설정이 필요해 과제 범위를 벗어난다.
 
@@ -921,55 +800,6 @@ class RequestLoggingAspect {
 }
 ```
 
-<details>
-<summary><strong>More detail — RequestLoggingAspect (Java)</strong></summary>
-
-```java
-@Aspect
-@Component
-@Slf4j
-public class RequestLoggingAspect {
-
-    private final ObjectMapper jsonWriter;
-
-    public RequestLoggingAspect() {
-        this.jsonWriter = new ObjectMapper();
-        this.jsonWriter.registerModule(new JavaTimeModule());
-        this.jsonWriter.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
-    }
-
-    @Pointcut("within(@org.springframework.web.bind.annotation.RestController *)")
-    public void restController() {}
-
-    @Around("restController()")
-    public Object logAround(ProceedingJoinPoint joinPoint) throws Throwable {
-        HttpServletRequest request = ((ServletRequestAttributes)
-            RequestContextHolder.getRequestAttributes()).getRequest();
-        String className = joinPoint.getTarget().getClass().getSimpleName();
-        String methodName = joinPoint.getSignature().getName();
-
-        log.info("[REQUEST] {} {} - {}.{}",
-            request.getMethod(), request.getRequestURI(), className, methodName);
-
-        long startTime = System.currentTimeMillis();
-
-        try {
-            Object result = joinPoint.proceed();
-            long duration = System.currentTimeMillis() - startTime;
-            log.info("[RESPONSE] {} {} - {}ms",
-                request.getMethod(), request.getRequestURI(), duration);
-            return result;
-        } catch (Exception e) {
-            long duration = System.currentTimeMillis() - startTime;
-            log.error("[ERROR] {} {} - {}ms - {}",
-                request.getMethod(), request.getRequestURI(), duration, e.getMessage());
-            throw e;
-        }
-    }
-}
-```
-
-</details>
 
 ### 3.3 실행 시간 측정 Aspect
 
