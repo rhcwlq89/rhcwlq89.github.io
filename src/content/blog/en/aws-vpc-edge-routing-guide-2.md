@@ -18,6 +18,7 @@ This decision goes wrong far more often than Part 1's. There are six candidates,
 - <strong>Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect (this post)</strong>
 - Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL
 - Part 4 — DNS decisions and Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
+- Part 5 — Four standard patterns: from decision tree to first sketch
 
 Same target reader as Part 1 — backend or infrastructure engineers who've built a VPC but can't explain "what's the difference between option A and option B" in one line. After this post, the goal is that <strong>"connect this VPC to something" is a 30-second decision.</strong>
 

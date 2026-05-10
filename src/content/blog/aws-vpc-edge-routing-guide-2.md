@@ -25,6 +25,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide2.png"
 - <strong>2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect (이 글)</strong>
 - 3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL
 - 4편 — DNS 결정과 Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
+- 5편 — 표준 패턴 4가지: 결정 트리에서 처음 그릴 때까지
 
 대상 독자는 1편과 같다 — VPC를 만들어 본 적은 있지만 "이 옵션과 저 옵션이 뭐가 다른지" 한 줄로 설명이 안 되는 백엔드/인프라 엔지니어. 다 읽고 나면 <strong>"VPC를 다른 무언가와 잇는다"는 결정이 30초 안에 끝나는</strong> 상태가 목표다.
 

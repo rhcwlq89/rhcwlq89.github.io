@@ -18,6 +18,7 @@ This post starts there. Before diving into the decision trees of Parts 1, 2, and
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL
 - Part 4 — DNS decisions and Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
+- Part 5 — Four standard patterns: from decision tree to first sketch
 
 The target reader is a backend or infrastructure engineer who's clicked through the AWS console but isn't quite sure about OSI L4/L7, how to read a CIDR notation, or what an ENI is. The goal is to make Parts 1, 2, and 3 readable without stalling on a single term.
 

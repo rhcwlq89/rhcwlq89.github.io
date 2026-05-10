@@ -25,6 +25,7 @@ AWS 네트워크 글을 처음 펼치면 절반 이상이 약어와 jargon이다
 - 2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - 3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL
 - 4편 — DNS 결정과 Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
+- 5편 — 표준 패턴 4가지: 결정 트리에서 처음 그릴 때까지
 
 대상 독자는 "AWS 콘솔은 만져봤지만 OSI L4/L7 차이가 뭔지, CIDR 표기를 어떻게 읽는지, ENI는 또 뭔지 막막한" 백엔드/인프라 엔지니어. 시리즈 본격편(1·2·3편)을 1초 막힘 없이 따라갈 수 있는 상태로 만드는 게 목표다.
 

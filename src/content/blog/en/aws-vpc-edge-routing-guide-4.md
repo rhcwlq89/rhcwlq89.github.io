@@ -18,6 +18,7 @@ The layer that handles that decision is **Route 53**. To close the series, this 
 - Part 2 — [VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect](/blog/en/aws-vpc-edge-routing-guide-2)
 - Part 3 — [Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL](/blog/en/aws-vpc-edge-routing-guide-3)
 - <strong>Part 4 — DNS decisions and Route 53 (this post)</strong>
+- Part 5 — Four standard patterns: from decision tree to first sketch
 
 Same target reader as the rest of the series — backend or infrastructure engineers who've used Route 53 in the console but aren't sure how the six Routing Policies differ, why Alias is preferable to CNAME, or how a Private Hosted Zone interacts with VPC Endpoint. After this post, the goal is that <strong>even DNS decisions resolve through a single decision tree</strong>.
 
@@ -319,17 +320,18 @@ Part 4's goal was to make <strong>DNS decisions resolvable through one decision 
 
 ### Series retrospective
 
-This series unpacked AWS network ingress and routing through the lens of <strong>"what decision problem does this solve?"</strong>, in five parts.
+This series unpacks AWS network ingress and routing through the lens of <strong>"what decision problem does this solve?"</strong>, across six parts.
 
 - <strong>Part 0</strong> — Primer: network and AWS fundamentals, gathered into one post.
 - <strong>Part 1</strong> — Picking the entry point that fronts a VPC (ALB / NLB / API Gateway / CloudFront / Global Accelerator). Four decision variables and a decision tree.
 - <strong>Part 2</strong> — Connecting a VPC to other VPCs, AWS services, and on-prem (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). The first split is destination type.
 - <strong>Part 3</strong> — How packets actually flow inside (IGW / NAT GW / Route Tables / SG vs NACL). Less about choosing, more about understanding mechanics.
 - <strong>Part 4</strong> — DNS decisions and Route 53. The decision that runs before all the entry points.
+- <strong>Part 5</strong> — Four standard patterns. The closing post that takes Parts 0–4's decision trees and recombines them into a "where do I start drawing?" layer.
 
-Together, the five posts give you <strong>a decision-tree-driven path through "DNS → external entry point → VPC → inside → other systems"</strong>. Holding all five in mind simultaneously is the starting point for infrastructure design.
+Together, the six posts give you <strong>a decision-tree-driven path through "DNS → external entry point → VPC → inside → other systems," plus four standard patterns to start from on day one</strong>. Parts 0–4 do the decomposition; Part 5 does the synthesis. Holding both at once is the starting point for infrastructure design.
 
-Worthwhile follow-ups: cost optimization (VPC traffic-cost patterns), observability (VPC Flow Logs, Reachability Analyzer, Route 53 Resolver Query Logs), multi-account (AWS Organizations + Resource Access Manager + domain delegation). Material for another series.
+Worthwhile follow-ups: security (WAF / Shield / SG / NACL / Network Firewall / GuardDuty / VPC Lattice), cost optimization (VPC traffic-cost patterns), observability (VPC Flow Logs, Reachability Analyzer, Route 53 Resolver Query Logs), multi-account (AWS Organizations + Resource Access Manager + domain delegation). Security gets its own series — <strong>AWS VPC Security Guide</strong> — because the decision area and narrative are different enough that bundling them here would make the series too heavy.
 
 ---
 

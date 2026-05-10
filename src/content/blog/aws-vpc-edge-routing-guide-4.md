@@ -22,6 +22,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide4.png"
 - 2편 — [VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect](/blog/aws-vpc-edge-routing-guide-2)
 - 3편 — [VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL](/blog/aws-vpc-edge-routing-guide-3)
 - <strong>4편 — DNS 결정과 Route 53 (이 글)</strong>
+- 5편 — 표준 패턴 4가지: 결정 트리에서 처음 그릴 때까지
 
 대상 독자는 시리즈 다른 편들과 같다 — Route 53를 콘솔에서 만져본 적은 있지만 Routing Policy 6종이 어떻게 다른지, Alias가 왜 CNAME보다 나은지, Private Hosted Zone이 VPC Endpoint와 어떻게 상호작용하는지 막막한 백엔드/인프라 엔지니어. 다 읽고 나면 <strong>DNS 결정도 결정 트리 한 장으로 처리할 수 있는</strong> 상태가 목표다.
 
@@ -323,17 +324,18 @@ Private Hosted Zone을 만들고 VPC 연결을 깜빡한 경우. <strong>Hosted 
 
 ### 시리즈 회고
 
-이 시리즈는 AWS 네트워크의 진입과 라우팅을 <strong>"어떤 결정 문제를 푸는가"</strong>의 관점에서 5편에 걸쳐 정리했다.
+이 시리즈는 AWS 네트워크의 진입과 라우팅을 <strong>"어떤 결정 문제를 푸는가"</strong>의 관점에서 6편에 걸쳐 정리한다.
 
 - <strong>0편</strong> — 사전편: 시리즈를 따라가기 위한 네트워크·AWS 기본 개념 정리
 - <strong>1편</strong> — 외부 트래픽이 VPC로 들어오는 진입점 결정 (ALB / NLB / API Gateway / CloudFront / Global Accelerator). 4가지 결정 변수와 결정 트리.
 - <strong>2편</strong> — VPC가 다른 VPC·AWS 서비스·온프레미스와 잇히는 방법 (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). 1단계 분기는 "목적지 종류".
 - <strong>3편</strong> — VPC 안에서 패킷이 흐르는 방식 (IGW / NAT GW / Route Tables / SG vs NACL). 결정이라기보다 메커니즘 이해.
 - <strong>4편</strong> — DNS 결정과 Route 53. 모든 진입점보다 먼저 일어나는 결정 영역.
+- <strong>5편</strong> — 표준 패턴 4가지. 0~4편의 결정 트리들을 "처음 그릴 때 출발점"이라는 합성 layer에서 다시 보는 마무리 편.
 
-다섯 편을 합치면 <strong>"DNS → 외부 진입점 → VPC → 내부 → 다른 시스템"의 전 경로를 결정 트리로 따라갈 수 있는</strong> 상태가 만들어진다. 새 서비스를 그릴 때 이 다섯을 머릿속에서 동시에 굴리는 게 인프라 설계의 출발점.
+여섯 편을 합치면 <strong>"DNS → 외부 진입점 → VPC → 내부 → 다른 시스템"의 전 경로를 결정 트리로 따라가고, 표준 패턴 4가지를 출발점으로 처음부터 그릴 수 있는</strong> 상태가 만들어진다. 0~4편이 분해, 5편이 합성. 새 서비스를 그릴 때 이 둘을 동시에 굴리는 게 인프라 설계의 출발점이다.
 
-후속으로 다룰 만한 주제는 — 비용 최적화(VPC 트래픽 비용 패턴), 관찰성(VPC Flow Logs·Reachability Analyzer·Route 53 Resolver Query Logs), 멀티 어카운트(AWS Organizations + Resource Access Manager + 도메인 위임). 시리즈를 한 번 더 묶을 가치가 있는 영역들.
+후속으로 다룰 만한 주제는 — 보안 (WAF·Shield·SG·NACL·Network Firewall·GuardDuty·VPC Lattice), 비용 최적화(VPC 트래픽 비용 패턴), 관찰성(VPC Flow Logs·Reachability Analyzer·Route 53 Resolver Query Logs), 멀티 어카운트(AWS Organizations + Resource Access Manager + 도메인 위임). 보안은 별도 시리즈(<strong>AWS VPC 보안 가이드</strong>)로 분리해 다룰 예정이다 — 결정 영역과 narrative가 다르고, 한 시리즈에 묶기엔 부피가 커서.
 
 ---
 
