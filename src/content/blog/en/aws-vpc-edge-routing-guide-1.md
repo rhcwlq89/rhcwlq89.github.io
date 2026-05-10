@@ -68,6 +68,8 @@ Walk these four in order and the candidate set almost always collapses to one or
 
 L7 means the entry point can route on the contents of the HTTP message (host, path, header, cookie). ALB, API Gateway, and CloudFront are all L7, but <strong>what they add at L7</strong> is completely different.
 
+> <strong>Note — what is a reverse proxy?</strong>: <strong>An intermediary that takes incoming client requests and forwards them to the appropriate backend server.</strong> If a forward proxy is "a tool that goes out on behalf of clients" (e.g., squid for outbound corporate traffic), a reverse proxy "stands in front of servers and dispatches external requests to the right backend." Four core responsibilities — (1) HTTPS termination, (2) host/path-based routing, (3) load balancing, (4) shielding the backend from direct exposure. Nginx, HAProxy, and Envoy are the canonical open-source implementations, and <strong>ALB, API Gateway, and CloudFront in this post are all "AWS-managed reverse proxies + extras."</strong> NLB plays the same dispatching role at L4 (TCP/UDP).
+
 ### 2.1 ALB — the most ordinary L7 load balancer
 
 ALB (Application Load Balancer) is AWS's managed L7 reverse proxy. <strong>It's the default entry point sitting in front of EC2 / ECS / EKS / Lambda inside a VPC</strong>, handling host/path/header-based routing and HTTPS termination.

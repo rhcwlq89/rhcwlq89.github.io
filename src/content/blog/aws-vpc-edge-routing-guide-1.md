@@ -75,6 +75,8 @@ flowchart LR
 
 L7은 진입점이 HTTP 메시지의 내용(host, path, header, cookie)을 보고 라우팅 결정을 내릴 수 있는 계층이다. ALB · API Gateway · CloudFront 셋 다 L7이지만, <strong>"L7에서 무엇을 더 해주는가"</strong>가 완전히 다르다.
 
+> <strong>참고 — 리버스 프록시(reverse proxy)가 뭔가</strong>: <strong>클라이언트 요청을 백엔드 대신 받아서 적절한 서버로 분배하는 중계자</strong>다. 정방향 프록시(forward proxy)가 "클라이언트를 대신해 외부로 나가는" 도구라면(예: 사내망에서 외부로 나갈 때 거치는 squid), 리버스 프록시는 "서버 앞에 서서 외부 요청을 받아 백엔드로 분배"한다. 핵심 책임 네 가지 — (1) HTTPS 종료, (2) host/path 기반 라우팅, (3) 로드밸런싱, (4) 백엔드 직접 노출 차단. Nginx·HAProxy·Envoy가 오픈소스 대표 구현이고, 이 글에서 다루는 <strong>ALB·API Gateway·CloudFront는 모두 "AWS가 관리해주는 리버스 프록시 + 부가 기능"</strong>으로 볼 수 있다. L4(TCP/UDP)에서 같은 중계 역할을 하는 게 NLB.
+
 ### 2.1 ALB — 가장 평범한 L7 로드밸런서
 
 ALB(Application Load Balancer)는 AWS 관리형 L7 리버스 프록시다. <strong>VPC 안의 EC2 / ECS / EKS / Lambda 앞에 두는 가장 기본적인 진입점</strong>으로, 호스트·경로·헤더 기반 라우팅과 HTTPS 종료를 맡는다.
