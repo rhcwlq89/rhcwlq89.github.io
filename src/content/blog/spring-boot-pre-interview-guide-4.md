@@ -1,46 +1,78 @@
 ---
-title: "스프링 사전과제 가이드 4편: Performance & Optimization"
-description: "성능 최적화와 쿼리 튜닝 - N+1 문제, 페이지네이션, 캐싱 전략"
+title: "스프링 사전과제 가이드 4편: Performance & Optimization — N+1·페이지네이션·캐싱·QueryDSL"
+description: "N+1 문제를 잡는 세 가지 도구(Fetch Join·@EntityGraph·@BatchSize)의 트레이드오프, Page/Slice/Cursor 중 언제 무엇을 쓸지, Caffeine과 Redis 중 어떤 캐시를 고를지, QueryDSL 동적 쿼리와 Projection 적용 기준까지 — 성능 최적화 영역에서 가점과 감점이 갈리는 포인트만 평가자 시점으로 정리했다."
 pubDate: 2026-01-15T10:00:00+09:00
-tags: ["Spring Boot", "JPA", "Performance", "Cache", "Backend", "사전과제"]
-heroImage: "../../assets/PreinterviewTaskGuide.png"
----
-
-## 시리즈 네비게이션
-
-| 이전 | 현재 | 다음 |
-|:---:|:---:|:---:|
-| [3편: Documentation & AOP](/blog/spring-boot-pre-interview-guide-3) | **4편: Performance** | [5편: Security](/blog/spring-boot-pre-interview-guide-5) |
-
-> 📚 **전체 로드맵**: [스프링 사전과제 가이드 로드맵](/blog/spring-boot-pre-interview-guide-1) 참고
-
+tags:
+  - Spring Boot
+  - JPA
+  - Performance
+  - Cache
+  - Backend
+  - 사전과제
+heroImage: "../../assets/SpringBootPreInterviewGuide4.png"
 ---
 
 ## 서론
 
-1~3편의 기본 과정을 마쳤다면, 이제 심화 과정이다. 4편에서는 성능 최적화를 다룬다.
+"성능 최적화, 어디서 시작해야 가점이 될까?"
 
-**4편에서 다루는 내용:**
-- N+1 문제 해결
-- 페이지네이션 전략
-- 캐싱 적용
-- 쿼리 최적화
+사전과제에서 Performance 영역은 두 가지로 갈린다. LAZY를 설정하고 @BatchSize를 전역으로 잡은 것과, EAGER가 그대로 남은 것. 이 차이가 리뷰어의 평가를 가른다.
 
-### 목차
+1편은 4계층, 2편은 Database & Testing, 3편은 Documentation & AOP를 다뤘다. 4편은 그 위에서 실제 쿼리 비용을 줄이는 영역이다. 주요 내용은 세 가지다.
 
-- [N+1 문제 해결](#n1-문제-해결)
-- [페이지네이션](#페이지네이션)
-- [캐싱 전략](#캐싱-전략)
-- [쿼리 최적화](#쿼리-최적화)
-- [정리](#정리)
+- N+1 해결 도구 3종의 트레이드오프
+- 페이지네이션 세 가지 타입의 분기 기준
+- 캐시 선택 논리, 동적 쿼리와 Projection 적용 기준
+
+대상 독자는 기능은 돌아가는데 성능 최적화가 막막한 주니어 백엔드 개발자다. 다 읽으면 도구별 선택 기준이 생긴다.
+
+[이전 글](/blog/spring-boot-pre-interview-guide-3)에서 Documentation & AOP를 먼저 다뤘다.
+
+- 1편 — [Core Application Layer](/blog/spring-boot-pre-interview-guide-1)
+- 2편 — [Database & Testing](/blog/spring-boot-pre-interview-guide-2)
+- 3편 — [Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
+- <strong>4편 — Performance & Optimization (이 글)</strong>
+- 5편 — [Security & Authentication](/blog/spring-boot-pre-interview-guide-5)
+- 6편 — [DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)
+- 7편 — [Advanced Patterns](/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
-## N+1 문제 해결
+## TL;DR
 
-### 1. N+1 문제란?
+- <strong>LAZY가 기본, 예외가 EAGER다</strong> — `@ManyToOne`·`@OneToOne` 기본값이 EAGER이므로 명시적으로 LAZY로 바꿔야 한다. EAGER를 그대로 두면 JPQL에서도 N+1이 발생한다.
+- <strong>Fetch Join은 페이징 불가, @BatchSize는 페이징 가능</strong> — 컬렉션 Fetch Join 후 페이징하면 메모리 페이징이 발생한다. 페이징이 필요하면 @BatchSize가 정답이다.
+- <strong>Page vs Cursor 분기점은 "전체 개수가 필요한가"</strong> — 전체 개수가 필요하면 Page(Offset), 무한 스크롤이면 Cursor, 그 중간이면 Slice다.
+- <strong>캐시 선택은 서버 수로 시작한다</strong> — 단일 서버면 Caffeine으로 충분하다. 멀티 서버거나 강한 일관성이 필요하면 Redis로 간다.
+- <strong>Projection은 목록 조회의 기본 옵션이다</strong> — 전체 Entity를 반환할 이유가 없는 목록 조회에서 DTO Projection으로 바꾸면 쿼리 컬럼 수가 줄고 성능이 오른다.
 
-연관관계가 있는 Entity를 조회할 때, 1번의 쿼리로 N개의 데이터를 가져온 후, 각 데이터마다 추가 쿼리가 N번 발생하는 현상이다.
+---
+
+## 1. N+1 문제 — 왜 LAZY가 정답이고 어디서 새는가
+
+### 1.1 N+1 발생 흐름
+
+<strong>N+1 문제는 1번의 쿼리로 N개의 레코드를 가져온 뒤, 각 레코드의 연관 데이터를 조회하기 위해 N번의 추가 쿼리가 발생하는 현상이다.</strong>
+
+"쿼리 1번으로 주문 목록을 가져왔는데, OrderItem을 접근할 때마다 SELECT가 터진다"는 게 N+1의 실체다.
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant DB as Database
+
+    App->>DB: SELECT * FROM orders (1번)
+    Note over DB: 10개의 Order 반환
+
+    loop N번 반복 (order_id 1~10)
+        App->>DB: SELECT * FROM order_item WHERE order_id = ?
+        DB-->>App: OrderItem 목록
+    end
+
+    Note over App,DB: 1번 + 10번 = 11번 쿼리 (N+1)
+```
+
+10개의 주문이면 1 + 10 = 11번 쿼리다. 100개면 101번. 연관이 중첩되면 기하급수로 늘어난다.
 
 ```java
 // Order : OrderItem = 1 : N 관계
@@ -53,11 +85,51 @@ for (Order order : orders) {
 }
 ```
 
-10개의 주문을 조회하면 1 + 10 = 11번의 쿼리가 실행된다.
+### 1.2 LAZY가 기본 — 그래도 새는 두 시나리오
 
-### 2. 해결 방법
+<strong>모든 연관관계는 `FetchType.LAZY`로 설정하는 것이 기본 원칙이다.</strong> LAZY는 연관 데이터를 실제 접근 시점까지 쿼리를 미룬다. EAGER는 부모 로딩과 동시에 연관 데이터를 가져온다.
 
-#### Fetch Join
+그런데 LAZY로 설정해도 N+1이 터지는 시나리오가 두 가지 있다.
+
+**시나리오 1 — @ManyToOne·@OneToOne 기본값이 EAGER**
+
+JPA 스펙에서 `@ManyToOne`, `@OneToOne`의 기본 fetch 전략은 `EAGER`다. 명시적으로 LAZY를 선언하지 않으면 부모 로딩 시 연관 Entity가 항상 따라온다.
+
+```java
+@Entity
+public class Order {
+
+    // 기본값 EAGER — 반드시 LAZY로 바꿔야 한다
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Member member;
+
+    // @OneToMany는 기본값이 LAZY라 그나마 낫다
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+    private List<OrderItem> orderItems = new ArrayList<>();
+}
+```
+
+**시나리오 2 — JPQL에서는 EAGER도 N+1**
+
+연관관계가 EAGER라도 JPQL이 JOIN을 자동으로 넣지 않는다. JPQL은 쿼리를 그대로 실행한 뒤 EAGER 설정을 보고 추가 쿼리를 발사한다. 결국 1 + N이다.
+
+```java
+// JPQL로 조회해도 EAGER 연관관계는 추가 쿼리가 발생한다
+@Query("SELECT o FROM Order o")
+List<Order> findAll();
+// → SELECT * FROM orders
+// → SELECT * FROM member WHERE id = ? (EAGER라서 N번 추가)
+```
+
+---
+
+## 2. N+1 해결 도구 3종 — Fetch Join · @EntityGraph · @BatchSize
+
+### 2.1 Fetch Join — 페이징 못 쓰는 이유
+
+<strong>Fetch Join은 JPQL에서 연관 Entity를 한 번의 JOIN 쿼리로 함께 가져오는 방법이다.</strong>
+
+N+1을 단 1번의 쿼리로 해결하는 가장 직접적인 방법이다. 그러나 치명적인 한계가 있다.
 
 ```java
 public interface OrderRepository extends JpaRepository<Order, Long> {
@@ -80,11 +152,15 @@ interface OrderRepository : JpaRepository<Order, Long> {
 
 </details>
 
-> **주의**: Fetch Join은 페이징과 함께 사용할 수 없다. 컬렉션을 Fetch Join하면 데이터가 뻥튀기되어 메모리에서 페이징 처리된다.
+> <strong>주의</strong>: 컬렉션 Fetch Join + 페이징은 Hibernate가 경고를 남긴다. 전체 데이터를 메모리에 올린 뒤 페이징하므로 OOM 위험이 있다.
 
-#### @EntityGraph
+왜 뻥튀기가 되는가? Order 1개에 OrderItem 3개면 JOIN 결과는 3행이다. 여기서 페이징하면 "Order 기준 10개"가 아니라 "행 기준 10개"가 잘린다.
 
-`@EntityGraph`는 JPQL 없이 Fetch Join과 동일한 효과를 낼 수 있다.
+### 2.2 @EntityGraph — 선언적 fetch
+
+<strong>@EntityGraph는 JPQL 없이 어노테이션으로 연관관계의 fetch 전략을 메서드 단위로 오버라이드하는 방법이다.</strong>
+
+Fetch Join과 동일한 JOIN 전략을 사용하지만, JPQL을 직접 작성하지 않아도 된다. 중첩 연관관계도 attributePaths 배열로 선언한다.
 
 ```java
 public interface OrderRepository extends JpaRepository<Order, Long> {
@@ -108,28 +184,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 }
 ```
 
-**@EntityGraph vs Fetch Join 비교**
+그런데 @EntityGraph도 Fetch Join과 동일하게 컬렉션을 포함하면 페이징이 메모리 처리로 넘어간다. 이 한계는 두 방법이 공유한다.
 
-| 항목 | @EntityGraph | Fetch Join |
-|------|-------------|------------|
-| 문법 | 어노테이션 | JPQL 작성 |
-| 유연성 | 고정된 그래프 | 조건에 따라 다른 쿼리 |
-| 가독성 | 좋음 | JPQL이 길어질 수 있음 |
-| 동적 적용 | 어려움 | 가능 |
+### 2.3 @BatchSize — 페이징과 양립
 
-> **팁**: 단순한 연관관계는 `@EntityGraph`, 복잡한 조건이 필요하면 Fetch Join을 사용한다.
+<strong>@BatchSize는 지연 로딩 시 발생하는 N번의 쿼리를 IN 조건 하나로 묶어주는 방법이다.</strong>
 
-#### @BatchSize
-
-`application.yml`에서 전역 설정하거나, Entity에 직접 적용할 수 있다.
+Fetch Join이 "미리 JOIN해서 가져오는" 전략이라면, @BatchSize는 "나중에 한꺼번에 가져오는" 전략이다. 쿼리가 1 + 1로 줄고, 페이징과 함께 써도 안전하다.
 
 ```yaml
+# application.yml — 전역 설정 (권장)
 spring:
   jpa:
     properties:
       hibernate:
         default_batch_fetch_size: 100
 ```
+
+전역 설정 대신 Entity 필드에 직접 붙일 수도 있다.
 
 ```java
 @Entity
@@ -141,76 +213,47 @@ public class Order {
 }
 ```
 
-`@BatchSize`는 지연 로딩 시 IN 쿼리로 한 번에 가져온다:
+적용 전후 쿼리 차이를 보면 차이가 명확하다.
 
 ```sql
--- 기존: N번의 쿼리
+-- 적용 전: 주문 10개면 10번 쿼리
 SELECT * FROM order_item WHERE order_id = 1;
 SELECT * FROM order_item WHERE order_id = 2;
 ...
 
--- @BatchSize 적용 후: 1번의 쿼리
-SELECT * FROM order_item WHERE order_id IN (1, 2, 3, ..., 100);
+-- 적용 후: IN 쿼리 1번으로 처리
+SELECT * FROM order_item WHERE order_id IN (1, 2, 3, ..., 10);
 ```
 
-<details>
-<summary>💬 Fetch Join vs @EntityGraph vs @BatchSize 선택 기준</summary>
+### 2.4 셋 중 무엇을 언제
 
-| 방법 | 장점 | 단점 | 사용 시점 |
-|------|------|------|----------|
-| **Fetch Join** | 한 번의 쿼리로 해결 | 페이징 불가, 카테시안 곱 주의 | 조회 건수가 적고 페이징이 필요 없을 때 |
-| **@EntityGraph** | 선언적, 메서드별 적용 가능 | Fetch Join과 동일한 한계 | 특정 쿼리에만 즉시 로딩이 필요할 때 |
-| **@BatchSize** | 페이징 가능, 전역 설정 가능 | 추가 쿼리 발생 (1 + 1) | 페이징이 필요하거나 컬렉션이 여러 개일 때 |
+결국 세 방법 모두 N+1을 줄이지만, 페이징 여부와 컬렉션 수에 따라 선택이 달라진다.
 
-**과제에서 권장**: `@BatchSize`를 전역 설정하고, 필요한 경우에만 Fetch Join 사용
+| 방법 | 쿼리 수 | 페이징 | 주요 제약 | 권장 시나리오 |
+|------|---------|--------|-----------|--------------|
+| <strong>Fetch Join</strong> | 1번 | 컬렉션 포함 시 불가 | 카테시안 곱, 컬렉션 2개 이상 MultipleBagFetchException | 페이징 없는 단건·소량 조회 |
+| <strong>@EntityGraph</strong> | 1번 | 컬렉션 포함 시 불가 | Fetch Join과 동일 | 특정 쿼리 메서드에만 즉시 로딩 필요 |
+| <strong>@BatchSize</strong> | 1 + 1 | 가능 | 추가 쿼리 1회 | 페이징 필요 / 컬렉션 여러 개 |
 
-</details>
-
-### 3. 지연 로딩 vs 즉시 로딩
-
-```java
-@Entity
-public class Order {
-
-    // 즉시 로딩 (EAGER) - 권장하지 않음
-    @ManyToOne(fetch = FetchType.EAGER)
-    private Member member;
-
-    // 지연 로딩 (LAZY) - 권장
-    @ManyToOne(fetch = FetchType.LAZY)
-    private Member member;
-}
-```
-
-<details>
-<summary>💡 실무 팁: 모든 연관관계는 LAZY로</summary>
-
-**기본 원칙**: 모든 연관관계는 `FetchType.LAZY`로 설정하고, 필요한 시점에 Fetch Join이나 @EntityGraph로 함께 조회한다.
-
-**이유**:
-1. EAGER는 예상치 못한 쿼리를 발생시킨다
-2. JPQL 사용 시 EAGER도 N+1 문제가 발생한다
-3. 필요한 데이터만 조회하는 것이 성능상 유리하다
-
-**주의**: `@ManyToOne`, `@OneToOne`의 기본값은 EAGER이므로 명시적으로 LAZY 설정이 필요하다.
-
-</details>
+> <strong>핵심</strong>: 과제에서는 `default_batch_fetch_size: 100`을 전역으로 설정한다. 페이징 없는 단건 상세 조회에만 Fetch Join을 선택적으로 쓰는 것이 가장 안전한 조합이다.
 
 ---
 
-## 페이지네이션
+## 3. 페이지네이션 — Page · Slice · Cursor
 
-### 1. Spring Data의 Pageable
+### 3.1 Pageable과 Page<T> 응답 형식
 
-**Page 응답 방식 비교**
+<strong>Pageable은 Spring Data JPA가 페이지 번호·크기·정렬을 추상화한 인터페이스다.</strong> Repository 메서드 파라미터로 받으면 자동으로 LIMIT/OFFSET SQL로 변환해준다.
 
-| 방식 | 장점 | 단점 |
-|------|------|------|
-| `Page<T>` 직접 반환 | 간단, Spring 표준 | 불필요한 필드 많음 (`sort`, `pageable` 등) |
-| `CommonResponse<Page<T>>` | 일관된 응답 형식 | Page 내부에 중첩 정보 |
-| 커스텀 PageResponse | 필요한 필드만 | 추가 DTO 작성 필요 |
+응답을 어떤 타입으로 내보낼지는 상황에 따라 세 가지 선택지가 있다.
 
-**권장**: 과제에서는 `Page<T>` 직접 반환 또는 `CommonResponse<Page<T>>`로 감싸는 것이 간단하고 충분하다.
+| 방식 | 특징 | 과제 권장 여부 |
+|------|------|--------------|
+| `Page<T>` 직접 반환 | Spring 표준, sort·pageable 메타 포함 | 충분 |
+| `CommonResponse<Page<T>>` | 일관된 응답 형식 | 1편에서 CommonResponse를 쓴다면 적합 |
+| 커스텀 PageResponse | 필요한 필드만 선택 | 선택 사항 |
+
+아래는 Service와 Controller에서의 기본 구조다.
 
 ```java
 @Service
@@ -234,24 +277,17 @@ public class ProductController {
 
     private final ProductService productService;
 
-    // 방식 1: Page 직접 반환
     @GetMapping
     public Page<ProductResponse> getProducts(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
         return productService.getProducts(pageable);
     }
-
-    // 방식 2: CommonResponse로 감싸기
-    @GetMapping("/v2")
-    public CommonResponse<Page<ProductResponse>> getProductsV2(Pageable pageable) {
-        return CommonResponse.success(productService.getProducts(pageable));
-    }
 }
 ```
 
 <details>
-<summary>💡 커스텀 PageResponse 예시 (선택)</summary>
+<summary>커스텀 PageResponse 예시 (선택)</summary>
 
 ```java
 public record PageResponse<T>(
@@ -308,12 +344,14 @@ class ProductController(
 
 </details>
 
-### 2. Page vs Slice
+### 3.2 Page vs Slice
 
-| 타입 | 특징 | 쿼리 |
-|------|------|------|
-| **Page** | 전체 개수 포함 | SELECT + COUNT |
-| **Slice** | 다음 페이지 존재 여부만 | SELECT (size + 1) |
+<strong>Page와 Slice의 차이는 COUNT 쿼리 실행 여부다.</strong>
+
+| 타입 | 전체 개수 | 실행 쿼리 | 사용 패턴 |
+|------|---------|---------|---------|
+| <strong>Page</strong> | 포함 (`totalElements`) | SELECT + COUNT | 관리자 목록, 전체 페이지 수 표시 |
+| <strong>Slice</strong> | 미포함 (`hasNext`만) | SELECT (size + 1) | 무한 스크롤 초기, 다음 여부만 필요 |
 
 ```java
 // Page - 전체 개수가 필요한 경우 (일반적인 페이지네이션)
@@ -326,67 +364,26 @@ Slice<Product> findByCategory(Category category, Pageable pageable);
 List<Product> findByCategory(Category category, Pageable pageable);
 ```
 
-<details>
-<summary>💡 실무 팁: COUNT 쿼리 최적화</summary>
+### 3.3 Offset vs Cursor — 대용량의 분기
 
-Page를 사용하면 COUNT 쿼리가 함께 실행되는데, 복잡한 조회 쿼리의 경우 COUNT 쿼리도 느려질 수 있다.
+Offset 기반 페이징의 약점은 `OFFSET`이 커질수록 DB가 앞 행을 전부 스캔해야 한다는 것이다. 수백만 row 테이블에서 page=500 요청은 500 × size개의 행을 건너뛰는 비용이 든다.
 
-```java
-// COUNT 쿼리 분리 최적화
-@Query(value = "SELECT p FROM Product p JOIN FETCH p.category WHERE p.status = :status",
-       countQuery = "SELECT COUNT(p) FROM Product p WHERE p.status = :status")
-Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pageable);
+<strong>Cursor 기반 페이징은 마지막으로 조회한 ID를 기준으로 다음 데이터를 가져와, 앞 행 스캔 비용을 완전히 제거한다.</strong>
+
+아래 결정 트리로 어떤 방식을 고를지 판단할 수 있다.
+
+```mermaid
+flowchart TD
+    A([페이지네이션 시작]) --> B{전체 개수가\n필요한가?}
+    B -->|Yes| C[Page\nSELECT + COUNT]
+    B -->|No| D{무한 스크롤 /\nSNS 피드인가?}
+    D -->|Yes| E{데이터 규모가\n수백만 row 이상?}
+    D -->|No| F[Slice\nhasNext만 확인]
+    E -->|Yes| G[Cursor 기반\nID < :cursor]
+    E -->|No| F
 ```
 
-**대안**:
-- 전체 개수가 필요 없으면 `Slice` 사용
-- 대략적인 개수만 필요하면 캐싱된 통계 테이블 활용
-
-**캐싱된 통계 테이블 활용 예시**
-
-대용량 데이터에서 매번 COUNT 쿼리를 실행하면 성능 문제가 발생한다. 이 경우 별도 통계 테이블을 두고 캐싱한다.
-
-```java
-// 1. 통계 Entity 정의
-@Entity
-public class ProductStats {
-    @Id
-    private Long categoryId;
-    private Long productCount;
-    private LocalDateTime updatedAt;
-}
-
-// 2. 상품 등록/삭제 시 통계 갱신 (이벤트 활용)
-@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-public void updateStats(ProductCreatedEvent event) {
-    statsRepository.incrementCount(event.getCategoryId());
-}
-
-// 3. 캐시와 함께 사용
-@Cacheable("productCounts")
-public Long getProductCount(Long categoryId) {
-    return statsRepository.findById(categoryId)
-        .map(ProductStats::getProductCount)
-        .orElse(0L);
-}
-```
-
-> **과제에서는**: 이 수준의 최적화는 필요하지 않다. `Page`의 기본 COUNT 쿼리로 충분하다.
-
-</details>
-
-### 3. Offset vs Cursor 기반 페이지네이션
-
-#### Offset 기반 (기본)
-
-```java
-// page=100, size=20 요청 시
-// OFFSET 2000 LIMIT 20 -> 2000개를 스킵해야 함
-```
-
-**문제점**: 데이터가 많아지면 OFFSET이 커져서 성능이 저하된다.
-
-#### Cursor 기반
+Cursor 구현의 핵심은 "마지막 항목의 ID를 다음 요청의 기준으로 사용"하는 것이다.
 
 ```java
 public interface ProductRepository extends JpaRepository<Product, Long> {
@@ -405,7 +402,8 @@ public class ProductService {
         Pageable pageable = PageRequest.of(0, size + 1); // 다음 페이지 확인용 +1
 
         List<Product> products = cursor == null
-            ? productRepository.findAll(PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))).getContent()
+            ? productRepository.findAll(
+                PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))).getContent()
             : productRepository.findByIdLessThan(cursor, pageable);
 
         boolean hasNext = products.size() > size;
@@ -439,31 +437,37 @@ public class CursorResponse<T> {
 
 </details>
 
-<details>
-<summary>💬 Offset vs Cursor 선택 기준</summary>
+> <strong>과제 권장</strong>: 기본적으로 Offset(Page)을 사용한다. README에 "대용량이면 Cursor 방식으로 전환 가능하며, 트레이드오프는 ~"를 한 문단 써두면 가산점이 된다.
 
-| 방식 | 장점 | 단점 | 사용 시점 |
-|------|------|------|----------|
-| **Offset** | 구현 간단, 특정 페이지 이동 가능 | 대용량에서 느림, 데이터 중복/누락 가능 | 관리자 페이지, 데이터가 적은 경우 |
-| **Cursor** | 대용량에서 빠름, 일관된 결과 | 특정 페이지 이동 불가 | 무한 스크롤, SNS 피드, 대용량 데이터 |
+### 3.4 참고: COUNT 쿼리 최적화
 
-**과제에서 권장**: 기본적으로 Offset(Page) 사용, README에 Cursor 방식의 존재와 트레이드오프를 언급하면 가산점
+Page를 쓸 때 COUNT 쿼리도 함께 실행된다. JOIN이 많은 복잡한 조회에서는 COUNT 쿼리도 느려진다. 이때는 countQuery를 분리한다.
 
-</details>
+```java
+@Query(
+    value = "SELECT p FROM Product p JOIN FETCH p.category WHERE p.status = :status",
+    countQuery = "SELECT COUNT(p) FROM Product p WHERE p.status = :status"
+)
+Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pageable);
+```
+
+> <strong>참고</strong>: 과제 규모에서는 이 수준의 최적화가 필요한 경우가 드물다. 구조 자체를 알고 코드에 적용해두면 "의도적으로 설계했다"는 신호가 된다.
 
 ---
 
-## 캐싱 전략
+## 4. 캐싱 — Spring Cache · Caffeine · Redis
 
-### 1. Spring Cache 추상화
+### 4.1 Spring Cache 추상화 (@Cacheable·@CachePut·@CacheEvict)
 
-```java
-@Configuration
-@EnableCaching
-public class CacheConfig {
-    // 기본 설정으로 ConcurrentHashMap 기반 캐시 사용
-}
-```
+<strong>Spring Cache 추상화는 캐시 구현체에 상관없이 어노테이션만으로 캐싱 로직을 선언하는 방법이다.</strong>
+
+캐시 구현체를 Caffeine으로 바꾸든 Redis로 바꾸든, 서비스 코드의 어노테이션은 변경 없이 동작한다. 세 가지 핵심 어노테이션의 역할은 다음과 같다.
+
+| 어노테이션 | 동작 | 사용 시점 |
+|-----------|------|---------|
+| `@Cacheable` | 캐시에 있으면 반환, 없으면 실행 후 저장 | 조회 메서드 |
+| `@CachePut` | 항상 실행 후 캐시 갱신 | 수정 메서드 |
+| `@CacheEvict` | 캐시에서 해당 키 제거 | 삭제 메서드 |
 
 ```java
 @Service
@@ -472,10 +476,6 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    /**
-     * 상품 상세 조회 - 캐시 적용
-     * key: productId, 캐시명: product
-     */
     @Cacheable(value = "product", key = "#productId")
     public ProductDetailResponse getProductDetail(Long productId) {
         Product product = productRepository.findById(productId)
@@ -483,9 +483,6 @@ public class ProductService {
         return ProductDetailResponse.from(product);
     }
 
-    /**
-     * 상품 수정 - 캐시 갱신
-     */
     @CachePut(value = "product", key = "#productId")
     public ProductDetailResponse updateProduct(Long productId, ProductUpdateCommand command) {
         Product product = productRepository.findById(productId)
@@ -494,31 +491,31 @@ public class ProductService {
         return ProductDetailResponse.from(product);
     }
 
-    /**
-     * 상품 삭제 - 캐시 제거
-     */
     @CacheEvict(value = "product", key = "#productId")
     public void deleteProduct(Long productId) {
         productRepository.deleteById(productId);
     }
 
-    /**
-     * 전체 상품 캐시 제거
-     */
     @CacheEvict(value = "product", allEntries = true)
     public void clearProductCache() {
-        // 캐시만 제거
+        // 캐시 전체 제거만 수행
     }
 }
 ```
 
-### 2. Caffeine 캐시 적용
+### 4.2 Caffeine — 단일 서버 표준
+
+<strong>Caffeine은 JVM 메모리 내에서 동작하는 고성능 로컬 캐시 라이브러리다.</strong>
+
+네트워크 통신 없이 메모리 직접 접근이라 속도가 가장 빠르다. 단일 서버 과제에서 기본 선택지다.
 
 ```groovy
 // build.gradle
 implementation 'com.github.ben-manes.caffeine:caffeine'
 implementation 'org.springframework.boot:spring-boot-starter-cache'
 ```
+
+기본 설정은 전체 캐시에 동일한 정책을 적용한다.
 
 ```java
 @Configuration
@@ -529,15 +526,15 @@ public class CacheConfig {
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager();
         cacheManager.setCaffeine(Caffeine.newBuilder()
-            .maximumSize(1000)           // 최대 1000개 항목
-            .expireAfterWrite(10, TimeUnit.MINUTES)  // 10분 후 만료
-            .recordStats());             // 통계 기록
+            .maximumSize(1000)
+            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .recordStats());
         return cacheManager;
     }
 }
 ```
 
-#### 캐시별 설정 분리
+캐시별로 TTL과 용량을 다르게 설정할 때는 SimpleCacheManager를 쓴다.
 
 ```java
 @Configuration
@@ -568,16 +565,18 @@ public class CacheConfig {
 }
 ```
 
-### 3. Redis 캐시 적용
+### 4.3 Redis — 분산 캐시
+
+<strong>Redis는 외부 서버에서 동작하는 분산 캐시로, 여러 애플리케이션 인스턴스 간에 캐시 데이터를 공유한다.</strong>
+
+멀티 서버 환경에서 각 인스턴스가 로컬 캐시를 따로 유지하면 데이터 불일치가 생긴다. Redis는 이 문제를 해결하는 공유 저장소 역할을 한다.
 
 ```groovy
-// build.gradle
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 implementation 'org.springframework.boot:spring-boot-starter-cache'
 ```
 
 ```yaml
-# application.yml
 spring:
   redis:
     host: localhost
@@ -585,7 +584,7 @@ spring:
   cache:
     type: redis
     redis:
-      time-to-live: 600000  # 10분 (밀리초)
+      time-to-live: 600000
       cache-null-values: false
 ```
 
@@ -616,52 +615,60 @@ public class RedisCacheConfig {
 }
 ```
 
-<details>
-<summary>💬 로컬 캐시 vs 분산 캐시</summary>
+### 4.4 로컬 vs 분산 결정
 
-| 구분 | 로컬 캐시 (Caffeine) | 분산 캐시 (Redis) |
-|------|---------------------|------------------|
-| **속도** | 매우 빠름 (메모리 직접 접근) | 상대적으로 느림 (네트워크 통신) |
-| **일관성** | 서버 간 불일치 가능 | 일관성 보장 |
-| **용량** | 서버 메모리 제한 | 별도 서버로 확장 가능 |
-| **복잡도** | 간단 | Redis 인프라 필요 |
+어떤 캐시를 선택할지는 서버 수와 일관성 요구사항으로 결정한다.
 
-**과제에서 권장**:
-- 단일 서버 과제라면 Caffeine으로 충분
-- Docker Compose에 Redis를 포함시키면 가산점
+```mermaid
+flowchart TD
+    A([캐시 선택 시작]) --> B{서버 인스턴스가\n2개 이상?}
+    B -->|No| C[Caffeine\n단일 서버로 충분]
+    B -->|Yes| D{서버 간\n강한 일관성 필요?}
+    D -->|Yes| E[Redis\n분산 캐시]
+    D -->|No| F{캐시 데이터\n용량이 매우 큼?}
+    F -->|Yes| E
+    F -->|No| G[Caffeine + TTL 조정\n로컬 캐시로 충분]
+```
 
-</details>
+| 구분 | Caffeine (로컬) | Redis (분산) |
+|------|----------------|-------------|
+| 속도 | 매우 빠름 (메모리 직접) | 상대적으로 느림 (네트워크) |
+| 일관성 | 서버 간 불일치 가능 | 공유 저장소로 일관성 보장 |
+| 용량 | 서버 JVM 메모리 제한 | 별도 서버로 확장 가능 |
+| 복잡도 | 간단 | Redis 인프라 필요 |
 
-<details>
-<summary>💡 캐시 무효화 전략</summary>
+> <strong>과제 권장</strong>: 단일 서버라면 Caffeine이 충분하다. Docker Compose에 Redis 컨테이너를 추가해서 Redis 캐시를 연결하면 "분산 환경도 고려했다"는 가산점이 된다.
 
-**Cache-Aside (Lazy Loading)**:
-1. 캐시에서 먼저 조회
-2. 없으면 DB에서 조회 후 캐시에 저장
-3. 수정/삭제 시 캐시 무효화
+### 4.5 참고: 캐시 무효화 전략
 
-**Write-Through**:
-1. 데이터 저장 시 캐시와 DB 동시 업데이트
+캐시를 잘 쓰려면 무효화 전략도 함께 설계해야 한다. 자주 쓰는 두 패턴은 다음과 같다.
 
-**주의사항**:
-- 목록 조회 캐시는 무효화가 어려움 (개별 항목 변경 시 전체 무효화 필요)
-- 캐시 TTL을 적절히 설정하여 자연 만료 유도
-- 캐시 키 설계 시 충돌 방지 (prefix 사용)
+**Cache-Aside (Lazy Loading)** — Spring Cache 기본 동작 방식
 
-</details>
+1. 조회 시 캐시에서 먼저 확인
+2. 캐시 미스 → DB 조회 후 캐시에 저장
+3. 수정/삭제 시 `@CacheEvict`로 해당 키 제거
+
+**Write-Through** — 쓰기 시 캐시와 DB 동시 갱신
+
+1. `@CachePut`으로 항상 실행 후 캐시 갱신
+2. 조회는 캐시에서 바로 반환
+
+주의사항이 두 가지 있다. 첫째, 목록 조회 캐시는 항목 하나가 변경될 때 전체 무효화(`allEntries = true`)가 필요하다. 둘째, 캐시 키에 prefix를 붙여 키 충돌을 막는다.
 
 ---
 
-## 쿼리 최적화
+## 5. 쿼리 최적화 — Projection · QueryDSL · 인덱스
 
-### 1. Projection 활용
+### 5.1 Projection — Entity 대신 필드만
 
-전체 Entity 대신 필요한 필드만 조회한다.
+<strong>Projection은 전체 Entity 대신 필요한 필드만 선택해서 조회하는 방법이다.</strong>
 
-#### Interface Projection
+목록 조회에서 전체 Entity를 반환하면 사용하지 않는 컬럼도 SELECT에 포함된다. Projection을 쓰면 DB 전송량과 메모리 사용이 줄어든다.
+
+두 가지 방식이 있다. Interface Projection은 인터페이스를 정의하면 Hibernate가 프록시를 생성한다.
 
 ```java
-// 필요한 필드만 정의한 인터페이스
 public interface ProductSummary {
     Long getId();
     String getName();
@@ -669,12 +676,11 @@ public interface ProductSummary {
 }
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
-
     List<ProductSummary> findByCategory(Category category);
 }
 ```
 
-#### Class Projection (DTO)
+DTO Projection은 record나 클래스로 직접 생성하므로 프록시 오버헤드가 없어 성능이 더 낫다.
 
 ```java
 public record ProductSummaryDto(
@@ -691,8 +697,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 }
 ```
 
+성능 순서는 DTO Projection > Interface Projection > Entity 전체 조회다. 단, 조회 후 Entity를 수정해야 하면 Entity로 조회해야 한다.
+
 <details>
-<summary>💡 Projection 성능 비교</summary>
+<summary>Projection 성능 비교 코드</summary>
 
 ```java
 // 1. Entity 전체 조회 - 모든 컬럼 + 연관 Entity
@@ -701,25 +709,26 @@ List<Product> products = productRepository.findAll();
 // 2. Interface Projection - 필요한 컬럼만 (Proxy 생성)
 List<ProductSummary> summaries = productRepository.findAllProjectedBy();
 
-// 3. DTO Projection - 필요한 컬럼만 (직접 생성)
+// 3. DTO Projection - 필요한 컬럼만 (직접 생성, 가장 빠름)
 List<ProductSummaryDto> dtos = productRepository.findAllSummary();
 ```
 
-**성능**: DTO Projection > Interface Projection > Entity 전체 조회
-
-단, 조회 후 Entity 수정이 필요하면 Entity로 조회해야 한다.
-
 </details>
 
-### 2. QueryDSL 동적 쿼리
+### 5.2 QueryDSL — 동적 쿼리
+
+<strong>QueryDSL은 타입 안전한 Java 코드로 JPQL을 생성하는 프레임워크다.</strong>
+
+JPQL은 문자열이라 컴파일 타임에 오류를 잡지 못하고, 동적 조건을 붙이려면 문자열 조작이 필요하다. QueryDSL은 이 두 문제를 해결한다.
 
 ```groovy
-// build.gradle
 implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
 annotationProcessor 'com.querydsl:querydsl-apt:5.0.0:jakarta'
 annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
 annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 ```
+
+동적 검색 조건을 BooleanExpression으로 구성한 전형적인 패턴은 다음과 같다.
 
 ```java
 @Repository
@@ -761,6 +770,8 @@ public class ProductQueryRepository {
 }
 ```
 
+조건 메서드가 null을 반환하면 QueryDSL이 해당 WHERE 절을 자동으로 제외한다. 이게 "동적 쿼리가 쉽다"는 이유다.
+
 <details>
 <summary>Kotlin + QueryDSL</summary>
 
@@ -800,20 +811,19 @@ class ProductQueryRepository(
 
 </details>
 
-<details>
-<summary>💬 QueryDSL vs JPQL vs Native Query</summary>
+QueryDSL 도입이 맞는 시점은 "검색 조건이 2개 이상이고, 선택적으로 적용된다"이다. 단순 CRUD는 Spring Data JPA가 더 간결하다.
 
-| 방식 | 장점 | 단점 | 사용 시점 |
-|------|------|------|----------|
-| **JPQL** | JPA 표준, Entity 매핑 | 문자열 기반, 동적 쿼리 어려움 | 단순한 정적 쿼리 |
-| **QueryDSL** | 타입 안전, 동적 쿼리 용이 | 설정 복잡, Q클래스 생성 필요 | 복잡한 동적 쿼리 |
-| **Native Query** | SQL 직접 작성, 최적화 가능 | DB 종속, Entity 매핑 제한 | 복잡한 통계, 특정 DB 기능 필요 시 |
+| 방식 | 타입 안전 | 동적 쿼리 | 사용 시점 |
+|------|---------|---------|---------|
+| <strong>JPQL</strong> | X (문자열) | 어려움 | 단순 정적 쿼리 |
+| <strong>QueryDSL</strong> | O | 쉬움 | 복잡한 동적 검색 |
+| <strong>Native Query</strong> | X | 어려움 | DB 특화 기능, 복잡한 통계 |
 
-**과제에서 권장**: 단순 CRUD는 Spring Data JPA, 복잡한 검색 조건이 있으면 QueryDSL 도입
+### 5.3 인덱스 설계 — Entity 어노테이션으로
 
-</details>
+<strong>인덱스는 WHERE·JOIN·ORDER BY에 자주 쓰이는 컬럼에 대한 DB 검색 최적화 구조다.</strong>
 
-### 3. 인덱스 설계
+JPA에서는 Entity `@Table` 어노테이션에 `@Index`를 선언하면 DDL 자동 생성 시 인덱스가 포함된다. "이 컬럼에 인덱스가 필요하다"는 의도를 코드 레벨에서 드러내는 방식이다.
 
 ```java
 @Entity
@@ -828,7 +838,7 @@ public class Product {
 ```
 
 <details>
-<summary>💡 인덱스 설계 팁</summary>
+<summary>인덱스 설계 기준</summary>
 
 **인덱스가 필요한 경우**:
 - WHERE 절에 자주 사용되는 컬럼
@@ -837,11 +847,9 @@ public class Product {
 - 카디널리티가 높은 컬럼 (고유값이 많은)
 
 **인덱스 주의사항**:
-- INSERT/UPDATE/DELETE 성능 저하
-- 복합 인덱스는 컬럼 순서가 중요 (왼쪽부터 사용)
-- 과도한 인덱스는 오히려 성능 저하
-
-**과제에서**: Entity에 `@Index`를 선언하면 DDL 자동 생성 시 인덱스가 포함되어 의도를 보여줄 수 있다.
+- INSERT/UPDATE/DELETE 성능을 저하시킨다 (인덱스 갱신 비용)
+- 복합 인덱스는 컬럼 순서가 중요하다 (왼쪽부터 사용)
+- 과도한 인덱스는 오히려 성능 저하 원인이 된다
 
 </details>
 
@@ -849,48 +857,51 @@ public class Product {
 
 ## 정리
 
+- <strong>LAZY 전역 + @BatchSize 100</strong> — 모든 연관관계를 LAZY로 선언하고 `default_batch_fetch_size: 100`을 전역 설정하면 N+1을 안전하게 잡는 기본 방어선이 된다.
+- <strong>페이징 분기는 전체 개수 필요 여부로</strong> — 전체 개수가 필요하면 Page, 다음 존재 여부만 필요하면 Slice, 대용량 무한 스크롤이면 Cursor다.
+- <strong>캐시는 서버 수로 시작한다</strong> — 단일 서버면 Caffeine, 멀티 서버면 Redis. 과제에서 Docker Compose에 Redis를 추가하면 가산점이다.
+- <strong>목록 조회에는 Projection을 기본으로 쓴다</strong> — 수정이 필요 없는 목록에서 Entity 대신 DTO Projection을 쓰면 쿼리 컬럼 수와 메모리 사용이 줄어든다.
+- <strong>복잡한 동적 검색에만 QueryDSL을 쓴다</strong> — 단순 CRUD는 Spring Data JPA가 더 간결하다. 선택적 검색 조건이 2개 이상일 때 QueryDSL이 명확한 이점을 준다.
+
 ### 체크리스트
 
 | 항목 | 확인 |
 |------|------|
 | 모든 연관관계가 `FetchType.LAZY`로 설정되어 있는가? | ⬜ |
-| `@BatchSize` 전역 설정이 적용되어 있는가? | ⬜ |
+| `@ManyToOne`·`@OneToOne`에 명시적 `LAZY` 선언이 있는가? | ⬜ |
+| `default_batch_fetch_size` 전역 설정이 적용되어 있는가? | ⬜ |
 | 페이지네이션이 필요한 API에 `Pageable`이 적용되어 있는가? | ⬜ |
 | 자주 조회되는 데이터에 캐싱이 적용되어 있는가? | ⬜ |
 | 목록 조회 시 필요한 필드만 Projection으로 가져오는가? | ⬜ |
 | 복잡한 동적 쿼리에 QueryDSL이 사용되었는가? | ⬜ |
 
-### 핵심 포인트
-
-1. **N+1 문제**: 모든 연관관계는 LAZY, 필요 시 Fetch Join 또는 @BatchSize
-2. **페이지네이션**: Page(Offset) 기본, 대용량이면 Cursor 고려
-3. **캐싱**: 변경이 적고 조회가 많은 데이터에 적용
-4. **쿼리 최적화**: 필요한 데이터만 조회 (Projection, 조건 절 최적화)
-
-<details>
-<summary>⚠️ 과제에서 흔한 실수</summary>
-
-1. **EAGER 로딩 그대로 사용**
-   - `@ManyToOne`, `@OneToOne` 기본값이 EAGER
-   - 반드시 명시적으로 LAZY 설정
-
-2. **무분별한 Fetch Join**
-   - 컬렉션 여러 개를 Fetch Join하면 카테시안 곱 발생
-   - `MultipleBagFetchException` 발생 가능
-
-3. **COUNT 쿼리 무시**
-   - Page 사용 시 COUNT 쿼리도 함께 실행됨
-   - 복잡한 조회 시 COUNT 쿼리 분리 또는 Slice 사용
-
-4. **캐시 키 충돌**
-   - 서로 다른 메서드에서 같은 캐시명 + 같은 키 사용
-   - 메서드별로 고유한 캐시명 또는 키 전략 필요
-
-</details>
+5편 Security & Authentication에서는 Spring Security 필터 체인, JWT 발급·검증, 비밀번호 암호화를 다룬다. 인증·인가 분기 설계와 감점 패턴 4종도 함께 정리한다.
 
 ---
 
-다음 편에서는 **Spring Security**, **JWT 인증**, **비밀번호 관리** 에 대해 다룹니다.
+## 부록
 
-👉 [이전: 3편 - Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
-👉 [다음: 5편 - Security & Authentication](/blog/spring-boot-pre-interview-guide-5)
+### 흔한 실수 5종
+
+<details>
+<summary>과제에서 자주 보이는 성능 실수 목록</summary>
+
+1. **EAGER 로딩 그대로 사용** — `@ManyToOne`, `@OneToOne` 기본값이 EAGER다. 명시적으로 LAZY를 선언하지 않으면 모든 조회에서 연관 데이터가 따라온다.
+
+2. **무분별한 컬렉션 Fetch Join** — 컬렉션을 Fetch Join한 상태에서 페이징하면 메모리 페이징이 발생한다. 컬렉션이 2개 이상이면 `MultipleBagFetchException`이 터진다.
+
+3. **COUNT 쿼리 무시** — Page를 쓰면 COUNT 쿼리도 실행된다. JOIN이 복잡한 조회라면 COUNT 쿼리도 같이 느려진다. countQuery 분리 또는 Slice 전환을 고려한다.
+
+4. **캐시 키 충돌** — 서로 다른 메서드에서 같은 캐시명 + 같은 키를 쓰면 의도하지 않은 데이터가 반환된다. 메서드별로 고유한 캐시명이나 키 prefix를 설계한다.
+
+5. **목록 조회에서 Entity 반환** — 전체 Entity 대신 DTO Projection으로 바꾸면 SELECT 컬럼 수와 DB 전송량이 줄어든다. 수정이 필요 없는 조회에서는 Projection이 기본 옵션이다.
+
+</details>
+
+### 외부 참조
+
+- [Spring Data JPA 공식 문서](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/)
+- [Hibernate ORM 공식 문서 — Fetching](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#fetching)
+- [Caffeine 공식 GitHub](https://github.com/ben-manes/caffeine)
+- [Spring Cache 추상화 공식 문서](https://docs.spring.io/spring-framework/docs/current/reference/html/integration.html#cache)
+- [QueryDSL 공식 문서](http://querydsl.com/static/querydsl/5.0.0/reference/html_single/)

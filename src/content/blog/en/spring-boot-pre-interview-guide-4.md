@@ -1,64 +1,130 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 4: Performance & Optimization"
-description: "Performance optimization and query tuning — N+1 problem, pagination, and caching strategies"
+title: "Spring Boot Pre-Interview Guide Part 4: Performance & Optimization — N+1, Pagination, Caching, QueryDSL"
+description: "The trade-offs between the three N+1 solutions (Fetch Join, @EntityGraph, @BatchSize), when to choose Page vs Slice vs Cursor, how to decide between Caffeine and Redis, and when QueryDSL and Projection actually earn their keep — the performance optimization checkpoints that separate passing assignments from standout ones, from an evaluator's perspective."
 pubDate: "2026-01-15T10:00:00+09:00"
 lang: en
 tags: ["Spring Boot", "Performance", "JPA", "Cache", "Interview", "Practical Guide"]
-heroImage: "../../../assets/PreinterviewTaskGuide.png"
----
-
-## Series Navigation
-
-| Previous | Current | Next |
-|:---:|:---:|:---:|
-| [Part 3: Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3) | **Part 4: Performance** | [Part 5: Security](/en/blog/spring-boot-pre-interview-guide-5) |
-
-> **Full Roadmap**: See the [Spring Boot Pre-Interview Guide Roadmap](/en/blog/spring-boot-pre-interview-guide-1)
-
+heroImage: "../../../assets/SpringBootPreInterviewGuide4.png"
 ---
 
 ## Introduction
 
-If you've completed the basics from Parts 1-3, it's time for the advanced material. Part 4 covers performance optimization.
+"Where do I start with performance optimization to actually score points?"
 
-**Topics covered in Part 4:**
-- Solving the N+1 problem
-- Pagination strategies
-- Applying caching
-- Query optimization
+In pre-interview assignments, the performance section splits candidates cleanly. Setting LAZY loading with a global `@BatchSize` versus leaving EAGER in place — that single difference is what signals "this developer understands JPA."
 
-### Table of Contents
+Parts 1–3 covered the four-layer architecture, Database & Testing, and Documentation & AOP. Part 4 is about reducing query costs on top of that foundation. The main topics are:
 
-- [Solving the N+1 Problem](#solving-the-n1-problem)
-- [Pagination](#pagination)
-- [Caching Strategies](#caching-strategies)
-- [Query Optimization](#query-optimization)
-- [Summary](#summary)
+- Trade-offs between the three N+1 solutions
+- Decision criteria for Page, Slice, and Cursor pagination
+- Cache selection logic, QueryDSL, and when Projection earns its place
+
+The target reader is a junior backend engineer who has the feature working but isn't sure how to handle the performance side. After reading, you'll have a clear decision framework for each tool.
+
+See [the previous post](/blog/en/spring-boot-pre-interview-guide-3) for Documentation & AOP.
+
+- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
+- <strong>Part 4 — Performance & Optimization (this post)</strong>
+- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
 
 ---
 
-## Solving the N+1 Problem
+## TL;DR
 
-### 1. What is the N+1 Problem?
+- <strong>LAZY is the rule, EAGER is the exception</strong> — `@ManyToOne` and `@OneToOne` default to EAGER, so you have to override them explicitly. Leaving EAGER in place causes N+1 even with JPQL.
+- <strong>Fetch Join breaks paging; @BatchSize doesn't</strong> — Joining a collection and then paging triggers in-memory paging. When paging is required, @BatchSize is the right answer.
+- <strong>The Page vs Cursor decision pivots on "do you need the total count?"</strong> — If yes, use Page (Offset). For infinite scroll, use Cursor. For the middle ground, use Slice.
+- <strong>Cache selection starts with server count</strong> — A single server is fine with Caffeine. Multiple servers, or strong consistency requirements, means Redis.
+- <strong>Projection is the default for list queries</strong> — For any list query that doesn't need to modify entities, switching to DTO Projection reduces the number of selected columns and cuts memory usage.
 
-When querying entities with associations, 1 query fetches N records, and then N additional queries are executed for each record's associated data.
+---
+
+## 1. The N+1 Problem — Why LAZY Is the Answer and Where It Still Leaks
+
+### 1.1 How N+1 Happens
+
+<strong>The N+1 problem occurs when 1 query fetches N records, and then N additional queries fire to load each record's associated data.</strong>
+
+"I fetched the order list with one query, but SELECT fires every time I access OrderItems" — that's the N+1 problem in practice.
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant DB as Database
+
+    App->>DB: SELECT * FROM orders (1 query)
+    Note over DB: Returns 10 Order rows
+
+    loop N iterations (order_id 1 to 10)
+        App->>DB: SELECT * FROM order_item WHERE order_id = ?
+        DB-->>App: OrderItem list
+    end
+
+    Note over App,DB: 1 + 10 = 11 queries total (N+1)
+```
+
+Ten orders means 11 queries. A hundred means 101. Nested associations multiply this exponentially.
 
 ```java
 // Order : OrderItem = 1 : N relationship
 List<Order> orders = orderRepository.findAll(); // 1 query
 
 for (Order order : orders) {
-    // An additional query fires for each Order's OrderItems (N times)
+    // Fires an additional SELECT for each Order's items (N times)
     List<OrderItem> items = order.getOrderItems();
     items.forEach(item -> System.out.println(item.getProductName()));
 }
 ```
 
-If you fetch 10 orders, 1 + 10 = 11 queries are executed.
+### 1.2 LAZY Is the Rule — Two Scenarios Where It Still Leaks
 
-### 2. Solutions
+<strong>The baseline rule is: set every association to `FetchType.LAZY`.</strong> LAZY defers loading associated data until it's actually accessed. EAGER, by contrast, always fetches associated data alongside the parent.
 
-#### Fetch Join
+Even with LAZY in place, N+1 can still appear in two scenarios.
+
+**Scenario 1 — @ManyToOne and @OneToOne default to EAGER**
+
+The JPA spec sets the default fetch strategy for `@ManyToOne` and `@OneToOne` to `EAGER`. Without an explicit LAZY declaration, associated entities are pulled in every time the parent loads.
+
+```java
+@Entity
+public class Order {
+
+    // Default is EAGER — must be overridden
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Member member;
+
+    // @OneToMany defaults to LAZY, which is safer
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+    private List<OrderItem> orderItems = new ArrayList<>();
+}
+```
+
+**Scenario 2 — EAGER associations still cause N+1 with JPQL**
+
+EAGER doesn't make JPQL automatically add a JOIN. JPQL executes the query as written, then fires additional queries for EAGER associations afterward. The result is still 1 + N.
+
+```java
+// Even JPQL triggers extra queries for EAGER associations
+@Query("SELECT o FROM Order o")
+List<Order> findAll();
+// → SELECT * FROM orders
+// → SELECT * FROM member WHERE id = ? (EAGER fires N times)
+```
+
+---
+
+## 2. Three N+1 Solutions — Fetch Join, @EntityGraph, @BatchSize
+
+### 2.1 Fetch Join — Why It Can't Be Paged
+
+<strong>Fetch Join is a JPQL technique that retrieves associated entities in a single JOIN query, eliminating the extra round trips.</strong>
+
+It's the most direct fix for N+1 — one query instead of N+1. But it has a critical constraint.
 
 ```java
 public interface OrderRepository extends JpaRepository<Order, Long> {
@@ -81,25 +147,29 @@ interface OrderRepository : JpaRepository<Order, Long> {
 
 </details>
 
-> **Caution**: Fetch Join cannot be used together with paging. When you Fetch Join a collection, the data gets multiplied (Cartesian product), and paging is applied in memory.
+> <strong>Caution</strong>: Combining a collection Fetch Join with `Pageable` causes Hibernate to load all rows into memory and page there. With large datasets, this is an OOM risk.
 
-#### @EntityGraph
+Why does the data multiply? If one Order has three OrderItems, the JOIN produces three rows. Paging those rows cuts "10 rows" — not "10 Orders." The result is not what you intended.
 
-`@EntityGraph` achieves the same effect as Fetch Join without writing JPQL.
+### 2.2 @EntityGraph — Declarative Fetch
+
+<strong>@EntityGraph overrides the fetch strategy per repository method using annotations, without writing JPQL.</strong>
+
+It uses the same JOIN strategy as Fetch Join, but you declare which paths to eager-load in `attributePaths` rather than writing a query string. Nested associations are specified as dot-separated paths in the array.
 
 ```java
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    // 1-level association: Order -> OrderItems
+    // 1-level: Order -> OrderItems
     @EntityGraph(attributePaths = {"orderItems"})
     @Query("SELECT o FROM Order o")
     List<Order> findAllWithOrderItemsGraph();
 
-    // 2-level association: Order -> OrderItems -> Product
+    // 2-level: Order -> OrderItems -> Product
     @EntityGraph(attributePaths = {"orderItems", "orderItems.product"})
     List<Order> findByStatus(OrderStatus status);
 
-    // 3-level association: Order -> OrderItems -> Product -> Category
+    // 3-level: Order -> OrderItems -> Product -> Category
     @EntityGraph(attributePaths = {
         "orderItems",
         "orderItems.product",
@@ -109,28 +179,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 }
 ```
 
-**@EntityGraph vs Fetch Join Comparison**
+@EntityGraph shares the same pagination limitation as Fetch Join: including a collection and paging together still triggers in-memory paging.
 
-| Aspect | @EntityGraph | Fetch Join |
-|------|-------------|------------|
-| Syntax | Annotation | JPQL required |
-| Flexibility | Fixed graph | Different queries per condition |
-| Readability | Good | JPQL can get lengthy |
-| Dynamic application | Difficult | Possible |
+### 2.3 @BatchSize — Compatible with Paging
 
-> **Tip**: Use `@EntityGraph` for simple associations, and Fetch Join when complex conditions are needed.
+<strong>@BatchSize collapses N lazy-loading queries into a single IN clause, making it safe to combine with pagination.</strong>
 
-#### @BatchSize
-
-You can configure it globally in `application.yml` or apply it directly on the entity.
+Where Fetch Join is "join everything upfront," @BatchSize is "batch it together later." The result is 1 + 1 queries, and paging works correctly because no row multiplication happens at the SQL level.
 
 ```yaml
+# application.yml — global setting (recommended)
 spring:
   jpa:
     properties:
       hibernate:
         default_batch_fetch_size: 100
 ```
+
+You can also apply it directly to a specific field instead of globally.
 
 ```java
 @Entity
@@ -142,76 +208,47 @@ public class Order {
 }
 ```
 
-`@BatchSize` uses an IN query to fetch lazily loaded data in one go:
+The before-and-after at the SQL level makes the improvement obvious.
 
 ```sql
--- Before: N queries
+-- Before: N queries for N orders
 SELECT * FROM order_item WHERE order_id = 1;
 SELECT * FROM order_item WHERE order_id = 2;
 ...
 
--- After @BatchSize: 1 query
-SELECT * FROM order_item WHERE order_id IN (1, 2, 3, ..., 100);
+-- After @BatchSize: one IN query
+SELECT * FROM order_item WHERE order_id IN (1, 2, 3, ..., 10);
 ```
 
-<details>
-<summary>Fetch Join vs @EntityGraph vs @BatchSize Selection Criteria</summary>
+### 2.4 Which One, When
 
-| Method | Pros | Cons | When to Use |
-|------|------|------|----------|
-| **Fetch Join** | Resolves in a single query | No paging, beware of Cartesian product | When result set is small and paging is not needed |
-| **@EntityGraph** | Declarative, applicable per method | Same limitations as Fetch Join | When eager loading is needed only for specific queries |
-| **@BatchSize** | Supports paging, global configuration | Additional queries (1 + 1) | When paging is needed or there are multiple collections |
+All three reduce N+1, but the right choice depends on whether you need paging and how many collections are involved.
 
-**Recommended for assignments**: Set `@BatchSize` globally, and use Fetch Join only when necessary
+| Method | Queries | Paging | Key Constraint | When to Use |
+|--------|---------|--------|----------------|-------------|
+| <strong>Fetch Join</strong> | 1 | No (collection) | Cartesian product; MultipleBagFetchException with 2+ collections | Small, non-paged single detail queries |
+| <strong>@EntityGraph</strong> | 1 | No (collection) | Same as Fetch Join | Eager loading needed only on specific repository methods |
+| <strong>@BatchSize</strong> | 1 + 1 | Yes | One extra query | Paging required / multiple collections |
 
-</details>
-
-### 3. Lazy Loading vs Eager Loading
-
-```java
-@Entity
-public class Order {
-
-    // Eager loading (EAGER) - NOT recommended
-    @ManyToOne(fetch = FetchType.EAGER)
-    private Member member;
-
-    // Lazy loading (LAZY) - Recommended
-    @ManyToOne(fetch = FetchType.LAZY)
-    private Member member;
-}
-```
-
-<details>
-<summary>Practical Tip: Set all associations to LAZY</summary>
-
-**Principle**: Set all associations to `FetchType.LAZY`, and fetch them together using Fetch Join or @EntityGraph when needed.
-
-**Reasons**:
-1. EAGER causes unexpected queries
-2. Even with EAGER, the N+1 problem occurs when using JPQL
-3. Fetching only the required data is better for performance
-
-**Note**: The default for `@ManyToOne` and `@OneToOne` is EAGER, so you must explicitly set them to LAZY.
-
-</details>
+> <strong>Key takeaway</strong>: For assignments, set `default_batch_fetch_size: 100` globally and reserve Fetch Join for non-paged single-entity detail queries. That combination is the safest baseline.
 
 ---
 
-## Pagination
+## 3. Pagination — Page, Slice, and Cursor
 
-### 1. Spring Data's Pageable
+### 3.1 Pageable and the Page<T> Response
 
-**Page Response Type Comparison**
+<strong>Pageable is Spring Data JPA's abstraction for page number, size, and sort — passed as a method parameter, it translates automatically into LIMIT/OFFSET SQL.</strong>
 
-| Approach | Pros | Cons |
-|------|------|------|
-| Return `Page<T>` directly | Simple, Spring standard | Too many unnecessary fields (`sort`, `pageable`, etc.) |
-| `CommonResponse<Page<T>>` | Consistent response format | Nested information inside Page |
-| Custom PageResponse | Only necessary fields | Requires additional DTO |
+There are three options for what to return from a paginated endpoint.
 
-**Recommended**: For assignments, returning `Page<T>` directly or wrapping it with `CommonResponse<Page<T>>` is simple and sufficient.
+| Approach | Characteristics | Recommended? |
+|----------|----------------|--------------|
+| Return `Page<T>` directly | Spring standard, includes sort and pageable metadata | Sufficient |
+| `CommonResponse<Page<T>>` | Consistent envelope if you're using it in §2 of Part 1 | Good fit |
+| Custom `PageResponse` | Only the fields you choose | Optional |
+
+Here's the baseline Service and Controller structure.
 
 ```java
 @Service
@@ -235,24 +272,17 @@ public class ProductController {
 
     private final ProductService productService;
 
-    // Approach 1: Return Page directly
     @GetMapping
     public Page<ProductResponse> getProducts(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
         return productService.getProducts(pageable);
     }
-
-    // Approach 2: Wrap with CommonResponse
-    @GetMapping("/v2")
-    public CommonResponse<Page<ProductResponse>> getProductsV2(Pageable pageable) {
-        return CommonResponse.success(productService.getProducts(pageable));
-    }
 }
 ```
 
 <details>
-<summary>Custom PageResponse Example (Optional)</summary>
+<summary>Custom PageResponse example (optional)</summary>
 
 ```java
 public record PageResponse<T>(
@@ -309,90 +339,50 @@ class ProductController(
 
 </details>
 
-### 2. Page vs Slice
+### 3.2 Page vs Slice
 
-| Type | Characteristics | Query |
-|------|------|------|
-| **Page** | Includes total count | SELECT + COUNT |
-| **Slice** | Only knows if next page exists | SELECT (size + 1) |
+<strong>The difference between Page and Slice is whether a COUNT query runs.</strong>
+
+| Type | Total Count | Queries | Use Pattern |
+|------|-------------|---------|-------------|
+| <strong>Page</strong> | Yes (`totalElements`) | SELECT + COUNT | Admin lists, showing total pages |
+| <strong>Slice</strong> | No (`hasNext` only) | SELECT (size + 1) | Infinite scroll, only "next exists" needed |
 
 ```java
-// Page - When total count is needed (typical pagination)
+// Page — when total count is needed (standard pagination)
 Page<Product> findByCategory(Category category, Pageable pageable);
 
-// Slice - When total count is unnecessary (e.g., infinite scroll)
+// Slice — when total count is unnecessary (e.g., infinite scroll)
 Slice<Product> findByCategory(Category category, Pageable pageable);
 
-// List - When only data is needed without pagination info
+// List — when only data is needed, no pagination metadata
 List<Product> findByCategory(Category category, Pageable pageable);
 ```
 
-<details>
-<summary>Practical Tip: COUNT Query Optimization</summary>
+### 3.3 Offset vs Cursor — The Large-Dataset Fork
 
-When using Page, a COUNT query runs alongside the main query. For complex queries, the COUNT query can also become slow.
+The weakness of offset-based paging is that `OFFSET` forces a full scan of all preceding rows. On a table with millions of rows, requesting page 500 means scanning 500 × size rows before returning anything.
 
-```java
-// Separate COUNT query optimization
-@Query(value = "SELECT p FROM Product p JOIN FETCH p.category WHERE p.status = :status",
-       countQuery = "SELECT COUNT(p) FROM Product p WHERE p.status = :status")
-Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pageable);
+<strong>Cursor-based paging uses the ID of the last fetched record as the starting point for the next page, eliminating the leading-row scan entirely.</strong>
+
+Use this decision tree to choose.
+
+```mermaid
+flowchart TD
+    A([Start pagination]) --> B{Total count\nrequired?}
+    B -->|Yes| C[Page\nSELECT + COUNT]
+    B -->|No| D{Infinite scroll /\nSNS feed?}
+    D -->|Yes| E{Dataset in\nmillions of rows?}
+    D -->|No| F[Slice\nhasNext only]
+    E -->|Yes| G[Cursor-based\nid < :cursor]
+    E -->|No| F
 ```
 
-**Alternatives**:
-- Use `Slice` if total count is not needed
-- Use a cached statistics table if only an approximate count is needed
-
-**Cached Statistics Table Example**
-
-Running COUNT queries on large datasets every time causes performance issues. In this case, maintain a separate statistics table with caching.
-
-```java
-// 1. Define Statistics Entity
-@Entity
-public class ProductStats {
-    @Id
-    private Long categoryId;
-    private Long productCount;
-    private LocalDateTime updatedAt;
-}
-
-// 2. Update statistics on product creation/deletion (using events)
-@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-public void updateStats(ProductCreatedEvent event) {
-    statsRepository.incrementCount(event.getCategoryId());
-}
-
-// 3. Use with cache
-@Cacheable("productCounts")
-public Long getProductCount(Long categoryId) {
-    return statsRepository.findById(categoryId)
-        .map(ProductStats::getProductCount)
-        .orElse(0L);
-}
-```
-
-> **For assignments**: This level of optimization is not necessary. The default COUNT query from `Page` is sufficient.
-
-</details>
-
-### 3. Offset vs Cursor-Based Pagination
-
-#### Offset-Based (Default)
-
-```java
-// When requesting page=100, size=20
-// OFFSET 2000 LIMIT 20 -> Must skip 2000 rows
-```
-
-**Problem**: As data grows, the OFFSET increases and performance degrades.
-
-#### Cursor-Based
+The core of a cursor implementation is using the last item's ID as the anchor for the next request.
 
 ```java
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-    // ID-based cursor pagination
     @Query("SELECT p FROM Product p WHERE p.id < :cursor ORDER BY p.id DESC")
     List<Product> findByIdLessThan(@Param("cursor") Long cursor, Pageable pageable);
 }
@@ -403,10 +393,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 public class ProductService {
 
     public CursorResponse<ProductResponse> getProductsWithCursor(Long cursor, int size) {
-        Pageable pageable = PageRequest.of(0, size + 1); // +1 to check for next page
+        Pageable pageable = PageRequest.of(0, size + 1); // +1 to detect hasNext
 
         List<Product> products = cursor == null
-            ? productRepository.findAll(PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))).getContent()
+            ? productRepository.findAll(
+                PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))).getContent()
             : productRepository.findByIdLessThan(cursor, pageable);
 
         boolean hasNext = products.size() > size;
@@ -426,7 +417,7 @@ public class ProductService {
 ```
 
 <details>
-<summary>CursorResponse Class</summary>
+<summary>CursorResponse class</summary>
 
 ```java
 @Getter
@@ -440,31 +431,37 @@ public class CursorResponse<T> {
 
 </details>
 
-<details>
-<summary>Offset vs Cursor Selection Criteria</summary>
+> <strong>Assignment recommendation</strong>: Use Offset (Page) as the default. Adding a paragraph to your README explaining cursor pagination and its trade-offs is a reliable way to earn bonus points.
 
-| Approach | Pros | Cons | When to Use |
-|------|------|------|----------|
-| **Offset** | Simple implementation, can jump to specific pages | Slow for large datasets, possible data duplication/omission | Admin pages, small datasets |
-| **Cursor** | Fast for large datasets, consistent results | Cannot jump to specific pages | Infinite scroll, SNS feeds, large datasets |
+### 3.4 Aside: COUNT Query Optimization
 
-**Recommended for assignments**: Use Offset (Page) by default; mentioning Cursor-based pagination and its trade-offs in the README can earn bonus points
+When using Page, a COUNT query runs alongside the main query. For queries with multiple JOINs, the COUNT query can become just as slow. The fix is to split it.
 
-</details>
+```java
+@Query(
+    value = "SELECT p FROM Product p JOIN FETCH p.category WHERE p.status = :status",
+    countQuery = "SELECT COUNT(p) FROM Product p WHERE p.status = :status"
+)
+Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pageable);
+```
+
+> <strong>Note</strong>: At assignment scale this level of optimization is rarely needed. That said, having the structure in place signals intentional design — which is exactly what evaluators look for.
 
 ---
 
-## Caching Strategies
+## 4. Caching — Spring Cache, Caffeine, Redis
 
-### 1. Spring Cache Abstraction
+### 4.1 Spring Cache Abstraction (@Cacheable, @CachePut, @CacheEvict)
 
-```java
-@Configuration
-@EnableCaching
-public class CacheConfig {
-    // Uses ConcurrentHashMap-based cache with default settings
-}
-```
+<strong>Spring Cache abstraction lets you declare caching behavior with annotations, independent of the underlying cache implementation.</strong>
+
+Whether you swap in Caffeine or Redis later, the service code annotations don't change. The three core annotations each have a clear role.
+
+| Annotation | Behavior | When to Use |
+|-----------|----------|-------------|
+| `@Cacheable` | Returns cached value if present; executes and stores if not | Read methods |
+| `@CachePut` | Always executes, then updates the cache | Write/update methods |
+| `@CacheEvict` | Removes the entry from cache | Delete methods |
 
 ```java
 @Service
@@ -473,10 +470,6 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    /**
-     * Product detail query - with caching
-     * key: productId, cache name: product
-     */
     @Cacheable(value = "product", key = "#productId")
     public ProductDetailResponse getProductDetail(Long productId) {
         Product product = productRepository.findById(productId)
@@ -484,9 +477,6 @@ public class ProductService {
         return ProductDetailResponse.from(product);
     }
 
-    /**
-     * Update product - refresh cache
-     */
     @CachePut(value = "product", key = "#productId")
     public ProductDetailResponse updateProduct(Long productId, ProductUpdateCommand command) {
         Product product = productRepository.findById(productId)
@@ -495,31 +485,30 @@ public class ProductService {
         return ProductDetailResponse.from(product);
     }
 
-    /**
-     * Delete product - evict cache
-     */
     @CacheEvict(value = "product", key = "#productId")
     public void deleteProduct(Long productId) {
         productRepository.deleteById(productId);
     }
 
-    /**
-     * Clear all product cache
-     */
     @CacheEvict(value = "product", allEntries = true)
     public void clearProductCache() {
-        // Only clears cache
+        // Evicts all entries for the "product" cache
     }
 }
 ```
 
-### 2. Caffeine Cache
+### 4.2 Caffeine — The Single-Server Standard
+
+<strong>Caffeine is a high-performance in-process cache library that operates entirely in JVM memory.</strong>
+
+No network round-trips — direct memory access makes it the fastest option available. For single-server assignments, it's the obvious default.
 
 ```groovy
-// build.gradle
 implementation 'com.github.ben-manes.caffeine:caffeine'
 implementation 'org.springframework.boot:spring-boot-starter-cache'
 ```
+
+The basic setup applies one policy to all caches.
 
 ```java
 @Configuration
@@ -530,15 +519,15 @@ public class CacheConfig {
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager();
         cacheManager.setCaffeine(Caffeine.newBuilder()
-            .maximumSize(1000)           // Maximum 1000 entries
-            .expireAfterWrite(10, TimeUnit.MINUTES)  // Expire after 10 minutes
-            .recordStats());             // Record statistics
+            .maximumSize(1000)
+            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .recordStats());
         return cacheManager;
     }
 }
 ```
 
-#### Per-Cache Configuration
+When you need different TTLs and sizes per cache, use `SimpleCacheManager`.
 
 ```java
 @Configuration
@@ -569,16 +558,18 @@ public class CacheConfig {
 }
 ```
 
-### 3. Redis Cache
+### 4.3 Redis — Distributed Cache
+
+<strong>Redis is an external distributed cache server that shares cached data across multiple application instances.</strong>
+
+In a multi-server environment, each instance maintaining its own local cache leads to inconsistent reads. Redis solves this by acting as a shared store.
 
 ```groovy
-// build.gradle
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 implementation 'org.springframework.boot:spring-boot-starter-cache'
 ```
 
 ```yaml
-# application.yml
 spring:
   redis:
     host: localhost
@@ -586,7 +577,7 @@ spring:
   cache:
     type: redis
     redis:
-      time-to-live: 600000  # 10 minutes (milliseconds)
+      time-to-live: 600000
       cache-null-values: false
 ```
 
@@ -617,52 +608,60 @@ public class RedisCacheConfig {
 }
 ```
 
-<details>
-<summary>Local Cache vs Distributed Cache</summary>
+### 4.4 Local vs Distributed — The Decision
 
-| Aspect | Local Cache (Caffeine) | Distributed Cache (Redis) |
-|------|---------------------|------------------|
-| **Speed** | Very fast (direct memory access) | Relatively slower (network communication) |
-| **Consistency** | Possible inconsistency across servers | Guarantees consistency |
-| **Capacity** | Limited by server memory | Scalable with dedicated servers |
-| **Complexity** | Simple | Requires Redis infrastructure |
+The cache selection decision starts with server count and consistency requirements.
 
-**Recommended for assignments**:
-- For single-server assignments, Caffeine is sufficient
-- Including Redis in Docker Compose can earn bonus points
+```mermaid
+flowchart TD
+    A([Start cache selection]) --> B{More than one\nserver instance?}
+    B -->|No| C[Caffeine\nLocal cache is sufficient]
+    B -->|Yes| D{Strong consistency\nrequired across servers?}
+    D -->|Yes| E[Redis\nDistributed cache]
+    D -->|No| F{Very large\ncache dataset?}
+    F -->|Yes| E
+    F -->|No| G[Caffeine + TTL tuning\nLocal cache is fine]
+```
 
-</details>
+| Aspect | Caffeine (Local) | Redis (Distributed) |
+|--------|-----------------|---------------------|
+| Speed | Very fast (direct memory) | Slower (network hop) |
+| Consistency | Possible inconsistency across instances | Shared store guarantees consistency |
+| Capacity | Limited by JVM heap | Dedicated server, horizontally scalable |
+| Complexity | Simple | Requires Redis infrastructure |
 
-<details>
-<summary>Cache Invalidation Strategies</summary>
+> <strong>Assignment recommendation</strong>: Caffeine is sufficient for single-server work. Adding Redis to Docker Compose earns bonus points for showing distributed environment awareness.
 
-**Cache-Aside (Lazy Loading)**:
-1. Check the cache first
-2. If not found, query the DB and store in cache
-3. On update/delete, invalidate the cache
+### 4.5 Aside: Cache Invalidation Strategies
 
-**Write-Through**:
-1. When saving data, update both cache and DB simultaneously
+Getting caching right means designing invalidation alongside the caching policy. Two common patterns:
 
-**Considerations**:
-- List query caches are difficult to invalidate (changing a single item requires invalidating the entire list)
-- Set appropriate cache TTL to allow natural expiration
-- Prevent key collisions when designing cache keys (use prefixes)
+**Cache-Aside (Lazy Loading)** — how Spring Cache works by default
 
-</details>
+1. On read: check cache first.
+2. Cache miss → query DB, store result in cache.
+3. On write/delete: `@CacheEvict` removes the relevant entry.
+
+**Write-Through** — keeps cache and DB in sync on every write
+
+1. `@CachePut` always executes the method and updates the cache.
+2. Reads always hit the cache.
+
+Two things to watch for. First, list caches are hard to invalidate — one item change may require full eviction (`allEntries = true`). Second, prefix cache keys so methods that share the same cache name don't collide.
 
 ---
 
-## Query Optimization
+## 5. Query Optimization — Projection, QueryDSL, Indexes
 
-### 1. Using Projections
+### 5.1 Projection — Fields Instead of Full Entities
 
-Fetch only the required fields instead of the entire entity.
+<strong>Projection selects only the fields you need from the database, rather than fetching the full entity.</strong>
 
-#### Interface Projection
+Returning complete entities for list queries means pulling in columns you'll never use. Projection reduces the number of selected columns, lowers data transfer volume, and cuts memory usage.
+
+There are two approaches. Interface Projection defines an interface; Hibernate generates a proxy at runtime.
 
 ```java
-// Interface defining only the required fields
 public interface ProductSummary {
     Long getId();
     String getName();
@@ -670,12 +669,11 @@ public interface ProductSummary {
 }
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
-
     List<ProductSummary> findByCategory(Category category);
 }
 ```
 
-#### Class Projection (DTO)
+DTO Projection constructs a record or class directly, with no proxy overhead — making it the faster option.
 
 ```java
 public record ProductSummaryDto(
@@ -692,35 +690,38 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 }
 ```
 
+Performance order: DTO Projection > Interface Projection > full Entity query. The exception: if you need to modify the entity after loading, you must fetch the full entity.
+
 <details>
-<summary>Projection Performance Comparison</summary>
+<summary>Projection performance comparison</summary>
 
 ```java
-// 1. Full Entity query - all columns + associated entities
+// 1. Full Entity query — all columns + associated entities
 List<Product> products = productRepository.findAll();
 
-// 2. Interface Projection - only required columns (proxy creation)
+// 2. Interface Projection — required columns only (proxy creation)
 List<ProductSummary> summaries = productRepository.findAllProjectedBy();
 
-// 3. DTO Projection - only required columns (direct instantiation)
+// 3. DTO Projection — required columns only (direct instantiation, fastest)
 List<ProductSummaryDto> dtos = productRepository.findAllSummary();
 ```
 
-**Performance**: DTO Projection > Interface Projection > Full Entity query
-
-However, if you need to modify the entity after querying, you must query it as an entity.
-
 </details>
 
-### 2. QueryDSL for Dynamic Queries
+### 5.2 QueryDSL — Dynamic Queries
+
+<strong>QueryDSL is a framework that generates JPQL from type-safe Java code.</strong>
+
+JPQL is a string — compile-time errors aren't caught, and adding optional conditions requires string concatenation. QueryDSL solves both problems.
 
 ```groovy
-// build.gradle
 implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
 annotationProcessor 'com.querydsl:querydsl-apt:5.0.0:jakarta'
 annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
 annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 ```
+
+The canonical pattern is to compose dynamic conditions as `BooleanExpression` methods that return `null` when the condition is not applicable — QueryDSL automatically omits null predicates from the WHERE clause.
 
 ```java
 @Repository
@@ -762,6 +763,8 @@ public class ProductQueryRepository {
 }
 ```
 
+That's why QueryDSL makes dynamic queries easy — null condition methods simply vanish from the query without any if-branching in the caller.
+
 <details>
 <summary>Kotlin + QueryDSL</summary>
 
@@ -801,20 +804,19 @@ class ProductQueryRepository(
 
 </details>
 
-<details>
-<summary>QueryDSL vs JPQL vs Native Query</summary>
+The right time to introduce QueryDSL: "two or more search conditions are optional." For straightforward CRUD, Spring Data JPA is cleaner.
 
-| Approach | Pros | Cons | When to Use |
-|------|------|------|----------|
-| **JPQL** | JPA standard, entity mapping | String-based, difficult dynamic queries | Simple static queries |
-| **QueryDSL** | Type-safe, easy dynamic queries | Complex setup, Q-class generation required | Complex dynamic queries |
-| **Native Query** | Direct SQL, can optimize | DB-dependent, limited entity mapping | Complex statistics, DB-specific features |
+| Approach | Type-safe | Dynamic queries | When to Use |
+|----------|-----------|----------------|-------------|
+| <strong>JPQL</strong> | No (string) | Awkward | Simple static queries |
+| <strong>QueryDSL</strong> | Yes | Easy | Complex optional search conditions |
+| <strong>Native Query</strong> | No | Awkward | DB-specific features, complex aggregations |
 
-**Recommended for assignments**: Use Spring Data JPA for simple CRUD, and introduce QueryDSL when complex search conditions are needed
+### 5.3 Index Design — Declared in Entity Annotations
 
-</details>
+<strong>Indexes are database structures that speed up searches on columns frequently used in WHERE, JOIN, and ORDER BY clauses.</strong>
 
-### 3. Index Design
+In JPA, declaring `@Index` inside `@Table` on an entity includes the index in auto-generated DDL. It's how you signal intent — "this column needs an index" — directly in the code.
 
 ```java
 @Entity
@@ -829,69 +831,70 @@ public class Product {
 ```
 
 <details>
-<summary>Index Design Tips</summary>
+<summary>Index design guidelines</summary>
 
-**When indexes are needed**:
+**When to add an index**:
 - Columns frequently used in WHERE clauses
-- Columns used in JOIN conditions (FK)
+- Columns used in JOIN conditions (foreign keys)
 - Columns used in ORDER BY
-- Columns with high cardinality (many unique values)
+- High-cardinality columns (many distinct values)
 
-**Index considerations**:
-- Degrades INSERT/UPDATE/DELETE performance
+**Things to watch for**:
+- Indexes slow down INSERT/UPDATE/DELETE (index maintenance overhead)
 - Column order matters in composite indexes (leftmost prefix rule)
-- Too many indexes can actually hurt performance
-
-**For assignments**: Declaring `@Index` on entities includes indexes in auto-generated DDL, demonstrating your intent.
+- Too many indexes can hurt overall performance
 
 </details>
 
 ---
 
-## Summary
+## Recap
+
+- <strong>LAZY globally + @BatchSize 100</strong> — Declaring all associations as LAZY and setting `default_batch_fetch_size: 100` globally is the safe, no-regret baseline defense against N+1.
+- <strong>Pagination branches on whether you need the total count</strong> — Page when you do, Slice when you only need "is there a next page," Cursor for large-scale infinite scroll.
+- <strong>Cache selection starts with server count</strong> — Caffeine for single server, Redis for multi-server. Adding Redis to Docker Compose earns bonus points.
+- <strong>Projection is the default for list queries</strong> — On any list that doesn't modify entities, DTO Projection reduces selected columns and memory usage with minimal effort.
+- <strong>QueryDSL only when conditions are genuinely dynamic</strong> — Spring Data JPA is cleaner for simple CRUD. QueryDSL's advantage becomes clear when two or more search conditions are optional.
 
 ### Checklist
 
 | Item | Check |
-|------|------|
-| Are all associations set to `FetchType.LAZY`? | ⬜ |
-| Is `@BatchSize` global configuration applied? | ⬜ |
+|------|-------|
+| Are all associations declared `FetchType.LAZY`? | ⬜ |
+| Do `@ManyToOne` and `@OneToOne` fields have an explicit LAZY override? | ⬜ |
+| Is `default_batch_fetch_size` set globally? | ⬜ |
 | Is `Pageable` applied to APIs that need pagination? | ⬜ |
-| Is caching applied to frequently queried data? | ⬜ |
-| Are list queries using Projection to fetch only needed fields? | ⬜ |
-| Is QueryDSL used for complex dynamic queries? | ⬜ |
+| Is caching applied to frequently read, rarely changed data? | ⬜ |
+| Are list queries using Projection to avoid full entity loads? | ⬜ |
+| Is QueryDSL used only for genuinely dynamic search conditions? | ⬜ |
 
-### Key Points
-
-1. **N+1 Problem**: Set all associations to LAZY; use Fetch Join or @BatchSize when needed
-2. **Pagination**: Use Page (Offset) by default; consider Cursor for large datasets
-3. **Caching**: Apply to data that is rarely modified but frequently read
-4. **Query Optimization**: Fetch only the required data (Projection, optimized WHERE clauses)
-
-<details>
-<summary>Common Mistakes in Assignments</summary>
-
-1. **Using EAGER loading as-is**
-   - Default for `@ManyToOne` and `@OneToOne` is EAGER
-   - Always explicitly set LAZY
-
-2. **Indiscriminate Fetch Joins**
-   - Fetch Joining multiple collections causes Cartesian products
-   - May throw `MultipleBagFetchException`
-
-3. **Ignoring COUNT queries**
-   - Using Page executes a COUNT query alongside the main query
-   - For complex queries, separate the COUNT query or use Slice
-
-4. **Cache key collisions**
-   - Different methods using the same cache name + same key
-   - Each method needs a unique cache name or key strategy
-
-</details>
+Part 5 covers Security & Authentication: Spring Security filter chain, JWT issuance and validation, and password hashing. We'll also cover the four patterns that reliably cost points in the security section.
 
 ---
 
-The next part covers **Spring Security**, **JWT authentication**, and **password management**.
+## Appendix
 
-[Previous: Part 3 - Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3)
-[Next: Part 5 - Security & Authentication](/en/blog/spring-boot-pre-interview-guide-5)
+### Five Common Performance Mistakes
+
+<details>
+<summary>Performance mistakes that appear most often in assignments</summary>
+
+1. **Leaving EAGER loading in place** — `@ManyToOne` and `@OneToOne` default to EAGER. Without an explicit LAZY override, associated entities are fetched on every parent query.
+
+2. **Indiscriminate collection Fetch Joins** — Joining a collection with Fetch Join and then paging causes in-memory pagination. Two or more collection Fetch Joins on the same query throw `MultipleBagFetchException`.
+
+3. **Ignoring the COUNT query** — Page always fires a COUNT alongside the main query. For complex JOINs, the COUNT can be just as slow. Split the COUNT query or switch to Slice.
+
+4. **Cache key collisions** — Different methods using the same cache name with the same key will return unexpected data. Design unique cache names or key prefixes per method.
+
+5. **Returning full entities from list endpoints** — On any list endpoint that doesn't modify data, a DTO Projection is a low-effort swap that directly reduces selected columns and DB transfer volume.
+
+</details>
+
+### External References
+
+- [Spring Data JPA Reference Documentation](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/)
+- [Hibernate ORM User Guide — Fetching](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#fetching)
+- [Caffeine — GitHub](https://github.com/ben-manes/caffeine)
+- [Spring Cache Abstraction Reference](https://docs.spring.io/spring-framework/docs/current/reference/html/integration.html#cache)
+- [QueryDSL Reference Documentation](http://querydsl.com/static/querydsl/5.0.0/reference/html_single/)
