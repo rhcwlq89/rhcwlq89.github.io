@@ -58,34 +58,22 @@ Third, <strong>decision trees don't expose interdependencies</strong>. Part 1's 
 
 ```mermaid
 flowchart TB
-    subgraph row1[" "]
+    subgraph A["A. Serverless API"]
         direction LR
-        subgraph A["A. Serverless API"]
-            A1[CloudFront] --> A2[API Gateway HTTP API]
-            A2 --> A3[Lambda]
-            A3 --> A4[(DynamoDB)]
-        end
-        subgraph B["B. Container Web"]
-            B1[CloudFront] --> B2[ALB]
-            B2 --> B3[ECS / EKS]
-            B3 --> B4[(RDS)]
-        end
+        A1[CloudFront] --> A2[API Gateway HTTP API] --> A3[Lambda] --> A4[(DynamoDB)]
     end
-    subgraph row2[" "]
+    subgraph B["B. Container Web"]
         direction LR
-        subgraph C["C. Global Latency-sensitive"]
-            C1[Route 53 Latency] --> C2[Global Accelerator]
-            C2 --> C3[Regional NLB]
-            C3 --> C4[Game / Trading server]
-        end
-        subgraph D["D. Hybrid Enterprise"]
-            D1[Direct Connect] --> D2[Transit Gateway]
-            D2 --> D3[Multi-VPC + on-prem]
-            D3 --> D4[Compliance workload]
-        end
+        B1[CloudFront] --> B2[ALB] --> B3[ECS / EKS] --> B4[(RDS)]
     end
-    style row1 fill:transparent,stroke:transparent
-    style row2 fill:transparent,stroke:transparent
+    subgraph C["C. Global Latency-sensitive"]
+        direction LR
+        C1[Route 53 Latency] --> C2[Global Accelerator] --> C3[Regional NLB] --> C4[Game / Trading server]
+    end
+    subgraph D["D. Hybrid Enterprise"]
+        direction LR
+        D1[Direct Connect] --> D2[Transit Gateway] --> D3[Multi-VPC + on-prem] --> D4[Compliance workload]
+    end
 ```
 
 ### 2.1 Pattern A — Serverless API
