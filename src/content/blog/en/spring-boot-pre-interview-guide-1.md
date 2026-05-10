@@ -1,9 +1,9 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 1: Core Application Layer — Controller, Service, Repository, Domain"
-description: "The four-layer design points evaluators repeatedly flag in Spring Boot pre-interview assignments — Controller/Service/Repository/Domain responsibility split, Request → Command conversion, what @Transactional(readOnly=true) actually does, and the three-tier priority of GlobalExceptionHandler. Series Part 1."
+title: "Spring Boot Pre-Interview Guide Part 1: Core Application Layer — Spring Boot 4 · Kotlin Four-Layer Design"
+description: "The four-layer design points evaluators repeatedly flag in Spring Boot pre-interview assignments — Controller/Service/Repository/Domain responsibility split, Request → Command conversion, what @Transactional(readOnly=true) actually does, and the three-tier priority of GlobalExceptionHandler — written for a Spring Boot 4 + Kotlin stack where data classes, primary constructors, and val/var replace Lombok naturally. Series Part 1."
 pubDate: "2026-01-09T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "REST API", "Backend", "Interview", "Practical Guide"]
+tags: ["Spring Boot", "Kotlin", "REST API", "Backend", "Interview", "Practical Guide"]
 heroImage: "../../../assets/SpringBootPreInterviewGuide1.png"
 ---
 
@@ -18,12 +18,12 @@ Part 1 starts where it should: the <strong>Controller · Service · Repository �
 The target reader is a junior backend engineer who knows Spring but isn't sure where evaluators are looking. After reading, you should no longer hesitate about what belongs in which layer.
 
 - <strong>Part 1 — Core Application Layer (this post)</strong>
-- Part 2 — [Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2)
-- Part 3 — [Documentation &amp; AOP](/en/blog/spring-boot-pre-interview-guide-3)
-- Part 4 — [Performance &amp; Optimization](/en/blog/spring-boot-pre-interview-guide-4)
-- Part 5 — [Security &amp; Authentication](/en/blog/spring-boot-pre-interview-guide-5)
-- Part 6 — [DevOps &amp; Deployment](/en/blog/spring-boot-pre-interview-guide-6)
-- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
+- Part 2 — [Database &amp; Testing](/blog/en/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation &amp; AOP](/blog/en/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance &amp; Optimization](/blog/en/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security &amp; Authentication](/blog/en/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps &amp; Deployment](/blog/en/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
 
 ---
 
@@ -32,7 +32,7 @@ The target reader is a junior backend engineer who knows Spring but isn't sure w
 - <strong>Half of the evaluation is layer-responsibility separation</strong> — Controller does HTTP only, Service owns transactions and business logic, Repository owns queries, Domain owns state and invariants. Mixed responsibilities cost points.
 - <strong>Request DTO ≠ Service input</strong> — Request DTOs live only in the Controller; convert them to Commands before passing to the Service. The point is to keep web dependencies out of Service tests.
 - <strong>`@Transactional(readOnly = true)` is not "no transaction"</strong> — A transaction does start, but Dirty Checking and auto-flush are off, and it can serve as a Read Replica routing hint. The standard pattern: declare it at the class level and override only on write methods.
-- <strong>Entities expose business methods, not setters</strong> — `update(name, category)` instead of `setName()`. This blocks indiscriminate state changes and makes invariants visible in code. Default constructor stays `protected`.
+- <strong>Entities expose business methods, not setters</strong> — `update(name, category)` instead of `setName()`. This blocks indiscriminate state changes and makes invariants visible in code. The `kotlin-jpa` plugin synthesizes the no-arg constructor automatically.
 - <strong>GlobalExceptionHandler is three-tiered</strong> — `CommonException` (intentional business errors) → `MethodArgumentNotValidException` (validation failures) → `Exception` (fallback). Without the fallback, the Whitelabel page leaks — which is itself a deduction.
 
 ---
@@ -68,6 +68,8 @@ flowchart TB
 ```
 
 The arrows point in one direction for a reason. <strong>The Controller knows only the Service, the Service knows the Repository and Entity, and the Repository knows only the DB.</strong> Reverse dependencies — a Service that knows HTTP, an Entity that knows DTOs — are anti-patterns.
+
+> <strong>Note — Spring Boot 4 + Kotlin project setup</strong>: Spring Boot 4 recommends Java 21, but that matters less on a Kotlin project. The two Kotlin plugins are the key: <strong>kotlin-spring</strong> automatically marks all Spring-annotated classes as `open` (required when JPA and Spring Security generate proxies), and <strong>kotlin-jpa</strong> synthesizes a no-arg constructor on JPA entities. Add `kotlin("plugin.spring") version "2.x"` and `kotlin("plugin.jpa") version "2.x"` to `build.gradle.kts` and you're done. Lombok has no place here — data classes, `val`, and `var` handle everything Lombok used to.
 
 ### 1.2 Responsibility per Layer
 
@@ -147,36 +149,37 @@ Content-Type: application/json
 | Resource PATCH | `PATCH /orders/{id}` | `{"status":"CANCELLED"}` | Simple state machine — recommended for assignments |
 | Sub-resource | `PUT /orders/{id}/status` | `{"value":"CANCELLED"}` | Modeling status itself as a resource |
 
-<strong>Spring Boot shape (Java)</strong>
+<strong>Kotlin + Spring Boot shape</strong>
 
-```java
+```kotlin
 // Controller — no "cancel" in the URL
 @PatchMapping("/{orderId}")
-public CommonResponse<Long> modifyOrder(
-        @PathVariable Long orderId,
-        @Valid @RequestBody ModifyOrderRequest request) {
-    return CommonResponse.success(orderService.modifyOrder(orderId, request.toCommand()));
+fun modifyOrder(
+    @PathVariable orderId: Long,
+    @Valid @RequestBody request: ModifyOrderRequest,
+): CommonResponse<Long> {
+    return CommonResponse.success(orderService.modifyOrder(orderId, request.toCommand()))
 }
 
 // Service — delegate state transition to the domain method
 @Transactional
-public Long modifyOrder(Long orderId, ModifyOrderCommand command) {
-    Order order = orderRepository.findById(orderId)
-        .orElseThrow(NotFoundException::new);
+fun modifyOrder(orderId: Long, command: ModifyOrderCommand): Long {
+    val order = orderRepository.findById(orderId)
+        ?: throw NotFoundException()
 
-    if (command.status() == OrderStatus.CANCELLED) {
-        order.cancel();   // transition validity is the Entity's job
+    if (command.status == OrderStatus.CANCELLED) {
+        order.cancel()   // transition validity is the Entity's job
     }
-    return order.getId();
+    return order.id!!
 }
 
-// Entity — same business-method + invariant pattern as Section 5
-public void cancel() {
+// Entity — same business-method + invariant pattern as §5
+fun cancel() {
     if (this.status == OrderStatus.COMPLETED) {
-        throw new BadRequestException(ErrorCode.ORDER_ALREADY_COMPLETED);
+        throw BadRequestException(ErrorCode.ORDER_ALREADY_COMPLETED)
     }
-    this.status = OrderStatus.CANCELLED;
-    this.cancelledAt = LocalDateTime.now();
+    this.status = OrderStatus.CANCELLED
+    this.cancelledAt = LocalDateTime.now()
 }
 ```
 
@@ -194,9 +197,6 @@ In short: simple state changes go through resource PATCH; workflows where the do
 
 Manage frequently used URIs as constants.
 
-<details>
-<summary><strong>ApiPaths (Kotlin)</strong></summary>
-
 ```kotlin
 object ApiPaths {
     const val API = "/api"
@@ -204,23 +204,6 @@ object ApiPaths {
     const val PRODUCTS = "/products"
 }
 ```
-
-</details>
-
-<details>
-<summary><strong>ApiPaths (Java)</strong></summary>
-
-```java
-public final class ApiPaths {
-    public static final String API = "/api";
-    public static final String V1 = "/v1";
-    public static final String PRODUCTS = "/products";
-
-    private ApiPaths() {}
-}
-```
-
-</details>
 
 ### 2.4 Common Response Class
 
@@ -252,59 +235,24 @@ Most teams in the field do use a common response class. It's especially useful f
 
 </details>
 
-<details>
-<summary><strong>CommonResponse (Kotlin)</strong></summary>
-
 ```kotlin
 data class CommonResponse<T>(
     val code: String = CODE_SUCCESS,
     val message: String = MSG_SUCCESS,
-    val data: T? = null
+    val data: T? = null,
 ) {
     companion object {
         const val CODE_SUCCESS = "SUC200"
         const val MSG_SUCCESS = "success"
 
-        fun <T> success(data: T? = null): CommonResponse<T> {
-            return CommonResponse(CODE_SUCCESS, MSG_SUCCESS, data)
-        }
+        fun <T> success(data: T? = null): CommonResponse<T> =
+            CommonResponse(CODE_SUCCESS, MSG_SUCCESS, data)
 
-        fun <T> error(code: String, message: String, data: T? = null): CommonResponse<T> {
-            return CommonResponse(code, message, data)
-        }
+        fun <T> error(code: String, message: String, data: T? = null): CommonResponse<T> =
+            CommonResponse(code, message, data)
     }
 }
 ```
-
-</details>
-
-<details>
-<summary><strong>CommonResponse (Java)</strong></summary>
-
-```java
-public record CommonResponse<T>(
-    String code,
-    String message,
-    T data
-) {
-    public static final String CODE_SUCCESS = "SUC200";
-    public static final String MSG_SUCCESS = "success";
-
-    public static <T> CommonResponse<T> success() {
-        return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, null);
-    }
-
-    public static <T> CommonResponse<T> success(T data) {
-        return new CommonResponse<>(CODE_SUCCESS, MSG_SUCCESS, data);
-    }
-
-    public static <T> CommonResponse<T> error(String code, String message) {
-        return new CommonResponse<>(code, message, null);
-    }
-}
-```
-
-</details>
 
 ### 2.5 DTO Validation and Command Conversion
 
@@ -314,6 +262,8 @@ public record CommonResponse<T>(
 - <strong>Request DTOs only live in the Controller; convert them to Command objects before passing to the Service</strong>
 
 > <strong>Tip</strong>: Passing Request DTOs directly to the Service tightly couples the Presentation Layer to the Business Layer. Using Command objects clearly separates layer responsibilities and lets Service tests run without web-related dependencies.
+
+> <strong>Note — Kotlin Bean Validation requires `@field:` prefix</strong>: A `val` in a primary constructor is treated as a property by default. To apply a Bean Validation annotation at the field level, write `@field:NotBlank` explicitly. Writing `@NotBlank val name` without the prefix attaches the annotation to the property getter, so validation silently does nothing.
 
 <details>
 <summary><strong>Is the Command pattern always necessary?</strong></summary>
@@ -341,11 +291,8 @@ If you have time, the Command pattern signals that you understand layer separati
 
 </details>
 
-<details>
-<summary><strong>Request DTO &amp; Command (Kotlin)</strong></summary>
-
 ```kotlin
-// Request DTO - used for validation in the Controller
+// Request DTO — used for validation in the Controller
 data class RegisterProductRequest(
     @field:NotBlank
     @field:Size(max = 100)
@@ -353,11 +300,11 @@ data class RegisterProductRequest(
 
     @field:Size(min = 1)
     @field:Valid
-    val details: List<ProductDetailDto>?
+    val details: List<ProductDetailDto>?,
 ) {
     fun toCommand() = RegisterProductCommand(
         name = name!!,
-        details = details!!.map { it.toCommand() }
+        details = details!!.map { it.toCommand() },
     )
 }
 
@@ -366,11 +313,11 @@ data class ProductDetailDto(
     val type: ProductCategoryType?,
 
     @field:NotBlank
-    val name: String?
+    val name: String?,
 ) {
     fun toCommand() = ProductDetailCommand(
         type = type!!,
-        name = name!!
+        name = name!!,
     )
 }
 
@@ -380,28 +327,28 @@ data class ModifyProductRequest(
     val name: String?,
 
     @field:NotNull
-    val category: ProductCategoryType?
+    val category: ProductCategoryType?,
 ) {
     fun toCommand() = ModifyProductCommand(
         name = name!!,
-        category = category!!
+        category = category!!,
     )
 }
 
-// Command - pure data object used in the Service Layer
+// Command — pure data object used in the Service Layer
 data class RegisterProductCommand(
     val name: String,
-    val details: List<ProductDetailCommand>
+    val details: List<ProductDetailCommand>,
 )
 
 data class ProductDetailCommand(
     val type: ProductCategoryType,
-    val name: String
+    val name: String,
 )
 
 data class ModifyProductCommand(
     val name: String,
-    val category: ProductCategoryType
+    val category: ProductCategoryType,
 )
 
 enum class ProductCategoryType {
@@ -409,96 +356,19 @@ enum class ProductCategoryType {
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>Request DTO &amp; Command (Java)</strong></summary>
-
-```java
-// Request DTO - used for validation in the Controller
-public record RegisterProductRequest(
-    @NotBlank
-    @Size(max = 100)
-    String name,
-
-    @Size(min = 1)
-    @Valid
-    List<ProductDetailDto> details
-) {
-    public RegisterProductCommand toCommand() {
-        return new RegisterProductCommand(
-            name,
-            details.stream()
-                .map(ProductDetailDto::toCommand)
-                .toList()
-        );
-    }
-}
-
-public record ProductDetailDto(
-    @NotNull
-    ProductCategoryType type,
-
-    @NotBlank
-    String name
-) {
-    public ProductDetailCommand toCommand() {
-        return new ProductDetailCommand(type, name);
-    }
-}
-
-public record ModifyProductRequest(
-    @NotBlank
-    @Size(max = 100)
-    String name,
-
-    @NotNull
-    ProductCategoryType category
-) {
-    public ModifyProductCommand toCommand() {
-        return new ModifyProductCommand(name, category);
-    }
-}
-
-// Command - pure data object used in the Service Layer
-public record RegisterProductCommand(
-    String name,
-    List<ProductDetailCommand> details
-) {}
-
-public record ProductDetailCommand(
-    ProductCategoryType type,
-    String name
-) {}
-
-public record ModifyProductCommand(
-    String name,
-    ProductCategoryType category
-) {}
-
-public enum ProductCategoryType {
-    FOOD, HOTEL
-}
-```
-
-</details>
-
 ### 2.6 Controller Implementation
 
 The Controller contains no business logic. <strong>Convert the Request DTO to a Command and delegate to the Service — that's the whole job.</strong>
-
-<details>
-<summary><strong>Controller (Kotlin)</strong></summary>
 
 ```kotlin
 @RestController
 @RequestMapping(API + V1 + PRODUCTS)
 class ProductController(
-    private val productService: ProductService
+    private val productService: ProductService,
 ) {
     @GetMapping("/{productId}")
     fun findProductDetail(
-        @PathVariable productId: Long
+        @PathVariable productId: Long,
     ): CommonResponse<FindProductDetailResponse> {
         return CommonResponse.success(productService.findProductDetail(productId))
     }
@@ -506,7 +376,7 @@ class ProductController(
     @GetMapping
     fun findProducts(
         @Valid @ModelAttribute request: FindProductRequest,
-        @PageableDefault(page = 0, size = 20) pageable: Pageable
+        @PageableDefault(page = 0, size = 20) pageable: Pageable,
     ): CommonResponse<Page<FindProductResponse>> {
         return CommonResponse.success(productService.findProducts(request.toCommand(), pageable))
     }
@@ -514,7 +384,7 @@ class ProductController(
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun registerProduct(
-        @Valid @RequestBody request: RegisterProductRequest
+        @Valid @RequestBody request: RegisterProductRequest,
     ): CommonResponse<Long> {
         return CommonResponse.success(productService.registerProduct(request.toCommand()))
     }
@@ -522,71 +392,20 @@ class ProductController(
     @PutMapping("/{productId}")
     fun modifyProduct(
         @PathVariable productId: Long,
-        @Valid @RequestBody request: ModifyProductRequest
+        @Valid @RequestBody request: ModifyProductRequest,
     ): CommonResponse<Long> {
         return CommonResponse.success(productService.modifyProduct(productId, request.toCommand()))
     }
 
     @DeleteMapping
     fun deleteProducts(
-        @Valid @Size(min = 1) @RequestParam productIds: Set<Long>
+        @Valid @Size(min = 1) @RequestParam productIds: Set<Long>,
     ): CommonResponse<Unit> {
         productService.deleteProducts(productIds)
         return CommonResponse.success()
     }
 }
 ```
-
-</details>
-
-<details>
-<summary><strong>Controller (Java)</strong></summary>
-
-```java
-@RestController
-@RequestMapping(API + V1 + PRODUCTS)   // import static com.example.config.ApiPaths.*;
-@RequiredArgsConstructor
-public class ProductController {
-
-    private final ProductService productService;
-
-    @GetMapping("/{productId}")
-    public CommonResponse<FindProductDetailResponse> findProductDetail(
-            @PathVariable Long productId) {
-        return CommonResponse.success(productService.findProductDetail(productId));
-    }
-
-    @GetMapping
-    public CommonResponse<Page<FindProductResponse>> findProducts(
-            @Valid @ModelAttribute FindProductRequest request,
-            @PageableDefault(page = 0, size = 20) Pageable pageable) {
-        return CommonResponse.success(productService.findProducts(request.toCommand(), pageable));
-    }
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public CommonResponse<Long> registerProduct(
-            @Valid @RequestBody RegisterProductRequest request) {
-        return CommonResponse.success(productService.registerProduct(request.toCommand()));
-    }
-
-    @PutMapping("/{productId}")
-    public CommonResponse<Long> modifyProduct(
-            @PathVariable Long productId,
-            @Valid @RequestBody ModifyProductRequest request) {
-        return CommonResponse.success(productService.modifyProduct(productId, request.toCommand()));
-    }
-
-    @DeleteMapping
-    public CommonResponse<Void> deleteProducts(
-            @Valid @Size(min = 1) @RequestParam Set<Long> productIds) {
-        productService.deleteProducts(productIds);
-        return CommonResponse.success();
-    }
-}
-```
-
-</details>
 
 ---
 
@@ -640,15 +459,16 @@ spring:
 
 <strong>Standard pattern</strong>
 
-```java
+```kotlin
 @Service
 @Transactional(readOnly = true)  // default: read-only
-public class ProductService {
-
-    public Product findById(Long id) { ... }  // readOnly = true applied
+class ProductService(
+    private val productRepository: ProductRepository,
+) {
+    fun findById(id: Long): Product { ... }  // readOnly = true applied
 
     @Transactional  // write operation: overrides to readOnly = false
-    public Long save(Product product) { ... }
+    fun save(product: Product): Long { ... }
 }
 ```
 
@@ -672,22 +492,19 @@ logging:
 
 Throw business-rule violations as Custom Exceptions and pin the HTTP status code and error code into each exception. This lets the handler map them straight into a response without branching.
 
-<details>
-<summary><strong>Custom Exception (Kotlin)</strong></summary>
-
 ```kotlin
 enum class ErrorCode(
     val code: String,
-    val message: String
+    val message: String,
 ) {
     ERR000("ERR000", "A temporary error occurred. Please try again later."),
     ERR001("ERR001", "Invalid request."),
-    ERR002("ERR002", "Product not found.")
+    ERR002("ERR002", "Product not found."),
 }
 
 open class CommonException(
     val statusCode: HttpStatus,
-    val errorCode: ErrorCode
+    val errorCode: ErrorCode,
 ) : RuntimeException(errorCode.message)
 
 class BadRequestException(errorCode: ErrorCode = ErrorCode.ERR001)
@@ -697,61 +514,15 @@ class NotFoundException(errorCode: ErrorCode = ErrorCode.ERR002)
     : CommonException(HttpStatus.NOT_FOUND, errorCode)
 ```
 
-</details>
-
-<details>
-<summary><strong>Custom Exception (Java)</strong></summary>
-
-```java
-@Getter
-@RequiredArgsConstructor
-public enum ErrorCode {
-    ERR000("ERR000", "A temporary error occurred. Please try again later."),
-    ERR001("ERR001", "Invalid request."),
-    ERR002("ERR002", "Product not found.");
-
-    private final String code;
-    private final String message;
-}
-
-@Getter
-public class CommonException extends RuntimeException {
-    private final HttpStatus statusCode;
-    private final ErrorCode errorCode;
-
-    public CommonException(HttpStatus statusCode, ErrorCode errorCode) {
-        super(errorCode.getMessage());
-        this.statusCode = statusCode;
-        this.errorCode = errorCode;
-    }
-}
-
-public class NotFoundException extends CommonException {
-    public NotFoundException() {
-        super(HttpStatus.NOT_FOUND, ErrorCode.ERR002);
-    }
-
-    public NotFoundException(ErrorCode errorCode) {
-        super(HttpStatus.NOT_FOUND, errorCode);
-    }
-}
-```
-
-</details>
-
 ### 3.3 Nullable Handling
 
-- Kotlin: use `?:` (Elvis operator) and nullable types
-- Java: use `Optional` and `orElseThrow()`
-
-<details>
-<summary><strong>Service Query (Kotlin)</strong></summary>
+Kotlin handles nullability with `?:` (Elvis operator) and nullable types — no `Optional` needed.
 
 ```kotlin
 @Service
 @Transactional(readOnly = true)
 class ProductService(
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
 ) {
     fun findProductDetail(productId: Long): FindProductDetailResponse {
         val product = productRepository.findById(productId)
@@ -762,34 +533,10 @@ class ProductService(
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>Service Query (Java)</strong></summary>
-
-```java
-@Service
-@Transactional(readOnly = true)
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
-    public FindProductDetailResponse findProductDetail(Long productId) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(NotFoundException::new);
-
-        return FindProductDetailResponse.from(product);
-    }
-}
-```
-
-</details>
-
 ### 3.4 Service Implementation Principles
 
 - Don't return Domain Models directly; convert them to response-specific DTOs
-- Use Streams for repetitive logic while preserving readability
+- Use scope functions (`map`, `let`, `run`) for concise repetitive logic
 - <strong>Accept Command objects as parameters, not Request DTOs</strong>
 
 <details>
@@ -801,12 +548,10 @@ Two approaches usually come to mind for deleting a single entity — `deleteById
 
 Almost untrue. Spring Data's `SimpleJpaRepository.deleteById()` actually does this:
 
-```java
-@Override
-@Transactional
-public void deleteById(ID id) {
-    Assert.notNull(id, "...");
-    findById(id).ifPresent(this::delete);   // ← it calls findById internally
+```kotlin
+// SimpleJpaRepository internals (JVM bytecode level)
+override fun deleteById(id: ID) {
+    findById(id).ifPresent { delete(it) }   // ← it calls findById internally
 }
 ```
 
@@ -821,74 +566,55 @@ JPA needs the entity in the persistence context to honor cascade and `@PreRemove
 | 3. `@Modifying @Query DELETE` | 1 | returns affected rows | ✗ | <strong>✗</strong> | bulk only — wrong for single |
 | 4. Domain method | 2 (SELECT + UPDATE) | throws an exception | <strong>✓</strong> | ✓ | <strong>soft delete</strong> |
 
-<strong>Approach 1 — why `deleteById` is rarely used</strong>
-
-```java
-productRepository.deleteById(productId);   // one line, but...
-```
-
-In modern Spring Data, calling it with a non-existent ID throws nothing. The caller can't tell whether anything was actually deleted, which becomes a <strong>silent entry point for bugs</strong>. It also leaves no room for pre-deletion checks ("can't delete an order that's already paid") or audit logging.
-
 <strong>Approach 2 — the standard (findById + delete)</strong>
 
-```java
+```kotlin
 @Transactional
-public void deleteProduct(Long productId) {
-    Product product = productRepository.findById(productId)
-        .orElseThrow(NotFoundException::new);
+fun deleteProduct(productId: Long) {
+    val product = productRepository.findById(productId)
+        ?: throw NotFoundException()
 
     // domain validation or event publishing fits here
-    productRepository.delete(product);
+    productRepository.delete(product)
 }
 ```
-
-Same query count as `deleteById`, but with <strong>an explicit 404 and a place to insert validation</strong>. It also lines up with the rest of Part 1's pattern of "the Service pulls the domain object and operates on it."
 
 <strong>Approach 3 — a shortcut with serious traps</strong>
 
-```java
+```kotlin
 @Modifying(clearAutomatically = true)   // ← omit this and the persistence context goes stale
 @Query("DELETE FROM Product p WHERE p.id = :id")
-int deleteByIdInBulk(@Param("id") Long id);
+fun deleteByIdInBulk(@Param("id") id: Long): Int
 ```
 
-A single DELETE is fired, but:
-- <strong>`@PreRemove`·`@PostRemove` are skipped</strong>
-- <strong>cascade is bypassed</strong> → child entities can remain and violate FK constraints
-- <strong>persistence context goes stale</strong> → re-querying within the same transaction can return cached data
-
-Not worth using for a single entity. Only useful for `WHERE id IN (...)` style bulk deletes of tens of thousands of rows.
+A single DELETE fires, but `@PreRemove`/`@PostRemove` are skipped, cascade is bypassed, and the persistence context can go stale. Not worth using for a single entity.
 
 <strong>Approach 4 — the canonical soft delete</strong>
 
-```java
+```kotlin
 // Service
 @Transactional
-public void deleteProduct(Long productId) {
-    Product product = productRepository.findById(productId)
-        .orElseThrow(NotFoundException::new);
-    product.softDelete();   // Dirty Checking emits the UPDATE
+fun deleteProduct(productId: Long) {
+    val product = productRepository.findById(productId)
+        ?: throw NotFoundException()
+    product.softDelete()   // Dirty Checking emits the UPDATE
 }
 
 // Entity
-public void softDelete() {
-    if (this.deletedAt != null) {
-        throw new BadRequestException(ErrorCode.ALREADY_DELETED);
-    }
-    this.deletedAt = LocalDateTime.now();
+fun softDelete() {
+    check(this.deletedAt == null) { "Already deleted" }
+    this.deletedAt = LocalDateTime.now()
 }
 ```
 
-The domain owns the "can this be deleted now?" rule, and the UPDATE is emitted by Dirty Checking — no explicit save call needed.
-
 <strong>Choosing by requirement</strong>
 
-```text
-Requirement ──┬── plain hard delete                     → Approach 2 (findById + delete)
-              ├── hard delete with validation/audit     → Approach 2 + a domain method
-              ├── soft delete                           → Approach 4 (domain method)
-              └── tens of thousands at once (batch)     → Approach 3 (@Modifying)
-```
+| Requirement | Recommended approach |
+|-------------|---------------------|
+| Plain hard delete | Approach 2 (findById + delete) |
+| Hard delete with validation/audit | Approach 2 + a domain method |
+| Soft delete | Approach 4 (domain method) |
+| Tens of thousands at once (batch) | Approach 3 (@Modifying) |
 
 <strong>"deleteById is almost never used"</strong> is the takeaway. It's short, but its silent success is consistently the door to silent bugs.
 
@@ -941,9 +667,9 @@ Most production projects use Soft Delete. Especially when:
 
 If not specified in the requirements, Hard Delete is fine. If you implement Soft Delete, don't forget to filter out deleted data in the query logic.
 
-```java
+```kotlin
 // Example query method when implementing Soft Delete (deletedAt column)
-Optional<Product> findByIdAndDeletedAtIsNull(Long id);
+fun findByIdAndDeletedAtIsNull(id: Long): Product?
 ```
 
 </details>
@@ -981,15 +707,15 @@ Partial indexes work with both boolean and timestamp, but `IS NULL` reads more n
 
 When deletion isn't a single boolean but part of a lifecycle:
 
-```java
-public enum OrderStatus { PENDING, PAID, CANCELLED, REFUNDED, DELETED }
+```kotlin
+enum class OrderStatus { PENDING, PAID, CANCELLED, REFUNDED, DELETED }
 
 @Entity
-public class Order {
+class Order(
     @Enumerated(EnumType.STRING)   // ORDINAL breaks when the enum is reordered or extended
     @Column(nullable = false)
-    private OrderStatus status;
-}
+    var status: OrderStatus = OrderStatus.PENDING,
+) : BaseEntity()
 ```
 
 Query as `status != 'DELETED'` or `IN (...)`. <strong>Always use `EnumType.STRING`</strong> — with `ORDINAL`, adding or reordering enum values silently invalidates existing rows.
@@ -1010,21 +736,17 @@ The live table stays lean and indexes remain meaningful. To restore, copy back f
 
 When GDPR "right to be forgotten" applies:
 
-```java
+```kotlin
 @Transactional
-public void deleteUser(Long userId) {
-    User user = userRepository.findById(userId).orElseThrow(NotFoundException::new);
+fun deleteUser(userId: Long) {
+    val user = userRepository.findById(userId) ?: throw NotFoundException()
 
-    auditLogRepository.save(AuditLog.of(user, "DELETE"));  // trace stays in audit
-    userRepository.delete(user);                            // row actually goes
+    auditLogRepository.save(AuditLog.of(user, "DELETE"))  // trace stays in audit
+    userRepository.delete(user)                            // row actually goes
 }
 ```
 
 Live table stays smallest, the audit trail lives in a dedicated table. Effectively required for any domain holding personal data.
-
-<strong>Pattern E — event sourcing</strong>
-
-"Delete" becomes an event written to an append-only log; current state is derived by replay. Used in finance, healthcare, and regulated industries — but it's a complexity step up and <strong>almost never makes sense for a pre-interview assignment</strong>.
 
 <strong>How to phrase it in an interview</strong>
 
@@ -1034,14 +756,13 @@ That level of nuance signals "this person actually understands soft-delete patte
 
 </details>
 
-<details>
-<summary><strong>Service (Kotlin)</strong></summary>
+Here is the full Service example — write methods override with `@Transactional`, and `?: throw NotFoundException()` makes null handling explicit.
 
 ```kotlin
 @Service
 @Transactional(readOnly = true)
 class ProductService(
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
 ) {
     @Transactional
     fun modifyProduct(productId: Long, command: ModifyProductCommand): Long {
@@ -1050,7 +771,7 @@ class ProductService(
 
         product.update(
             name = command.name,
-            category = command.category
+            category = command.category,
         )
 
         return product.id!!
@@ -1077,52 +798,6 @@ class ProductService(
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>Service (Java)</strong></summary>
-
-```java
-@Service
-@Transactional(readOnly = true)
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
-    @Transactional
-    public Long modifyProduct(Long productId, ModifyProductCommand command) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(NotFoundException::new);
-
-        product.update(command.name(), command.category());
-
-        return product.getId();
-    }
-
-    @Transactional
-    public void deleteProduct(Long productId) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(NotFoundException::new);
-
-        productRepository.delete(product);
-    }
-
-    @Transactional
-    public void deleteProducts(Set<Long> productIds) {
-        List<Product> products = productRepository.findAllById(productIds);
-
-        if (products.size() != productIds.size()) {
-            throw new NotFoundException();
-        }
-
-        productRepository.deleteAll(products);
-    }
-}
-```
-
-</details>
-
 ### 3.5 Response DTO Conversion Patterns
 
 The Service doesn't return Entities directly — it converts them into Response DTOs. Where the conversion code lives splits into three patterns.
@@ -1135,50 +810,13 @@ The Service doesn't return Entities directly — it converts them into Response 
 
 The key principle: <strong>conversion responsibility belongs to the DTO side</strong>. If the Entity knows the DTO shape, the domain gets dragged around by the presentation layer.
 
-<details>
-<summary><strong>Static factory (Java)</strong></summary>
-
-```java
-public record FindProductDetailResponse(
-    Long id,
-    String name,
-    ProductCategoryType category,
-    boolean enabled,
-    LocalDateTime createdAt
-) {
-    public static FindProductDetailResponse from(Product product) {
-        return new FindProductDetailResponse(
-            product.getId(),
-            product.getName(),
-            product.getCategory(),
-            product.isEnabled(),
-            product.getCreatedAt()
-        );
-    }
-}
-
-// In the Service
-public FindProductDetailResponse findProductDetail(Long productId) {
-    Product product = productRepository.findById(productId)
-        .orElseThrow(NotFoundException::new);
-    return FindProductDetailResponse.from(product);
-}
-```
-
-For collection responses, use `entities.stream().map(Response::from).toList()`. For paged responses, use `page.map(Response::from)` — Spring Data's `Page` supports `map` directly.
-
-</details>
-
-<details>
-<summary><strong>Static factory (Kotlin)</strong></summary>
-
 ```kotlin
 data class FindProductDetailResponse(
     val id: Long,
     val name: String,
     val category: ProductCategoryType,
     val enabled: Boolean,
-    val createdAt: LocalDateTime
+    val createdAt: LocalDateTime,
 ) {
     companion object {
         fun from(product: Product) = FindProductDetailResponse(
@@ -1186,26 +824,31 @@ data class FindProductDetailResponse(
             name = product.name,
             category = product.category,
             enabled = product.enabled,
-            createdAt = product.createdAt
+            createdAt = product.createdAt,
         )
     }
 }
+
+// In the Service
+fun findProductDetail(productId: Long): FindProductDetailResponse {
+    val product = productRepository.findById(productId)
+        ?: throw NotFoundException()
+    return FindProductDetailResponse.from(product)
+}
 ```
 
-An extension function (`fun Product.toResponse()`) is also possible, but the static factory stays more consistent with the rest of the code style.
-
-</details>
+For collection responses, use `entities.map { FindProductDetailResponse.from(it) }`. For paged responses, use `page.map { FindProductDetailResponse.from(it) }` — Spring Data's `Page` supports `map` directly.
 
 <details>
 <summary><strong>MapStruct alternative</strong></summary>
 
 When you have many DTOs or deep graphs (Order → OrderItems → Product), MapStruct cuts the boilerplate substantially.
 
-```java
+```kotlin
 @Mapper(componentModel = "spring")
-public interface ProductMapper {
-    FindProductDetailResponse toDetailResponse(Product product);
-    List<FindProductResponse> toListResponse(List<Product> products);
+interface ProductMapper {
+    fun toDetailResponse(product: Product): FindProductDetailResponse
+    fun toListResponse(products: List<Product>): List<FindProductResponse>
 }
 ```
 
@@ -1219,7 +862,7 @@ Pros: compile-time mapping verification and runtime performance. Cons: extra dep
 
 ### 4.1 Basic Principles
 
-- <strong>Nullable handling</strong>: Java uses Optional, Kotlin uses Nullable
+- <strong>Nullable handling</strong>: Kotlin nullable types (`Product?`)
 - <strong>Simple queries</strong>: use JPA Query Methods
 - <strong>Complex queries</strong>: use Querydsl
 - <strong>When using Querydsl</strong>: explicitly declare `@Transactional`
@@ -1244,9 +887,6 @@ spring:
 
 </details>
 
-<details>
-<summary><strong>Repository (Kotlin)</strong></summary>
-
 ```kotlin
 interface ProductRepository : JpaRepository<Product, Long>, ProductRepositoryCustom {
     fun findByIdAndDeletedAtIsNull(id: Long): Product?
@@ -1257,18 +897,18 @@ interface ProductRepositoryCustom {
     fun findProducts(
         name: String?,
         enabled: Boolean?,
-        pageable: Pageable
+        pageable: Pageable,
     ): Page<Product>
 }
 
 class ProductRepositoryImpl(
-    private val queryFactory: JPAQueryFactory
+    private val queryFactory: JPAQueryFactory,
 ) : ProductRepositoryCustom {
 
     override fun findProducts(
         name: String?,
         enabled: Boolean?,
-        pageable: Pageable
+        pageable: Pageable,
     ): Page<Product> {
         val product = QProduct.product
 
@@ -1276,7 +916,7 @@ class ProductRepositoryImpl(
             .selectFrom(product)
             .where(
                 nameContains(name),
-                enabledEq(enabled)
+                enabledEq(enabled),
             )
             .offset(pageable.offset)
             .limit(pageable.pageSize.toLong())
@@ -1288,7 +928,7 @@ class ProductRepositoryImpl(
             .from(product)
             .where(
                 nameContains(name),
-                enabledEq(enabled)
+                enabledEq(enabled),
             )
 
         return PageableExecutionUtils.getPage(results, pageable) {
@@ -1296,77 +936,15 @@ class ProductRepositoryImpl(
         }
     }
 
-    private fun nameContains(name: String?): BooleanExpression? {
-        return name?.let { QProduct.product.name.containsIgnoreCase(it) }
-    }
+    private fun nameContains(name: String?): BooleanExpression? =
+        name?.let { QProduct.product.name.containsIgnoreCase(it) }
 
-    private fun enabledEq(enabled: Boolean?): BooleanExpression? {
-        return enabled?.let { QProduct.product.enabled.eq(it) }
-    }
+    private fun enabledEq(enabled: Boolean?): BooleanExpression? =
+        enabled?.let { QProduct.product.enabled.eq(it) }
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>Repository (Java)</strong></summary>
-
-```java
-public interface ProductRepository extends JpaRepository<Product, Long>,
-        ProductRepositoryCustom {
-
-    Optional<Product> findByIdAndDeletedAtIsNull(Long id);
-    List<Product> findAllByIdIn(Collection<Long> ids);
-}
-
-public interface ProductRepositoryCustom {
-    Page<Product> findProducts(String name, Boolean enabled, Pageable pageable);
-}
-
-@RequiredArgsConstructor
-public class ProductRepositoryImpl implements ProductRepositoryCustom {
-
-    private final JPAQueryFactory queryFactory;
-
-    @Override
-    public Page<Product> findProducts(String name, Boolean enabled, Pageable pageable) {
-        QProduct product = QProduct.product;
-
-        List<Product> results = queryFactory
-            .selectFrom(product)
-            .where(
-                nameContains(name),
-                enabledEq(enabled)
-            )
-            .offset(pageable.getOffset())
-            .limit(pageable.getPageSize())
-            .orderBy(product.id.desc())
-            .fetch();
-
-        JPAQuery<Long> countQuery = queryFactory
-            .select(product.count())
-            .from(product)
-            .where(
-                nameContains(name),
-                enabledEq(enabled)
-            );
-
-        return PageableExecutionUtils.getPage(results, pageable, countQuery::fetchOne);
-    }
-
-    private BooleanExpression nameContains(String name) {
-        return name != null ? QProduct.product.name.containsIgnoreCase(name) : null;
-    }
-
-    private BooleanExpression enabledEq(Boolean enabled) {
-        return enabled != null ? QProduct.product.enabled.eq(enabled) : null;
-    }
-}
-```
-
-</details>
-
-> <strong>Note</strong>: Pagination depth (Page vs Slice, cursor-based pagination) is covered in [Part 4 — Performance](/en/blog/spring-boot-pre-interview-guide-4); Querydsl dependencies and setup live in [Part 2 — Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2).
+> <strong>Note</strong>: Pagination depth (Page vs Slice, cursor-based pagination) is covered in [Part 4 — Performance](/blog/en/spring-boot-pre-interview-guide-4); Querydsl dependencies and setup live in [Part 2 — Database &amp; Testing](/blog/en/spring-boot-pre-interview-guide-2).
 
 ---
 
@@ -1375,7 +953,7 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 ### 5.1 Design Principles
 
 - <strong>Business methods instead of setters</strong>: `updateName()`, `activate()`, etc.
-- <strong>Default constructor should be protected</strong>: satisfies the JPA spec and prevents indiscriminate object creation
+- <strong>The `kotlin-jpa` plugin synthesizes the no-arg constructor automatically</strong> — no need to write a protected constructor manually
 - <strong>Separate related entities</strong>: split child entities when needed
 - <strong>Fixed values</strong>: use Enums
 
@@ -1386,22 +964,7 @@ Strictly speaking, <strong>protected isn't mandatory</strong>. The JPA 2.1 spec 
 
 <strong>1. Why not public — preventing incomplete objects</strong>
 
-```java
-@Entity
-@NoArgsConstructor  // defaults to public
-public class Product extends BaseEntity {
-    @Column(nullable = false)
-    private String name;
-
-    public Product(String name) { this.name = name; }
-}
-
-// Anyone can do this
-Product p = new Product();    // a zombie object with name = null
-productRepository.save(p);    // you won't notice until DB rejects NULL
-```
-
-Entities are designed to remove setters and have state changed only via constructors and business methods. A public no-arg constructor breaks that principle the moment it exists.
+Entities are designed to remove setters and have state changed only via constructors and business methods. A public no-arg constructor allows creating a zombie object with `name = null`, which won't be caught until the DB rejects the NULL.
 
 <strong>2. Why not private — Hibernate proxies need to call the parent constructor</strong>
 
@@ -1414,30 +977,13 @@ For lazy loading, Hibernate generates <strong>subclass proxies of your Entity at
 | `package-private` | △ (only within the same package) |
 | `private` | ✗ |
 
-Private can be worked around via reflection, but it violates the JPA spec and breaks under certain bytecode-enhancement setups.
-
-<strong>3. protected sits at the intersection of both pressures</strong>
-
-- Visible enough for JPA / Hibernate (spec-compliant, proxy-able)
-- Invisible to application code (`new Product()` is blocked)
-
-```java
-@Entity
-@NoArgsConstructor(access = AccessLevel.PROTECTED)  // ← the standard one-liner
-public class Product extends BaseEntity {
-    public Product(String name) { this.name = name; }
-}
-
-new Product();   // compile error — protected access
-```
-
-<strong>Kotlin is different</strong>
+<strong>3. Kotlin handles this through the `kotlin-jpa` plugin</strong>
 
 ```kotlin
 // build.gradle.kts
 plugins {
-    kotlin("plugin.jpa") version "..."     // synthesizes no-arg ctor on @Entity
-    kotlin("plugin.allopen") version "..." // opens @Entity classes for proxying
+    kotlin("plugin.jpa") version "2.x"     // synthesizes no-arg ctor on @Entity
+    kotlin("plugin.spring") version "2.x"  // opens @Entity classes for proxying
 }
 ```
 
@@ -1446,92 +992,27 @@ The `kotlin-jpa` plugin synthesizes a no-arg constructor on `@Entity` classes at
 </details>
 
 <details>
-<summary><strong>Using Lombok in entities — is it safe?</strong></summary>
+<summary><strong>Kotlin Entity without Lombok — what replaces what</strong></summary>
 
-<strong>Annotations that require caution</strong>
+Kotlin needs no Lombok at all. What Lombok annotations did in Java, Kotlin handles at the language level.
 
-| Annotation | Risk | Reason |
-|-----------|:---:|------|
-| `@Data` | High | Includes `@EqualsAndHashCode` — infinite loop with bidirectional relationships |
-| `@EqualsAndHashCode` | High | StackOverflow when including related entities |
-| `@ToString` | Medium | Forces lazy-loading proxy initialization, infinite loop |
-| `@AllArgsConstructor` | Medium | Bugs possible when field order changes |
-| `@Setter` | Low | Unintended state changes possible |
-| `@Getter` | Safe | Generally no issues |
-| `@NoArgsConstructor` | Safe | Recommended with `access = PROTECTED` |
-| `@Builder` | Safe | But be careful when combined with `@AllArgsConstructor` |
+| Java Lombok | Kotlin equivalent |
+|-------------|-------------------|
+| `@Getter`·`@Setter` | `val`/`var` auto-accessors |
+| `@RequiredArgsConstructor` | primary constructor |
+| `@AllArgsConstructor` | primary constructor (all fields) |
+| `@NoArgsConstructor` | `kotlin-jpa` plugin synthesizes it |
+| `@Builder` | named arguments + default values |
+| `@Data` | `data class` |
+| `@Slf4j` | `private val log = LoggerFactory.getLogger(this::class.java)` |
 
-<strong>@Builder + @AllArgsConstructor combination caution</strong>
-
-❌ Potentially problematic pattern
-
-```java
-@Entity
-@Builder
-@AllArgsConstructor
-@NoArgsConstructor
-public class Product {
-    @Id @GeneratedValue
-    private Long id;
-    private String name;
-    private int price;
-}
-
-// Builder calls AllArgsConstructor
-// If field order changes, values may be assigned incorrectly
-Product product = Product.builder()
-    .name("Product")
-    .price(1000)
-    .build();
-```
-
-✅ Recommended pattern — apply `@Builder` directly to a constructor
-
-```java
-@Entity
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Product {
-    @Id @GeneratedValue
-    private Long id;
-    private String name;
-    private int price;
-
-    @Builder
-    private Product(String name, int price) {
-        this.name = name;
-        this.price = price;
-    }
-}
-```
-
-Applying `@Builder` to the constructor lets you specify only the required fields and is safe against field-order changes.
-
-<strong>Recommended production pattern</strong>
-
-```java
-@Entity
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Product {
-    // No @Setter — change state through business methods
-    // @ToString — if needed, implement manually excluding related entities
-    // @EqualsAndHashCode — implement ID-based manually or don't use it
-}
-```
-
-<strong>Recommendation for assignments</strong>
-
-Use only `@Getter` and `@NoArgsConstructor(access = PROTECTED)`, and implement everything else manually. Never use `@Data`.
+Note: don't use `data class` for JPA entities. Hibernate generates subclasses (proxies) for lazy loading, and `data class`'s `copy()`, `equals()`, and `hashCode()` can produce unexpected behavior.
 
 </details>
 
 ### 5.2 BaseEntity
 
 Separate common fields like creation time and modification time into a BaseEntity.
-
-<details>
-<summary><strong>BaseEntity (Kotlin)</strong></summary>
 
 ```kotlin
 @MappedSuperclass
@@ -1564,65 +1045,27 @@ abstract class BaseEntityWithAuditor : BaseEntity() {
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>BaseEntity (Java)</strong></summary>
-
-```java
-@MappedSuperclass
-@EntityListeners(AuditingEntityListener.class)
-@Getter
-public abstract class BaseEntity {
-
-    @CreatedDate
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
-    @LastModifiedDate
-    @Column
-    private LocalDateTime updatedAt;
-}
-
-@MappedSuperclass
-@Getter
-public abstract class BaseEntityWithAuditor extends BaseEntity {
-
-    @CreatedBy
-    @Column(updatable = false)
-    private Long createdBy;
-
-    @LastModifiedBy
-    @Column
-    private Long updatedBy;
-}
-```
-
-</details>
-
 ### 5.3 Entity Implementation
-
-<details>
-<summary><strong>Entity (Kotlin)</strong></summary>
 
 ```kotlin
 @Entity
 @Table(name = "products")
 class Product(
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long? = null,
-
     @Column(nullable = false)
     var name: String,
 
-    @Column(nullable = false)
-    var enabled: Boolean = true,
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    var category: ProductCategoryType
+    var category: ProductCategoryType,
+
+    @Column(nullable = false)
+    var enabled: Boolean = true,
 ) : BaseEntity() {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long? = null
+        protected set
 
     fun update(name: String, category: ProductCategoryType) {
         this.name = name
@@ -1639,54 +1082,6 @@ class Product(
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>Entity (Java)</strong></summary>
-
-```java
-@Entity
-@Table(name = "products")
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Product extends BaseEntity {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false)
-    private String name;
-
-    @Column(nullable = false)
-    private Boolean enabled = true;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ProductCategoryType category;
-
-    public Product(String name, ProductCategoryType category) {
-        this.name = name;
-        this.category = category;
-    }
-
-    public void update(String name, ProductCategoryType category) {
-        this.name = name;
-        this.category = category;
-    }
-
-    public void enable() {
-        this.enabled = true;
-    }
-
-    public void disable() {
-        this.enabled = false;
-    }
-}
-```
-
-</details>
-
 ### 5.4 Associations
 
 Assignment domains almost always involve associations (order-product, user-order, etc.). The two things evaluators flag most are <strong>missing fetch type</strong> and <strong>overuse of bidirectional mapping</strong>.
@@ -1698,30 +1093,25 @@ Three core principles:
 - <strong>Avoid Cascade ALL; opt in to specific ones</strong> — only declare `PERSIST`/`REMOVE` when the child's lifecycle truly matches the parent's.
 
 <details>
-<summary><strong>Unidirectional @ManyToOne (Java) — the safe default</strong></summary>
+<summary><strong>Unidirectional @ManyToOne (Kotlin) — the safe default</strong></summary>
 
-```java
+```kotlin
 @Entity
 @Table(name = "orders")
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Order extends BaseEntity {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
+class Order(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    val user: User,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private OrderStatus status = OrderStatus.PENDING;
+    var status: OrderStatus = OrderStatus.PENDING,
+) : BaseEntity() {
 
-    public Order(User user) {
-        this.user = user;
-    }
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long? = null
+        protected set
 }
 ```
 
@@ -1730,35 +1120,39 @@ Specifying `fetch = LAZY` is almost a magic incantation — without it, every Or
 </details>
 
 <details>
-<summary><strong>Bidirectional @OneToMany (Java) — only when truly needed</strong></summary>
+<summary><strong>Bidirectional @OneToMany (Kotlin) — only when truly needed</strong></summary>
 
-```java
+```kotlin
 @Entity
-public class Order extends BaseEntity {
+class Order(
     // ...
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderItem> items = new ArrayList<>();
+) : BaseEntity() {
+
+    @OneToMany(mappedBy = "order", cascade = [CascadeType.ALL], orphanRemoval = true)
+    val items: MutableList<OrderItem> = mutableListOf()
 
     // Convenience method — keeping both sides in sync is the domain's job
-    public void addItem(OrderItem item) {
-        this.items.add(item);
-        item.assignTo(this);
+    fun addItem(item: OrderItem) {
+        items.add(item)
+        item.assignTo(this)
     }
 }
 
 @Entity
 @Table(name = "order_items")
-public class OrderItem {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
+class OrderItem(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+    var order: Order,
+) : BaseEntity() {
 
-    void assignTo(Order order) {
-        this.order = order;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long? = null
+        protected set
+
+    fun assignTo(order: Order) {
+        this.order = order
     }
 }
 ```
@@ -1788,7 +1182,7 @@ In a bidirectional mapping, one side is the <strong>"owner of the relationship"<
 
 </details>
 
-> <strong>Note</strong>: N+1 problems caused by associations, fetch joins, and `@EntityGraph` are covered in [Part 4 — Performance](/en/blog/spring-boot-pre-interview-guide-4).
+> <strong>Note</strong>: N+1 problems caused by associations, fetch joins, and `@EntityGraph` are covered in [Part 4 — Performance](/blog/en/spring-boot-pre-interview-guide-4).
 
 ---
 
@@ -1802,9 +1196,9 @@ Spring matches the <strong>most specific handler</strong> first based on the exc
 
 | Priority | Handler | Target |
 |:---:|--------|----------|
-| 1 | `CommonException.class` | Exceptions intentionally thrown from business logic |
-| 2 | `MethodArgumentNotValidException.class` | Exceptions thrown when `@Valid` validation fails |
-| 3 | `Exception.class` | All unhandled exceptions (Fallback) |
+| 1 | `CommonException::class` | Exceptions intentionally thrown from business logic |
+| 2 | `MethodArgumentNotValidException::class` | Exceptions thrown when `@Valid` validation fails |
+| 3 | `Exception::class` | All unhandled exceptions (Fallback) |
 
 ### 6.2 Role of Each Handler
 
@@ -1816,14 +1210,11 @@ Spring matches the <strong>most specific handler</strong> first based on the exc
 
 ### 6.3 GlobalExceptionHandler Implementation
 
-<details>
-<summary><strong>GlobalExceptionHandler (Kotlin)</strong></summary>
-
 ```kotlin
 @RestControllerAdvice
 class GlobalExceptionHandler {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val log = LoggerFactory.getLogger(this::class.java)
 
     /**
      * Business exception handler
@@ -1834,7 +1225,7 @@ class GlobalExceptionHandler {
     fun handleCommonException(e: CommonException): ResponseEntity<CommonResponse<Unit>> {
         val response = CommonResponse.error<Unit>(
             e.errorCode.code,
-            e.errorCode.message
+            e.errorCode.message,
         )
         return ResponseEntity(response, e.statusCode)
     }
@@ -1846,7 +1237,7 @@ class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidationException(
-        e: MethodArgumentNotValidException
+        e: MethodArgumentNotValidException,
     ): ResponseEntity<CommonResponse<Unit>> {
         val fieldError = e.bindingResult.fieldErrors.firstOrNull()
         val message = fieldError?.let { "${it.field}: ${it.defaultMessage}" }
@@ -1868,75 +1259,14 @@ class GlobalExceptionHandler {
 
         val response = CommonResponse.error<Unit>(
             ErrorCode.ERR000.code,
-            ErrorCode.ERR000.message
+            ErrorCode.ERR000.message,
         )
         return ResponseEntity(response, HttpStatus.INTERNAL_SERVER_ERROR)
     }
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>GlobalExceptionHandler (Java)</strong></summary>
-
-```java
-@Slf4j
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-
-    /**
-     * Business exception handler
-     */
-    @ExceptionHandler(CommonException.class)
-    public ResponseEntity<CommonResponse<Void>> handleCommonException(CommonException e) {
-        CommonResponse<Void> response = CommonResponse.error(
-            e.getErrorCode().getCode(),
-            e.getErrorCode().getMessage()
-        );
-        return ResponseEntity.status(e.getStatusCode()).body(response);
-    }
-
-    /**
-     * Validation exception handler
-     */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<CommonResponse<Void>> handleValidationException(
-            MethodArgumentNotValidException e) {
-        FieldError fieldError = e.getBindingResult().getFieldErrors().stream()
-            .findFirst()
-            .orElse(null);
-
-        String message = fieldError != null
-            ? fieldError.getField() + ": " + fieldError.getDefaultMessage()
-            : "Validation failed";
-
-        CommonResponse<Void> response = CommonResponse.error(
-            ErrorCode.ERR001.getCode(),
-            message
-        );
-        return ResponseEntity.badRequest().body(response);
-    }
-
-    /**
-     * Fallback
-     */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<CommonResponse<Void>> handleException(Exception e) {
-        log.error("Unexpected error occurred", e);
-
-        CommonResponse<Void> response = CommonResponse.error(
-            ErrorCode.ERR000.getCode(),
-            ErrorCode.ERR000.getMessage()
-        );
-        return ResponseEntity.internalServerError().body(response);
-    }
-}
-```
-
-</details>
-
-> <strong>Note</strong>: How to integrate Spring Security's authentication/authorization exceptions (`AuthenticationException`, `AccessDeniedException`) into the same handler shape is covered in [Part 5 — Security](/en/blog/spring-boot-pre-interview-guide-5).
+> <strong>Note</strong>: How to integrate Spring Security's authentication/authorization exceptions (`AuthenticationException`, `AccessDeniedException`) into the same handler shape is covered in [Part 5 — Security](/blog/en/spring-boot-pre-interview-guide-5).
 
 ---
 
@@ -1955,7 +1285,7 @@ public class GlobalExceptionHandler {
 | <strong>Controller</strong> | HTTP method mapping, URI design, validation, common response, Request → Command conversion |
 | <strong>Service</strong> | Transaction split, exception handling, Response DTO static factory, Command input |
 | <strong>Repository</strong> | Nullable handling, pagination, Querydsl usage |
-| <strong>Domain</strong> | Business methods, BaseEntity, protected constructor, associations with fetch=LAZY |
+| <strong>Domain</strong> | Business methods, BaseEntity, `kotlin-jpa` plugin, associations with fetch=LAZY |
 | <strong>Exception Handler</strong> | Three-tier priority, fallback that blocks internal exposure |
 
 <details>
@@ -1963,7 +1293,7 @@ public class GlobalExceptionHandler {
 
 - [ ] Are CRUD operations correctly mapped to HTTP methods?
 - [ ] Do URIs clearly represent resources?
-- [ ] Is validation applied to DTOs?
+- [ ] Is validation applied to DTOs? (using `@field:NotBlank` form?)
 - [ ] Are Request DTOs converted to Commands before being passed to the Service?
 - [ ] Is `readOnly = true` set for read transactions?
 - [ ] Does Entity → Response DTO conversion use a `from()` static factory?
@@ -1971,10 +1301,10 @@ public class GlobalExceptionHandler {
 - [ ] Is bidirectional mapping used only when truly necessary?
 - [ ] Are exceptions handled consistently in the GlobalExceptionHandler?
 - [ ] Do entities have business methods instead of setters?
-- [ ] Is the fallback handler (`Exception.class`) defined?
+- [ ] Is the fallback handler (`Exception::class`) defined?
 
 </details>
 
 The next part is <strong>Database &amp; Testing</strong>. With the four layers drawn in code, we now look at the database those layers live on and how that code gets verified. Profile-based H2/MySQL separation, JPA mapping pitfalls, and how to split unit, slice, and integration tests so the evaluator walks away thinking, "this person actually writes tests."
 
-[Next: Part 2 — Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2)
+[Next: Part 2 — Database &amp; Testing](/blog/en/spring-boot-pre-interview-guide-2)
