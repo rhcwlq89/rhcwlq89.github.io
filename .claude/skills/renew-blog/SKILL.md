@@ -238,6 +238,8 @@ Use these mappings as the source of truth when an args hint is "Kotlin only" or 
 
 **Other Kotlin-specific moves:**
 
+- **Pin the Kotlin version to `2.3`** in any `build.gradle.kts` snippet you write. Spring Boot 4 + Kotlin 2.3 is the verified-compatible pair (K2 compiler stable; `kotlin-spring`/`kotlin-jpa` plugins work normally; binary-compatible with the rest of the 2.x line). Use `kotlin("plugin.spring") version "2.3"` and `kotlin("plugin.jpa") version "2.3"`, never the placeholder `"2.x"`. If the user explicitly asks for a different Kotlin minor (2.0/2.1/2.2/2.4+), follow that — but the default is `2.3`.
+- In the §1.1 setup callout, frame the post as "Spring Boot 4 + Kotlin 2.3 기준" / "Spring Boot 4 + Kotlin 2.3" (KO/EN). Add a short reassurance that the 2.x series is backward-compatible so the same code runs on 2.0–2.3 — this protects readers stuck on slightly older minors.
 - Add the `kotlin-spring` and `kotlin-jpa` Gradle plugins; mention them in a §1.1 (or equivalent) callout. Don't assume the reader has them.
 - Drop Lombok entirely from the project — no `compileOnly 'org.projectlombok:lombok'`, no `annotationProcessor`. Note in prose that Kotlin doesn't use Lombok.
 - Use scope functions (`apply`, `let`, `run`) where they shorten code without hiding intent. Don't force them.
