@@ -1,9 +1,10 @@
 ---
-title: "스프링 사전과제 가이드 2편: Database & Testing — 환경 분리·테스트 피라미드·Testcontainers"
-description: "환경별 DB 선택과 ddl-auto 정책, Memory Repository 구현 시 주의사항, Test Pyramid에 따른 어노테이션 선택 기준, 테스트 대역(Dummy·Stub·Spy·Mock·Fake) 선택 기준, Testcontainers로 H2 방언 차이가 가리는 버그를 잡는 법까지 — 사전과제 평가자가 두 번째로 자주 지적하는 Database & Testing 영역을 한 편으로 정리했다."
+title: "스프링 사전과제 가이드 2편: Database & Testing — Spring Boot 4 · Kotlin 환경 분리·테스트 피라미드·Testcontainers"
+description: "Spring Boot 4 + Kotlin 환경에서 환경별 DB 선택과 ddl-auto 정책, Memory Repository 구현 시 주의사항, Test Pyramid에 따른 어노테이션 선택 기준, 테스트 대역(Dummy·Stub·Spy·Mock·Fake) 선택 기준, Testcontainers로 H2 방언 차이가 가리는 버그를 잡는 법까지 — data class·val/var로 Lombok 없이 풀이한 시리즈 2편."
 pubDate: 2026-01-11T10:00:00+09:00
 tags:
   - Spring Boot
+  - Kotlin
   - JPA
   - Testing
   - Backend
@@ -50,6 +51,8 @@ heroImage: "../../assets/SpringBootPreInterviewGuide2.png"
 ## 1. Database 환경 매트릭스 — 로컬·테스트·운영 분리
 
 ### 1.1 환경별 DB 선택 기준
+
+> <strong>참고</strong>: Spring Boot 4 + Kotlin 프로젝트 셋업(kotlin-spring·kotlin-jpa plugin) 자체는 1편 1.1절에서 다뤘다. 2편은 그 위에서 도는 Database·Testing 영역에 집중한다.
 
 환경마다 DB 선택과 `ddl-auto` 정책이 달라야 한다. 아래 표가 기준이다.
 
@@ -206,36 +209,36 @@ volumes:
 
 **1. ID 생성 — `AtomicLong`을 써야 한다**
 
-```java
+```kotlin
 // ❌ 잘못된 예 — 동시성 문제
-private long sequence = 0;
-product.setId(++sequence);  // Race condition 발생 가능
+private var sequence = 0L
+product.id = ++sequence  // Race condition 발생 가능
 
 // ✅ 올바른 예
-private final AtomicLong sequence = new AtomicLong(0);
-product.setId(sequence.incrementAndGet());
+private val sequence = AtomicLong(0)
+product.id = sequence.incrementAndGet()
 ```
 
 **2. 방어적 복사 — 반환값이 저장소 원본을 노출하면 안 된다**
 
-```java
+```kotlin
 // ❌ 위험 — 외부에서 수정하면 저장소 데이터도 바뀜
-return store.get(id);
+return store[id]
 
 // ✅ 안전 — 새 객체로 복사해서 반환
-return store.get(id).copy();  // 또는 new Product(store.get(id))
+return store[id]?.copy()  // data class의 copy()
 ```
 
 JPA는 영속성 컨텍스트가 변경 감지를 책임지지만, Memory Repository에는 그 메커니즘이 없다. 방어적 복사 없이는 테스트가 저장소 상태를 오염시킨다.
 
 **3. 페이징 — 직접 구현해야 한다**
 
-```java
-public Page<Product> findAll(Pageable pageable) {
-    List<Product> all = new ArrayList<>(store.values());
-    int start = (int) pageable.getOffset();
-    int end = Math.min(start + pageable.getPageSize(), all.size());
-    return new PageImpl<>(all.subList(start, end), pageable, all.size());
+```kotlin
+fun findAll(pageable: Pageable): Page<Product> {
+    val all = store.values.toList()
+    val start = pageable.offset.toInt()
+    val end = minOf(start + pageable.pageSize, all.size)
+    return PageImpl(all.subList(start, end), pageable, all.size.toLong())
 }
 ```
 
@@ -468,65 +471,64 @@ Repository는 `@DataJpaTest` + 실제 H2 또는 Testcontainers로 검증한다. 
 
 **과도한 Mock 사용의 안티패턴**
 
-```java
+```kotlin
 // ❌ 과도한 Mock — 테스트가 구현 세부사항만 검증함
-given(repository.save(any())).willReturn(product);
-given(repository.findById(1L)).willReturn(Optional.of(product));
+every { repository.save(any()) } returns product
+every { repository.findById(1L) } returns Optional.of(product)
 
-Product saved = service.create(request);
-Product found = service.find(1L);
+val saved = service.create(request)
+val found = service.find(1L)
 
 // Mock이 같은 객체를 반환하도록 설정했기 때문에 항상 성공
 // 실제 저장·조회 로직은 검증하지 못함
-assertThat(found.getId()).isEqualTo(saved.getId());
+assertThat(found.id).isEqualTo(saved.id)
 ```
 
 **Fake Repository로 개선**
 
 먼저 `FakeProductRepository`의 정체를 명확히 해 두자. JPA Repository 인터페이스를 그대로 구현하되, DB 대신 `Map`으로 동작한다.
 
-```java
-class FakeProductRepository implements ProductRepository {
-    private final Map<Long, Product> store = new HashMap<>();
-    private long sequence = 0L;
+```kotlin
+class FakeProductRepository : ProductRepository {
 
-    @Override
-    public Product save(Product product) {
-        long id = product.getId() != null ? product.getId() : ++sequence;
-        Product saved = new Product(id, product.getName(), product.getPrice());
-        store.put(id, saved);
-        return saved;
+    private val store = ConcurrentHashMap<Long, Product>()
+    private val sequence = AtomicLong(0)
+
+    override fun save(product: Product): Product {
+        val id = product.id ?: sequence.incrementAndGet()
+        val saved = product.copy(id = id)
+        store[id] = saved
+        return saved
     }
 
-    @Override
-    public Optional<Product> findById(Long id) {
-        return Optional.ofNullable(store.get(id));
-    }
+    override fun findById(id: Long): Optional<Product> =
+        Optional.ofNullable(store[id])
 }
 ```
 
 이 가짜 객체는 JPA 없이도 실제 Repository의 핵심 계약 — <strong>저장하면 ID가 부여되고, 그 ID로 다시 조회하면 같은 데이터가 나온다</strong> — 을 그대로 따른다. 이걸로 Service를 검증하면:
 
-```java
+```kotlin
 // ✅ Fake Repository 사용 — 실제 저장·조회 동작을 검증
 class ProductServiceTest {
-    private ProductService service;
-    private FakeProductRepository repository;
+
+    private lateinit var service: ProductService
+    private lateinit var repository: FakeProductRepository
 
     @BeforeEach
-    void setUp() {
-        repository = new FakeProductRepository();
-        service = new ProductService(repository);
+    fun setUp() {
+        repository = FakeProductRepository()
+        service = ProductService(repository)
     }
 
     @Test
-    void 상품_저장_후_조회() {
-        CreateProductRequest request = new CreateProductRequest("상품", 1000);
+    fun `상품 저장 후 조회`() {
+        val request = CreateProductRequest("상품", 1000)
 
-        Long savedId = service.create(request);
-        Product found = service.findById(savedId);
+        val savedId = service.create(request)
+        val found = service.findById(savedId)
 
-        assertThat(found.getName()).isEqualTo("상품");
+        assertThat(found.name).isEqualTo("상품")
     }
 }
 ```
@@ -563,51 +565,10 @@ class ProductServiceTest {
 
 ### 4.1 Repository — `@DataJpaTest`로 쿼리 검증
 
-**Java**
-
-```java
-@DataJpaTest
-class ProductRepositoryTest {
-
-    @Autowired
-    private ProductRepository productRepository;
-
-    @Test
-    @DisplayName("상품 저장 테스트")
-    void saveProduct() {
-        // given
-        Product product = new Product("테스트 상품", 10000);
-
-        // when
-        Product saved = productRepository.save(product);
-
-        // then
-        assertThat(saved.getId()).isNotNull();
-        assertThat(saved.getName()).isEqualTo("테스트 상품");
-    }
-
-    @Test
-    @DisplayName("상품 조회 테스트")
-    void findById() {
-        // given
-        Product product = productRepository.save(new Product("테스트 상품", 10000));
-
-        // when
-        Optional<Product> found = productRepository.findById(product.getId());
-
-        // then
-        assertThat(found).isPresent();
-        assertThat(found.get().getName()).isEqualTo("테스트 상품");
-    }
-}
-```
-
-**Kotlin + Kotest FunSpec**
-
 ```kotlin
 @DataJpaTest
 class ProductRepositoryTest(
-    private val productRepository: ProductRepository
+    @Autowired private val productRepository: ProductRepository
 ) : FunSpec({
 
     test("상품 저장") {
@@ -617,42 +578,21 @@ class ProductRepositoryTest(
         saved.id shouldNotBe null
         saved.name shouldBe "테스트 상품"
     }
+
+    test("상품 조회") {
+        val product = productRepository.save(Product(name = "테스트 상품", price = 10000))
+
+        val found = productRepository.findById(product.id!!)
+
+        found.isPresent shouldBe true
+        found.get().name shouldBe "테스트 상품"
+    }
 })
 ```
 
 ### 4.2 Service — Mock과 Fake의 트레이드오프
 
-**Java + Mockito (Mock 방식)**
-
-```java
-@ExtendWith(MockitoExtension.class)
-class ProductServiceTest {
-
-    @Mock
-    private ProductRepository productRepository;
-
-    @InjectMocks
-    private ProductService productService;
-
-    @Test
-    @DisplayName("상품 생성 테스트")
-    void createProduct() {
-        // given
-        ProductRequest request = new ProductRequest("테스트 상품", 10000);
-        Product product = new Product(1L, "테스트 상품", 10000);
-        given(productRepository.save(any(Product.class))).willReturn(product);
-
-        // when
-        ProductResponse response = productService.create(request);
-
-        // then
-        assertThat(response.getName()).isEqualTo("테스트 상품");
-        verify(productRepository, times(1)).save(any(Product.class));
-    }
-}
-```
-
-**Kotlin + MockK BehaviorSpec (Mock 방식)**
+**MockK BehaviorSpec (Mock 방식)**
 
 ```kotlin
 class ProductServiceTest : BehaviorSpec({
@@ -679,22 +619,23 @@ class ProductServiceTest : BehaviorSpec({
 
 **Fake Repository 패턴 — Repository 의존이 많은 Service에 적합**
 
-```java
+```kotlin
 class ProductServiceFakeTest {
-    private ProductService service;
-    private FakeProductRepository repository;
+
+    private lateinit var service: ProductService
+    private lateinit var repository: FakeProductRepository
 
     @BeforeEach
-    void setUp() {
-        repository = new FakeProductRepository();
-        service = new ProductService(repository);
+    fun setUp() {
+        repository = FakeProductRepository()
+        service = ProductService(repository)
     }
 
     @Test
-    void 상품_저장_후_조회() {
-        Long savedId = service.create(new CreateProductRequest("상품", 1000));
-        Product found = service.findById(savedId);
-        assertThat(found.getName()).isEqualTo("상품");
+    fun `상품 저장 후 조회`() {
+        val savedId = service.create(CreateProductRequest("상품", 1000))
+        val found = service.findById(savedId)
+        assertThat(found.name).isEqualTo("상품")
     }
 }
 ```
@@ -704,42 +645,6 @@ Fake Repository는 `ProductRepository` 인터페이스를 구현한 메모리 �
 덕분에 "저장 후 조회" 시나리오를 자연스럽게 검증할 수 있다.
 
 ### 4.3 Controller — `@WebMvcTest` + MockMvc
-
-**Java**
-
-```java
-@WebMvcTest(ProductController.class)
-class ProductControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
-    private ProductService productService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Test
-    @DisplayName("상품 생성 API 테스트")
-    void createProduct() throws Exception {
-        // given
-        ProductRequest request = new ProductRequest("테스트 상품", 10000);
-        ProductResponse response = new ProductResponse(1L, "테스트 상품", 10000);
-        given(productService.create(any())).willReturn(response);
-
-        // when & then
-        mockMvc.perform(post("/api/products")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.id").value(1))
-            .andExpect(jsonPath("$.name").value("테스트 상품"));
-    }
-}
-```
-
-**Kotlin + Kotest DescribeSpec**
 
 ```kotlin
 @WebMvcTest(ProductController::class)
@@ -822,38 +727,42 @@ H2는 빠르고 설정이 간단하지만, MySQL이나 PostgreSQL과 완전히 �
 
 ### 5.2 Testcontainers 설정
 
-**의존성 (build.gradle)**
+**의존성 (build.gradle.kts)**
 
-```groovy
+```kotlin
 dependencies {
-    testImplementation 'org.testcontainers:testcontainers:1.19.0'
-    testImplementation 'org.testcontainers:mysql:1.19.0'
-    testImplementation 'org.testcontainers:junit-jupiter:1.19.0'
+    testImplementation("org.testcontainers:testcontainers:1.19.0")
+    testImplementation("org.testcontainers:mysql:1.19.0")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.0")
 }
 ```
 
 **테스트 클래스 설정**
 
-```java
+```kotlin
 @SpringBootTest
 @Testcontainers
 class ProductIntegrationTest {
 
-    @Container
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("testdb")
-        .withUsername("test")
-        .withPassword("test");
+    companion object {
+        @Container
+        @JvmStatic
+        val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test")
 
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
+        @DynamicPropertySource
+        @JvmStatic
+        fun configureProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.url", mysql::getJdbcUrl)
+            registry.add("spring.datasource.username", mysql::getUsername)
+            registry.add("spring.datasource.password", mysql::getPassword)
+        }
     }
 
     @Test
-    void 네이티브_쿼리_검증() {
+    fun `네이티브 쿼리 검증`() {
         // 실제 MySQL에서만 동작하는 쿼리 테스트
     }
 }
@@ -905,20 +814,21 @@ Swagger UI가 단순 어노테이션 이상인 이유, `@Around` AOP로 로깅�
 | 의미 있음 | 재고 부족 시 예외 발생 여부 | 비즈니스 규칙을 검증 |
 | 의미 있음 | 동일 이름 상품 저장 시 유니크 제약 위반 | DB 제약조건을 검증 |
 
-```java
+```kotlin
 // ❌ 의미 없는 테스트
 @Test
-void getterTest() {
-    Product p = new Product("test", 1000);
-    assertThat(p.getName()).isEqualTo("test");
+fun getterTest() {
+    val p = Product(name = "test", price = 1000)
+    assertThat(p.name).isEqualTo("test")
 }
 
 // ✅ 의미 있는 테스트
 @Test
-void 재고가_부족하면_예외가_발생한다() {
-    Product product = new Product("test", 1000, 5);
-    assertThrows(InsufficientStockException.class,
-        () -> product.decreaseStock(10));
+fun `재고가 부족하면 예외가 발생한다`() {
+    val product = Product(name = "test", price = 1000, stock = 5)
+    assertThrows<InsufficientStockException> {
+        product.decreaseStock(10)
+    }
 }
 ```
 

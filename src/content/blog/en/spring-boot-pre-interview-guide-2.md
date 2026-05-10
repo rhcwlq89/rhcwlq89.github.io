@@ -1,9 +1,9 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 2: Database & Testing — Environment Split · Test Pyramid · Testcontainers"
-description: "Environment-specific DB selection and ddl-auto policies, Memory Repository pitfalls, Test Pyramid annotation choices, choosing between test doubles (Dummy, Stub, Spy, Mock, Fake), and using Testcontainers to catch bugs that H2 dialect differences hide — the second most-flagged area in Spring Boot pre-interview submissions, covered in one post."
+title: "Spring Boot Pre-Interview Guide Part 2: Database & Testing — Spring Boot 4 · Kotlin Environment Separation, Test Pyramid, Testcontainers"
+description: "On a Spring Boot 4 + Kotlin stack — picking the right DB per environment, the ddl-auto policy, gotchas when implementing a Memory Repository, choosing annotations along the Test Pyramid, when to reach for Dummy/Stub/Spy/Mock/Fake, and using Testcontainers to surface the bugs H2's dialect differences hide. Written with data classes and val/var instead of Lombok. Series Part 2."
 pubDate: "2026-01-11T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "JPA", "Testing", "Backend", "Pre-interview"]
+tags: ["Spring Boot", "Kotlin", "JPA", "Testing", "Backend", "Interview", "Practical Guide"]
 heroImage: "../../../assets/SpringBootPreInterviewGuide2.png"
 ---
 
@@ -40,6 +40,8 @@ Read [the previous post](/blog/en/spring-boot-pre-interview-guide-1) first if yo
 ## 1. Database Environment Matrix — Local · Test · Production Split
 
 ### 1.1 DB Selection Criteria per Environment
+
+> <strong>Note</strong>: Spring Boot 4 + Kotlin project setup (kotlin-spring · kotlin-jpa plugins) is covered in Part 1 §1.1. This post focuses on the Database and Testing layers that run on top of that foundation.
 
 The DB choice and `ddl-auto` policy must differ per environment. Use the table below as the reference.
 
@@ -195,36 +197,36 @@ When the task requires a "pure in-memory store," there are three common traps.
 
 **1. ID generation — use `AtomicLong`**
 
-```java
+```kotlin
 // Bad — race condition
-private long sequence = 0;
-product.setId(++sequence);
+private var sequence = 0L
+product.id = ++sequence
 
 // Good
-private final AtomicLong sequence = new AtomicLong(0);
-product.setId(sequence.incrementAndGet());
+private val sequence = AtomicLong(0)
+product.id = sequence.incrementAndGet()
 ```
 
 **2. Defensive copy — never expose the stored reference directly**
 
-```java
+```kotlin
 // Dangerous — external callers can mutate the stored object
-return store.get(id);
+return store[id]
 
 // Safe — return a copy
-return store.get(id).copy();  // or new Product(store.get(id))
+return store[id]?.copy()  // data class copy()
 ```
 
 JPA relies on the persistence context to track changes. A Memory Repository has no such mechanism. Without a defensive copy, tests can corrupt the store's state.
 
 **3. Pagination — must be implemented manually**
 
-```java
-public Page<Product> findAll(Pageable pageable) {
-    List<Product> all = new ArrayList<>(store.values());
-    int start = (int) pageable.getOffset();
-    int end = Math.min(start + pageable.getPageSize(), all.size());
-    return new PageImpl<>(all.subList(start, end), pageable, all.size());
+```kotlin
+fun findAll(pageable: Pageable): Page<Product> {
+    val all = store.values.toList()
+    val start = pageable.offset.toInt()
+    val end = minOf(start + pageable.pageSize, all.size)
+    return PageImpl(all.subList(start, end), pageable, all.size.toLong())
 }
 ```
 
@@ -451,65 +453,64 @@ Validate Repositories with `@DataJpaTest` + real H2 or Testcontainers. Domain la
 
 **Anti-pattern: excessive mocking**
 
-```java
+```kotlin
 // Bad — test only verifies implementation details, not behavior
-given(repository.save(any())).willReturn(product);
-given(repository.findById(1L)).willReturn(Optional.of(product));
+every { repository.save(any()) } returns product
+every { repository.findById(1L) } returns Optional.of(product)
 
-Product saved = service.create(request);
-Product found = service.find(1L);
+val saved = service.create(request)
+val found = service.find(1L)
 
 // Always passes because Mock returns the same object we configured
 // The actual save/find logic is never exercised
-assertThat(found.getId()).isEqualTo(saved.getId());
+assertThat(found.id).isEqualTo(saved.id)
 ```
 
 **Fixed with a Fake Repository**
 
 First, what `FakeProductRepository` actually is. It implements the same JPA Repository interface, but it's backed by a `Map` instead of a database.
 
-```java
-class FakeProductRepository implements ProductRepository {
-    private final Map<Long, Product> store = new HashMap<>();
-    private long sequence = 0L;
+```kotlin
+class FakeProductRepository : ProductRepository {
 
-    @Override
-    public Product save(Product product) {
-        long id = product.getId() != null ? product.getId() : ++sequence;
-        Product saved = new Product(id, product.getName(), product.getPrice());
-        store.put(id, saved);
-        return saved;
+    private val store = ConcurrentHashMap<Long, Product>()
+    private val sequence = AtomicLong(0)
+
+    override fun save(product: Product): Product {
+        val id = product.id ?: sequence.incrementAndGet()
+        val saved = product.copy(id = id)
+        store[id] = saved
+        return saved
     }
 
-    @Override
-    public Optional<Product> findById(Long id) {
-        return Optional.ofNullable(store.get(id));
-    }
+    override fun findById(id: Long): Optional<Product> =
+        Optional.ofNullable(store[id])
 }
 ```
 
 This fake honors the real Repository's core contract without a database — <strong>save assigns an ID, and reading by that ID returns the same data back</strong>. Wiring it into the Service test:
 
-```java
+```kotlin
 // Good — exercises actual save/find behavior
 class ProductServiceTest {
-    private ProductService service;
-    private FakeProductRepository repository;
+
+    private lateinit var service: ProductService
+    private lateinit var repository: FakeProductRepository
 
     @BeforeEach
-    void setUp() {
-        repository = new FakeProductRepository();
-        service = new ProductService(repository);
+    fun setUp() {
+        repository = FakeProductRepository()
+        service = ProductService(repository)
     }
 
     @Test
-    void save_and_retrieve_product() {
-        CreateProductRequest request = new CreateProductRequest("Product", 1000);
+    fun `save and retrieve product`() {
+        val request = CreateProductRequest("Product", 1000)
 
-        Long savedId = service.create(request);
-        Product found = service.findById(savedId);
+        val savedId = service.create(request)
+        val found = service.findById(savedId)
 
-        assertThat(found.getName()).isEqualTo("Product");
+        assertThat(found.name).isEqualTo("Product")
     }
 }
 ```
@@ -546,51 +547,10 @@ The Mock version above, in contrast, has both `save()` and `findById()` stubbed 
 
 ### 4.1 Repository — Query Verification with `@DataJpaTest`
 
-**Java**
-
-```java
-@DataJpaTest
-class ProductRepositoryTest {
-
-    @Autowired
-    private ProductRepository productRepository;
-
-    @Test
-    @DisplayName("Product save test")
-    void saveProduct() {
-        // given
-        Product product = new Product("Test Product", 10000);
-
-        // when
-        Product saved = productRepository.save(product);
-
-        // then
-        assertThat(saved.getId()).isNotNull();
-        assertThat(saved.getName()).isEqualTo("Test Product");
-    }
-
-    @Test
-    @DisplayName("Product find by ID test")
-    void findById() {
-        // given
-        Product product = productRepository.save(new Product("Test Product", 10000));
-
-        // when
-        Optional<Product> found = productRepository.findById(product.getId());
-
-        // then
-        assertThat(found).isPresent();
-        assertThat(found.get().getName()).isEqualTo("Test Product");
-    }
-}
-```
-
-**Kotlin + Kotest FunSpec**
-
 ```kotlin
 @DataJpaTest
 class ProductRepositoryTest(
-    private val productRepository: ProductRepository
+    @Autowired private val productRepository: ProductRepository
 ) : FunSpec({
 
     test("Save product") {
@@ -600,42 +560,21 @@ class ProductRepositoryTest(
         saved.id shouldNotBe null
         saved.name shouldBe "Test Product"
     }
+
+    test("Find product by ID") {
+        val product = productRepository.save(Product(name = "Test Product", price = 10000))
+
+        val found = productRepository.findById(product.id!!)
+
+        found.isPresent shouldBe true
+        found.get().name shouldBe "Test Product"
+    }
 })
 ```
 
 ### 4.2 Service — Mock vs Fake Trade-offs
 
-**Java + Mockito (Mock approach)**
-
-```java
-@ExtendWith(MockitoExtension.class)
-class ProductServiceTest {
-
-    @Mock
-    private ProductRepository productRepository;
-
-    @InjectMocks
-    private ProductService productService;
-
-    @Test
-    @DisplayName("Product creation test")
-    void createProduct() {
-        // given
-        ProductRequest request = new ProductRequest("Test Product", 10000);
-        Product product = new Product(1L, "Test Product", 10000);
-        given(productRepository.save(any(Product.class))).willReturn(product);
-
-        // when
-        ProductResponse response = productService.create(request);
-
-        // then
-        assertThat(response.getName()).isEqualTo("Test Product");
-        verify(productRepository, times(1)).save(any(Product.class));
-    }
-}
-```
-
-**Kotlin + MockK BehaviorSpec (Mock approach)**
+**MockK BehaviorSpec (Mock approach)**
 
 ```kotlin
 class ProductServiceTest : BehaviorSpec({
@@ -662,22 +601,23 @@ class ProductServiceTest : BehaviorSpec({
 
 **Fake Repository pattern — suited for Services with heavy Repository dependencies**
 
-```java
+```kotlin
 class ProductServiceFakeTest {
-    private ProductService service;
-    private FakeProductRepository repository;
+
+    private lateinit var service: ProductService
+    private lateinit var repository: FakeProductRepository
 
     @BeforeEach
-    void setUp() {
-        repository = new FakeProductRepository();
-        service = new ProductService(repository);
+    fun setUp() {
+        repository = FakeProductRepository()
+        service = ProductService(repository)
     }
 
     @Test
-    void save_and_retrieve_product() {
-        Long savedId = service.create(new CreateProductRequest("Product", 1000));
-        Product found = service.findById(savedId);
-        assertThat(found.getName()).isEqualTo("Product");
+    fun `save and retrieve product`() {
+        val savedId = service.create(CreateProductRequest("Product", 1000))
+        val found = service.findById(savedId)
+        assertThat(found.name).isEqualTo("Product")
     }
 }
 ```
@@ -685,42 +625,6 @@ class ProductServiceFakeTest {
 A Fake Repository implements the `ProductRepository` interface using an in-memory store. Unlike a Mock, actual save and retrieve operations occur — so "save then find" scenarios are validated naturally.
 
 ### 4.3 Controller — `@WebMvcTest` + MockMvc
-
-**Java**
-
-```java
-@WebMvcTest(ProductController.class)
-class ProductControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
-    private ProductService productService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Test
-    @DisplayName("Product creation API test")
-    void createProduct() throws Exception {
-        // given
-        ProductRequest request = new ProductRequest("Test Product", 10000);
-        ProductResponse response = new ProductResponse(1L, "Test Product", 10000);
-        given(productService.create(any())).willReturn(response);
-
-        // when & then
-        mockMvc.perform(post("/api/products")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.id").value(1))
-            .andExpect(jsonPath("$.name").value("Test Product"));
-    }
-}
-```
-
-**Kotlin + Kotest DescribeSpec**
 
 ```kotlin
 @WebMvcTest(ProductController::class)
@@ -801,38 +705,42 @@ H2 is fast and requires no setup, but it is not identical to MySQL or PostgreSQL
 
 ### 5.2 Testcontainers Setup
 
-**Dependencies (build.gradle)**
+**Dependencies (build.gradle.kts)**
 
-```groovy
+```kotlin
 dependencies {
-    testImplementation 'org.testcontainers:testcontainers:1.19.0'
-    testImplementation 'org.testcontainers:mysql:1.19.0'
-    testImplementation 'org.testcontainers:junit-jupiter:1.19.0'
+    testImplementation("org.testcontainers:testcontainers:1.19.0")
+    testImplementation("org.testcontainers:mysql:1.19.0")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.0")
 }
 ```
 
 **Test class configuration**
 
-```java
+```kotlin
 @SpringBootTest
 @Testcontainers
 class ProductIntegrationTest {
 
-    @Container
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
-        .withDatabaseName("testdb")
-        .withUsername("test")
-        .withPassword("test");
+    companion object {
+        @Container
+        @JvmStatic
+        val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test")
 
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
+        @DynamicPropertySource
+        @JvmStatic
+        fun configureProperties(registry: DynamicPropertyRegistry) {
+            registry.add("spring.datasource.url", mysql::getJdbcUrl)
+            registry.add("spring.datasource.username", mysql::getUsername)
+            registry.add("spring.datasource.password", mysql::getPassword)
+        }
     }
 
     @Test
-    void native_query_verification() {
+    fun `native query verification`() {
         // Test queries that only work correctly on real MySQL
     }
 }
@@ -881,20 +789,21 @@ Tests are better than no tests, but meaningless tests raise maintenance cost wit
 | Meaningful | Exception thrown when stock is insufficient | Verifies a business rule |
 | Meaningful | Unique constraint violation on duplicate name | Verifies a DB constraint |
 
-```java
+```kotlin
 // Bad — meaningless test
 @Test
-void getterTest() {
-    Product p = new Product("test", 1000);
-    assertThat(p.getName()).isEqualTo("test");
+fun getterTest() {
+    val p = Product(name = "test", price = 1000)
+    assertThat(p.name).isEqualTo("test")
 }
 
 // Good — meaningful test
 @Test
-void throws_when_stock_is_insufficient() {
-    Product product = new Product("test", 1000, 5);
-    assertThrows(InsufficientStockException.class,
-        () -> product.decreaseStock(10));
+fun `throws when stock is insufficient`() {
+    val product = Product(name = "test", price = 1000, stock = 5)
+    assertThrows<InsufficientStockException> {
+        product.decreaseStock(10)
+    }
 }
 ```
 
