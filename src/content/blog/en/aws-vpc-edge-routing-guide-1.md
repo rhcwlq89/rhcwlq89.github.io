@@ -94,6 +94,8 @@ The features that matter:
 
 Pricing has two axes: <strong>hourly LB cost + LCU</strong> (Load Balancer Capacity Units). Roughly $16~20/month sits there as a fixed cost regardless of traffic. That's the key catch — even with zero traffic, an idle ALB still bills monthly.
 
+> <strong>Note — how LCU is actually calculated</strong>: LCU isn't a single metric — it's a synthetic unit billed at the <strong>maximum across four dimensions</strong> per hour. Per-LCU caps: (1) 25 new connections/sec, (2) 3,000 active connections/min, (3) 1 GB/hr processed (0.4 GB/hr for HTTPS), (4) 1,000 rule evaluations/sec (only counting rules beyond the first 10). Whichever dimension your traffic shape pushes hardest is what dominates — many short API calls lean on "new connections," WebSockets and SSE lean on "active connections," big file responses lean on "processed bytes," and rule sets larger than 10 lean on "rule evaluations." 1 LCU/hour is ≈ $5.84/month (Seoul region), so small services don't even fill 1 LCU and the LCU charge effectively disappears under the LB-hour cost; only when traffic spikes does LCU start to exceed the hourly. NLB's NLCU works the same max-of-dimensions way but with much larger per-dimension caps (e.g., 800 new flows/sec, 100,000 active flows/min), so for the same traffic NLB usually accrues fewer NLCUs and ends up cheaper.
+
 ### 2.2 API Gateway — when you need the managed extras
 
 API Gateway is also L7, but it's <strong>an entry point that wraps "everything you need to operate an API"</strong> in one box. Don't think of it as a router — think of it as "auth, throttling, usage plans, response cache, custom domain, OpenAPI import, all in one service."

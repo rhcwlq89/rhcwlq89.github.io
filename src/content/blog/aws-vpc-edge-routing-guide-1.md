@@ -101,6 +101,8 @@ flowchart LR
 
 과금은 <strong>시간당 LB 비용 + LCU</strong>(Load Balancer Capacity Unit) 두 축이다. 한국 리전 기준 LB 시간당 $0.0225, 즉 월 $16~20 상시 비용이 깔린다. 이게 핵심이다 — 트래픽이 0이어도 ALB가 떠 있으면 매월 청구된다.
 
+> <strong>참고 — LCU 계산 메커니즘</strong>: LCU는 단일 metric이 아니라 <strong>4개 차원 중 가장 큰 값</strong>을 매시간 청구하는 합성 단위다. 1 LCU 한도 — (1) 새 연결 25/초, (2) 활성 연결 3,000/분, (3) 처리 바이트 HTTP 1 GB/시간(HTTPS는 0.4 GB/시간), (4) 10번째 이후 rule 평가 1,000/초. 트래픽 성격에 따라 dominate 차원이 자동으로 결정된다 — 짧은 API 요청 많으면 "새 연결"이, WebSocket 장기 연결이면 "활성 연결"이, 큰 파일 응답 많으면 "처리 바이트"가, 라우팅 규칙이 10개를 훌쩍 넘으면 "rule 평가"가 비용을 좌우한다. 1 LCU/시간 ≈ 월 $5.84(서울)라 작은 서비스는 1 LCU도 못 채워 LB 시간 비용에 가려져 "사실상 0"이 되고, 트래픽이 폭증해야 LCU가 시간 비용을 넘어선다. NLB의 NLCU도 같은 max 메커니즘이지만 차원 한도가 훨씬 커서(예: 새 flow 800/초, 활성 flow 100,000/분) 같은 트래픽에 대해 ALB LCU보다 적게 잡혀 보통 더 싸다.
+
 ### 2.2 API Gateway — "관리형 부가 기능"이 필요한 API
 
 API Gateway는 ALB와 같은 L7이지만 <strong>"API 운영에 필요한 부가 기능"을 통째로 품은 진입점</strong>이다. 단순한 HTTP 라우터로 보면 안 되고, "인증·쓰로틀·요금제·캐시·custom domain·OpenAPI 임포트"까지 한 박스에 들어 있는 서비스로 봐야 한다.
