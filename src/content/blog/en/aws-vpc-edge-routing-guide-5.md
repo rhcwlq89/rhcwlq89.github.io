@@ -56,25 +56,12 @@ Third, <strong>decision trees don't expose interdependencies</strong>. Part 1's 
 
 90% of new AWS infrastructure designs converge on one of four patterns. Each pattern has a fixed answer for ingress, compute, and data layers.
 
-```mermaid
-flowchart TB
-    subgraph A["A. Serverless API"]
-        direction LR
-        A1[CloudFront] --> A2[API Gateway HTTP API] --> A3[Lambda] --> A4[(DynamoDB)]
-    end
-    subgraph B["B. Container Web"]
-        direction LR
-        B1[CloudFront] --> B2[ALB] --> B3[ECS / EKS] --> B4[(RDS)]
-    end
-    subgraph C["C. Global Latency-sensitive"]
-        direction LR
-        C1[Route 53 Latency] --> C2[Global Accelerator] --> C3[Regional NLB] --> C4[Game / Trading server]
-    end
-    subgraph D["D. Hybrid Enterprise"]
-        direction LR
-        D1[Direct Connect] --> D2[Transit Gateway] --> D3[Multi-VPC + on-prem] --> D4[Compliance workload]
-    end
-```
+| Pattern | Ingress layer | Compute | Data |
+| --- | --- | --- | --- |
+| <strong>A. Serverless API</strong> | CloudFront → API Gateway HTTP API | Lambda | DynamoDB |
+| <strong>B. Container Web</strong> | CloudFront → ALB | ECS / EKS | RDS |
+| <strong>C. Global Latency-sensitive</strong> | Route 53 Latency → Global Accelerator | Regional NLB | Game server / trading |
+| <strong>D. Hybrid Enterprise</strong> | Direct Connect → Transit Gateway | Multi-VPC + on-prem | Compliance workload |
 
 ### 2.1 Pattern A — Serverless API
 

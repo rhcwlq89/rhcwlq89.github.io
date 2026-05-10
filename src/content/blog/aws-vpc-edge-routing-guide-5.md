@@ -60,25 +60,12 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide5.png"
 
 새 AWS 인프라를 그리는 90%의 케이스는 다음 4개 패턴 중 하나로 수렴한다. 각 패턴이 진입점·컴퓨트·데이터 layer를 어떻게 채우는지가 정해져 있다.
 
-```mermaid
-flowchart TB
-    subgraph A["A. Serverless API"]
-        direction LR
-        A1[CloudFront] --> A2[API Gateway HTTP API] --> A3[Lambda] --> A4[(DynamoDB)]
-    end
-    subgraph B["B. Container Web"]
-        direction LR
-        B1[CloudFront] --> B2[ALB] --> B3[ECS / EKS] --> B4[(RDS)]
-    end
-    subgraph C["C. Global Latency-sensitive"]
-        direction LR
-        C1[Route 53 Latency] --> C2[Global Accelerator] --> C3[Regional NLB] --> C4[Game / Trading server]
-    end
-    subgraph D["D. Hybrid Enterprise"]
-        direction LR
-        D1[Direct Connect] --> D2[Transit Gateway] --> D3[Multi-VPC + 온프렘] --> D4[Compliance workload]
-    end
-```
+| 패턴 | 진입 layer | 컴퓨트 | 데이터 |
+| --- | --- | --- | --- |
+| <strong>A. Serverless API</strong> | CloudFront → API Gateway HTTP API | Lambda | DynamoDB |
+| <strong>B. Container Web</strong> | CloudFront → ALB | ECS / EKS | RDS |
+| <strong>C. 글로벌 Latency-sensitive</strong> | Route 53 Latency → Global Accelerator | 리전별 NLB | 게임 서버 / 트레이딩 |
+| <strong>D. 하이브리드 엔터프라이즈</strong> | Direct Connect → Transit Gateway | 멀티 VPC + 온프렘 | Compliance workload |
 
 ### 2.1 패턴 A — Serverless API
 
