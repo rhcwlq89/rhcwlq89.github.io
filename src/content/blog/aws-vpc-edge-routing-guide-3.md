@@ -102,7 +102,7 @@ flowchart LR
 - <strong>NAT 매핑 테이블</strong> — 응답이 돌아올 때 매핑을 lookup해서 원래 인스턴스로 라우팅.
 - <strong>AZ-bound</strong> — NAT GW는 특정 AZ의 Public Subnet에 산다. Private 인스턴스의 Route Table은 같은 AZ의 NAT GW를 가리키도록 설정해야 cross-AZ 트래픽 비용을 피할 수 있다.
 
-비용은 <strong>시간당 $0.045 + 데이터 처리당 $0.045/GB</strong>. 한국 리전에서 한 AZ만 두면 월 $32+, AZ 3개에 다 두면 월 $97+. <strong>NAT GW 비용은 1편 안티패턴(NAT으로 S3 접근)에서 반복적으로 짚었던 그 비용</strong>이다.
+비용은 <strong>시간당 $0.045 + 데이터 처리당 $0.045/GB</strong>. 한국 리전에서 한 AZ만 두면 월 $32+, AZ 3개에 다 두면 월 $97+. <strong>NAT GW 비용은 1편 안티패턴(NAT으로 S3 접근)에서 반복적으로 짚었던 그 비용</strong>이다. (시리즈 전체 egress 비용 종합 비교는 0편 부록 I 참고.)
 
 > <strong>참고 — NAT Gateway vs NAT Instance</strong>: 예전에는 EC2 위에 자체 NAT를 띄우는 NAT Instance도 흔했다. 비용은 EC2(t3.nano ~월 $4) 수준으로 NAT GW의 1/10. 다만 <strong>대역폭 한계, 자체 HA 구성 필요, 패치 책임</strong>까지 떠안아야 해서, 사이드 프로젝트가 아닌 이상 NAT GW가 표준 답.
 

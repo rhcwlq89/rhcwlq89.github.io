@@ -338,7 +338,7 @@ flowchart TD
 
 ### 7.1 NAT Gateway로 S3 접근
 
-가장 흔하고 가장 비싸게 새는 패턴. <strong>S3로 가는 트래픽을 NAT Gateway가 처리하면 GB당 $0.045가 발생</strong>한다. 데이터 분석·로그 적재·이미지 업로드 워크로드는 월 수백 GB~TB가 보통이고, 이 비용이 그냥 청구서에 추가된다. Gateway Endpoint를 만들고 Route Table에 prefix list 경로 한 줄 추가하면 끝 — 5분 작업이 매월 수백 달러를 절약한다.
+가장 흔하고 가장 비싸게 새는 패턴. <strong>S3로 가는 트래픽을 NAT Gateway가 처리하면 GB당 $0.045가 발생</strong>한다. 데이터 분석·로그 적재·이미지 업로드 워크로드는 월 수백 GB~TB가 보통이고, 이 비용이 그냥 청구서에 추가된다. Gateway Endpoint를 만들고 Route Table에 prefix list 경로 한 줄 추가하면 끝 — 5분 작업이 매월 수백 달러를 절약한다. (Gateway Endpoint·NAT GW·IGW·Peering·TGW 비용 한눈에 비교는 0편 부록 I 참고.)
 
 ### 7.2 VPC Peering으로 N:N 메시
 
@@ -372,7 +372,7 @@ DX 한 회선만 운영하다가 광케이블 사고로 통신이 끊긴 사례�
 
 다음 편(3편)에서는 <strong>VPC 내부 라우팅</strong>을 다룬다 — IGW와 NAT Gateway는 어떻게 동작하는가, Route Table은 어떤 우선순위로 평가되는가, Security Group과 NACL의 stateful/stateless 차이는 실무에서 어디서 갈리는가. 외부 진입과 외부 연결이 모두 끝난 다음, <strong>VPC 안에서 패킷이 실제로 흐르는 방식</strong>을 풀어낸다.
 
-> <strong>참고 — 시리즈 흐름</strong>: 본 편의 모든 연결 결정도 [4편(DNS·Route 53)](/blog/aws-vpc-edge-routing-guide-4)에서 다루는 DNS layer가 먼저다. 특히 2.3절에서 Interface Endpoint가 "Private DNS"로 동작한다고 했는데, 그 Private DNS가 사실 Route 53 Private Hosted Zone(4편 §2.2)이라는 점을 알면 시리즈 전체가 더 잘 연결된다.
+> <strong>참고 — 시리즈 흐름</strong>: 본 편의 모든 연결 결정도 [4편(DNS·Route 53)](/blog/aws-vpc-edge-routing-guide-4)에서 다루는 DNS layer가 먼저다. 특히 2.3절에서 Interface Endpoint가 "Private DNS"로 동작한다고 했는데, 그 Private DNS가 사실 Route 53 Private Hosted Zone(4편 2.2절)이라는 점을 알면 시리즈 전체가 더 잘 연결된다.
 
 ---
 

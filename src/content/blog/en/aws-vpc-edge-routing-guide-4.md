@@ -1,6 +1,6 @@
 ---
 title: "AWS VPC Edge Routing Guide Part 4: DNS Decisions and Route 53 — Hosted Zones, the Six Routing Policies, Alias vs CNAME, and Health Checks"
-description: "The decision that always comes before the entry points in Parts 1, 2, and 3 — DNS. Route 53's Public vs Private Hosted Zones, the decisive difference between A / CNAME / Alias records, the six Routing Policies (Simple / Weighted / Latency / Geolocation / Geoproximity / Multi-value / Failover), the three kinds of Health Check, and the decision boundary among Route 53, Global Accelerator, and CloudFront. The closing post in the series."
+description: "The decision that always comes before the entry points in Parts 1, 2, and 3 — DNS. Route 53's Public vs Private Hosted Zones, the decisive difference between A / CNAME / Alias records, the six Routing Policies (Simple / Weighted / Latency / Geolocation / Geoproximity / Multi-value / Failover), the three kinds of Health Check, and the decision boundary among Route 53, Global Accelerator, and CloudFront. The DNS layer in the series; the synthesis closes in Part 5."
 pubDate: "2026-05-10T10:00:00+09:00"
 tags: ["AWS", "Route 53", "DNS", "VPC", "Architecture"]
 heroImage: "../../../assets/AwsVpcEdgeRoutingGuide4.png"
@@ -11,7 +11,7 @@ lang: en
 
 Part 1 picked the entry point that fronts a VPC (ALB, NLB, API Gateway, CloudFront, GA). But before traffic ever reaches that entry point, another decision always happens first — <strong>DNS resolution</strong>. Type `https://api.example.com`, and the browser fires off a DNS query to learn an IP; the IP / CNAME returned at that moment decides which entry point, region, or instance the traffic actually reaches.
 
-The layer that handles that decision is **Route 53**. To close the series, this post unpacks Route 53's core decisions — Hosted Zone selection, record types, Routing Policies, Health Checks.
+The layer that handles that decision is **Route 53**. Part 4 unpacks Route 53's core decisions — Hosted Zone selection, record types, Routing Policies, Health Checks. (The series synthesis and standard patterns close in Part 5.)
 
 - Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
 - Part 1 — [Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator](/blog/en/aws-vpc-edge-routing-guide-1)

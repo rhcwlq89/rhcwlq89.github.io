@@ -95,7 +95,7 @@ Mechanism:
 - <strong>NAT mapping table</strong> — when responses come back, looks up the mapping and routes to the original instance.
 - <strong>AZ-bound</strong> — a NAT GW lives in a specific AZ's Public Subnet. Private instances should route to a NAT GW in their own AZ to avoid cross-AZ data charges.
 
-Pricing: <strong>$0.045/hour + $0.045/GB processed</strong>. One per AZ in Korea region runs ~$32/month, three AZs ~$97/month. <strong>This is the same NAT GW cost the Part 1 anti-pattern (S3 traffic via NAT) called out repeatedly.</strong>
+Pricing: <strong>$0.045/hour + $0.045/GB processed</strong>. One per AZ in Korea region runs ~$32/month, three AZs ~$97/month. <strong>This is the same NAT GW cost the Part 1 anti-pattern (S3 traffic via NAT) called out repeatedly.</strong> (For the full series egress cost comparison, see Part 0 Appendix I.)
 
 > <strong>Note — NAT Gateway vs NAT Instance</strong>: Self-hosted NAT on EC2 used to be common. Cost is roughly EC2 (t3.nano ~$4/month) — about 1/10 of NAT GW. But you take on <strong>bandwidth limits, your own HA setup, and patching</strong>, so for anything past a side project, NAT GW is the standard answer.
 

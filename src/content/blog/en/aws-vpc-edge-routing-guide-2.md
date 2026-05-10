@@ -331,7 +331,7 @@ Each branch in one line:
 
 ### 7.1 NAT Gateway for S3 access
 
-The most common and most expensive leak. <strong>S3 traffic through a NAT Gateway costs $0.045/GB</strong>, and analytics, log shipping, and image upload workloads run hundreds of GB to TBs monthly — that just gets added to the bill. A Gateway Endpoint plus one prefix-list line in the Route Table is a five-minute change that saves hundreds of dollars a month.
+The most common and most expensive leak. <strong>S3 traffic through a NAT Gateway costs $0.045/GB</strong>, and analytics, log shipping, and image upload workloads run hundreds of GB to TBs monthly — that just gets added to the bill. A Gateway Endpoint plus one prefix-list line in the Route Table is a five-minute change that saves hundreds of dollars a month. (For a side-by-side cost comparison of Gateway Endpoint vs. NAT GW vs. IGW vs. Peering / TGW, see Part 0 Appendix I.)
 
 ### 7.2 N:N mesh of VPC Peerings
 

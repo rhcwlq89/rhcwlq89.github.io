@@ -134,7 +134,7 @@ Direct Connect → Transit Gateway → 멀티 VPC + 온프레미스 데이터센
 | <strong>1편 인증·쓰로틀</strong> | API Gateway 내장 (JWT/OIDC) | ALB → 백엔드 또는 Cognito | 백엔드 자체 처리 | IAM + AD/LDAP 통합 |
 | <strong>1편 글로벌 캐시</strong> | CloudFront 표준 | CloudFront 표준 | GA 백본 (CloudFront 옵션) | 보통 불필요 (내부망) |
 | <strong>2편 AWS 서비스 접근</strong> | Lambda → DynamoDB 직접 | Gateway Endpoint (S3·DDB) | Gateway Endpoint | Gateway/Interface Endpoint 표준화 |
-| <strong>2편 VPC 간 연결</strong> | 보통 단일 VPC | 2~3 VPC: Peering, 그 이상: TGW | 멀티 리전: Inter-region Peering 또는 TGW | <strong>TGW 필수</strong> (10+ VPC) |
+| <strong>2편 VPC 간 연결</strong> | 보통 단일 VPC | 3 VPC 이하: Peering, 4+ VPC: TGW (2편 3.3절 분기점과 동일) | 멀티 리전: Inter-region Peering 또는 TGW | <strong>TGW 필수</strong> (10+ VPC) |
 | <strong>2편 온프레미스</strong> | 거의 없음 | VPN (필요 시) | 보통 없음 | <strong>Direct Connect + VPN backup</strong> |
 | <strong>3편 Public/Private subnet</strong> | Lambda는 VPC 밖 (default) | Public: ALB / Private: ECS·RDS | Public: NLB / Private: 게임 서버 | 모두 Private (망분리) |
 | <strong>3편 NAT GW</strong> | 거의 없음 | AZ당 1개 표준 | 필요 시 AZ당 1개 | 표준 패턴: AZ당 1개 |
@@ -188,7 +188,7 @@ AWS의 공식 설계 프레임. 모든 결정을 5개 관점에서 검증한다.
 90%는 패턴 안에 들어가지만 10%는 표준에서 벗어난다. 그 신호가 진짜인지 자기 합리화인지 구분하는 기준이 필요하다.
 
 1. <strong>패턴 B인데 글로벌 사용자가 있다</strong> — B의 디폴트는 단일 리전이라 글로벌 사용자에게 latency가 느려진다. 이때 1편 결정 트리로 가서 "GA를 ALB 앞에 둘지" 또는 "패턴을 C로 변형할지" 결정. 진짜 신호: 글로벌 사용자 RTT 측정해서 200ms+면 진짜.
-2. <strong>패턴 A인데 트래픽이 일정 수준 이상으로 꾸준</strong> — A의 idle 0 장점이 사라지고 요청당 단가가 누적된다. 분기점은 대략 월 200만 요청, 그 이상이면 B로 변형 검토. 진짜 신호: 월간 청구서에서 API Gateway·Lambda 비용이 ALB·ECS 시간 비용을 넘어서기 시작.
+2. <strong>패턴 A인데 트래픽이 일정 수준 이상으로 꾸준</strong> — A의 idle 0 장점이 사라지고 요청당 단가가 누적된다. 분기점은 대략 월 200만 요청 (1편 2.5절 ALB vs API Gateway 분기점과 동일 기준), 그 이상이면 B로 변형 검토. 진짜 신호: 월간 청구서에서 API Gateway·Lambda 비용이 ALB·ECS 시간 비용을 넘어서기 시작.
 3. <strong>패턴 D 규모인데 DX 못 깐다</strong> — 규제는 있지만 회사 규모상 DX($300+/월) 부담스러울 때. Site-to-Site VPN으로 시작해서 DX는 1년 후 마이그레이션. 진짜 신호: 온프레미스 트래픽이 월 1TB 미만이면 VPN으로 충분.
 4. <strong>패턴 B인데 컨테이너 운영 인력이 없다</strong> — EKS는 운영 부담이 크다. ECS Fargate로 변형하거나, 일부 모듈을 Lambda로 분리해서 A 하이브리드. 진짜 신호: oncall 가능한 SRE가 1명 미만.
 5. <strong>패턴 C인데 멀티 리전이 아니다</strong> — 단일 리전 + GA는 거의 항상 낭비(GA 비용만 발생, 백본 효과 미미). 패턴 B로 다운그레이드하거나, 멀티 리전 인프라부터 구축. 진짜 신호: 사용자가 한 국가에 90% 몰려있으면 C 자체가 잘못된 선택.

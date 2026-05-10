@@ -130,7 +130,7 @@ When you put each pattern next to the decision-tree branches from Parts 0–4, t
 | <strong>Part 1 auth / throttle</strong> | API Gateway built-in (JWT/OIDC) | ALB → backend or Cognito | Backend handles itself | IAM + AD/LDAP integration |
 | <strong>Part 1 global cache</strong> | CloudFront standard | CloudFront standard | GA backbone (CloudFront optional) | Usually unnecessary (internal) |
 | <strong>Part 2 AWS service access</strong> | Lambda → DynamoDB direct | Gateway Endpoint (S3, DDB) | Gateway Endpoint | Gateway / Interface Endpoint standardized |
-| <strong>Part 2 VPC-to-VPC</strong> | Usually single VPC | 2–3 VPCs: Peering. More: TGW | Multi-region: inter-region Peering or TGW | <strong>TGW required</strong> (10+ VPCs) |
+| <strong>Part 2 VPC-to-VPC</strong> | Usually single VPC | ≤3 VPCs: Peering. 4+: TGW (same threshold as Part 2 §3.3) | Multi-region: inter-region Peering or TGW | <strong>TGW required</strong> (10+ VPCs) |
 | <strong>Part 2 on-prem</strong> | Almost never | VPN if needed | Usually none | <strong>Direct Connect + VPN backup</strong> |
 | <strong>Part 3 Public/Private subnet</strong> | Lambda is outside the VPC by default | Public: ALB / Private: ECS, RDS | Public: NLB / Private: game servers | All Private (segregation) |
 | <strong>Part 3 NAT GW</strong> | Almost none | One per AZ standard | One per AZ if needed | Standard: one per AZ |
@@ -184,7 +184,7 @@ AWS's official design framework. Validate every decision against five lenses.
 90% fits inside a pattern, 10% genuinely deviates. The five signals below distinguish a real exception from a rationalization.
 
 1. <strong>Pattern B but with global users</strong> — Pattern B defaults to single-region, which feels slow for global users. Use Part 1's tree to decide whether to put GA in front of the ALB, or whether to upgrade to Pattern C entirely. Real signal: measure global user RTT — if it's 200ms+, the signal is real.
-2. <strong>Pattern A but with steady, sustained traffic</strong> — A's idle-zero advantage disappears, and per-request costs accumulate. The crossover is roughly 2 million requests per month — past that, evaluate moving to B. Real signal: API Gateway + Lambda costs in your monthly bill start to outpace what an ALB + ECS deployment would cost in pure compute hours.
+2. <strong>Pattern A but with steady, sustained traffic</strong> — A's idle-zero advantage disappears, and per-request costs accumulate. The crossover is roughly 2 million requests per month (the same threshold Part 1 §2.5 calls out for ALB vs. API Gateway HTTP API) — past that, evaluate moving to B. Real signal: API Gateway + Lambda costs in your monthly bill start to outpace what an ALB + ECS deployment would cost in pure compute hours.
 3. <strong>Pattern D scale but you can't justify DX</strong> — You have regulatory requirements but the company isn't large enough for DX (~$300+/month). Start with Site-to-Site VPN, migrate to DX after a year. Real signal: monthly on-prem traffic under 1 TB makes VPN sufficient.
 4. <strong>Pattern B but no container ops headcount</strong> — EKS is operationally heavy. Switch to ECS Fargate, or split out modules into Lambda for an A/B hybrid. Real signal: fewer than one SRE who can carry pager.
 5. <strong>Pattern C but you're single-region</strong> — Single-region + GA is almost always wasted spend (you pay for GA without backbone benefit). Downgrade to B, or actually build the multi-region infra first. Real signal: 90% of users in one country means C was the wrong starting choice.

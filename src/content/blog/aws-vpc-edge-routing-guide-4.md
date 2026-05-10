@@ -1,6 +1,6 @@
 ---
 title: "AWS VPC Edge 라우팅 가이드 4편: DNS 결정과 Route 53 — Hosted Zone, Routing Policy 6종, Alias vs CNAME, Health Check"
-description: "1·2·3편의 진입점들 앞에 항상 먼저 오는 결정 — DNS. Route 53의 Public/Private Hosted Zone, A/CNAME/Alias 레코드의 결정적 차이, 6종 Routing Policy(Simple/Weighted/Latency/Geolocation/Geoproximity/Multi-value/Failover), Health Check 3 종류, 그리고 Route 53 vs Global Accelerator vs CloudFront의 결정 영역까지. 시리즈를 마무리하는 글."
+description: "1·2·3편의 진입점들 앞에 항상 먼저 오는 결정 — DNS. Route 53의 Public/Private Hosted Zone, A/CNAME/Alias 레코드의 결정적 차이, 6종 Routing Policy(Simple/Weighted/Latency/Geolocation/Geoproximity/Multi-value/Failover), Health Check 3 종류, 그리고 Route 53 vs Global Accelerator vs CloudFront의 결정 영역까지. 시리즈의 DNS layer를 다루는 편(시리즈 합성·표준 패턴은 5편)."
 pubDate: 2026-05-10T10:00:00+09:00
 tags:
   - AWS
@@ -15,7 +15,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide4.png"
 
 1편에서 외부 트래픽이 VPC로 들어오는 진입점(ALB·NLB·API Gateway·CloudFront·GA)을 골랐다. 그런데 사용자가 그 진입점에 도달하기 전에 항상 먼저 일어나는 결정이 있다 — <strong>DNS 해석</strong>이다. `https://api.example.com`을 입력하면 브라우저가 IP를 알기 위해 DNS 쿼리를 날리고, 이 시점에 어떤 IP·CNAME으로 해석되는가가 트래픽이 어느 진입점·리전·인스턴스로 가는지를 좌우한다.
 
-이 결정 layer를 책임지는 게 **Route 53**다. 시리즈를 마무리하면서 Route 53의 핵심 결정 — Hosted Zone 선택, Record type, Routing Policy, Health Check — 을 한 글에 정리한다.
+이 결정 layer를 책임지는 게 **Route 53**다. 4편에서 Route 53의 핵심 결정 — Hosted Zone 선택, Record type, Routing Policy, Health Check — 을 한 글에 정리한다. (시리즈 합성·표준 패턴은 5편에서 마무리.)
 
 - 0편 — [사전편: 네트워크·AWS 기본 개념 정리](/blog/aws-vpc-edge-routing-guide-0)
 - 1편 — [외부 진입점 선택: ALB / NLB / API Gateway / CloudFront / Global Accelerator](/blog/aws-vpc-edge-routing-guide-1)
