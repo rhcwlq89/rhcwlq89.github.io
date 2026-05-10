@@ -136,9 +136,40 @@ rg -q '^## TL;DR' "$FILE" || echo "MISSING: TL;DR section"
 
 # 6. Stray § in KO posts — should be 'N.M절' instead (KO file only)
 rg '§[0-9]' "$FILE"
+
+# 7. Glossary coverage — every acronym/jargon term in the body should be in the appendix glossary
+#    (or defined inline at first appearance). Run this Python check to spot missing ones.
+python3 <<'PY'
+import re
+with open("$FILE") as f:
+    content = f.read()
+# Body = everything before the appendix
+body = re.split(r'^## (?:부록|Appendix)', content, maxsplit=1, flags=re.MULTILINE)[0]
+appendix = content[len(body):]
+# Heuristic acronym extraction: 2+ letter all-caps tokens, or known jargon
+candidates = set(re.findall(r'\b[A-Z][A-Z0-9]{1,}\b', body))
+# Also include common lowercase jargon
+for term in ['mTLS', 'gRPC', 'IPsec', 'IPv4', 'IPv6', 'Lambda', 'CloudFront',
+             'PrivateLink', 'WebSocket', 'OpenAPI', 'Cognito', '온프렘', '온프레미스']:
+    if term in body:
+        candidates.add(term)
+# Filter out trivial ones
+skip = {'A','D','I','S','M','URL','TL','DR','HTTP','HTTPS','JSON','YAML','SQL','XML',
+        'AWS','OS','PR','CI','CD','UI','API','REST','DB','RPS','IT','SDK','NOC',
+        'AZ','RT','SG','GA','TG','DX','DR','TLS','TCP','UDP','IP','IPS','MAC','EU','US','PoC'}
+missing = sorted(c for c in candidates - skip if c not in appendix and len(c) >= 2)
+if missing:
+    print("MISSING from glossary (verify each is defined inline or add to appendix):")
+    for m in missing:
+        print(f"  - {m}")
+else:
+    print("Glossary coverage: OK")
+PY
 ```
 
-Also run the same checks on the EN counterpart under `src/content/blog/en/<slug>.md` (checks 1, 4, and 6 mostly don't apply to English, but 2, 3, and 5 do).
+Also run the same checks on the EN counterpart under `src/content/blog/en/<slug>.md` (checks 1, 4, and 6 mostly don't apply to English, but 2, 3, 5, and 7 do).
+
+The glossary check above is a heuristic — it flags candidates, but you should manually verify each: either it has an inline definition at first appearance, or it deserves a glossary entry. The goal is "no acronym/jargon term used without a one-sentence definition somewhere accessible to a junior reader."
 
 ## Hero Image Style Guide
 
