@@ -203,6 +203,76 @@ For posts > 800 lines, delegate the actual rewrite to an `executor` subagent wit
 
 Then verify the executor's output yourself before reporting back to the user.
 
+### 11. Stack/Version migrations (when args carry a stack hint)
+
+If the user's `command-args` includes a stack/version hint (e.g. "Spring Boot 4", "Kotlin only", "Spring Security 7", "Spring Security 7 버전 기준", "JJWT → oauth2-resource-server", "Java 21"), the renewal is more than a structural pass — it must also migrate the code to that stack's standard patterns. Treat the hint as a hard requirement, not a suggestion.
+
+**Workflow when a stack hint is present:**
+
+1. **Detect** — read the args carefully. Stack hints commonly look like "Spring Boot N", "Spring Security N", "Kotlin only / Kotlin으로만", "Java N", or library swaps like "X로 교체" / "X → Y".
+2. **Verify versions** — confirm the named stack/library exists at that version and identify what changed from the previous major. If you're unsure of a 7-vs-6 difference, name it explicitly to the user before guessing.
+3. **Plan-stage disclosure** — in your structure plan to the user, **call out the stack-driven changes separately** from the structural changes. Example: "[구조] H2 8개 그대로 유지 / [Stack] Java 30 블록 → Kotlin, Lombok 제거, record → data class". The user should be able to approve the stack migration distinctly.
+4. **Series consistency check** — if the target post is part of a series, scan sibling posts for the existing language/library. If the migration would leave the series asymmetric (e.g. "1편만 Kotlin, 2~5편은 Java"), surface that to the user with three options before proceeding:
+   - **A**: this post only (asymmetric series, defer the rest)
+   - **B**: this post + a memory note "series migration in progress" (defer siblings explicitly)
+   - **C**: migrate all sibling posts in this session (large work)
+5. **Executor brief** — when delegating, embed the stack patterns from §11.1–§11.3 directly in the prompt. Don't make the executor reinvent the conversion.
+
+#### 11.1 Java → Kotlin migration patterns (the most common stack swap)
+
+Use these mappings as the source of truth when an args hint is "Kotlin only" or equivalent:
+
+| Java | Kotlin |
+|------|--------|
+| `@Getter` / `@Setter` | `val` / `var` (auto accessors) |
+| `@RequiredArgsConstructor` | primary constructor with `val` |
+| `@AllArgsConstructor` | primary constructor (all fields) |
+| `@NoArgsConstructor` | the `kotlin-jpa` plugin synthesizes it for entities |
+| `@Builder` | named arguments + default values (Builder is rarely needed) |
+| `@Data` / `record` | `data class` |
+| `@Slf4j` | `private val log = LoggerFactory.getLogger(this::class.java)` |
+| `Optional<T>.orElseThrow()` | Elvis `?: throw` |
+| `Optional<T>.map(...)` | `?.let { ... }` |
+| `@Valid @RequestBody Foo dto` | `@Valid @RequestBody dto: Foo` |
+| Bean Validation `@NotBlank String name` | `@field:NotBlank val name: String` (primary-constructor `val` is a property by default — annotations need the `field:` site target to land on the underlying field) |
+
+**Other Kotlin-specific moves:**
+
+- Add the `kotlin-spring` and `kotlin-jpa` Gradle plugins; mention them in a §1.1 (or equivalent) callout. Don't assume the reader has them.
+- Drop Lombok entirely from the project — no `compileOnly 'org.projectlombok:lombok'`, no `annotationProcessor`. Note in prose that Kotlin doesn't use Lombok.
+- Use scope functions (`apply`, `let`, `run`) where they shorten code without hiding intent. Don't force them.
+- For exception handlers and similar branching, `when` expressions read more naturally than chained `if/else` — use them when the mapping is exhaustive.
+- In an entity, prefer `var` for mutable JPA fields and `val` for immutable identifiers; surround the no-arg requirement with the plugin instead of a manual `protected constructor()`.
+
+#### 11.2 `<details>` fold integration when the main language changes
+
+If the previous version of the post had Java as the main code and Kotlin in `<details>` blocks (or vice versa), and the migration flips that:
+
+- **Promote** the previously-folded language's blocks to be the main code.
+- **Delete** the previously-main language's blocks entirely. Do not keep them as a new fold "for completeness" — the post becomes harder to skim and longer for no reader benefit.
+- **One exception**: a single `<details>` block titled "Lombok → Kotlin mapping" (or similar) is fine if it helps Lombok-trained readers ramp up. Keep it short and tabular.
+
+#### 11.3 What `pubDate` does NOT change
+
+A stack migration is **not** an update event for the post's authorship date. The `pubDate` stays at its original value. If the user genuinely wants a new published date, they will say so explicitly. This rule has been broken before — re-read §3.
+
+#### 11.4 Frontmatter changes for stack migrations
+
+- **title**: append the stack to the em-dash subtitle when the migration is significant. Example: `"... — Spring Boot 4 · Kotlin 4계층 설계"` (KO) / `"... — Spring Boot 4 · Kotlin Four-Layer Design"` (EN).
+- **description**: surface the stack and what makes it different (e.g. "Lombok 없이 data class·val/var로 자연스럽게 풀이").
+- **tags**: add the new language/framework as a tag. Don't remove the old one if the post still references it for comparison purposes.
+
+#### 11.5 Commit message addendum
+
+In addition to the standard "캐노니컬 스켈레톤 적용" phrasing, mention the stack swap explicitly. Example fragments:
+
+```
+... + Kotlin-only 전면 교체 — Java N개 → Kotlin, Lombok 제거, record → data class, details fold 통합
+... + Spring Security 7 표준화 — JJWT 제거 후 oauth2-resource-server 전면 교체, JwtDecoder/JwtEncoder Bean 한 짝
+```
+
+The reader of the git log should be able to tell from the title alone whether this commit was a structural pass, a stack migration, or both.
+
 ## What to commit
 
 - The two restructured `.md` files
