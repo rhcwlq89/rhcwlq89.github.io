@@ -24,6 +24,7 @@ AWS 네트워크 글을 처음 펼치면 절반 이상이 약어와 jargon이다
 - 1편 — 외부 진입점 선택: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - 2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - 3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL
+- 4편 — DNS 결정과 Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
 
 대상 독자는 "AWS 콘솔은 만져봤지만 OSI L4/L7 차이가 뭔지, CIDR 표기를 어떻게 읽는지, ENI는 또 뭔지 막막한" 백엔드/인프라 엔지니어. 시리즈 본격편(1·2·3편)을 1초 막힘 없이 따라갈 수 있는 상태로 만드는 게 목표다.
 
@@ -306,7 +307,7 @@ sequenceDiagram
 
 API Gateway REST API는 mTLS를 지원하지만 HTTP API는 미지원 — 1편에서 REST/HTTP 갈림길의 한 변수.
 
-### 4.3 인증 jargon — JWT / OIDC / OAuth / IAM / Cognito
+### 4.3 인증 jargon — JWT / OIDC / SAML / OAuth / IAM / Cognito
 
 API Gateway 같은 매니지드 진입점이 "인증" 기능을 자랑할 때 자주 등장하는 용어들.
 
@@ -322,10 +323,13 @@ API Gateway 같은 매니지드 진입점이 "인증" 기능을 자랑할 때 �
 | 약어 | 정의 | 어디 쓰이나 |
 | --- | --- | --- |
 | <strong>OAuth 2.0</strong> | 인가(Authorization) 위임 표준 — "사용자가 X 서비스에게 자기 데이터 접근을 위임" | Google·Facebook·GitHub 로그인 백엔드 |
-| <strong>OIDC</strong> (OpenID Connect) | OAuth 2.0 위에 인증(Authentication) layer를 얹은 표준 — "이 사용자가 누구인지 확인" | 사실상 모든 모던 SSO |
+| <strong>OIDC</strong> (OpenID Connect) | OAuth 2.0 위에 인증(Authentication) layer를 얹은 표준 — "이 사용자가 누구인지 확인". JSON·JWT 기반 | 모바일·SPA·API 친화적 모던 SSO |
+| <strong>SAML</strong> (Security Assertion Markup Language) | OASIS가 2002년 표준화한 XML 기반 SSO 프로토콜. OIDC보다 오래되고 엔터프라이즈에서 표준 | <strong>AWS IAM Identity Center</strong>(구 AWS SSO) · IAM SAML Federation · Okta·Azure AD 같은 사내 IdP 연동 |
 | <strong>JWT</strong> (JSON Web Token) | 서명된 JSON 토큰. 서버가 발행하면 클라이언트가 매 요청에 첨부 — "이게 검증된 토큰임" | OIDC 응답·세션 토큰·API Gateway Authorizer |
 | <strong>IAM</strong> (Identity and Access Management) | AWS의 권한·접근 관리 시스템. 사용자·역할(Role)·정책(Policy)으로 구성 | AWS 리소스 접근 통제 (모든 AWS 서비스) |
-| <strong>Cognito</strong> | AWS 매니지드 사용자 풀 + 인증 서비스. OIDC·SAML 지원 | 모바일·웹 앱의 사용자 로그인 백엔드 |
+| <strong>Cognito</strong> | AWS 매니지드 사용자 풀 + 인증 서비스. OIDC·SAML 모두 IdP로 연동 가능 | 모바일·웹 앱의 사용자 로그인 백엔드 |
+
+> <strong>OIDC vs SAML</strong> — 둘 다 SSO 표준이지만 사용처가 다르다. <strong>OIDC는 JSON·JWT 기반</strong>으로 모바일·SPA·API 친화적이라 컨슈머 앱·신규 시스템의 표준이 됐고, <strong>SAML은 XML 기반</strong>으로 2000년대 초부터 엔터프라이즈 SSO의 표준 — Okta·Microsoft Azure AD·OneLogin·Ping Identity 같은 사내 IdP가 모두 SAML을 backbone으로 한다. AWS 측에서도 <strong>IAM Identity Center는 SAML이 backbone</strong>이고, Cognito User Pool은 둘 다 IdP로 받아들일 수 있다. "어느 걸 쓰나" 판단은 단순: <strong>사내 SSO·B2B 통합이면 SAML, 외부 사용자·모바일 앱이면 OIDC</strong>.
 
 > <strong>한 줄 요약</strong>: 사용자가 ID/PW로 로그인 → 서버가 JWT 발행(OIDC 표준) → 클라이언트가 매 API 호출에 JWT 첨부 → API Gateway가 JWT 검증해서 인증 통과시킴. AWS 안에서는 IAM이 리소스 접근을 통제.
 
@@ -340,11 +344,14 @@ ALB·API Gateway·CloudFront — 1편의 L7 진입점 셋은 모두 본질적으
 ```mermaid
 flowchart LR
     subgraph Forward["정방향 프록시 (Forward Proxy)"]
+        direction LR
         Client1[Client] --> Squid[Squid] --> Internet1[Internet]
     end
     subgraph Reverse["리버스 프록시 (Reverse Proxy)"]
+        direction LR
         User1[External User] --> Nginx[Nginx] --> Backend[Backend Server]
     end
+    Internet1 ~~~ User1
 ```
 
 - <strong>Forward Proxy</strong>: 클라이언트를 대신해 외부에 요청을 보냄. 사내망에서 외부로 나갈 때 거치는 squid 같은 도구. 클라이언트 보호·필터링.
@@ -571,7 +578,8 @@ AWS 서비스가 200개가 넘지만, 본 시리즈에서 등장하는 건 30개
 | TLS | Transport Layer Security. HTTPS의 암호화 프로토콜 |
 | mTLS | Mutual TLS. 양방향 인증 |
 | OAuth | Authorization 위임 표준 |
-| OIDC | OpenID Connect. OAuth 위에 인증 layer |
+| OIDC | OpenID Connect. OAuth 위에 인증 layer (JSON·JWT 기반, 모바일·SPA 친화) |
+| SAML | Security Assertion Markup Language. XML 기반 SSO 프로토콜 (엔터프라이즈 표준, AWS IAM Identity Center backbone) |
 | JWT | JSON Web Token. 서명된 JSON 토큰 |
 | IAM | Identity and Access Management. AWS 권한 시스템 |
 | Cognito | AWS 매니지드 사용자 풀·인증 |

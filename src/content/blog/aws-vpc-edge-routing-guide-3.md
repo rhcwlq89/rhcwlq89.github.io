@@ -24,6 +24,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide3.png"
 - 1편 — 외부 진입점 선택: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - 2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - <strong>3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL (이 글)</strong>
+- 4편 — DNS 결정과 Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
 
 대상 독자는 1·2편과 같다 — VPC를 만들어 본 적은 있지만 "왜 안 되지?"가 나올 때 어디부터 봐야 할지 막막한 백엔드/인프라 엔지니어. 다 읽고 나면 <strong>패킷 한 개의 경로를 머릿속으로 따라가며 디버깅이 가능한 상태</strong>가 목표다.
 

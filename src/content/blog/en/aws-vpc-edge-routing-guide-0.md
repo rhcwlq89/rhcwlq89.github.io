@@ -17,6 +17,7 @@ This post starts there. Before diving into the decision trees of Parts 1, 2, and
 - Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL
+- Part 4 — DNS decisions and Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
 
 The target reader is a backend or infrastructure engineer who's clicked through the AWS console but isn't quite sure about OSI L4/L7, how to read a CIDR notation, or what an ENI is. The goal is to make Parts 1, 2, and 3 readable without stalling on a single term.
 
@@ -299,7 +300,7 @@ The pattern where an entry point unwraps TLS so that traffic to the backend is p
 
 API Gateway REST API supports mTLS; HTTP API doesn't — one of the variables when deciding REST vs HTTP API in Part 1.
 
-### 4.3 Auth jargon — JWT / OIDC / OAuth / IAM / Cognito
+### 4.3 Auth jargon — JWT / OIDC / SAML / OAuth / IAM / Cognito
 
 The terms that show up when managed entry points like API Gateway advertise their "auth" features.
 
@@ -315,10 +316,13 @@ The two are often conflated but they're distinct decisions, usually handled toge
 | Acronym | What it is | Where it shows up |
 | --- | --- | --- |
 | <strong>OAuth 2.0</strong> | Authorization-delegation standard — "the user lets service X access their data on Y" | Google / Facebook / GitHub login backends |
-| <strong>OIDC</strong> (OpenID Connect) | An authentication layer on top of OAuth 2.0 — "confirm who this user is" | Effectively every modern SSO |
+| <strong>OIDC</strong> (OpenID Connect) | An authentication layer on top of OAuth 2.0 — "confirm who this user is." JSON / JWT-based | Mobile, SPA, API-friendly modern SSO |
+| <strong>SAML</strong> (Security Assertion Markup Language) | An OASIS-standardized XML-based SSO protocol from 2002. Older than OIDC and the de facto enterprise standard | <strong>AWS IAM Identity Center</strong> (formerly AWS SSO), IAM SAML Federation, Okta / Azure AD-style enterprise IdP integration |
 | <strong>JWT</strong> (JSON Web Token) | A signed JSON token. Server issues it; client attaches it to every request — "this is verified" | OIDC responses, session tokens, API Gateway Authorizers |
 | <strong>IAM</strong> (Identity and Access Management) | AWS's permissions and access system. Users, Roles, Policies | Access control across every AWS service |
-| <strong>Cognito</strong> | AWS-managed user pools and authentication. Supports OIDC and SAML | The login backend for mobile / web apps |
+| <strong>Cognito</strong> | AWS-managed user pools and authentication. Supports OIDC and SAML as IdPs | The login backend for mobile / web apps |
+
+> <strong>OIDC vs SAML</strong> — both are SSO standards but their fits differ. <strong>OIDC is JSON / JWT-based</strong>, mobile- and SPA-friendly, and has become the standard for consumer apps and new systems. <strong>SAML is XML-based</strong> and has been the enterprise SSO standard since the early 2000s — Okta, Microsoft Azure AD, OneLogin, Ping Identity all use SAML as their backbone. On AWS, <strong>IAM Identity Center is built on SAML</strong>, and Cognito User Pools accept both as IdPs. The decision rule is simple: <strong>internal SSO and B2B integration → SAML; external users and mobile apps → OIDC</strong>.
 
 > <strong>One-line summary</strong>: A user logs in with ID/PW → the server issues a JWT (per OIDC standard) → the client attaches the JWT to every API request → API Gateway verifies the JWT to authenticate. Inside AWS, IAM controls access to resources.
 
@@ -333,11 +337,14 @@ ALB, API Gateway, CloudFront — the three L7 candidates of Part 1 are all, fund
 ```mermaid
 flowchart LR
     subgraph Forward["Forward Proxy"]
+        direction LR
         Client1[Client] --> Squid[Squid] --> Internet1[Internet]
     end
     subgraph Reverse["Reverse Proxy"]
+        direction LR
         User1[External User] --> Nginx[Nginx] --> Backend[Backend Server]
     end
+    Internet1 ~~~ User1
 ```
 
 - <strong>Forward proxy</strong>: stands in for clients reaching out — for example, the corporate squid relay for outbound traffic. Protects clients, filters egress.
@@ -562,7 +569,8 @@ Every acronym in the series, organized by category. When something stops making 
 | TLS | Transport Layer Security. The encryption protocol behind HTTPS |
 | mTLS | Mutual TLS. Both server and client authenticate |
 | OAuth | Authorization-delegation standard |
-| OIDC | OpenID Connect. Auth layer on top of OAuth |
+| OIDC | OpenID Connect. Auth layer on top of OAuth (JSON / JWT-based, mobile / SPA-friendly) |
+| SAML | Security Assertion Markup Language. XML-based SSO protocol (enterprise standard, AWS IAM Identity Center backbone) |
 | JWT | JSON Web Token. Signed JSON for auth/session |
 | IAM | Identity and Access Management. AWS permissions system |
 | Cognito | AWS-managed user pools and auth |

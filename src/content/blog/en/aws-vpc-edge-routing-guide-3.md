@@ -17,6 +17,7 @@ This area trips people up more than Parts 1 and 2 combined. It isn't a "pick A o
 - Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - <strong>Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL (this post)</strong>
+- Part 4 — DNS decisions and Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
 
 Same target reader as before — backend or infrastructure engineers who've built a VPC but freeze when "why isn't this working?" hits. After this post, the goal is that <strong>you can mentally trace a single packet through the VPC and debug from there.</strong>
 

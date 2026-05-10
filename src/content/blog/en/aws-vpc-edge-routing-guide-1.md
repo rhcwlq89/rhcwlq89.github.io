@@ -17,6 +17,7 @@ This series starts there. We walk through AWS network service blocks framed as <
 - <strong>Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator (this post)</strong>
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Transit Gateway / Peering / Direct Connect
 - Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL
+- Part 4 — DNS decisions and Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
 
 The target reader is a backend or infrastructure engineer who has "spun up an ALB in the console but isn't sure when to reach for API Gateway or CloudFront." After this post, the goal is that <strong>picking the entry point for a new service stops being a thing you stall on.</strong>
 

@@ -24,6 +24,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide1.png"
 - <strong>1편 — 외부 진입점 선택: ALB / NLB / API Gateway / CloudFront / Global Accelerator (이 글)</strong>
 - 2편 — VPC 간·온프레미스 연결: VPC Endpoint / PrivateLink / Transit Gateway / Peering / Direct Connect
 - 3편 — VPC 내부 라우팅: IGW / NAT GW / Route Tables / Security Group vs NACL
+- 4편 — DNS 결정과 Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check
 
 대상 독자는 "AWS 콘솔에서 ALB는 만들어봤지만 API Gateway나 CloudFront를 언제 써야 하는지 명확하지 않은" 백엔드/인프라 엔지니어다. 다 읽고 나면 <strong>새 서비스를 그릴 때 진입점 결정에 더는 헤매지 않는</strong> 상태가 목표다.
 
