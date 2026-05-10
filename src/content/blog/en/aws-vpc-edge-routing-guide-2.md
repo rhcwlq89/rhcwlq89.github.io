@@ -102,7 +102,7 @@ Two pitfalls:
 
 ### 2.3 Interface Endpoint — an ENI inside the VPC
 
-Interface Endpoint works completely differently. <strong>It puts an ENI in a Subnet of your VPC and attaches Private DNS</strong> so that the service's official domain (e.g., `kms.ap-northeast-2.amazonaws.com`) resolves to the ENI's private IP.
+Interface Endpoint works completely differently. <strong>It puts an ENI in a Subnet of your VPC and attaches Private DNS</strong> so that the service's official domain (e.g., `kms.ap-northeast-2.amazonaws.com`) resolves to the ENI's private IP. <strong>ENI (Elastic Network Interface) is a virtual NIC that lives inside a VPC with a private IP</strong> — almost everything in a VPC (EC2, RDS, Lambda, ALB, etc.) has at least one, and the key fact is that private IPs, Security Groups, and EIPs all bind to the ENI rather than to the instance directly.
 
 Two implications:
 
@@ -110,6 +110,19 @@ Two implications:
 - <strong>Endpoint policies for access control</strong> — IAM-policy-style rules on which resources can be reached through this Endpoint. Common in compliance-driven environments.
 
 > <strong>Note</strong>: Interface Endpoint and PrivateLink are the same mechanism. AWS managed services exposed via PrivateLink → Interface Endpoint; user services exposed the same way → PrivateLink (§5). Same box, different label.
+
+### 2.4 Aside: how do you test locally with VPC Endpoint?
+
+A frequent practical question. The principle in one line — <strong>VPC Endpoint only affects traffic originating inside the VPC</strong>. Your laptop sits outside the VPC and reaches AWS over the public internet, so usually <strong>plain IAM access keys work for local testing as if Endpoints don't exist</strong>. Endpoint configuration is just a routing change inside the production VPC — it doesn't alter the access controls of the AWS services themselves.
+
+Where it does break: when bucket or Endpoint policies enforce `aws:SourceVpce` ("only allow access through this Endpoint"), no credential from outside reaches them. Two patterns cover most cases:
+
+| Pattern | How it works |
+| --- | --- |
+| <strong>Separate dev account</strong> (most common) | Production account locks down with Endpoint-only policies; dev/staging accounts allow public access. Local development uses dev-account credentials. Code stays identical, only the IAM and resource policies differ. |
+| <strong>LocalStack</strong> (offline / CI) | Docker-emulate S3, DynamoDB, SQS locally; point AWS SDK endpoint URL to `http://localhost:4566`. Zero real AWS calls — best for CI determinism. |
+
+When these aren't enough — when you need to validate the Endpoint policies themselves, or company policy forces the local path to mirror production — fall back to SSM Session Manager port forwarding, AWS Client VPN to join the VPC from your laptop, or running integration tests inside a VPC-attached CodeBuild project.
 
 ---
 
@@ -226,7 +239,7 @@ Connecting on-prem to a VPC narrows to two options: Site-to-Site VPN and Direct 
 
 ### 5.1 Site-to-Site VPN — IPsec tunnel over the internet
 
-Site-to-Site VPN sets up IPsec tunnels over the public internet between AWS-side Virtual Private Gateway (VGW) or TGW and your on-prem router. Two IPsec tunnels come up automatically; both sides exchange routes via BGP or static routing.
+Site-to-Site VPN sets up IPsec (IP Security — a network-layer protocol that encrypts packets and verifies their integrity) tunnels over the public internet between AWS-side Virtual Private Gateway (VGW) or TGW and your on-prem router. Two IPsec tunnels come up automatically; both sides exchange routes via BGP or static routing.
 
 - <strong>Up in days</strong> — no hardware orders, just router configuration.
 - <strong>Bandwidth bound by your internet circuit</strong> — roughly 1.25 Gbps per tunnel cap.
@@ -386,14 +399,52 @@ Part 3 covers <strong>routing inside the VPC</strong> — how IGW and NAT Gatewa
 
 ### D. Acronyms
 
+**AWS services and components**
+
 | Acronym | Meaning |
 | --- | --- |
-| On-prem / On-premises | Your own datacenter or office server room — infrastructure you operate outside a public cloud like AWS |
+| VPC | Virtual Private Cloud. An isolated virtual network inside AWS |
+| EC2 | Elastic Compute Cloud. AWS virtual servers |
+| RDS | Relational Database Service. AWS-managed RDB |
+| Lambda | AWS serverless compute |
+| S3 | Simple Storage Service. AWS object storage |
+| DynamoDB | AWS-managed NoSQL key-value database |
+| KMS | Key Management Service. AWS-managed encryption keys |
+| ECR | Elastic Container Registry. AWS container image registry |
+| SSM | AWS Systems Manager. Unified EC2 ops (Session Manager etc.) |
+| ALB / NLB | Application / Network Load Balancer (L7 / L4) |
+
+**Connectivity and routing**
+
+| Acronym | Meaning |
+| --- | --- |
+| VPC Endpoint | A path inside the VPC to AWS services without going through the internet (Gateway / Interface variants) |
+| PrivateLink | A one-way connection that exposes a service behind an NLB and is consumed via an ENI in the consumer's VPC |
 | TGW | Transit Gateway. N:N VPC and on-prem hub |
 | DX | Direct Connect. Dedicated fiber to AWS |
 | VPN | Virtual Private Network. Here, Site-to-Site VPN |
 | VGW | Virtual Private Gateway. AWS-side VPN endpoint |
-| ENI | Elastic Network Interface. Virtual NIC in a VPC |
+| IGW | Internet Gateway. The bidirectional gateway between VPC and the internet |
+| NAT | Network Address Translation. Private-IP-to-public-IP translation |
+| NACL | Network Access Control List. Subnet-level stateless firewall |
+| SG | Security Group. ENI-level stateful firewall |
+
+**Network basics**
+
+| Acronym | Meaning |
+| --- | --- |
+| ENI | Elastic Network Interface. Virtual NIC with a private IP inside a VPC |
+| NIC | Network Interface Card. A network adapter (physical or virtual) |
+| CIDR | Classless Inter-Domain Routing. IP-range notation `startIP/prefix-length` (e.g., `10.0.0.0/16`) |
 | BGP | Border Gateway Protocol. Dynamic routing protocol |
-| CIDR | Classless Inter-Domain Routing. IP range notation |
+| IPsec | IP Security. Network-layer protocol for packet encryption and integrity |
+| L3 | OSI network layer (IP) |
 | AZ | Availability Zone. Datacenter unit within a region |
+
+**General**
+
+| Acronym | Meaning |
+| --- | --- |
+| SaaS | Software as a Service. Managed software services (Salesforce, Datadog, etc.) |
+| PoC | Proof of Concept. A small-scale implementation to validate feasibility |
+| On-prem / On-premises | Your own datacenter or office server room — infrastructure you operate outside a public cloud like AWS |

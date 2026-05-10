@@ -122,7 +122,7 @@ A VPC creates a main Route Table at construction time, and a <strong>local route
 
 ### 3.1 What a Route Table is
 
-A Route Table maps <strong>(destination CIDR, next hop)</strong>. A packet's destination IP is matched against entries; the matching entry's target is the next hop.
+A Route Table maps <strong>(destination CIDR, next hop)</strong> — <strong>CIDR (Classless Inter-Domain Routing) is the notation `startIP/prefix-length` for IP ranges</strong>. For example, `10.0.0.0/16` is a block of 65,536 IPs (smaller prefix = larger range); `0.0.0.0/0` means every IP. The packet's destination IP is matched against the CIDR entries, and the matching entry's target is the next hop.
 
 Example (Public Subnet's Route Table):
 
@@ -177,7 +177,7 @@ VPC has two firewall types. They aren't substitutes — <strong>they operate at 
 
 ### 4.1 Security Group (SG) — instance-level, stateful
 
-- <strong>Applies to</strong>: ENIs (EC2, RDS, Lambda VPC connections, ALB/NLB — anything with an ENI).
+- <strong>Applies to</strong>: ENIs (Elastic Network Interface — virtual NICs with a private IP that live inside a VPC; EC2, RDS, Lambda VPC connections, ALB/NLB and effectively anything attached to a VPC has at least one).
 - <strong>Stateful</strong>: allow inbound and the response is automatically allowed outbound, and vice versa.
 - <strong>Allow-only</strong>: no explicit deny rules. "Not allowed = denied" model.
 - <strong>Multiple SGs per ENI</strong>: up to 5. Rules are unioned.
@@ -357,15 +357,45 @@ When "the packet isn't getting through" lands on your desk:
 
 ### D. Acronyms
 
+**AWS services and components**
+
+| Acronym | Meaning |
+| --- | --- |
+| VPC | Virtual Private Cloud. An isolated virtual network inside AWS |
+| EC2 | Elastic Compute Cloud. AWS virtual servers |
+| RDS | Relational Database Service. AWS-managed RDB |
+| Lambda | AWS serverless compute |
+| S3 | Simple Storage Service. AWS object storage |
+| ALB / NLB | Application / Network Load Balancer (L7 / L4) |
+| CloudFront | AWS's CDN (global edge caching) |
+| PrivateLink | A one-way connection that exposes another org's service behind an NLB |
+| VPN | Virtual Private Network. Here, Site-to-Site VPN |
+
+**Gateways and firewalls**
+
 | Acronym | Meaning |
 | --- | --- |
 | IGW | Internet Gateway. Bidirectional VPC-internet gateway |
 | NAT GW | NAT Gateway. IPv4 outbound path for Private subnets |
 | EOIGW | Egress-only Internet Gateway. IPv6 outbound path for Private subnets |
-| RT | Route Table. (destination CIDR, next hop) mapping |
-| SG | Security Group. ENI-level stateful firewall |
-| NACL | Network Access Control List. Subnet-level stateless firewall |
-| ENI | Elastic Network Interface. Virtual NIC inside a VPC |
+| NAT | Network Address Translation. Private-IP-to-public-IP translation |
+| RT / Route Table | (destination CIDR, next hop) mapping. Per-subnet routing table |
+| SG / Security Group | ENI-level stateful firewall (allow inbound → response auto-allowed, allow-only) |
+| NACL | Network Access Control List. Subnet-level stateless firewall (both allow and deny) |
+
+**Network basics**
+
+| Acronym | Meaning |
+| --- | --- |
+| ENI | Elastic Network Interface. Virtual NIC with a private IP inside a VPC |
+| NIC | Network Interface Card. A network adapter (physical or virtual) |
 | EIP | Elastic IP. Static public IP |
+| CIDR | Classless Inter-Domain Routing. IP-range notation `startIP/prefix-length` (e.g., `10.0.0.0/16`) |
+| IPv4 / IPv6 | 32-bit / 128-bit IP address schemes. NAT GW is IPv4-only; Egress-only IGW is IPv6-only |
 | AZ | Availability Zone. Datacenter unit within a region |
+
+**General**
+
+| Acronym | Meaning |
+| --- | --- |
 | On-prem / On-premises | Your own datacenter or office server room — infrastructure you operate outside a public cloud like AWS |

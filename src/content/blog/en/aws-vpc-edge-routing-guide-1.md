@@ -60,6 +60,8 @@ The trick is that an entry point isn't just "where traffic arrives" — it's <st
 | Managed extras | Auth, throttling, API keys, usage plans, cache | API Gateway (auth/throttle) / CloudFront (cache) |
 | Static IP / ultra-low latency | IP allowlists, finance/game traffic | NLB |
 
+> <strong>Note — L4 vs L7 and the OSI model</strong>: The <strong>OSI (Open Systems Interconnection) 7-layer model</strong> abstracts network communication into seven layers (physical, data link, network, transport, session, presentation, application). <strong>L4 (transport — TCP/UDP)</strong> routes by IP/port only, while <strong>L7 (application — HTTP)</strong> can route by message contents (host, path, headers). ALB is L7, NLB is L4 — same category of "AWS load balancer," fundamentally different routing units.
+
 Walk these four in order and the candidate set almost always collapses to one or two. The decision tree in §4 captures that flow on a single page; the sections before that explain how each candidate actually behaves.
 
 ---
@@ -392,15 +394,64 @@ Bookmark this section for quick reference.
 
 ### D. Acronyms
 
+**AWS services and entry points**
+
 | Acronym | Meaning |
 | --- | --- |
+| VPC | Virtual Private Cloud. An isolated virtual network inside AWS |
+| EC2 | Elastic Compute Cloud. AWS virtual servers |
+| ECS / EKS | Elastic Container Service / Elastic Kubernetes Service. Managed container orchestration on AWS |
+| Lambda | AWS serverless compute (upload code; pay per invocation) |
+| S3 | Simple Storage Service. AWS object storage |
+| DynamoDB | AWS-managed NoSQL key-value database |
+| SQS | Simple Queue Service. AWS-managed message queue |
 | ALB | Application Load Balancer. L7 load balancer |
 | NLB | Network Load Balancer. L4 load balancer |
+| CloudFront | AWS's CDN (global edge caching) |
 | GA | Global Accelerator. AWS-backbone-based global accelerator |
-| CDN | Content Delivery Network. CloudFront |
-| LCU | Load Balancer Capacity Unit. ALB billing unit |
+| API Gateway | AWS-managed API entry point (auth, throttling, usage plans) |
+
+**Pricing and components**
+
+| Acronym | Meaning |
+| --- | --- |
+| LCU / NLCU | (Network) Load Balancer Capacity Unit. ALB / NLB usage billing unit |
 | EIP | Elastic IP. Static public IP |
 | TG | Target Group. ALB/NLB backend pool |
 | OAC | Origin Access Control. CloudFront-to-S3 access protection |
+
+**Network and protocols**
+
+| Acronym | Meaning |
+| --- | --- |
+| OSI | Open Systems Interconnection. The 7-layer model abstraction of network communication |
+| L4 | OSI transport layer (TCP/UDP). Routes by IP/port only |
+| L7 | OSI application layer (HTTP). Routes by message contents (host, path, header) |
+| TLS | Transport Layer Security. The encryption protocol behind HTTPS |
+| mTLS | Mutual TLS. Both server and client authenticate via certificates |
+| TCP / UDP | Transmission Control Protocol / User Datagram Protocol. L4 transport protocols |
+| WebSocket | A bidirectional real-time protocol over TCP |
+| gRPC | Google RPC. HTTP/2 + Protocol Buffers RPC framework |
+| RTT | Round Trip Time. The latency measure for a packet round trip |
+| DNS | Domain Name System. Resolves domains to IPs |
+
+**APIs and auth**
+
+| Acronym | Meaning |
+| --- | --- |
+| REST | Representational State Transfer. The HTTP-based API design style |
+| OpenAPI | A YAML/JSON standard for documenting APIs (formerly Swagger) |
+| OIDC | OpenID Connect. An identity layer on top of OAuth 2.0 |
+| JWT | JSON Web Token. A signed JSON token used for auth/session passing |
+| Cognito | AWS-managed user pools and authentication |
+| IAM | Identity and Access Management. AWS permission and access control |
 | VTL | Velocity Template Language. The request/response transform template DSL in API Gateway REST API (Apache-Velocity-based) |
+| WAF | Web Application Firewall. L7 firewall (blocks SQL injection, XSS, etc.) |
+| DDoS | Distributed Denial of Service. A traffic flooding attack from many sources |
+
+**General**
+
+| Acronym | Meaning |
+| --- | --- |
+| CDN | Content Delivery Network. A global edge caching network (e.g., CloudFront) |
 | On-prem / On-premises | Your own datacenter or office server room — infrastructure you operate outside a public cloud like AWS |

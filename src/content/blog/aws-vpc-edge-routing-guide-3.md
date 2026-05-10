@@ -129,7 +129,7 @@ VPC는 만들어지자마자 메인 Route Table이 자동 생성되고, VPC CIDR
 
 ### 3.1 Route Table은 무엇인가
 
-Route Table은 <strong>(목적지 CIDR, 다음 hop)</strong>의 매핑이다. 패킷이 들어오면 destination IP를 보고 가장 일치하는 경로를 찾아 다음 hop으로 보낸다.
+Route Table은 <strong>(목적지 CIDR, 다음 hop)</strong>의 매핑이다 — <strong>CIDR(Classless Inter-Domain Routing)은 IP 대역을 `시작IP/prefix길이`로 표기하는 방식</strong>으로, 예를 들어 `10.0.0.0/16`은 65,536개 IP 묶음(prefix 길이가 작을수록 큰 범위), `0.0.0.0/0`은 모든 IP를 의미한다. 패킷이 들어오면 destination IP를 보고 가장 일치하는 CIDR 경로를 찾아 다음 hop으로 보낸다.
 
 예시 (Public Subnet의 Route Table):
 
@@ -184,7 +184,7 @@ VPC에는 두 종류의 방화벽이 있다. 둘은 같은 자리의 대안이 �
 
 ### 4.1 Security Group (SG) — 인스턴스 단위, stateful
 
-- <strong>적용 대상</strong>: ENI(EC2 인스턴스, RDS, Lambda VPC 연결, ALB·NLB 등 ENI를 가진 모든 리소스).
+- <strong>적용 대상</strong>: ENI(Elastic Network Interface, VPC에 사설 IP를 갖고 붙는 가상 NIC — EC2 인스턴스·RDS·Lambda VPC 연결·ALB·NLB 등 VPC에 연결되는 모든 리소스가 가지는 네트워크 인터페이스).
 - <strong>stateful</strong>: 인바운드를 허용하면 응답(아웃바운드)은 자동으로 허용. 반대도 마찬가지.
 - <strong>allow-only</strong>: 명시적 deny 규칙은 없다. "허용 안 된 것은 거부"라는 모델.
 - <strong>여러 개 attach 가능</strong>: 한 ENI에 SG 5개까지. 규칙은 union(합집합).
@@ -364,15 +364,45 @@ sequenceDiagram
 
 ### D. 약어
 
+**AWS 서비스·구성**
+
+| 약어 | 풀이 |
+| --- | --- |
+| VPC | Virtual Private Cloud. AWS 안에 격리해 만드는 가상 네트워크 |
+| EC2 | Elastic Compute Cloud. AWS의 가상 서버 |
+| RDS | Relational Database Service. AWS 매니지드 RDB |
+| Lambda | AWS 서버리스 컴퓨트 |
+| S3 | Simple Storage Service. AWS의 객체 스토리지 |
+| ALB / NLB | Application / Network Load Balancer (L7 / L4) |
+| CloudFront | AWS의 CDN (글로벌 edge 캐싱) |
+| PrivateLink | 다른 조직 서비스를 NLB 뒤에 노출하는 단방향 연결 |
+| VPN | Virtual Private Network. 여기서는 Site-to-Site VPN |
+
+**게이트웨이·방화벽**
+
 | 약어 | 풀이 |
 | --- | --- |
 | IGW | Internet Gateway. VPC와 인터넷의 양방향 게이트웨이 |
 | NAT GW | NAT Gateway. Private subnet의 IPv4 outbound 통로 |
 | EOIGW | Egress-only Internet Gateway. Private subnet의 IPv6 outbound 통로 |
-| RT | Route Table. (목적지 CIDR, 다음 hop) 매핑 |
-| SG | Security Group. ENI 단위 stateful 방화벽 |
-| NACL | Network Access Control List. Subnet 단위 stateless 방화벽 |
-| ENI | Elastic Network Interface. VPC 안의 가상 NIC |
+| NAT | Network Address Translation. 사설 IP ↔ 공인 IP 변환 |
+| RT / Route Table | (목적지 CIDR, 다음 hop) 매핑. Subnet 단위 라우팅 결정표 |
+| SG / Security Group | ENI 단위 stateful 방화벽 (인바운드 허용 시 응답 자동 허용, allow-only) |
+| NACL | Network Access Control List. Subnet 단위 stateless 방화벽 (allow + deny 모두) |
+
+**네트워크 기초**
+
+| 약어 | 풀이 |
+| --- | --- |
+| ENI | Elastic Network Interface. VPC에 사설 IP를 갖고 붙는 가상 NIC |
+| NIC | Network Interface Card. 네트워크 카드 (실물 또는 가상) |
 | EIP | Elastic IP. 고정 공인 IP |
+| CIDR | Classless Inter-Domain Routing. IP 대역을 `시작IP/prefix길이`로 표기 (예: `10.0.0.0/16`) |
+| IPv4 / IPv6 | 32비트 / 128비트 IP 주소 체계. NAT GW는 IPv4 전용, Egress-only IGW는 IPv6 전용 |
 | AZ | Availability Zone. 리전 안의 데이터센터 단위 |
+
+**일반**
+
+| 약어 | 풀이 |
+| --- | --- |
 | 온프렘 / 온프레미스 | On-Premises. 자사 데이터센터·사옥 서버실 등 AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라 |

@@ -67,6 +67,8 @@ flowchart LR
 | 관리형 부가 기능 | 인증, 쓰로틀, API Key, 요금제, 캐시 | API Gateway(인증·쓰로틀) / CloudFront(캐시) |
 | 정적 IP·초저지연 | 화이트리스트 필요, 금융 거래·게임 트래픽 | NLB |
 
+> <strong>참고 — L4 vs L7과 OSI 모델</strong>: <strong>OSI(Open Systems Interconnection) 7-layer 모델</strong>은 네트워크 통신을 7개 계층(물리·데이터링크·네트워크·전송·세션·표현·응용)으로 나눈 추상 모델이다. <strong>L4(전송 계층 — TCP/UDP)</strong>는 패킷의 IP·port만 보고 라우팅하고, <strong>L7(응용 계층 — HTTP)</strong>은 메시지 내용(host·path·header)까지 보고 결정한다. ALB는 L7, NLB는 L4 — 같은 "AWS 로드밸런서"지만 라우팅 단위가 완전히 다른 이유.
+
 이 네 가지를 차례로 묻고 답하면 후보는 거의 항상 1~2개로 좁혀진다. 4절의 결정 트리가 이 흐름을 한 장으로 정리한 것이고, 그 전에 각 후보가 실제로 어떻게 동작하는지를 짧게 짚는다.
 
 ---
@@ -399,15 +401,64 @@ EC2 1대뿐인데 ALB를 끼운 구성. <strong>로드밸런싱할 대상이 없
 
 ### D. 약어
 
+**AWS 서비스·진입점**
+
 | 약어 | 풀이 |
 | --- | --- |
+| VPC | Virtual Private Cloud. AWS 안에 격리해 만드는 가상 네트워크 |
+| EC2 | Elastic Compute Cloud. AWS의 가상 서버 |
+| ECS / EKS | Elastic Container Service / Elastic Kubernetes Service. AWS 컨테이너 오케스트레이션 매니지드 |
+| Lambda | AWS 서버리스 컴퓨트 (코드만 업로드, 호출당 과금) |
+| S3 | Simple Storage Service. AWS의 객체 스토리지 |
+| DynamoDB | AWS의 매니지드 NoSQL 키-값 DB |
+| SQS | Simple Queue Service. AWS의 메시지 큐 |
 | ALB | Application Load Balancer. L7 로드밸런서 |
 | NLB | Network Load Balancer. L4 로드밸런서 |
+| CloudFront | AWS의 CDN (글로벌 edge 캐싱) |
 | GA | Global Accelerator. AWS 백본 기반 글로벌 가속기 |
-| CDN | Content Delivery Network. CloudFront가 여기 해당 |
-| LCU | Load Balancer Capacity Unit. ALB 과금 단위 |
+| API Gateway | AWS 매니지드 API 진입점 (인증·쓰로틀·요금제 포함) |
+
+**과금·구성 요소**
+
+| 약어 | 풀이 |
+| --- | --- |
+| LCU / NLCU | (Network) Load Balancer Capacity Unit. ALB·NLB의 사용량 청구 단위 |
 | EIP | Elastic IP. 고정 공인 IP |
 | TG | Target Group. ALB/NLB의 백엔드 묶음 |
 | OAC | Origin Access Control. CloudFront에서 S3 접근 보호 |
+
+**네트워크·프로토콜**
+
+| 약어 | 풀이 |
+| --- | --- |
+| OSI | Open Systems Interconnection. 네트워크 통신을 7개 계층으로 나눈 추상 모델 |
+| L4 | OSI 전송 계층 (TCP/UDP). 패킷의 IP·port만 보고 라우팅 |
+| L7 | OSI 응용 계층 (HTTP). 메시지 내용까지 보고 라우팅 |
+| TLS | Transport Layer Security. HTTPS의 암호화 프로토콜 |
+| mTLS | Mutual TLS. 서버·클라이언트 양쪽이 인증서로 서로 인증 |
+| TCP / UDP | Transmission Control Protocol / User Datagram Protocol. L4 전송 프로토콜 |
+| WebSocket | TCP 위에서 동작하는 양방향 실시간 통신 프로토콜 |
+| gRPC | Google RPC. HTTP/2 + Protocol Buffers 기반 RPC 프레임워크 |
+| RTT | Round Trip Time. 패킷 왕복 시간 (지연 측정 단위) |
+| DNS | Domain Name System. 도메인을 IP로 해석하는 시스템 |
+
+**API·인증**
+
+| 약어 | 풀이 |
+| --- | --- |
+| REST | Representational State Transfer. HTTP 기반 API 디자인 스타일 |
+| OpenAPI | API 명세를 YAML/JSON으로 표준화한 형식 (구 Swagger) |
+| OIDC | OpenID Connect. OAuth 2.0 위에 인증 layer를 얹은 표준 |
+| JWT | JSON Web Token. 서명된 JSON 토큰 (인증·세션 전달용) |
+| Cognito | AWS의 사용자 풀·인증 매니지드 서비스 |
+| IAM | Identity and Access Management. AWS 권한·접근 관리 |
 | VTL | Velocity Template Language. API Gateway REST API의 요청·응답 변환 템플릿 DSL (Apache Velocity 기반) |
+| WAF | Web Application Firewall. L7 방화벽 (SQL injection·XSS 등 차단) |
+| DDoS | Distributed Denial of Service. 분산 서비스 거부 공격 |
+
+**일반**
+
+| 약어 | 풀이 |
+| --- | --- |
+| CDN | Content Delivery Network. 글로벌 edge 캐싱 네트워크 (CloudFront 등) |
 | 온프렘 / 온프레미스 | On-Premises. 자사 데이터센터·사옥 서버실 등 AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라 |

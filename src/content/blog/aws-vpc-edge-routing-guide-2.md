@@ -109,7 +109,7 @@ flowchart LR
 
 ### 2.3 Interface Endpoint — VPC 안에 ENI를 띄우는 모델
 
-Interface Endpoint는 Gateway와 동작 원리가 완전히 다르다. <strong>VPC 안의 Subnet에 ENI를 만들고, 거기에 Private DNS를 붙여서</strong> 서비스의 공식 도메인(예: `kms.ap-northeast-2.amazonaws.com`)이 그 ENI의 사설 IP로 해석되도록 한다.
+Interface Endpoint는 Gateway와 동작 원리가 완전히 다르다. <strong>VPC 안의 Subnet에 ENI를 만들고, 거기에 Private DNS를 붙여서</strong> 서비스의 공식 도메인(예: `kms.ap-northeast-2.amazonaws.com`)이 그 ENI의 사설 IP로 해석되도록 한다. <strong>ENI(Elastic Network Interface)는 VPC에 사설 IP를 갖고 붙는 가상 NIC</strong>로, EC2·RDS·Lambda·ALB 등 VPC에 연결되는 거의 모든 리소스가 최소 1개씩 가진다 — 사설 IP·SG·EIP가 모두 ENI 단위로 결합되는 게 핵심.
 
 이게 의미하는 게 두 가지:
 
@@ -117,6 +117,19 @@ Interface Endpoint는 Gateway와 동작 원리가 완전히 다르다. <strong>V
 - <strong>Endpoint 정책으로 접근 제어 가능</strong> — IAM Policy처럼 "이 Endpoint를 통해 어떤 리소스에만 접근 허용"을 걸 수 있다. 컴플라이언스 환경에서 자주 쓴다.
 
 > <strong>참고</strong>: Interface Endpoint는 PrivateLink와 같은 메커니즘이다. AWS 관리 서비스를 PrivateLink로 노출한 게 Interface Endpoint, 사용자 서비스를 같은 방식으로 노출한 게 5절의 PrivateLink. 같은 상자 다른 라벨이라고 보면 된다.
+
+### 2.4 참고: VPC Endpoint 환경에서 로컬 테스트는 어떻게 하나
+
+실무에서 자주 부딪히는 질문이다. 핵심 원리는 한 줄 — <strong>VPC Endpoint는 VPC 안에서 발생한 트래픽에만 영향</strong>이다. 로컬 노트북은 VPC 밖이라 그냥 퍼블릭 인터넷 경로로 AWS에 도달하므로, 보통은 <strong>IAM access key로 평소처럼 테스트하면 그대로 동작</strong>한다. Endpoint 설정은 운영 VPC만의 라우팅 변경일 뿐, AWS 서비스 자체의 접근 통제를 바꾸진 않는다.
+
+다만 보안 정책이 강해서 버킷·Endpoint 정책에 `aws:SourceVpce` 조건("이 Endpoint 통과만 허용")이 박혀 있으면 로컬에선 어떤 credential로도 접근이 차단된다. 그때 가장 흔히 쓰는 패턴 두 가지:
+
+| 패턴 | 어떻게 동작하나 |
+| --- | --- |
+| <strong>Dev 계정 분리</strong> (가장 흔함) | 운영 계정은 Endpoint-only 정책, dev/staging 계정은 public access 허용. 로컬은 dev 계정 credential로 테스트. 환경별 IAM·정책만 다르고 코드는 동일. |
+| <strong>LocalStack</strong> (오프라인·CI) | S3·DynamoDB·SQS 등을 Docker로 로컬 에뮬레이션. AWS SDK의 endpoint URL을 `http://localhost:4566`으로 가리키면 AWS 호출 0건이라 CI 결정성 최고. |
+
+이 둘로 부족하면 — Endpoint 정책 자체를 검증해야 한다거나 회사 정책상 운영과 동일 경로가 강제될 때 — SSM Session Manager 포트 포워딩, AWS Client VPN으로 로컬을 VPC에 합류, 또는 통합 테스트를 VPC 안 CodeBuild 프로젝트에서 실행하는 옵션으로 넘어간다.
 
 ---
 
@@ -233,7 +246,7 @@ Peering·TGW와 비교한 PrivateLink의 강점:
 
 ### 5.1 Site-to-Site VPN — 인터넷 위에 IPsec 터널
 
-VPN은 인터넷을 통해 IPsec 터널을 만든다. AWS 쪽 Virtual Private Gateway(VGW) 또는 TGW와 온프레미스 라우터 사이에 두 개의 IPsec 터널이 자동으로 뜨고, 양쪽이 BGP나 정적 라우팅으로 IP 대역을 교환한다.
+VPN은 인터넷을 통해 IPsec(IP Security, 패킷을 암호화하고 무결성을 검증하는 네트워크 계층 보안 프로토콜) 터널을 만든다. AWS 쪽 Virtual Private Gateway(VGW) 또는 TGW와 온프레미스 라우터 사이에 두 개의 IPsec 터널이 자동으로 뜨고, 양쪽이 BGP나 정적 라우팅으로 IP 대역을 교환한다.
 
 - <strong>며칠 안에 구성 가능</strong> — 하드웨어 발주 없이 라우터 설정만으로 시작.
 - <strong>대역폭은 인터넷 회선에 종속</strong> — 한 터널당 1.25 Gbps 정도 한도.
@@ -393,14 +406,52 @@ DX 한 회선만 운영하다가 광케이블 사고로 통신이 끊긴 사례�
 
 ### D. 약어
 
+**AWS 서비스·구성**
+
 | 약어 | 풀이 |
 | --- | --- |
-| 온프렘 / 온프레미스 | On-Premises. 자사 데이터센터·사옥 서버실 등 AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라 |
+| VPC | Virtual Private Cloud. AWS 안에 격리해 만드는 가상 네트워크 |
+| EC2 | Elastic Compute Cloud. AWS의 가상 서버 |
+| RDS | Relational Database Service. AWS 매니지드 RDB |
+| Lambda | AWS 서버리스 컴퓨트 |
+| S3 | Simple Storage Service. AWS의 객체 스토리지 |
+| DynamoDB | AWS의 매니지드 NoSQL 키-값 DB |
+| KMS | Key Management Service. AWS 암호화 키 관리 |
+| ECR | Elastic Container Registry. AWS 컨테이너 이미지 저장소 |
+| SSM | AWS Systems Manager. EC2 통합 관리 (Session Manager 등) |
+| ALB / NLB | Application / Network Load Balancer (L7 / L4) |
+
+**연결·라우팅**
+
+| 약어 | 풀이 |
+| --- | --- |
+| VPC Endpoint | VPC 안에서 AWS 서비스로 인터넷 우회 없이 직접 통신하는 통로 (Gateway · Interface 두 종류) |
+| PrivateLink | 다른 조직의 서비스를 NLB 뒤에 노출하고 Consumer VPC에 ENI로 받는 단방향 연결 |
 | TGW | Transit Gateway. 다대다 VPC·온프레미스 허브 |
 | DX | Direct Connect. AWS와의 전용 회선 |
 | VPN | Virtual Private Network. 여기서는 Site-to-Site VPN |
 | VGW | Virtual Private Gateway. VPC 쪽 VPN 종단점 |
-| ENI | Elastic Network Interface. VPC 안의 가상 NIC |
+| IGW | Internet Gateway. VPC와 인터넷의 양방향 게이트웨이 |
+| NAT | Network Address Translation. 사설 IP ↔ 공인 IP 변환 |
+| NACL | Network Access Control List. Subnet 단위 stateless 방화벽 |
+| SG | Security Group. ENI 단위 stateful 방화벽 |
+
+**네트워크 기초**
+
+| 약어 | 풀이 |
+| --- | --- |
+| ENI | Elastic Network Interface. VPC에 사설 IP를 갖고 붙는 가상 NIC |
+| NIC | Network Interface Card. 네트워크 카드 (실물 또는 가상) |
+| CIDR | Classless Inter-Domain Routing. IP 대역을 `시작IP/prefix길이`로 표기 (예: `10.0.0.0/16`) |
 | BGP | Border Gateway Protocol. 동적 라우팅 프로토콜 |
-| CIDR | Classless Inter-Domain Routing. IP 주소 대역 표기 |
+| IPsec | IP Security. 패킷 암호화·무결성 검증 네트워크 계층 보안 프로토콜 |
+| L3 | OSI 네트워크 계층 (IP) |
 | AZ | Availability Zone. 리전 안의 데이터센터 단위 |
+
+**일반**
+
+| 약어 | 풀이 |
+| --- | --- |
+| SaaS | Software as a Service. 매니지드 소프트웨어 서비스 (Salesforce·Datadog 등) |
+| PoC | Proof of Concept. 가능성 검증용 시범 구현 |
+| 온프렘 / 온프레미스 | On-Premises. 자사 데이터센터·사옥 서버실 등 AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라 |
