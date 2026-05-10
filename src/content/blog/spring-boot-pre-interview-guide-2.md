@@ -52,7 +52,7 @@ heroImage: "../../assets/SpringBootPreInterviewGuide2.png"
 
 ### 1.1 환경별 DB 선택 기준
 
-> <strong>참고</strong>: Spring Boot 4 + Kotlin 프로젝트 셋업(kotlin-spring·kotlin-jpa plugin) 자체는 1편 1.1절에서 다뤘다. 2편은 그 위에서 도는 Database·Testing 영역에 집중한다.
+> <strong>참고</strong>: Spring Boot 4 + Kotlin 2.3 프로젝트 셋업(kotlin-spring·kotlin-jpa plugin) 자체는 1편 1.1절에서 다뤘다. 2편은 그 위에서 도는 Database·Testing 영역에 집중한다.
 
 환경마다 DB 선택과 `ddl-auto` 정책이 달라야 한다. 아래 표가 기준이다.
 

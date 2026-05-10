@@ -69,7 +69,7 @@ flowchart TB
 
 The arrows point in one direction for a reason. <strong>The Controller knows only the Service, the Service knows the Repository and Entity, and the Repository knows only the DB.</strong> Reverse dependencies — a Service that knows HTTP, an Entity that knows DTOs — are anti-patterns.
 
-> <strong>Note — Spring Boot 4 + Kotlin project setup</strong>: Spring Boot 4 recommends Java 21, but that matters less on a Kotlin project. The two Kotlin plugins are the key: <strong>kotlin-spring</strong> automatically marks all Spring-annotated classes as `open` (required when JPA and Spring Security generate proxies), and <strong>kotlin-jpa</strong> synthesizes a no-arg constructor on JPA entities. Add `kotlin("plugin.spring") version "2.x"` and `kotlin("plugin.jpa") version "2.x"` to `build.gradle.kts` and you're done. Lombok has no place here — data classes, `val`, and `var` handle everything Lombok used to.
+> <strong>Note — Spring Boot 4 + Kotlin 2.3 project setup</strong>: This post is written against <strong>Spring Boot 4 + Kotlin 2.3</strong>. Spring Boot 4 recommends Java 21, but that matters less on a Kotlin project. The two Kotlin plugins are the key: <strong>kotlin-spring</strong> automatically marks all Spring-annotated classes as `open` (required when JPA and Spring Security generate proxies), and <strong>kotlin-jpa</strong> synthesizes a no-arg constructor on JPA entities. Add `kotlin("plugin.spring") version "2.3"` and `kotlin("plugin.jpa") version "2.3"` to `build.gradle.kts` and you're done — the Kotlin 2.x line is binary-compatible across 2.0–2.3, so the code below also runs on earlier point releases. Lombok has no place here — data classes, `val`, and `var` handle everything Lombok used to.
 
 ### 1.2 Responsibility per Layer
 
@@ -982,8 +982,8 @@ For lazy loading, Hibernate generates <strong>subclass proxies of your Entity at
 ```kotlin
 // build.gradle.kts
 plugins {
-    kotlin("plugin.jpa") version "2.x"     // synthesizes no-arg ctor on @Entity
-    kotlin("plugin.spring") version "2.x"  // opens @Entity classes for proxying
+    kotlin("plugin.jpa") version "2.3"     // synthesizes no-arg ctor on @Entity
+    kotlin("plugin.spring") version "2.3"  // opens @Entity classes for proxying
 }
 ```
 

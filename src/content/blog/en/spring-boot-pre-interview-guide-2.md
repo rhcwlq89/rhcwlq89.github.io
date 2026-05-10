@@ -41,7 +41,7 @@ Read [the previous post](/blog/en/spring-boot-pre-interview-guide-1) first if yo
 
 ### 1.1 DB Selection Criteria per Environment
 
-> <strong>Note</strong>: Spring Boot 4 + Kotlin project setup (kotlin-spring · kotlin-jpa plugins) is covered in Part 1 §1.1. This post focuses on the Database and Testing layers that run on top of that foundation.
+> <strong>Note</strong>: Spring Boot 4 + Kotlin 2.3 project setup (kotlin-spring · kotlin-jpa plugins) is covered in Part 1 §1.1. This post focuses on the Database and Testing layers that run on top of that foundation.
 
 The DB choice and `ddl-auto` policy must differ per environment. Use the table below as the reference.
 

@@ -74,7 +74,7 @@ flowchart TB
 
 핵심은 화살표의 방향이다. <strong>Controller는 Service만 알고, Service는 Repository와 Entity를 알고, Repository는 DB만 안다.</strong> 역방향 의존(Service가 HTTP를 알거나, Entity가 DTO를 아는)은 전부 안티패턴이다.
 
-> <strong>참고 — Spring Boot 4 + Kotlin 프로젝트 셋업</strong>: Spring Boot 4는 Java 21을 권장하지만 Kotlin 프로젝트라면 그 영향이 적다. 핵심은 두 Kotlin plugin이다 — <strong>kotlin-spring</strong>은 Spring 어노테이션이 붙은 모든 클래스를 자동으로 open(상속 가능)하게 만들고(JPA·Spring Security가 프록시를 만들 때 필요), <strong>kotlin-jpa</strong>는 JPA Entity에 자동으로 no-arg 기본 생성자를 생성한다. `build.gradle.kts`에 `kotlin("plugin.spring") version "2.x"`와 `kotlin("plugin.jpa") version "2.x"`만 추가하면 끝이다. Lombok은 이 환경에서 안 쓴다 — data class·val/var가 모두 자동으로 처리한다.
+> <strong>참고 — Spring Boot 4 + Kotlin 2.3 프로젝트 셋업</strong>: 본 글은 <strong>Spring Boot 4 + Kotlin 2.3</strong> 기준이다. Spring Boot 4는 Java 21을 권장하지만 Kotlin 프로젝트라면 그 영향이 적다. 핵심은 두 Kotlin plugin이다 — <strong>kotlin-spring</strong>은 Spring 어노테이션이 붙은 모든 클래스를 자동으로 open(상속 가능)하게 만들고(JPA·Spring Security가 프록시를 만들 때 필요), <strong>kotlin-jpa</strong>는 JPA Entity에 자동으로 no-arg 기본 생성자를 생성한다. `build.gradle.kts`에 `kotlin("plugin.spring") version "2.3"`과 `kotlin("plugin.jpa") version "2.3"`만 추가하면 끝이다(Kotlin 2.x 시리즈는 백워드 호환이라 2.0~2.3 어느 버전이든 같은 코드가 작동). Lombok은 이 환경에서 안 쓴다 — data class·val/var가 모두 자동으로 처리한다.
 
 ### 1.2 계층별 책임
 
@@ -981,8 +981,8 @@ Hibernate는 지연 로딩을 위해 Entity의 <strong>서브클래스(프록시
 ```kotlin
 // build.gradle.kts
 plugins {
-    kotlin("plugin.jpa") version "2.x"     // @Entity에 무인자 생성자 자동 합성
-    kotlin("plugin.spring") version "2.x"  // @Entity 클래스의 final 해제 (프록시용)
+    kotlin("plugin.jpa") version "2.3"     // @Entity에 무인자 생성자 자동 합성
+    kotlin("plugin.spring") version "2.3"  // @Entity 클래스의 final 해제 (프록시용)
 }
 ```
 
