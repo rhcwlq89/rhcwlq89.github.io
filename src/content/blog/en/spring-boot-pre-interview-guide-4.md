@@ -1,9 +1,9 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 4: Performance & Optimization — N+1, Pagination, Caching, QueryDSL"
-description: "The trade-offs between the three N+1 solutions (Fetch Join, @EntityGraph, @BatchSize), when to choose Page vs Slice vs Cursor, how to decide between Caffeine and Redis, and when QueryDSL and Projection actually earn their keep — the performance optimization checkpoints that separate passing assignments from standout ones, from an evaluator's perspective."
+title: "Spring Boot Pre-Interview Guide Part 4: Performance & Optimization — Spring Boot 4 · Kotlin 2.3 N+1, Pagination, Caching, QueryDSL"
+description: "On Spring Boot 4 with Kotlin 2.3, learn the trade-offs between the three N+1 solutions (Fetch Join, @EntityGraph, @BatchSize), when to choose Page vs Slice vs Cursor, how to decide between Caffeine and Redis, and when QueryDSL and Projection actually earn their keep — the performance optimization checkpoints that separate passing assignments from standout ones, from an evaluator's perspective."
 pubDate: "2026-01-15T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "Performance", "JPA", "Cache", "Interview", "Practical Guide"]
+tags: ["Spring Boot", "Performance", "JPA", "Cache", "Interview", "Practical Guide", "Kotlin"]
 heroImage: "../../../assets/SpringBootPreInterviewGuide4.png"
 ---
 
@@ -11,7 +11,7 @@ heroImage: "../../../assets/SpringBootPreInterviewGuide4.png"
 
 "Where do I start with performance optimization to actually score points?"
 
-In pre-interview assignments, the performance section splits candidates cleanly. Setting LAZY loading with a global `@BatchSize` versus leaving EAGER in place — that single difference is what signals "this developer understands JPA."
+In pre-interview assignments, the performance section splits candidates cleanly. Setting LAZY loading with a global `@BatchSize` versus leaving EAGER in place — that one difference signals "this developer understands JPA."
 
 Parts 1–3 covered the four-layer architecture, Database & Testing, and Documentation & AOP. Part 4 is about reducing query costs on top of that foundation. The main topics are:
 
@@ -47,6 +47,8 @@ See [the previous post](/blog/en/spring-boot-pre-interview-guide-3) for Document
 
 ### 1.1 How N+1 Happens
 
+> <strong>Note</strong>: The Spring Boot 4 + Kotlin 2.3 project setup itself (kotlin-spring / kotlin-jpa plugins) was covered in [Part 1 §1.1](/blog/en/spring-boot-pre-interview-guide-1). Part 4 focuses on the Performance layer that runs on top of that setup. Kotlin 2.x is backward-compatible, so the same code works on 2.0–2.3.
+
 <strong>The N+1 problem occurs when 1 query fetches N records, and then N additional queries fire to load each record's associated data.</strong>
 
 "I fetched the order list with one query, but SELECT fires every time I access OrderItems" — that's the N+1 problem in practice.
@@ -69,20 +71,22 @@ sequenceDiagram
 
 Ten orders means 11 queries. A hundred means 101. Nested associations multiply this exponentially.
 
-```java
+```kotlin
 // Order : OrderItem = 1 : N relationship
-List<Order> orders = orderRepository.findAll(); // 1 query
+val orders = orderRepository.findAll() // 1 query
 
-for (Order order : orders) {
+for (order in orders) {
     // Fires an additional SELECT for each Order's items (N times)
-    List<OrderItem> items = order.getOrderItems();
-    items.forEach(item -> System.out.println(item.getProductName()));
+    val items = order.orderItems
+    items.forEach { println(it.productName) }
 }
 ```
 
 ### 1.2 LAZY Is the Rule — Two Scenarios Where It Still Leaks
 
-<strong>The baseline rule is: set every association to `FetchType.LAZY`.</strong> LAZY defers loading associated data until it's actually accessed. EAGER, by contrast, always fetches associated data alongside the parent.
+<strong>The baseline rule is: set every association to `FetchType.LAZY`.</strong> LAZY defers loading until first access. EAGER always fetches associated data alongside the parent.
+
+The kotlin-jpa plugin synthesizes a no-arg constructor on JPA entities automatically, so you don't need to add one manually (see Part 1 §1.1 for the setup).
 
 Even with LAZY in place, N+1 can still appear in two scenarios.
 
@@ -90,28 +94,27 @@ Even with LAZY in place, N+1 can still appear in two scenarios.
 
 The JPA spec sets the default fetch strategy for `@ManyToOne` and `@OneToOne` to `EAGER`. Without an explicit LAZY declaration, associated entities are pulled in every time the parent loads.
 
-```java
+```kotlin
 @Entity
-public class Order {
-
+class Order(
     // Default is EAGER — must be overridden
     @ManyToOne(fetch = FetchType.LAZY)
-    private Member member;
+    val member: Member,
 
     // @OneToMany defaults to LAZY, which is safer
     @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
-    private List<OrderItem> orderItems = new ArrayList<>();
-}
+    val orderItems: MutableList<OrderItem> = mutableListOf()
+)
 ```
 
 **Scenario 2 — EAGER associations still cause N+1 with JPQL**
 
 EAGER doesn't make JPQL automatically add a JOIN. JPQL executes the query as written, then fires additional queries for EAGER associations afterward. The result is still 1 + N.
 
-```java
+```kotlin
 // Even JPQL triggers extra queries for EAGER associations
 @Query("SELECT o FROM Order o")
-List<Order> findAll();
+fun findAll(): List<Order>
 // → SELECT * FROM orders
 // → SELECT * FROM member WHERE id = ? (EAGER fires N times)
 ```
@@ -126,17 +129,6 @@ List<Order> findAll();
 
 It's the most direct fix for N+1 — one query instead of N+1. But it has a critical constraint.
 
-```java
-public interface OrderRepository extends JpaRepository<Order, Long> {
-
-    @Query("SELECT DISTINCT o FROM Order o JOIN FETCH o.orderItems")
-    List<Order> findAllWithOrderItems();
-}
-```
-
-<details>
-<summary>Kotlin version</summary>
-
 ```kotlin
 interface OrderRepository : JpaRepository<Order, Long> {
 
@@ -144,8 +136,6 @@ interface OrderRepository : JpaRepository<Order, Long> {
     fun findAllWithOrderItems(): List<Order>
 }
 ```
-
-</details>
 
 > <strong>Caution</strong>: Combining a collection Fetch Join with `Pageable` causes Hibernate to load all rows into memory and page there. With large datasets, this is an OOM risk.
 
@@ -155,27 +145,27 @@ Why does the data multiply? If one Order has three OrderItems, the JOIN produces
 
 <strong>@EntityGraph overrides the fetch strategy per repository method using annotations, without writing JPQL.</strong>
 
-It uses the same JOIN strategy as Fetch Join, but you declare which paths to eager-load in `attributePaths` rather than writing a query string. Nested associations are specified as dot-separated paths in the array.
+It uses the same JOIN strategy as Fetch Join, but paths to eager-load are declared in `attributePaths` rather than written as a query string. Nested associations use dot-separated paths in the array.
 
-```java
-public interface OrderRepository extends JpaRepository<Order, Long> {
+```kotlin
+interface OrderRepository : JpaRepository<Order, Long> {
 
     // 1-level: Order -> OrderItems
-    @EntityGraph(attributePaths = {"orderItems"})
+    @EntityGraph(attributePaths = ["orderItems"])
     @Query("SELECT o FROM Order o")
-    List<Order> findAllWithOrderItemsGraph();
+    fun findAllWithOrderItemsGraph(): List<Order>
 
     // 2-level: Order -> OrderItems -> Product
-    @EntityGraph(attributePaths = {"orderItems", "orderItems.product"})
-    List<Order> findByStatus(OrderStatus status);
+    @EntityGraph(attributePaths = ["orderItems", "orderItems.product"])
+    fun findByStatus(status: OrderStatus): List<Order>
 
     // 3-level: Order -> OrderItems -> Product -> Category
-    @EntityGraph(attributePaths = {
+    @EntityGraph(attributePaths = [
         "orderItems",
         "orderItems.product",
         "orderItems.product.category"
-    })
-    Optional<Order> findWithFullDetailsById(Long id);
+    ])
+    fun findWithFullDetailsById(id: Long): Optional<Order>
 }
 ```
 
@@ -198,14 +188,13 @@ spring:
 
 You can also apply it directly to a specific field instead of globally.
 
-```java
+```kotlin
 @Entity
-public class Order {
-
+class Order(
     @BatchSize(size = 100)
     @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
-    private List<OrderItem> orderItems = new ArrayList<>();
-}
+    val orderItems: MutableList<OrderItem> = mutableListOf()
+)
 ```
 
 The before-and-after at the SQL level makes the improvement obvious.
@@ -248,80 +237,19 @@ There are three options for what to return from a paginated endpoint.
 | `CommonResponse<Page<T>>` | Consistent envelope if you're using it in §2 of Part 1 | Good fit |
 | Custom `PageResponse` | Only the fields you choose | Optional |
 
-Here's the baseline Service and Controller structure.
-
-```java
-@Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
-    public Page<ProductResponse> getProducts(Pageable pageable) {
-        return productRepository.findAll(pageable)
-            .map(ProductResponse::from);
-    }
-}
-```
-
-```java
-@RestController
-@RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
-public class ProductController {
-
-    private final ProductService productService;
-
-    @GetMapping
-    public Page<ProductResponse> getProducts(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
-            Pageable pageable) {
-        return productService.getProducts(pageable);
-    }
-}
-```
-
-<details>
-<summary>Custom PageResponse example (optional)</summary>
-
-```java
-public record PageResponse<T>(
-    List<T> content,
-    int page,
-    int size,
-    long totalElements,
-    int totalPages,
-    boolean hasNext
-) {
-    public static <T> PageResponse<T> from(Page<T> page) {
-        return new PageResponse<>(
-            page.getContent(),
-            page.getNumber(),
-            page.getSize(),
-            page.getTotalElements(),
-            page.getTotalPages(),
-            page.hasNext()
-        );
-    }
-}
-```
-
-</details>
-
-<details>
-<summary>Kotlin version</summary>
+Kotlin doesn't use Lombok — constructor injection is handled by primary constructor `val` parameters. Here's the baseline Service and Controller structure.
 
 ```kotlin
 @Service
 class ProductService(
     private val productRepository: ProductRepository
 ) {
-    fun getProducts(pageable: Pageable): Page<ProductResponse> {
-        return productRepository.findAll(pageable)
-            .map { ProductResponse.from(it) }
-    }
+    fun getProducts(pageable: Pageable): Page<ProductResponse> =
+        productRepository.findAll(pageable).map { ProductResponse.from(it) }
 }
+```
 
+```kotlin
 @RestController
 @RequestMapping("/api/v1/products")
 class ProductController(
@@ -331,8 +259,31 @@ class ProductController(
     fun getProducts(
         @PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC)
         pageable: Pageable
-    ): Page<ProductResponse> {
-        return productService.getProducts(pageable)
+    ): Page<ProductResponse> = productService.getProducts(pageable)
+}
+```
+
+<details>
+<summary>Custom PageResponse example (optional)</summary>
+
+```kotlin
+data class PageResponse<T>(
+    val content: List<T>,
+    val page: Int,
+    val size: Int,
+    val totalElements: Long,
+    val totalPages: Int,
+    val hasNext: Boolean
+) {
+    companion object {
+        fun <T> from(page: Page<T>): PageResponse<T> = PageResponse(
+            content = page.content,
+            page = page.number,
+            size = page.size,
+            totalElements = page.totalElements,
+            totalPages = page.totalPages,
+            hasNext = page.hasNext()
+        )
     }
 }
 ```
@@ -348,20 +299,20 @@ class ProductController(
 | <strong>Page</strong> | Yes (`totalElements`) | SELECT + COUNT | Admin lists, showing total pages |
 | <strong>Slice</strong> | No (`hasNext` only) | SELECT (size + 1) | Infinite scroll, only "next exists" needed |
 
-```java
+```kotlin
 // Page — when total count is needed (standard pagination)
-Page<Product> findByCategory(Category category, Pageable pageable);
+fun findByCategory(category: Category, pageable: Pageable): Page<Product>
 
 // Slice — when total count is unnecessary (e.g., infinite scroll)
-Slice<Product> findByCategory(Category category, Pageable pageable);
+fun findByCategory(category: Category, pageable: Pageable): Slice<Product>
 
 // List — when only data is needed, no pagination metadata
-List<Product> findByCategory(Category category, Pageable pageable);
+fun findByCategory(category: Category, pageable: Pageable): List<Product>
 ```
 
 ### 3.3 Offset vs Cursor — The Large-Dataset Fork
 
-The weakness of offset-based paging is that `OFFSET` forces a full scan of all preceding rows. On a table with millions of rows, requesting page 500 means scanning 500 × size rows before returning anything.
+The weakness of offset-based paging is that `OFFSET` forces a full scan of all preceding rows. On a millions-row table, requesting page 500 means scanning 500 × size rows before returning anything.
 
 <strong>Cursor-based paging uses the ID of the last fetched record as the starting point for the next page, eliminating the leading-row scan entirely.</strong>
 
@@ -380,38 +331,42 @@ flowchart TD
 
 The core of a cursor implementation is using the last item's ID as the anchor for the next request.
 
-```java
-public interface ProductRepository extends JpaRepository<Product, Long> {
+```kotlin
+interface ProductRepository : JpaRepository<Product, Long> {
 
     @Query("SELECT p FROM Product p WHERE p.id < :cursor ORDER BY p.id DESC")
-    List<Product> findByIdLessThan(@Param("cursor") Long cursor, Pageable pageable);
+    fun findByIdLessThan(@Param("cursor") cursor: Long, pageable: Pageable): List<Product>
 }
 ```
 
-```java
+```kotlin
 @Service
-public class ProductService {
+class ProductService(
+    private val productRepository: ProductRepository
+) {
+    fun getProductsWithCursor(cursor: Long?, size: Int): CursorResponse<ProductResponse> {
+        val pageable = PageRequest.of(0, size + 1) // +1 to detect hasNext
 
-    public CursorResponse<ProductResponse> getProductsWithCursor(Long cursor, int size) {
-        Pageable pageable = PageRequest.of(0, size + 1); // +1 to detect hasNext
-
-        List<Product> products = cursor == null
-            ? productRepository.findAll(
-                PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))).getContent()
-            : productRepository.findByIdLessThan(cursor, pageable);
-
-        boolean hasNext = products.size() > size;
-        if (hasNext) {
-            products = products.subList(0, size);
+        var products = if (cursor == null) {
+            productRepository.findAll(
+                PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))
+            ).content
+        } else {
+            productRepository.findByIdLessThan(cursor, pageable)
         }
 
-        Long nextCursor = hasNext ? products.get(products.size() - 1).getId() : null;
+        val hasNext = products.size > size
+        if (hasNext) {
+            products = products.subList(0, size)
+        }
 
-        return new CursorResponse<>(
-            products.stream().map(ProductResponse::from).toList(),
-            nextCursor,
-            hasNext
-        );
+        val nextCursor = if (hasNext) products.last().id else null
+
+        return CursorResponse(
+            content = products.map { ProductResponse.from(it) },
+            nextCursor = nextCursor,
+            hasNext = hasNext
+        )
     }
 }
 ```
@@ -419,14 +374,12 @@ public class ProductService {
 <details>
 <summary>CursorResponse class</summary>
 
-```java
-@Getter
-@AllArgsConstructor
-public class CursorResponse<T> {
-    private List<T> content;
-    private Long nextCursor;
-    private boolean hasNext;
-}
+```kotlin
+data class CursorResponse<T>(
+    val content: List<T>,
+    val nextCursor: Long?,
+    val hasNext: Boolean
+)
 ```
 
 </details>
@@ -437,12 +390,12 @@ public class CursorResponse<T> {
 
 When using Page, a COUNT query runs alongside the main query. For queries with multiple JOINs, the COUNT query can become just as slow. The fix is to split it.
 
-```java
+```kotlin
 @Query(
     value = "SELECT p FROM Product p JOIN FETCH p.category WHERE p.status = :status",
     countQuery = "SELECT COUNT(p) FROM Product p WHERE p.status = :status"
 )
-Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pageable);
+fun findByStatus(@Param("status") status: ProductStatus, pageable: Pageable): Page<Product>
 ```
 
 > <strong>Note</strong>: At assignment scale this level of optimization is rarely needed. That said, having the structure in place signals intentional design — which is exactly what evaluators look for.
@@ -463,35 +416,33 @@ Whether you swap in Caffeine or Redis later, the service code annotations don't 
 | `@CachePut` | Always executes, then updates the cache | Write/update methods |
 | `@CacheEvict` | Removes the entry from cache | Delete methods |
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
+class ProductService(
+    private val productRepository: ProductRepository
+) {
     @Cacheable(value = "product", key = "#productId")
-    public ProductDetailResponse getProductDetail(Long productId) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new ProductNotFoundException(productId));
-        return ProductDetailResponse.from(product);
+    fun getProductDetail(productId: Long): ProductDetailResponse {
+        val product = productRepository.findById(productId)
+            ?: throw ProductNotFoundException(productId)
+        return ProductDetailResponse.from(product)
     }
 
     @CachePut(value = "product", key = "#productId")
-    public ProductDetailResponse updateProduct(Long productId, ProductUpdateCommand command) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new ProductNotFoundException(productId));
-        product.update(command.getName(), command.getPrice());
-        return ProductDetailResponse.from(product);
+    fun updateProduct(productId: Long, command: ProductUpdateCommand): ProductDetailResponse {
+        val product = productRepository.findById(productId)
+            ?: throw ProductNotFoundException(productId)
+        product.update(command.name, command.price)
+        return ProductDetailResponse.from(product)
     }
 
     @CacheEvict(value = "product", key = "#productId")
-    public void deleteProduct(Long productId) {
-        productRepository.deleteById(productId);
+    fun deleteProduct(productId: Long) {
+        productRepository.deleteById(productId)
     }
 
     @CacheEvict(value = "product", allEntries = true)
-    public void clearProductCache() {
+    fun clearProductCache() {
         // Evicts all entries for the "product" cache
     }
 }
@@ -503,58 +454,69 @@ public class ProductService {
 
 No network round-trips — direct memory access makes it the fastest option available. For single-server assignments, it's the obvious default.
 
-```groovy
-implementation 'com.github.ben-manes.caffeine:caffeine'
-implementation 'org.springframework.boot:spring-boot-starter-cache'
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("caffeine", "com.github.ben-manes.caffeine", "caffeine").withoutVersion()
+            library("spring-boot-starter-cache", "org.springframework.boot", "spring-boot-starter-cache").withoutVersion()
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation(libs.caffeine)
+    implementation(libs.spring.boot.starter.cache)
+}
 ```
 
 The basic setup applies one policy to all caches.
 
-```java
+```kotlin
 @Configuration
 @EnableCaching
-public class CacheConfig {
+class CacheConfig {
 
     @Bean
-    public CacheManager cacheManager() {
-        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+    fun cacheManager(): CacheManager {
+        val cacheManager = CaffeineCacheManager()
         cacheManager.setCaffeine(Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(10, TimeUnit.MINUTES)
-            .recordStats());
-        return cacheManager;
+            .recordStats())
+        return cacheManager
     }
 }
 ```
 
 When you need different TTLs and sizes per cache, use `SimpleCacheManager`.
 
-```java
+```kotlin
 @Configuration
 @EnableCaching
-public class CacheConfig {
+class CacheConfig {
 
     @Bean
-    public CacheManager cacheManager() {
-        SimpleCacheManager cacheManager = new SimpleCacheManager();
-
-        List<CaffeineCache> caches = List.of(
+    fun cacheManager(): CacheManager {
+        val cacheManager = SimpleCacheManager()
+        cacheManager.setCaches(listOf(
             buildCache("product", 500, 30, TimeUnit.MINUTES),
             buildCache("category", 100, 1, TimeUnit.HOURS),
             buildCache("config", 50, 24, TimeUnit.HOURS)
-        );
-
-        cacheManager.setCaches(caches);
-        return cacheManager;
+        ))
+        return cacheManager
     }
 
-    private CaffeineCache buildCache(String name, int maxSize, long duration, TimeUnit unit) {
-        return new CaffeineCache(name, Caffeine.newBuilder()
+    private fun buildCache(name: String, maxSize: Long, duration: Long, unit: TimeUnit): CaffeineCache =
+        CaffeineCache(name, Caffeine.newBuilder()
             .maximumSize(maxSize)
             .expireAfterWrite(duration, unit)
             .recordStats()
-            .build());
-    }
+            .build())
 }
 ```
 
@@ -564,9 +526,24 @@ public class CacheConfig {
 
 In a multi-server environment, each instance maintaining its own local cache leads to inconsistent reads. Redis solves this by acting as a shared store.
 
-```groovy
-implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-implementation 'org.springframework.boot:spring-boot-starter-cache'
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("spring-boot-starter-data-redis", "org.springframework.boot", "spring-boot-starter-data-redis").withoutVersion()
+            library("spring-boot-starter-cache", "org.springframework.boot", "spring-boot-starter-cache").withoutVersion()
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation(libs.spring.boot.starter.data.redis)
+    implementation(libs.spring.boot.starter.cache)
+}
 ```
 
 ```yaml
@@ -581,29 +558,29 @@ spring:
       cache-null-values: false
 ```
 
-```java
+```kotlin
 @Configuration
 @EnableCaching
-public class RedisCacheConfig {
+class RedisCacheConfig {
 
     @Bean
-    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+    fun cacheManager(connectionFactory: RedisConnectionFactory): CacheManager {
+        val defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
             .entryTtl(Duration.ofMinutes(10))
             .serializeKeysWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new StringRedisSerializer()))
+                .fromSerializer(StringRedisSerializer()))
             .serializeValuesWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+                .fromSerializer(GenericJackson2JsonRedisSerializer()))
 
-        Map<String, RedisCacheConfiguration> cacheConfigurations = Map.of(
-            "product", defaultConfig.entryTtl(Duration.ofMinutes(30)),
-            "category", defaultConfig.entryTtl(Duration.ofHours(1))
-        );
+        val cacheConfigurations = mapOf(
+            "product" to defaultConfig.entryTtl(Duration.ofMinutes(30)),
+            "category" to defaultConfig.entryTtl(Duration.ofHours(1))
+        )
 
         return RedisCacheManager.builder(connectionFactory)
             .cacheDefaults(defaultConfig)
             .withInitialCacheConfigurations(cacheConfigurations)
-            .build();
+            .build()
     }
 }
 ```
@@ -647,7 +624,7 @@ Getting caching right means designing invalidation alongside the caching policy.
 1. `@CachePut` always executes the method and updates the cache.
 2. Reads always hit the cache.
 
-Two things to watch for. First, list caches are hard to invalidate — one item change may require full eviction (`allEntries = true`). Second, prefix cache keys so methods that share the same cache name don't collide.
+Two things to watch for. First, list caches need full eviction on any item change (`allEntries = true`). Second, prefix cache keys so methods sharing the same cache name don't collide.
 
 ---
 
@@ -661,32 +638,32 @@ Returning complete entities for list queries means pulling in columns you'll nev
 
 There are two approaches. Interface Projection defines an interface; Hibernate generates a proxy at runtime.
 
-```java
-public interface ProductSummary {
-    Long getId();
-    String getName();
-    Integer getPrice();
+```kotlin
+interface ProductSummary {
+    val id: Long
+    val name: String
+    val price: Int
 }
 
-public interface ProductRepository extends JpaRepository<Product, Long> {
-    List<ProductSummary> findByCategory(Category category);
+interface ProductRepository : JpaRepository<Product, Long> {
+    fun findByCategory(category: Category): List<ProductSummary>
 }
 ```
 
-DTO Projection constructs a record or class directly, with no proxy overhead — making it the faster option.
+DTO Projection constructs a data class directly, with no proxy overhead — making it the faster option.
 
-```java
-public record ProductSummaryDto(
-    Long id,
-    String name,
-    Integer price
-) {}
+```kotlin
+data class ProductSummaryDto(
+    val id: Long,
+    val name: String,
+    val price: Int
+)
 
-public interface ProductRepository extends JpaRepository<Product, Long> {
+interface ProductRepository : JpaRepository<Product, Long> {
 
     @Query("SELECT new com.example.dto.ProductSummaryDto(p.id, p.name, p.price) " +
            "FROM Product p WHERE p.category = :category")
-    List<ProductSummaryDto> findSummaryByCategory(@Param("category") Category category);
+    fun findSummaryByCategory(@Param("category") category: Category): List<ProductSummaryDto>
 }
 ```
 
@@ -695,78 +672,42 @@ Performance order: DTO Projection > Interface Projection > full Entity query. Th
 <details>
 <summary>Projection performance comparison</summary>
 
-```java
+```kotlin
 // 1. Full Entity query — all columns + associated entities
-List<Product> products = productRepository.findAll();
+val products: List<Product> = productRepository.findAll()
 
 // 2. Interface Projection — required columns only (proxy creation)
-List<ProductSummary> summaries = productRepository.findAllProjectedBy();
+val summaries: List<ProductSummary> = productRepository.findAllProjectedBy()
 
 // 3. DTO Projection — required columns only (direct instantiation, fastest)
-List<ProductSummaryDto> dtos = productRepository.findAllSummary();
+val dtos: List<ProductSummaryDto> = productRepository.findAllSummary()
 ```
 
 </details>
 
 ### 5.2 QueryDSL — Dynamic Queries
 
-<strong>QueryDSL is a framework that generates JPQL from type-safe Java code.</strong>
+<strong>QueryDSL is a framework that generates JPQL from type-safe Kotlin/Java code.</strong>
 
 JPQL is a string — compile-time errors aren't caught, and adding optional conditions requires string concatenation. QueryDSL solves both problems.
 
-```groovy
-implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
-annotationProcessor 'com.querydsl:querydsl-apt:5.0.0:jakarta'
-annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
-annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
-```
+In Kotlin, Q-class generation uses `kapt` (Kotlin Annotation Processing Tool) instead of `annotationProcessor`.
 
-The canonical pattern is to compose dynamic conditions as `BooleanExpression` methods that return `null` when the condition is not applicable — QueryDSL automatically omits null predicates from the WHERE clause.
+```kotlin
+// build.gradle.kts — QueryDSL + kapt setup
+plugins {
+    kotlin("kapt") version "2.3"
+}
 
-```java
-@Repository
-@RequiredArgsConstructor
-public class ProductQueryRepository {
-
-    private final JPAQueryFactory queryFactory;
-
-    public List<Product> searchProducts(ProductSearchCondition condition) {
-        return queryFactory
-            .selectFrom(product)
-            .where(
-                categoryEq(condition.getCategoryId()),
-                priceGoe(condition.getMinPrice()),
-                priceLoe(condition.getMaxPrice()),
-                nameContains(condition.getKeyword())
-            )
-            .orderBy(product.createdAt.desc())
-            .offset(condition.getOffset())
-            .limit(condition.getLimit())
-            .fetch();
-    }
-
-    private BooleanExpression categoryEq(Long categoryId) {
-        return categoryId != null ? product.category.id.eq(categoryId) : null;
-    }
-
-    private BooleanExpression priceGoe(Integer minPrice) {
-        return minPrice != null ? product.price.goe(minPrice) : null;
-    }
-
-    private BooleanExpression priceLoe(Integer maxPrice) {
-        return maxPrice != null ? product.price.loe(maxPrice) : null;
-    }
-
-    private BooleanExpression nameContains(String keyword) {
-        return StringUtils.hasText(keyword) ? product.name.contains(keyword) : null;
-    }
+dependencies {
+    implementation("com.querydsl:querydsl-jpa:5.0.0:jakarta")
+    kapt("com.querydsl:querydsl-apt:5.0.0:jakarta")
+    kapt("jakarta.annotation:jakarta.annotation-api")
+    kapt("jakarta.persistence:jakarta.persistence-api")
 }
 ```
 
-That's why QueryDSL makes dynamic queries easy — null condition methods simply vanish from the query without any if-branching in the caller.
-
-<details>
-<summary>Kotlin + QueryDSL</summary>
+The canonical pattern: compose each condition as a `BooleanExpression` method that returns `null` when not applicable. QueryDSL automatically omits null predicates from the WHERE clause.
 
 ```kotlin
 @Repository
@@ -802,7 +743,7 @@ class ProductQueryRepository(
 }
 ```
 
-</details>
+That's why QueryDSL makes dynamic queries easy — null condition methods simply vanish from the query without any if-branching in the caller.
 
 The right time to introduce QueryDSL: "two or more search conditions are optional." For straightforward CRUD, Spring Data JPA is cleaner.
 
@@ -818,14 +759,14 @@ The right time to introduce QueryDSL: "two or more search conditions are optiona
 
 In JPA, declaring `@Index` inside `@Table` on an entity includes the index in auto-generated DDL. It's how you signal intent — "this column needs an index" — directly in the code.
 
-```java
+```kotlin
 @Entity
-@Table(name = "product", indexes = {
-    @Index(name = "idx_product_category", columnList = "category_id"),
-    @Index(name = "idx_product_status_created", columnList = "status, created_at"),
-    @Index(name = "idx_product_name", columnList = "name")
-})
-public class Product {
+@Table(name = "product", indexes = [
+    Index(name = "idx_product_category", columnList = "category_id"),
+    Index(name = "idx_product_status_created", columnList = "status, created_at"),
+    Index(name = "idx_product_name", columnList = "name")
+])
+class Product {
     // ...
 }
 ```

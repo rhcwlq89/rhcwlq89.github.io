@@ -1,6 +1,6 @@
 ---
-title: "스프링 사전과제 가이드 4편: Performance & Optimization — N+1·페이지네이션·캐싱·QueryDSL"
-description: "N+1 문제를 잡는 세 가지 도구(Fetch Join·@EntityGraph·@BatchSize)의 트레이드오프, Page/Slice/Cursor 중 언제 무엇을 쓸지, Caffeine과 Redis 중 어떤 캐시를 고를지, QueryDSL 동적 쿼리와 Projection 적용 기준까지 — 성능 최적화 영역에서 가점과 감점이 갈리는 포인트만 평가자 시점으로 정리했다."
+title: "스프링 사전과제 가이드 4편: Performance & Optimization — Spring Boot 4 · Kotlin 2.3 N+1·페이지네이션·캐싱·QueryDSL"
+description: "Spring Boot 4 + Kotlin 2.3 환경에서 N+1 문제를 잡는 세 가지 도구(Fetch Join·@EntityGraph·@BatchSize)의 트레이드오프, Page/Slice/Cursor 중 언제 무엇을 쓸지, Caffeine과 Redis 중 어떤 캐시를 고를지, QueryDSL 동적 쿼리와 Projection 적용 기준까지 — 성능 최적화 영역에서 가점과 감점이 갈리는 포인트만 평가자 시점으로 정리했다."
 pubDate: 2026-01-15T10:00:00+09:00
 tags:
   - Spring Boot
@@ -9,6 +9,7 @@ tags:
   - Cache
   - Backend
   - 사전과제
+  - Kotlin
 heroImage: "../../assets/SpringBootPreInterviewGuide4.png"
 ---
 
@@ -52,6 +53,8 @@ heroImage: "../../assets/SpringBootPreInterviewGuide4.png"
 
 ### 1.1 N+1 발생 흐름
 
+> <strong>참고</strong>: Spring Boot 4 + Kotlin 2.3 프로젝트 셋업(kotlin-spring·kotlin-jpa plugin 등) 자체는 [1편 1.1절](/blog/spring-boot-pre-interview-guide-1)에서 다뤘다. 4편은 그 위에서 도는 Performance 영역에 집중한다. Kotlin 2.x 시리즈는 백워드 호환이라 같은 코드가 2.0~2.3 모두 작동한다.
+
 <strong>N+1 문제는 1번의 쿼리로 N개의 레코드를 가져온 뒤, 각 레코드의 연관 데이터를 조회하기 위해 N번의 추가 쿼리가 발생하는 현상이다.</strong>
 
 "쿼리 1번으로 주문 목록을 가져왔는데, OrderItem을 접근할 때마다 SELECT가 터진다"는 게 N+1의 실체다.
@@ -74,20 +77,22 @@ sequenceDiagram
 
 10개의 주문이면 1 + 10 = 11번 쿼리다. 100개면 101번. 연관이 중첩되면 기하급수로 늘어난다.
 
-```java
+```kotlin
 // Order : OrderItem = 1 : N 관계
-List<Order> orders = orderRepository.findAll(); // 1번 쿼리
+val orders = orderRepository.findAll() // 1번 쿼리
 
-for (Order order : orders) {
+for (order in orders) {
     // 각 Order마다 OrderItem 조회 쿼리 발생 (N번)
-    List<OrderItem> items = order.getOrderItems();
-    items.forEach(item -> System.out.println(item.getProductName()));
+    val items = order.orderItems
+    items.forEach { println(it.productName) }
 }
 ```
 
 ### 1.2 LAZY가 기본 — 그래도 새는 두 시나리오
 
-<strong>모든 연관관계는 `FetchType.LAZY`로 설정하는 것이 기본 원칙이다.</strong> LAZY는 연관 데이터를 실제 접근 시점까지 쿼리를 미룬다. EAGER는 부모 로딩과 동시에 연관 데이터를 가져온다.
+<strong>모든 연관관계는 `FetchType.LAZY`로 설정하는 것이 기본 원칙이다.</strong> LAZY는 연관 데이터를 실제 접근 시점까지 쿼리를 미룬다. EAGER는 부모 로딩과 동시에 연관 데이터를 불러온다.
+
+kotlin-jpa 플러그인이 JPA Entity에 no-arg 생성자를 자동으로 합성하므로, 직접 추가할 필요가 없다(1편 1.1절 참고).
 
 그런데 LAZY로 설정해도 N+1이 터지는 시나리오가 두 가지 있다.
 
@@ -95,28 +100,27 @@ for (Order order : orders) {
 
 JPA 스펙에서 `@ManyToOne`, `@OneToOne`의 기본 fetch 전략은 `EAGER`다. 명시적으로 LAZY를 선언하지 않으면 부모 로딩 시 연관 Entity가 항상 따라온다.
 
-```java
+```kotlin
 @Entity
-public class Order {
-
+class Order(
     // 기본값 EAGER — 반드시 LAZY로 바꿔야 한다
     @ManyToOne(fetch = FetchType.LAZY)
-    private Member member;
+    val member: Member,
 
     // @OneToMany는 기본값이 LAZY라 그나마 낫다
     @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
-    private List<OrderItem> orderItems = new ArrayList<>();
-}
+    val orderItems: MutableList<OrderItem> = mutableListOf()
+)
 ```
 
 **시나리오 2 — JPQL에서는 EAGER도 N+1**
 
 연관관계가 EAGER라도 JPQL이 JOIN을 자동으로 넣지 않는다. JPQL은 쿼리를 그대로 실행한 뒤 EAGER 설정을 보고 추가 쿼리를 발사한다. 결국 1 + N이다.
 
-```java
+```kotlin
 // JPQL로 조회해도 EAGER 연관관계는 추가 쿼리가 발생한다
 @Query("SELECT o FROM Order o")
-List<Order> findAll();
+fun findAll(): List<Order>
 // → SELECT * FROM orders
 // → SELECT * FROM member WHERE id = ? (EAGER라서 N번 추가)
 ```
@@ -131,17 +135,6 @@ List<Order> findAll();
 
 N+1을 단 1번의 쿼리로 해결하는 가장 직접적인 방법이다. 그러나 치명적인 한계가 있다.
 
-```java
-public interface OrderRepository extends JpaRepository<Order, Long> {
-
-    @Query("SELECT DISTINCT o FROM Order o JOIN FETCH o.orderItems")
-    List<Order> findAllWithOrderItems();
-}
-```
-
-<details>
-<summary>Kotlin 버전</summary>
-
 ```kotlin
 interface OrderRepository : JpaRepository<Order, Long> {
 
@@ -149,8 +142,6 @@ interface OrderRepository : JpaRepository<Order, Long> {
     fun findAllWithOrderItems(): List<Order>
 }
 ```
-
-</details>
 
 > <strong>주의</strong>: 컬렉션 Fetch Join + 페이징은 Hibernate가 경고를 남긴다. 전체 데이터를 메모리에 올린 뒤 페이징하므로 OOM 위험이 있다.
 
@@ -162,25 +153,25 @@ interface OrderRepository : JpaRepository<Order, Long> {
 
 Fetch Join과 동일한 JOIN 전략을 사용하지만, JPQL을 직접 작성하지 않아도 된다. 중첩 연관관계도 attributePaths 배열로 선언한다.
 
-```java
-public interface OrderRepository extends JpaRepository<Order, Long> {
+```kotlin
+interface OrderRepository : JpaRepository<Order, Long> {
 
     // 1단계 연관관계: Order → OrderItems
-    @EntityGraph(attributePaths = {"orderItems"})
+    @EntityGraph(attributePaths = ["orderItems"])
     @Query("SELECT o FROM Order o")
-    List<Order> findAllWithOrderItemsGraph();
+    fun findAllWithOrderItemsGraph(): List<Order>
 
     // 2단계 연관관계: Order → OrderItems → Product
-    @EntityGraph(attributePaths = {"orderItems", "orderItems.product"})
-    List<Order> findByStatus(OrderStatus status);
+    @EntityGraph(attributePaths = ["orderItems", "orderItems.product"])
+    fun findByStatus(status: OrderStatus): List<Order>
 
     // 3단계 연관관계: Order → OrderItems → Product → Category
-    @EntityGraph(attributePaths = {
+    @EntityGraph(attributePaths = [
         "orderItems",
         "orderItems.product",
         "orderItems.product.category"
-    })
-    Optional<Order> findWithFullDetailsById(Long id);
+    ])
+    fun findWithFullDetailsById(id: Long): Optional<Order>
 }
 ```
 
@@ -203,14 +194,13 @@ spring:
 
 전역 설정 대신 Entity 필드에 직접 붙일 수도 있다.
 
-```java
+```kotlin
 @Entity
-public class Order {
-
+class Order(
     @BatchSize(size = 100)
     @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
-    private List<OrderItem> orderItems = new ArrayList<>();
-}
+    val orderItems: MutableList<OrderItem> = mutableListOf()
+)
 ```
 
 적용 전후 쿼리 차이를 보면 차이가 명확하다.
@@ -253,80 +243,19 @@ SELECT * FROM order_item WHERE order_id IN (1, 2, 3, ..., 10);
 | `CommonResponse<Page<T>>` | 일관된 응답 형식 | 1편에서 CommonResponse를 쓴다면 적합 |
 | 커스텀 PageResponse | 필요한 필드만 선택 | 선택 사항 |
 
-아래는 Service와 Controller에서의 기본 구조다.
-
-```java
-@Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
-    public Page<ProductResponse> getProducts(Pageable pageable) {
-        return productRepository.findAll(pageable)
-            .map(ProductResponse::from);
-    }
-}
-```
-
-```java
-@RestController
-@RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
-public class ProductController {
-
-    private final ProductService productService;
-
-    @GetMapping
-    public Page<ProductResponse> getProducts(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
-            Pageable pageable) {
-        return productService.getProducts(pageable);
-    }
-}
-```
-
-<details>
-<summary>커스텀 PageResponse 예시 (선택)</summary>
-
-```java
-public record PageResponse<T>(
-    List<T> content,
-    int page,
-    int size,
-    long totalElements,
-    int totalPages,
-    boolean hasNext
-) {
-    public static <T> PageResponse<T> from(Page<T> page) {
-        return new PageResponse<>(
-            page.getContent(),
-            page.getNumber(),
-            page.getSize(),
-            page.getTotalElements(),
-            page.getTotalPages(),
-            page.hasNext()
-        );
-    }
-}
-```
-
-</details>
-
-<details>
-<summary>Kotlin 버전</summary>
+Kotlin은 Lombok을 쓰지 않는다 — 주입은 primary constructor의 `val` 파라미터로 처리한다. 아래는 Service와 Controller에서의 기본 구조다.
 
 ```kotlin
 @Service
 class ProductService(
     private val productRepository: ProductRepository
 ) {
-    fun getProducts(pageable: Pageable): Page<ProductResponse> {
-        return productRepository.findAll(pageable)
-            .map { ProductResponse.from(it) }
-    }
+    fun getProducts(pageable: Pageable): Page<ProductResponse> =
+        productRepository.findAll(pageable).map { ProductResponse.from(it) }
 }
+```
 
+```kotlin
 @RestController
 @RequestMapping("/api/v1/products")
 class ProductController(
@@ -336,8 +265,31 @@ class ProductController(
     fun getProducts(
         @PageableDefault(size = 20, sort = ["createdAt"], direction = Sort.Direction.DESC)
         pageable: Pageable
-    ): Page<ProductResponse> {
-        return productService.getProducts(pageable)
+    ): Page<ProductResponse> = productService.getProducts(pageable)
+}
+```
+
+<details>
+<summary>커스텀 PageResponse 예시 (선택)</summary>
+
+```kotlin
+data class PageResponse<T>(
+    val content: List<T>,
+    val page: Int,
+    val size: Int,
+    val totalElements: Long,
+    val totalPages: Int,
+    val hasNext: Boolean
+) {
+    companion object {
+        fun <T> from(page: Page<T>): PageResponse<T> = PageResponse(
+            content = page.content,
+            page = page.number,
+            size = page.size,
+            totalElements = page.totalElements,
+            totalPages = page.totalPages,
+            hasNext = page.hasNext()
+        )
     }
 }
 ```
@@ -353,15 +305,15 @@ class ProductController(
 | <strong>Page</strong> | 포함 (`totalElements`) | SELECT + COUNT | 관리자 목록, 전체 페이지 수 표시 |
 | <strong>Slice</strong> | 미포함 (`hasNext`만) | SELECT (size + 1) | 무한 스크롤 초기, 다음 여부만 필요 |
 
-```java
+```kotlin
 // Page - 전체 개수가 필요한 경우 (일반적인 페이지네이션)
-Page<Product> findByCategory(Category category, Pageable pageable);
+fun findByCategory(category: Category, pageable: Pageable): Page<Product>
 
 // Slice - 무한 스크롤 등 전체 개수가 불필요한 경우
-Slice<Product> findByCategory(Category category, Pageable pageable);
+fun findByCategory(category: Category, pageable: Pageable): Slice<Product>
 
 // List - 페이징 정보 없이 데이터만 필요한 경우
-List<Product> findByCategory(Category category, Pageable pageable);
+fun findByCategory(category: Category, pageable: Pageable): List<Product>
 ```
 
 ### 3.3 Offset vs Cursor — 대용량의 분기
@@ -385,39 +337,43 @@ flowchart TD
 
 Cursor 구현의 핵심은 "마지막 항목의 ID를 다음 요청의 기준으로 사용"하는 것이다.
 
-```java
-public interface ProductRepository extends JpaRepository<Product, Long> {
+```kotlin
+interface ProductRepository : JpaRepository<Product, Long> {
 
     // ID 기반 커서 페이지네이션
     @Query("SELECT p FROM Product p WHERE p.id < :cursor ORDER BY p.id DESC")
-    List<Product> findByIdLessThan(@Param("cursor") Long cursor, Pageable pageable);
+    fun findByIdLessThan(@Param("cursor") cursor: Long, pageable: Pageable): List<Product>
 }
 ```
 
-```java
+```kotlin
 @Service
-public class ProductService {
+class ProductService(
+    private val productRepository: ProductRepository
+) {
+    fun getProductsWithCursor(cursor: Long?, size: Int): CursorResponse<ProductResponse> {
+        val pageable = PageRequest.of(0, size + 1) // 다음 페이지 확인용 +1
 
-    public CursorResponse<ProductResponse> getProductsWithCursor(Long cursor, int size) {
-        Pageable pageable = PageRequest.of(0, size + 1); // 다음 페이지 확인용 +1
-
-        List<Product> products = cursor == null
-            ? productRepository.findAll(
-                PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))).getContent()
-            : productRepository.findByIdLessThan(cursor, pageable);
-
-        boolean hasNext = products.size() > size;
-        if (hasNext) {
-            products = products.subList(0, size);
+        var products = if (cursor == null) {
+            productRepository.findAll(
+                PageRequest.of(0, size + 1, Sort.by(Sort.Direction.DESC, "id"))
+            ).content
+        } else {
+            productRepository.findByIdLessThan(cursor, pageable)
         }
 
-        Long nextCursor = hasNext ? products.get(products.size() - 1).getId() : null;
+        val hasNext = products.size > size
+        if (hasNext) {
+            products = products.subList(0, size)
+        }
 
-        return new CursorResponse<>(
-            products.stream().map(ProductResponse::from).toList(),
-            nextCursor,
-            hasNext
-        );
+        val nextCursor = if (hasNext) products.last().id else null
+
+        return CursorResponse(
+            content = products.map { ProductResponse.from(it) },
+            nextCursor = nextCursor,
+            hasNext = hasNext
+        )
     }
 }
 ```
@@ -425,14 +381,12 @@ public class ProductService {
 <details>
 <summary>CursorResponse 클래스</summary>
 
-```java
-@Getter
-@AllArgsConstructor
-public class CursorResponse<T> {
-    private List<T> content;
-    private Long nextCursor;
-    private boolean hasNext;
-}
+```kotlin
+data class CursorResponse<T>(
+    val content: List<T>,
+    val nextCursor: Long?,
+    val hasNext: Boolean
+)
 ```
 
 </details>
@@ -443,12 +397,12 @@ public class CursorResponse<T> {
 
 Page를 쓸 때 COUNT 쿼리도 함께 실행된다. JOIN이 많은 복잡한 조회에서는 COUNT 쿼리도 느려진다. 이때는 countQuery를 분리한다.
 
-```java
+```kotlin
 @Query(
     value = "SELECT p FROM Product p JOIN FETCH p.category WHERE p.status = :status",
     countQuery = "SELECT COUNT(p) FROM Product p WHERE p.status = :status"
 )
-Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pageable);
+fun findByStatus(@Param("status") status: ProductStatus, pageable: Pageable): Page<Product>
 ```
 
 > <strong>참고</strong>: 과제 규모에서는 이 수준의 최적화가 필요한 경우가 드물다. 구조 자체를 알고 코드에 적용해두면 "의도적으로 설계했다"는 신호가 된다.
@@ -469,35 +423,33 @@ Page<Product> findByStatus(@Param("status") ProductStatus status, Pageable pagea
 | `@CachePut` | 항상 실행 후 캐시 갱신 | 수정 메서드 |
 | `@CacheEvict` | 캐시에서 해당 키 제거 | 삭제 메서드 |
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class ProductService {
-
-    private final ProductRepository productRepository;
-
+class ProductService(
+    private val productRepository: ProductRepository
+) {
     @Cacheable(value = "product", key = "#productId")
-    public ProductDetailResponse getProductDetail(Long productId) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new ProductNotFoundException(productId));
-        return ProductDetailResponse.from(product);
+    fun getProductDetail(productId: Long): ProductDetailResponse {
+        val product = productRepository.findById(productId)
+            ?: throw ProductNotFoundException(productId)
+        return ProductDetailResponse.from(product)
     }
 
     @CachePut(value = "product", key = "#productId")
-    public ProductDetailResponse updateProduct(Long productId, ProductUpdateCommand command) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new ProductNotFoundException(productId));
-        product.update(command.getName(), command.getPrice());
-        return ProductDetailResponse.from(product);
+    fun updateProduct(productId: Long, command: ProductUpdateCommand): ProductDetailResponse {
+        val product = productRepository.findById(productId)
+            ?: throw ProductNotFoundException(productId)
+        product.update(command.name, command.price)
+        return ProductDetailResponse.from(product)
     }
 
     @CacheEvict(value = "product", key = "#productId")
-    public void deleteProduct(Long productId) {
-        productRepository.deleteById(productId);
+    fun deleteProduct(productId: Long) {
+        productRepository.deleteById(productId)
     }
 
     @CacheEvict(value = "product", allEntries = true)
-    public void clearProductCache() {
+    fun clearProductCache() {
         // 캐시 전체 제거만 수행
     }
 }
@@ -509,59 +461,69 @@ public class ProductService {
 
 네트워크 통신 없이 메모리 직접 접근이라 속도가 가장 빠르다. 단일 서버 과제에서 기본 선택지다.
 
-```groovy
-// build.gradle
-implementation 'com.github.ben-manes.caffeine:caffeine'
-implementation 'org.springframework.boot:spring-boot-starter-cache'
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("caffeine", "com.github.ben-manes.caffeine", "caffeine").withoutVersion()
+            library("spring-boot-starter-cache", "org.springframework.boot", "spring-boot-starter-cache").withoutVersion()
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation(libs.caffeine)
+    implementation(libs.spring.boot.starter.cache)
+}
 ```
 
 기본 설정은 전체 캐시에 동일한 정책을 적용한다.
 
-```java
+```kotlin
 @Configuration
 @EnableCaching
-public class CacheConfig {
+class CacheConfig {
 
     @Bean
-    public CacheManager cacheManager() {
-        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+    fun cacheManager(): CacheManager {
+        val cacheManager = CaffeineCacheManager()
         cacheManager.setCaffeine(Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(10, TimeUnit.MINUTES)
-            .recordStats());
-        return cacheManager;
+            .recordStats())
+        return cacheManager
     }
 }
 ```
 
 캐시별로 TTL과 용량을 다르게 설정할 때는 SimpleCacheManager를 쓴다.
 
-```java
+```kotlin
 @Configuration
 @EnableCaching
-public class CacheConfig {
+class CacheConfig {
 
     @Bean
-    public CacheManager cacheManager() {
-        SimpleCacheManager cacheManager = new SimpleCacheManager();
-
-        List<CaffeineCache> caches = List.of(
+    fun cacheManager(): CacheManager {
+        val cacheManager = SimpleCacheManager()
+        cacheManager.setCaches(listOf(
             buildCache("product", 500, 30, TimeUnit.MINUTES),
             buildCache("category", 100, 1, TimeUnit.HOURS),
             buildCache("config", 50, 24, TimeUnit.HOURS)
-        );
-
-        cacheManager.setCaches(caches);
-        return cacheManager;
+        ))
+        return cacheManager
     }
 
-    private CaffeineCache buildCache(String name, int maxSize, long duration, TimeUnit unit) {
-        return new CaffeineCache(name, Caffeine.newBuilder()
+    private fun buildCache(name: String, maxSize: Long, duration: Long, unit: TimeUnit): CaffeineCache =
+        CaffeineCache(name, Caffeine.newBuilder()
             .maximumSize(maxSize)
             .expireAfterWrite(duration, unit)
             .recordStats()
-            .build());
-    }
+            .build())
 }
 ```
 
@@ -571,9 +533,24 @@ public class CacheConfig {
 
 멀티 서버 환경에서 각 인스턴스가 로컬 캐시를 따로 유지하면 데이터 불일치가 생긴다. Redis는 이 문제를 해결하는 공유 저장소 역할을 한다.
 
-```groovy
-implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-implementation 'org.springframework.boot:spring-boot-starter-cache'
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("spring-boot-starter-data-redis", "org.springframework.boot", "spring-boot-starter-data-redis").withoutVersion()
+            library("spring-boot-starter-cache", "org.springframework.boot", "spring-boot-starter-cache").withoutVersion()
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation(libs.spring.boot.starter.data.redis)
+    implementation(libs.spring.boot.starter.cache)
+}
 ```
 
 ```yaml
@@ -588,29 +565,29 @@ spring:
       cache-null-values: false
 ```
 
-```java
+```kotlin
 @Configuration
 @EnableCaching
-public class RedisCacheConfig {
+class RedisCacheConfig {
 
     @Bean
-    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+    fun cacheManager(connectionFactory: RedisConnectionFactory): CacheManager {
+        val defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
             .entryTtl(Duration.ofMinutes(10))
             .serializeKeysWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new StringRedisSerializer()))
+                .fromSerializer(StringRedisSerializer()))
             .serializeValuesWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+                .fromSerializer(GenericJackson2JsonRedisSerializer()))
 
-        Map<String, RedisCacheConfiguration> cacheConfigurations = Map.of(
-            "product", defaultConfig.entryTtl(Duration.ofMinutes(30)),
-            "category", defaultConfig.entryTtl(Duration.ofHours(1))
-        );
+        val cacheConfigurations = mapOf(
+            "product" to defaultConfig.entryTtl(Duration.ofMinutes(30)),
+            "category" to defaultConfig.entryTtl(Duration.ofHours(1))
+        )
 
         return RedisCacheManager.builder(connectionFactory)
             .cacheDefaults(defaultConfig)
             .withInitialCacheConfigurations(cacheConfigurations)
-            .build();
+            .build()
     }
 }
 ```
@@ -668,32 +645,32 @@ flowchart TD
 
 두 가지 방식이 있다. Interface Projection은 인터페이스를 정의하면 Hibernate가 프록시를 생성한다.
 
-```java
-public interface ProductSummary {
-    Long getId();
-    String getName();
-    Integer getPrice();
+```kotlin
+interface ProductSummary {
+    val id: Long
+    val name: String
+    val price: Int
 }
 
-public interface ProductRepository extends JpaRepository<Product, Long> {
-    List<ProductSummary> findByCategory(Category category);
+interface ProductRepository : JpaRepository<Product, Long> {
+    fun findByCategory(category: Category): List<ProductSummary>
 }
 ```
 
-DTO Projection은 record나 클래스로 직접 생성하므로 프록시 오버헤드가 없어 성능이 더 낫다.
+DTO Projection은 data class로 직접 생성하므로 프록시 오버헤드가 없어 성능이 더 낫다.
 
-```java
-public record ProductSummaryDto(
-    Long id,
-    String name,
-    Integer price
-) {}
+```kotlin
+data class ProductSummaryDto(
+    val id: Long,
+    val name: String,
+    val price: Int
+)
 
-public interface ProductRepository extends JpaRepository<Product, Long> {
+interface ProductRepository : JpaRepository<Product, Long> {
 
     @Query("SELECT new com.example.dto.ProductSummaryDto(p.id, p.name, p.price) " +
            "FROM Product p WHERE p.category = :category")
-    List<ProductSummaryDto> findSummaryByCategory(@Param("category") Category category);
+    fun findSummaryByCategory(@Param("category") category: Category): List<ProductSummaryDto>
 }
 ```
 
@@ -702,78 +679,42 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 <details>
 <summary>Projection 성능 비교 코드</summary>
 
-```java
+```kotlin
 // 1. Entity 전체 조회 - 모든 컬럼 + 연관 Entity
-List<Product> products = productRepository.findAll();
+val products: List<Product> = productRepository.findAll()
 
 // 2. Interface Projection - 필요한 컬럼만 (Proxy 생성)
-List<ProductSummary> summaries = productRepository.findAllProjectedBy();
+val summaries: List<ProductSummary> = productRepository.findAllProjectedBy()
 
 // 3. DTO Projection - 필요한 컬럼만 (직접 생성, 가장 빠름)
-List<ProductSummaryDto> dtos = productRepository.findAllSummary();
+val dtos: List<ProductSummaryDto> = productRepository.findAllSummary()
 ```
 
 </details>
 
 ### 5.2 QueryDSL — 동적 쿼리
 
-<strong>QueryDSL은 타입 안전한 Java 코드로 JPQL을 생성하는 프레임워크다.</strong>
+<strong>QueryDSL은 타입 안전한 Kotlin/Java 코드로 JPQL을 생성하는 프레임워크다.</strong>
 
 JPQL은 문자열이라 컴파일 타임에 오류를 잡지 못하고, 동적 조건을 붙이려면 문자열 조작이 필요하다. QueryDSL은 이 두 문제를 해결한다.
 
-```groovy
-implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
-annotationProcessor 'com.querydsl:querydsl-apt:5.0.0:jakarta'
-annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
-annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
-```
+Kotlin에서는 `annotationProcessor` 대신 `kapt`(Kotlin Annotation Processing Tool)로 Q 클래스를 생성한다.
 
-동적 검색 조건을 BooleanExpression으로 구성한 전형적인 패턴은 다음과 같다.
+```kotlin
+// build.gradle.kts — QueryDSL + kapt 설정
+plugins {
+    kotlin("kapt") version "2.3"
+}
 
-```java
-@Repository
-@RequiredArgsConstructor
-public class ProductQueryRepository {
-
-    private final JPAQueryFactory queryFactory;
-
-    public List<Product> searchProducts(ProductSearchCondition condition) {
-        return queryFactory
-            .selectFrom(product)
-            .where(
-                categoryEq(condition.getCategoryId()),
-                priceGoe(condition.getMinPrice()),
-                priceLoe(condition.getMaxPrice()),
-                nameContains(condition.getKeyword())
-            )
-            .orderBy(product.createdAt.desc())
-            .offset(condition.getOffset())
-            .limit(condition.getLimit())
-            .fetch();
-    }
-
-    private BooleanExpression categoryEq(Long categoryId) {
-        return categoryId != null ? product.category.id.eq(categoryId) : null;
-    }
-
-    private BooleanExpression priceGoe(Integer minPrice) {
-        return minPrice != null ? product.price.goe(minPrice) : null;
-    }
-
-    private BooleanExpression priceLoe(Integer maxPrice) {
-        return maxPrice != null ? product.price.loe(maxPrice) : null;
-    }
-
-    private BooleanExpression nameContains(String keyword) {
-        return StringUtils.hasText(keyword) ? product.name.contains(keyword) : null;
-    }
+dependencies {
+    implementation("com.querydsl:querydsl-jpa:5.0.0:jakarta")
+    kapt("com.querydsl:querydsl-apt:5.0.0:jakarta")
+    kapt("jakarta.annotation:jakarta.annotation-api")
+    kapt("jakarta.persistence:jakarta.persistence-api")
 }
 ```
 
-조건 메서드가 null을 반환하면 QueryDSL이 해당 WHERE 절을 자동으로 제외한다. 이게 "동적 쿼리가 쉽다"는 이유다.
-
-<details>
-<summary>Kotlin + QueryDSL</summary>
+동적 검색 조건을 BooleanExpression으로 구성한 전형적인 패턴은 다음과 같다.
 
 ```kotlin
 @Repository
@@ -809,7 +750,7 @@ class ProductQueryRepository(
 }
 ```
 
-</details>
+조건 메서드가 null을 반환하면 QueryDSL이 해당 WHERE 절을 자동으로 제외한다. 이게 "동적 쿼리가 쉽다"는 이유다.
 
 QueryDSL 도입이 맞는 시점은 "검색 조건이 2개 이상이고, 선택적으로 적용된다"이다. 단순 CRUD는 Spring Data JPA가 더 간결하다.
 
@@ -825,14 +766,14 @@ QueryDSL 도입이 맞는 시점은 "검색 조건이 2개 이상이고, 선택�
 
 JPA에서는 Entity `@Table` 어노테이션에 `@Index`를 선언하면 DDL 자동 생성 시 인덱스가 포함된다. "이 컬럼에 인덱스가 필요하다"는 의도를 코드 레벨에서 드러내는 방식이다.
 
-```java
+```kotlin
 @Entity
-@Table(name = "product", indexes = {
-    @Index(name = "idx_product_category", columnList = "category_id"),
-    @Index(name = "idx_product_status_created", columnList = "status, created_at"),
-    @Index(name = "idx_product_name", columnList = "name")
-})
-public class Product {
+@Table(name = "product", indexes = [
+    Index(name = "idx_product_category", columnList = "category_id"),
+    Index(name = "idx_product_status_created", columnList = "status, created_at"),
+    Index(name = "idx_product_name", columnList = "name")
+])
+class Product {
     // ...
 }
 ```
