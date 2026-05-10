@@ -1,9 +1,9 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 5: Security & Authentication — Spring Security 7, JWT (oauth2-resource-server), BCrypt vs Argon2, RBAC"
-description: "How to implement standard JWT authentication with Spring Security 7 and spring-boot-starter-oauth2-resource-server — JwtDecoder/JwtEncoder bean pair for verify and issue, JwtAuthenticationConverter mapping the role claim to ROLE_ authorities, @AuthenticationPrincipal Jwt for extracting the current user in controllers, picking between BCrypt and Argon2, @PreAuthorize plus service-layer resource ownership checks, and the common CORS traps — written from an evaluator's perspective on the security pieces of pre-interview assignments."
+title: "Spring Boot Pre-Interview Guide Part 5: Security & Authentication — Spring Boot 4 · Kotlin 2.3 · Spring Security 7, JWT (oauth2-resource-server), BCrypt vs Argon2, RBAC"
+description: "On Spring Boot 4 with Kotlin 2.3, how to implement standard JWT authentication using Spring Security 7 and spring-boot-starter-oauth2-resource-server — JwtDecoder/JwtEncoder bean pair for verify and issue, JwtAuthenticationConverter mapping the role claim to ROLE_ authorities, @AuthenticationPrincipal Jwt for extracting the current user in controllers, picking between BCrypt and Argon2, @PreAuthorize plus service-layer resource ownership checks, and the common CORS traps — written from an evaluator's perspective on the security pieces of pre-interview assignments."
 pubDate: "2026-01-17T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "Spring Security", "JWT", "OAuth2", "Interview", "Practical Guide"]
+tags: ["Spring Boot", "Spring Security", "JWT", "OAuth2", "Kotlin", "Interview", "Practical Guide"]
 heroImage: "../../../assets/SpringBootPreInterviewGuide5.png"
 ---
 
@@ -47,15 +47,30 @@ See the [previous post](/blog/en/spring-boot-pre-interview-guide-4) for Performa
 
 ### §1.1 Dependencies and Key Changes from Spring Security 6 to 7
 
+> <strong>Note</strong>: The Spring Boot 4 + Kotlin 2.3 project setup itself (kotlin-spring, kotlin-jpa plugins, etc.) is covered in Part 1 §1.1. Part 5 focuses on the Security layer that runs on top of that. The Kotlin 2.x line is backward-compatible, so the same code works on 2.0–2.3.
+
 In Spring Security 7, adding `spring-boot-starter-oauth2-resource-server` alongside the main security starter is standard practice. This starter pulls in Nimbus JOSE+JWT as a transitive dependency, so no separate JJWT library is needed.
 
-```groovy
-// build.gradle
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("spring-boot-starter-security", "org.springframework.boot:spring-boot-starter-security:3.4.0")
+            library("spring-boot-starter-oauth2-resource-server", "org.springframework.boot:spring-boot-starter-oauth2-resource-server:3.4.0")
+            library("spring-security-test", "org.springframework.security:spring-security-test:6.4.0")
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    implementation(libs.spring.boot.starter.security)
+    implementation(libs.spring.boot.starter.oauth2.resource.server)
     // JJWT not needed — Nimbus JOSE+JWT is included transitively
-    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation(libs.spring.security.test)
 }
 ```
 
@@ -93,83 +108,18 @@ sequenceDiagram
     F->>Ctrl: Inject @AuthenticationPrincipal Jwt
 ```
 
-Here is the full SecurityConfig. The key difference from JJWT-based implementations: `addFilterBefore(new JwtAuthenticationFilter(...))` is replaced by `oauth2ResourceServer(...)`.
-
-```java
-@Configuration
-@EnableMethodSecurity
-public class SecurityConfig {
-
-    @Value("${jwt.secret}")
-    private String secret;
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-            )
-            .build();
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        SecretKeySpec key = new SecretKeySpec(
-            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(key)
-            .macAlgorithm(MacAlgorithm.HS256)
-            .build();
-    }
-
-    @Bean
-    public JwtEncoder jwtEncoder() {
-        SecretKeySpec key = new SecretKeySpec(
-            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        JWKSource<SecurityContext> jwks = new ImmutableSecret<>(key);
-        return new NimbusJwtEncoder(jwks);
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
-    }
-
-    private JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authoritiesConverter =
-            new JwtGrantedAuthoritiesConverter();
-        authoritiesConverter.setAuthoritiesClaimName("role");
-        authoritiesConverter.setAuthorityPrefix("ROLE_");
-
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
-        return converter;
-    }
-}
-```
-
-<details>
-<summary>Kotlin version</summary>
+Here is the full SecurityConfig. The key difference from JJWT-based implementations: `addFilterBefore(JwtAuthenticationFilter(...))` is replaced by `oauth2ResourceServer(...)`.
 
 ```kotlin
 @Configuration
 @EnableMethodSecurity
-class SecurityConfig {
-
-    @Value("\${jwt.secret}")
-    private lateinit var secret: String
+class SecurityConfig(
+    @Value("\${jwt.secret}") private val secret: String
+) {
 
     @Bean
-    fun filterChain(http: HttpSecurity): SecurityFilterChain {
-        return http
+    fun filterChain(http: HttpSecurity): SecurityFilterChain =
+        http
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
@@ -183,12 +133,13 @@ class SecurityConfig {
                 oauth2.jwt { jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()) }
             }
             .build()
-    }
 
     @Bean
     fun jwtDecoder(): JwtDecoder {
         val key = SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256")
-        return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build()
+        return NimbusJwtDecoder.withSecretKey(key)
+            .macAlgorithm(MacAlgorithm.HS256)
+            .build()
     }
 
     @Bean
@@ -203,18 +154,16 @@ class SecurityConfig {
         PasswordEncoderFactories.createDelegatingPasswordEncoder()
 
     private fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
-        val authoritiesConverter = JwtGrantedAuthoritiesConverter()
-        authoritiesConverter.setAuthoritiesClaimName("role")
-        authoritiesConverter.setAuthorityPrefix("ROLE_")
-
-        val converter = JwtAuthenticationConverter()
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter)
-        return converter
+        val authoritiesConverter = JwtGrantedAuthoritiesConverter().apply {
+            setAuthoritiesClaimName("role")
+            setAuthorityPrefix("ROLE_")
+        }
+        return JwtAuthenticationConverter().apply {
+            setJwtGrantedAuthoritiesConverter(authoritiesConverter)
+        }
     }
 }
 ```
-
-</details>
 
 ### §1.3 @EnableWebSecurity vs @EnableMethodSecurity
 
@@ -256,19 +205,16 @@ Both beans are already registered in SecurityConfig (see §1.2). For HMAC, the `
 
 With an RSA key pair, external services can verify tokens by distributing only the public key — a pattern common in microservice architectures where the auth server is separate.
 
-```java
+```kotlin
 @Bean
-public JwtDecoder jwtDecoder(RSAPublicKey publicKey) {
-    return NimbusJwtDecoder.withPublicKey(publicKey).build();
-}
+fun jwtDecoder(publicKey: RSAPublicKey): JwtDecoder =
+    NimbusJwtDecoder.withPublicKey(publicKey).build()
 
 @Bean
-public JwtEncoder jwtEncoder(RSAPrivateKey privateKey, RSAPublicKey publicKey) {
-    RSAKey rsaKey = new RSAKey.Builder(publicKey)
-        .privateKey(privateKey)
-        .build();
-    JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(rsaKey));
-    return new NimbusJwtEncoder(jwks);
+fun jwtEncoder(privateKey: RSAPrivateKey, publicKey: RSAPublicKey): JwtEncoder {
+    val rsaKey = RSAKey.Builder(publicKey).privateKey(privateKey).build()
+    val jwks: JWKSource<SecurityContext> = ImmutableJWKSet(JWKSet(rsaKey))
+    return NimbusJwtEncoder(jwks)
 }
 ```
 
@@ -280,18 +226,17 @@ HMAC is sufficient for assignments. For RSA, knowing "public key distribution en
 
 Spring Security's `hasRole('SELLER')` SpEL internally looks for a `GrantedAuthority` named `ROLE_SELLER`. If the JWT's `role` claim contains `SELLER`, `JwtAuthenticationConverter` automatically prepends `ROLE_` to produce `ROLE_SELLER`.
 
-```java
+```kotlin
 // Private method inside SecurityConfig (already included in §1.2)
-private JwtAuthenticationConverter jwtAuthenticationConverter() {
-    JwtGrantedAuthoritiesConverter authoritiesConverter =
-        new JwtGrantedAuthoritiesConverter();
-    authoritiesConverter.setAuthoritiesClaimName("role");   // JWT claim name
-    authoritiesConverter.setAuthorityPrefix("ROLE_");       // add prefix
-
-    JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-    converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+private fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
+    val authoritiesConverter = JwtGrantedAuthoritiesConverter().apply {
+        setAuthoritiesClaimName("role")  // JWT claim name
+        setAuthorityPrefix("ROLE_")      // add prefix
+    }
     // principal name = sub claim (default) — userId lives here
-    return converter;
+    return JwtAuthenticationConverter().apply {
+        setJwtGrantedAuthoritiesConverter(authoritiesConverter)
+    }
 }
 ```
 
@@ -338,130 +283,6 @@ sequenceDiagram
 
 **TokenService** — issues tokens with `JwtEncoder`, parses them with `JwtDecoder`. This replaces the role that `JwtTokenProvider` played in the JJWT-based approach.
 
-```java
-@Service
-@RequiredArgsConstructor
-public class TokenService {
-
-    private final JwtEncoder jwtEncoder;
-    private final JwtDecoder jwtDecoder;
-
-    private static final Duration ACCESS_TOKEN_TTL = Duration.ofHours(1);
-    private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
-
-    public String createAccessToken(Long userId, String email, String role) {
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-            .issuer("self")
-            .issuedAt(now)
-            .expiresAt(now.plus(ACCESS_TOKEN_TTL))
-            .subject(userId.toString())
-            .claim("email", email)
-            .claim("role", role)
-            .build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
-    }
-
-    public String createRefreshToken(Long userId) {
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-            .issuer("self")
-            .issuedAt(now)
-            .expiresAt(now.plus(REFRESH_TOKEN_TTL))
-            .subject(userId.toString())
-            .claim("token_type", "refresh")
-            .build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
-    }
-
-    public Long parseUserId(String token) {
-        Jwt jwt = jwtDecoder.decode(token);  // verify + parse in one call
-        return Long.parseLong(jwt.getSubject());
-    }
-}
-```
-
-**AuthController + AuthService** — inject and use `TokenService`.
-
-```java
-@RestController
-@RequestMapping("/api/v1/auth")
-@RequiredArgsConstructor
-public class AuthController {
-
-    private final AuthService authService;
-
-    @PostMapping("/signup")
-    public ResponseEntity<Void> signup(@Valid @RequestBody SignupRequest request) {
-        authService.signup(request.toCommand());
-        return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request.toCommand()));
-    }
-
-    @PostMapping("/refresh")
-    public ResponseEntity<TokenResponse> refresh(@RequestBody RefreshTokenRequest request) {
-        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
-    }
-}
-```
-
-```java
-@Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
-public class AuthService {
-
-    private final MemberRepository memberRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final TokenService tokenService;
-
-    @Transactional
-    public void signup(SignupCommand command) {
-        if (memberRepository.existsByEmail(command.getEmail())) {
-            throw new DuplicateEmailException(command.getEmail());
-        }
-        Member member = Member.builder()
-            .email(command.getEmail())
-            .password(passwordEncoder.encode(command.getPassword()))
-            .name(command.getName())
-            .role(MemberRole.USER)
-            .build();
-        memberRepository.save(member);
-    }
-
-    public TokenResponse login(LoginCommand command) {
-        Member member = memberRepository.findByEmail(command.getEmail())
-            .orElseThrow(InvalidCredentialsException::new);
-
-        if (!passwordEncoder.matches(command.getPassword(), member.getPassword())) {
-            throw new InvalidCredentialsException();
-        }
-
-        String accessToken = tokenService.createAccessToken(
-            member.getId(), member.getEmail(), member.getRole().name());
-        String refreshToken = tokenService.createRefreshToken(member.getId());
-        return new TokenResponse(accessToken, refreshToken);
-    }
-
-    public TokenResponse refresh(String refreshToken) {
-        Long userId = tokenService.parseUserId(refreshToken);  // throws JwtException if expired
-        Member member = memberRepository.findById(userId)
-            .orElseThrow(() -> new MemberNotFoundException(userId));
-
-        String newAccessToken = tokenService.createAccessToken(
-            member.getId(), member.getEmail(), member.getRole().name());
-        return new TokenResponse(newAccessToken, refreshToken);
-    }
-}
-```
-
-<details>
-<summary>Kotlin version — TokenService</summary>
-
 ```kotlin
 @Service
 class TokenService(
@@ -469,8 +290,8 @@ class TokenService(
     private val jwtDecoder: JwtDecoder
 ) {
     companion object {
-        private val ACCESS_TOKEN_TTL = Duration.ofHours(1)
-        private val REFRESH_TOKEN_TTL = Duration.ofDays(7)
+        private val ACCESS_TOKEN_TTL: Duration = Duration.ofHours(1)
+        private val REFRESH_TOKEN_TTL: Duration = Duration.ofDays(7)
     }
 
     fun createAccessToken(userId: Long, email: String, role: String): String {
@@ -499,37 +320,109 @@ class TokenService(
     }
 
     fun parseUserId(token: String): Long {
-        val jwt = jwtDecoder.decode(token)
+        val jwt = jwtDecoder.decode(token)  // verify + parse in one call
         return jwt.subject.toLong()
     }
 }
 ```
 
-</details>
+**AuthController + AuthService** — inject and use `TokenService`.
+
+```kotlin
+@RestController
+@RequestMapping("/api/v1/auth")
+class AuthController(private val authService: AuthService) {
+
+    @PostMapping("/signup")
+    fun signup(@Valid @RequestBody request: SignupRequest): ResponseEntity<Void> {
+        authService.signup(request.toCommand())
+        return ResponseEntity.status(HttpStatus.CREATED).build()
+    }
+
+    @PostMapping("/login")
+    fun login(@Valid @RequestBody request: LoginRequest): ResponseEntity<TokenResponse> =
+        ResponseEntity.ok(authService.login(request.toCommand()))
+
+    @PostMapping("/refresh")
+    fun refresh(@RequestBody request: RefreshTokenRequest): ResponseEntity<TokenResponse> =
+        ResponseEntity.ok(authService.refresh(request.refreshToken))
+}
+```
+
+```kotlin
+@Service
+@Transactional(readOnly = true)
+class AuthService(
+    private val memberRepository: MemberRepository,
+    private val passwordEncoder: PasswordEncoder,
+    private val tokenService: TokenService
+) {
+
+    @Transactional
+    fun signup(command: SignupCommand) {
+        if (memberRepository.existsByEmail(command.email)) {
+            throw DuplicateEmailException(command.email)
+        }
+        val member = Member(
+            email = command.email,
+            password = passwordEncoder.encode(command.password),
+            name = command.name,
+            role = MemberRole.USER
+        )
+        memberRepository.save(member)
+    }
+
+    fun login(command: LoginCommand): TokenResponse {
+        val member = memberRepository.findByEmail(command.email)
+            ?: throw InvalidCredentialsException()
+
+        if (!passwordEncoder.matches(command.password, member.password)) {
+            throw InvalidCredentialsException()
+        }
+
+        val accessToken = tokenService.createAccessToken(
+            member.id, member.email, member.role.name
+        )
+        val refreshToken = tokenService.createRefreshToken(member.id)
+        return TokenResponse(accessToken, refreshToken)
+    }
+
+    fun refresh(refreshToken: String): TokenResponse {
+        val userId = tokenService.parseUserId(refreshToken)  // throws JwtException if expired
+        val member = memberRepository.findById(userId)
+            .orElseThrow { MemberNotFoundException(userId) }
+
+        val newAccessToken = tokenService.createAccessToken(
+            member.id, member.email, member.role.name
+        )
+        return TokenResponse(newAccessToken, refreshToken)
+    }
+}
+```
 
 ### §2.5 Getting the Current User in Controllers — @AuthenticationPrincipal Jwt
 
 The principal stored in `SecurityContext` by `BearerTokenAuthenticationFilter` is a `Jwt` object. Receiving it with `@AuthenticationPrincipal Jwt jwt` in a Controller gives direct access to claims without any casting.
 
-```java
+```kotlin
 @GetMapping("/me")
-public MemberResponse getMyProfile(@AuthenticationPrincipal Jwt jwt) {
-    Long userId = Long.parseLong(jwt.getSubject());
-    return memberService.getMember(userId);
+fun getMyProfile(@AuthenticationPrincipal jwt: Jwt): MemberResponse {
+    val userId = jwt.subject.toLong()
+    return memberService.getMember(userId)
 }
 
 @PostMapping
 @PreAuthorize("hasRole('SELLER')")
-public ProductResponse createProduct(
-    @AuthenticationPrincipal Jwt jwt,
-    @Valid @RequestBody CreateProductRequest request
-) {
-    Long sellerId = Long.parseLong(jwt.getSubject());
-    return productService.createProduct(sellerId, request);
+fun createProduct(
+    @AuthenticationPrincipal jwt: Jwt,
+    @Valid @RequestBody request: CreateProductRequest
+): ProductResponse {
+    val sellerId = jwt.subject.toLong()
+    return productService.createProduct(sellerId, request)
 }
 ```
 
-`jwt.getSubject()` → userId (sub claim), `jwt.getClaim("email")` → any custom claim, `jwt.getClaim("role")` → role claim.
+`jwt.subject` → userId (sub claim), `jwt.getClaim<String>("email")` → any custom claim, `jwt.getClaim<String>("role")` → role claim.
 
 ### §2.6 Aside: JJWT direct implementation vs oauth2-resource-server
 
@@ -586,52 +479,51 @@ Production recommendation: Access Token in memory, Refresh Token in HttpOnly + S
 
 The default algorithm in Spring Security 7 is `{bcrypt}`. The bean is already registered in SecurityConfig.
 
-```java
+```kotlin
 @Bean
-public PasswordEncoder passwordEncoder() {
-    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+fun passwordEncoder(): PasswordEncoder =
+    PasswordEncoderFactories.createDelegatingPasswordEncoder()
     // Stored format: {bcrypt}$2a$10$...
-}
 ```
 
 The correct pattern for a password change:
 
-```java
+```kotlin
 @Transactional
-public void changePassword(Long memberId, String currentPassword, String newPassword) {
-    Member member = memberRepository.findById(memberId)
-        .orElseThrow(() -> new MemberNotFoundException(memberId));
+fun changePassword(memberId: Long, currentPassword: String, newPassword: String) {
+    val member = memberRepository.findById(memberId)
+        .orElseThrow { MemberNotFoundException(memberId) }
 
-    if (!passwordEncoder.matches(currentPassword, member.getPassword())) {
-        throw new InvalidPasswordException();
+    if (!passwordEncoder.matches(currentPassword, member.password)) {
+        throw InvalidPasswordException()
     }
 
-    member.changePassword(passwordEncoder.encode(newPassword));
+    member.changePassword(passwordEncoder.encode(newPassword))
 }
 ```
 
 ### §3.2 Password Policy Validation
 
-Enforce input policy with `@Pattern` in the request DTO.
+Enforce input policy with `@Pattern` in the request DTO. In Kotlin, Bean Validation annotations need the `@field:` site target so they land on the underlying field, not the constructor parameter.
 
-```java
-public record SignupRequest(
-    @NotBlank @Email
-    String email,
+```kotlin
+data class SignupRequest(
+    @field:NotBlank
+    @field:Email
+    val email: String,
 
-    @NotBlank
-    @Pattern(
-        regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&])[A-Za-z\\d@$!%*#?&]{8,20}$",
+    @field:NotBlank
+    @field:Pattern(
+        regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@\$!%*#?&])[A-Za-z\\d@\$!%*#?&]{8,20}\$",
         message = "Password must be 8-20 characters and include letters, numbers, and a special character"
     )
-    String password,
+    val password: String,
 
-    @NotBlank @Size(min = 2, max = 20)
-    String name
+    @field:NotBlank
+    @field:Size(min = 2, max = 20)
+    val name: String
 ) {
-    public SignupCommand toCommand() {
-        return new SignupCommand(email, password, name);
-    }
+    fun toCommand(): SignupCommand = SignupCommand(email, password, name)
 }
 ```
 
@@ -645,15 +537,14 @@ public record SignupRequest(
 
 Using Argon2 in Spring Security 7:
 
-```java
+```kotlin
 @Bean
-public PasswordEncoder passwordEncoder() {
+fun passwordEncoder(): PasswordEncoder =
     // saltLength=16, hashLength=32, parallelism=1, memory=65536 KB, iterations=3
-    return new Argon2PasswordEncoder(16, 32, 1, 65536, 3);
-}
+    Argon2PasswordEncoder(16, 32, 1, 65536, 3)
 ```
 
-> <strong>Note</strong>: BCrypt is the de facto standard for assignments. Using `PasswordEncoderFactories.createDelegatingPasswordEncoder()` means switching algorithms later remains backward-compatible with existing hashes.
+> <strong>Note</strong>: BCrypt is the de facto standard for assignments. Replacing the bean wholesale with a single `Argon2PasswordEncoder` — as in the snippet above — fails to verify any existing `{bcrypt}`-prefixed hashes. For a gradual migration, keep the `DelegatingPasswordEncoder` structure: add Argon2 to the encoder map and switch `idForEncode` to `"argon2"`. New hashes are stored as `{argon2}` while old `{bcrypt}` hashes continue to verify via prefix lookup.
 
 ---
 
@@ -663,86 +554,38 @@ public PasswordEncoder passwordEncoder() {
 
 Define roles to match the assignment requirements. Storing with `@Enumerated(EnumType.STRING)` writes `USER`, `SELLER`, `ADMIN` as strings in the DB, making queries readable.
 
-```java
-public enum MemberRole {
+```kotlin
+enum class MemberRole {
     USER,    // Regular user
     SELLER,  // Seller
     ADMIN    // Administrator
 }
 ```
 
-```java
+```kotlin
 @Entity
-public class Member {
-
+class Member(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private MemberRole role;
-}
+    var role: MemberRole
+)
 ```
 
 ### §4.2 Method-Level Security with @PreAuthorize
 
 Declaring `@EnableMethodSecurity` allows `@PreAuthorize` on Controller methods. Because the JWT's role claim flows through `JwtAuthenticationConverter` to become `ROLE_SELLER`, `hasRole('SELLER')` resolves correctly.
 
-```java
-@RestController
-@RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
-public class ProductController {
-
-    private final ProductService productService;
-
-    // permitAll in SecurityConfig — anyone can view
-    @GetMapping("/{productId}")
-    public ProductResponse getProduct(@PathVariable Long productId) {
-        return productService.getProduct(productId);
-    }
-
-    // Only SELLER role can create products
-    @PostMapping
-    @PreAuthorize("hasRole('SELLER')")
-    public ProductResponse createProduct(
-        @AuthenticationPrincipal Jwt jwt,
-        @Valid @RequestBody CreateProductRequest request
-    ) {
-        Long sellerId = Long.parseLong(jwt.getSubject());
-        return productService.createProduct(sellerId, request);
-    }
-
-    // Only SELLER role can update products
-    @PatchMapping("/{productId}")
-    @PreAuthorize("hasRole('SELLER')")
-    public ProductResponse updateProduct(
-        @AuthenticationPrincipal Jwt jwt,
-        @PathVariable Long productId,
-        @RequestBody UpdateProductRequest request
-    ) {
-        Long sellerId = Long.parseLong(jwt.getSubject());
-        return productService.updateProduct(sellerId, productId, request);
-    }
-
-    // Only ADMIN can access
-    @GetMapping("/admin/all")
-    @PreAuthorize("hasRole('ADMIN')")
-    public List<ProductResponse> getAllProductsForAdmin() {
-        return productService.getAllProductsForAdmin();
-    }
-}
-```
-
-<details>
-<summary>Kotlin version</summary>
-
 ```kotlin
 @RestController
 @RequestMapping("/api/v1/products")
 class ProductController(private val productService: ProductService) {
 
+    // permitAll in SecurityConfig — anyone can view
     @GetMapping("/{productId}")
     fun getProduct(@PathVariable productId: Long): ProductResponse =
         productService.getProduct(productId)
 
+    // Only SELLER role can create products
     @PostMapping
     @PreAuthorize("hasRole('SELLER')")
     fun createProduct(
@@ -753,6 +596,7 @@ class ProductController(private val productService: ProductService) {
         return productService.createProduct(sellerId, request)
     }
 
+    // Only SELLER role can update products
     @PatchMapping("/{productId}")
     @PreAuthorize("hasRole('SELLER')")
     fun updateProduct(
@@ -763,10 +607,14 @@ class ProductController(private val productService: ProductService) {
         val sellerId = jwt.subject.toLong()
         return productService.updateProduct(sellerId, productId, request)
     }
+
+    // Only ADMIN can access
+    @GetMapping("/admin/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun getAllProductsForAdmin(): List<ProductResponse> =
+        productService.getAllProductsForAdmin()
 }
 ```
-
-</details>
 
 ### §4.3 Resource Ownership Checks — Service vs @PreAuthorize
 
@@ -774,53 +622,49 @@ Role checks are handled by `@PreAuthorize`, but "does this resource belong to th
 
 **Approach 1: Direct check in the Service (recommended for assignments)**
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class ProductService {
-
-    private final ProductRepository productRepository;
+class ProductService(private val productRepository: ProductRepository) {
 
     @Transactional
-    public ProductResponse updateProduct(Long sellerId, Long productId,
-                                         UpdateProductRequest request) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+    fun updateProduct(
+        sellerId: Long,
+        productId: Long,
+        request: UpdateProductRequest
+    ): ProductResponse {
+        val product = productRepository.findById(productId)
+            .orElseThrow { BusinessException(ErrorCode.PRODUCT_NOT_FOUND) }
 
-        if (!product.getSellerId().equals(sellerId)) {
-            throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
+        if (product.sellerId != sellerId) {
+            throw BusinessException(ErrorCode.PRODUCT_NOT_OWNED)
         }
 
-        product.update(request.getName(), request.getPrice());
-        return ProductResponse.from(product);
+        product.update(request.name, request.price)
+        return ProductResponse.from(product)
     }
 }
 ```
 
 **Approach 2: @PreAuthorize + custom SpEL service**
 
-```java
+```kotlin
 @GetMapping("/{orderId}")
 @PreAuthorize("@orderAuthorizationService.isOwner(#orderId, authentication.principal)")
-public OrderResponse getOrder(@PathVariable Long orderId) {
-    return orderService.getOrder(orderId);
-}
+fun getOrder(@PathVariable orderId: Long): OrderResponse =
+    orderService.getOrder(orderId)
 ```
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class OrderAuthorizationService {
-
-    private final OrderRepository orderRepository;
+class OrderAuthorizationService(private val orderRepository: OrderRepository) {
 
     // authentication.principal is a Jwt object
-    public boolean isOwner(Long orderId, Jwt jwt) {
-        Long userId = Long.parseLong(jwt.getSubject());
+    fun isOwner(orderId: Long, jwt: Jwt): Boolean {
+        val userId = jwt.subject.toLong()
         return orderRepository.findById(orderId)
-            .map(order -> order.getBuyerId().equals(userId))
-            .orElse(false);
+            .map { it.buyerId == userId }
+            .orElse(false)
     }
 }
 ```
@@ -838,27 +682,24 @@ Comparing the two:
 
 Use `@AuthenticationPrincipal Jwt jwt` in Controllers to access the current user's information.
 
-```java
+```kotlin
 @RestController
 @RequestMapping("/api/v1/members")
-@RequiredArgsConstructor
-public class MemberController {
-
-    private final MemberService memberService;
+class MemberController(private val memberService: MemberService) {
 
     @GetMapping("/me")
-    public MemberResponse getCurrentMember(@AuthenticationPrincipal Jwt jwt) {
-        Long userId = Long.parseLong(jwt.getSubject());
-        return memberService.getMember(userId);
+    fun getCurrentMember(@AuthenticationPrincipal jwt: Jwt): MemberResponse {
+        val userId = jwt.subject.toLong()
+        return memberService.getMember(userId)
     }
 
     @PatchMapping("/me")
-    public MemberResponse updateProfile(
-        @AuthenticationPrincipal Jwt jwt,
-        @Valid @RequestBody UpdateMemberRequest request
-    ) {
-        Long userId = Long.parseLong(jwt.getSubject());
-        return memberService.updateMember(userId, request);
+    fun updateProfile(
+        @AuthenticationPrincipal jwt: Jwt,
+        @Valid @RequestBody request: UpdateMemberRequest
+    ): MemberResponse {
+        val userId = jwt.subject.toLong()
+        return memberService.updateMember(userId, request)
     }
 }
 ```
@@ -868,15 +709,14 @@ public class MemberController {
 
 If `@AuthenticationPrincipal` feels too verbose or the userId extraction is repetitive, wrap it in a custom annotation.
 
-```java
-@Target(ElementType.PARAMETER)
-@Retention(RetentionPolicy.RUNTIME)
+```kotlin
+@Target(AnnotationTarget.VALUE_PARAMETER)
+@Retention(AnnotationRetention.RUNTIME)
 @AuthenticationPrincipal
-public @interface CurrentUser {
-}
+annotation class CurrentUser
 ```
 
-Using `@AuthenticationPrincipal` as a meta-annotation lets Spring handle it identically. Controllers then use `@CurrentUser Jwt jwt`.
+Using `@AuthenticationPrincipal` as a meta-annotation lets Spring handle it identically. Controllers then use `@CurrentUser jwt: Jwt`.
 
 </details>
 
@@ -909,41 +749,40 @@ flowchart TD
 
 When using Spring Security, the `CorsConfigurationSource` bean must be wired into SecurityConfig via `.cors(cors -> cors.configurationSource(...))`. Creating a `CorsConfig` class alone without connecting it to Security causes preflight (OPTIONS) requests to return 401.
 
-```java
+```kotlin
 @Configuration
-public class CorsConfig {
+class CorsConfig {
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-            "http://localhost:3000",
-            "https://your-frontend-domain.com"
-        ));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+    fun corsConfigurationSource(): CorsConfigurationSource {
+        val configuration = CorsConfiguration().apply {
+            allowedOrigins = listOf(
+                "http://localhost:3000",
+                "https://your-frontend-domain.com"
+            )
+            allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            allowedHeaders = listOf("*")
+            exposedHeaders = listOf("Authorization")
+            allowCredentials = true
+            maxAge = 3600L
+        }
+        return UrlBasedCorsConfigurationSource().apply {
+            registerCorsConfiguration("/**", configuration)
+        }
     }
 }
 ```
 
 Add `.cors(...)` to the `filterChain` in SecurityConfig:
 
-```java
+```kotlin
 @Bean
-public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    return http
-        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-        .csrf(csrf -> csrf.disable())
+fun filterChain(http: HttpSecurity): SecurityFilterChain =
+    http
+        .cors { it.configurationSource(corsConfigurationSource()) }
+        .csrf { it.disable() }
         // ... rest of the config
-        .build();
-}
+        .build()
 ```
 
 > <strong>Note</strong>: Place `corsConfigurationSource` in the same `@Configuration` class as SecurityConfig, or inject it with `@Autowired` and reference it there.
@@ -952,11 +791,11 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
 Use this when a specific Controller needs a different CORS policy from the global one.
 
-```java
+```kotlin
 @RestController
 @RequestMapping("/api/v1/public")
-@CrossOrigin(origins = "http://localhost:3000")
-public class PublicController {
+@CrossOrigin(origins = ["http://localhost:3000"])
+class PublicController {
     // CORS origin restriction applied to this controller only
 }
 ```
@@ -1019,21 +858,22 @@ Part 6 covers <strong>Docker, Docker Compose, and GitHub Actions CI/CD</strong>.
 
 <strong>Refresh Token Rotation</strong> is the pattern of issuing a new Refresh Token alongside the new Access Token whenever the Refresh Token is used, and invalidating the old one. This makes reuse of a stolen Refresh Token detectable.
 
-```java
-public TokenResponse refresh(String refreshToken) {
-    Long userId = tokenService.parseUserId(refreshToken);  // throws JwtException if expired → 401
-    Member member = memberRepository.findById(userId)
-        .orElseThrow(() -> new MemberNotFoundException(userId));
+```kotlin
+fun refresh(refreshToken: String): TokenResponse {
+    val userId = tokenService.parseUserId(refreshToken)  // throws JwtException if expired → 401
+    val member = memberRepository.findById(userId)
+        .orElseThrow { MemberNotFoundException(userId) }
 
     // Issue both a new Access Token and a new Refresh Token
-    String newAccessToken = tokenService.createAccessToken(
-        member.getId(), member.getEmail(), member.getRole().name());
-    String newRefreshToken = tokenService.createRefreshToken(member.getId());
+    val newAccessToken = tokenService.createAccessToken(
+        member.id, member.email, member.role.name
+    )
+    val newRefreshToken = tokenService.createRefreshToken(member.id)
 
     // Invalidate the old Refresh Token (when stored in DB)
-    // refreshTokenRepository.delete(refreshToken);
+    // refreshTokenRepository.delete(refreshToken)
 
-    return new TokenResponse(newAccessToken, newRefreshToken);
+    return TokenResponse(newAccessToken, newRefreshToken)
 }
 ```
 

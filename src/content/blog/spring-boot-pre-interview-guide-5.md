@@ -1,12 +1,13 @@
 ---
-title: "스프링 사전과제 가이드 5편: Security & Authentication — Spring Security 7, JWT(oauth2-resource-server), BCrypt·Argon2, RBAC"
-description: "Spring Security 7과 spring-boot-starter-oauth2-resource-server로 JWT 인증을 표준대로 구현하는 법, JwtDecoder/JwtEncoder Bean 한 짝으로 검증·발급, JwtAuthenticationConverter로 role claim → ROLE_ 매핑, @AuthenticationPrincipal Jwt로 Controller에서 사용자 정보 추출, BCrypt/Argon2 선택 기준, @PreAuthorize와 Service에서의 리소스 소유자 검증, CORS 흔한 함정까지 — 사전과제 보안 영역에서 가점과 감점이 갈리는 포인트를 평가자 시점으로 정리."
+title: "스프링 사전과제 가이드 5편: Security & Authentication — Spring Boot 4 · Kotlin 2.3 · Spring Security 7, JWT(oauth2-resource-server), BCrypt·Argon2, RBAC"
+description: "Spring Boot 4 + Kotlin 2.3 환경에서 Spring Security 7과 spring-boot-starter-oauth2-resource-server로 JWT 인증을 표준대로 구현하는 법. JwtDecoder/JwtEncoder Bean 한 짝으로 검증·발급, JwtAuthenticationConverter로 role claim → ROLE_ 매핑, @AuthenticationPrincipal Jwt로 Controller에서 사용자 정보 추출, BCrypt/Argon2 선택 기준, @PreAuthorize와 Service에서의 리소스 소유자 검증, CORS 흔한 함정까지 — 사전과제 보안 영역에서 가점과 감점이 갈리는 포인트를 평가자 시점으로 정리."
 pubDate: 2026-01-17T10:00:00+09:00
 tags:
   - Spring Boot
   - Spring Security
   - JWT
   - OAuth2
+  - Kotlin
   - Backend
   - 사전과제
 heroImage: "../../assets/SpringBootPreInterviewGuide5.png"
@@ -52,15 +53,30 @@ heroImage: "../../assets/SpringBootPreInterviewGuide5.png"
 
 ### 1.1 의존성과 Spring Security 6 → 7 주요 변경
 
+> <strong>참고</strong>: Spring Boot 4 + Kotlin 2.3 프로젝트 셋업(kotlin-spring·kotlin-jpa plugin 등) 자체는 1편 1.1절에서 다뤘다. 5편은 그 위에서 도는 Security 영역에 집중한다. Kotlin 2.x 시리즈는 백워드 호환이라 같은 코드가 2.0~2.3 모두 작동한다.
+
 Spring Security 7에서는 `spring-boot-starter-oauth2-resource-server`를 함께 추가하는 것이 표준이다. 이 스타터는 Nimbus JOSE+JWT를 transitive 의존성으로 가져오기 때문에 JJWT 라이브러리를 별도로 추가할 필요가 없다.
 
-```groovy
-// build.gradle
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            library("spring-boot-starter-security", "org.springframework.boot:spring-boot-starter-security:3.4.0")
+            library("spring-boot-starter-oauth2-resource-server", "org.springframework.boot:spring-boot-starter-oauth2-resource-server:3.4.0")
+            library("spring-security-test", "org.springframework.security:spring-security-test:6.4.0")
+        }
+    }
+}
+```
+
+```kotlin
+// build.gradle.kts
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    implementation(libs.spring.boot.starter.security)
+    implementation(libs.spring.boot.starter.oauth2.resource.server)
     // JJWT 라이브러리 불필요 — Nimbus JOSE+JWT가 transitive로 포함됨
-    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation(libs.spring.security.test)
 }
 ```
 
@@ -98,83 +114,18 @@ sequenceDiagram
     F->>Ctrl: @AuthenticationPrincipal Jwt 주입
 ```
 
-SecurityConfig 전체 코드다. JJWT 기반 구현과의 차이는 `addFilterBefore(new JwtAuthenticationFilter(...))` 줄이 `oauth2ResourceServer(...)` 한 줄로 대체된다는 점이다.
-
-```java
-@Configuration
-@EnableMethodSecurity
-public class SecurityConfig {
-
-    @Value("${jwt.secret}")
-    private String secret;
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-            )
-            .build();
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        SecretKeySpec key = new SecretKeySpec(
-            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(key)
-            .macAlgorithm(MacAlgorithm.HS256)
-            .build();
-    }
-
-    @Bean
-    public JwtEncoder jwtEncoder() {
-        SecretKeySpec key = new SecretKeySpec(
-            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        JWKSource<SecurityContext> jwks = new ImmutableSecret<>(key);
-        return new NimbusJwtEncoder(jwks);
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
-    }
-
-    private JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authoritiesConverter =
-            new JwtGrantedAuthoritiesConverter();
-        authoritiesConverter.setAuthoritiesClaimName("role");
-        authoritiesConverter.setAuthorityPrefix("ROLE_");
-
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
-        return converter;
-    }
-}
-```
-
-<details>
-<summary>Kotlin 버전</summary>
+SecurityConfig 전체 코드다. JJWT 기반 구현과의 차이는 `addFilterBefore(JwtAuthenticationFilter(...))` 줄이 `oauth2ResourceServer(...)` 한 줄로 대체된다는 점이다.
 
 ```kotlin
 @Configuration
 @EnableMethodSecurity
-class SecurityConfig {
-
-    @Value("\${jwt.secret}")
-    private lateinit var secret: String
+class SecurityConfig(
+    @Value("\${jwt.secret}") private val secret: String
+) {
 
     @Bean
-    fun filterChain(http: HttpSecurity): SecurityFilterChain {
-        return http
+    fun filterChain(http: HttpSecurity): SecurityFilterChain =
+        http
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
@@ -188,12 +139,13 @@ class SecurityConfig {
                 oauth2.jwt { jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()) }
             }
             .build()
-    }
 
     @Bean
     fun jwtDecoder(): JwtDecoder {
         val key = SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256")
-        return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build()
+        return NimbusJwtDecoder.withSecretKey(key)
+            .macAlgorithm(MacAlgorithm.HS256)
+            .build()
     }
 
     @Bean
@@ -208,18 +160,16 @@ class SecurityConfig {
         PasswordEncoderFactories.createDelegatingPasswordEncoder()
 
     private fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
-        val authoritiesConverter = JwtGrantedAuthoritiesConverter()
-        authoritiesConverter.setAuthoritiesClaimName("role")
-        authoritiesConverter.setAuthorityPrefix("ROLE_")
-
-        val converter = JwtAuthenticationConverter()
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter)
-        return converter
+        val authoritiesConverter = JwtGrantedAuthoritiesConverter().apply {
+            setAuthoritiesClaimName("role")
+            setAuthorityPrefix("ROLE_")
+        }
+        return JwtAuthenticationConverter().apply {
+            setJwtGrantedAuthoritiesConverter(authoritiesConverter)
+        }
     }
 }
 ```
-
-</details>
 
 ### 1.3 @EnableWebSecurity vs @EnableMethodSecurity
 
@@ -261,19 +211,16 @@ SecurityConfig에 이미 두 Bean을 등록했다(1.2절 참조). HMAC 방식의
 
 RSA 키 쌍을 사용하면 공개키 배포만으로 외부 서비스가 토큰을 검증할 수 있다. 인증 서버가 분리된 MSA 구조에서 주로 쓴다.
 
-```java
+```kotlin
 @Bean
-public JwtDecoder jwtDecoder(RSAPublicKey publicKey) {
-    return NimbusJwtDecoder.withPublicKey(publicKey).build();
-}
+fun jwtDecoder(publicKey: RSAPublicKey): JwtDecoder =
+    NimbusJwtDecoder.withPublicKey(publicKey).build()
 
 @Bean
-public JwtEncoder jwtEncoder(RSAPrivateKey privateKey, RSAPublicKey publicKey) {
-    RSAKey rsaKey = new RSAKey.Builder(publicKey)
-        .privateKey(privateKey)
-        .build();
-    JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(rsaKey));
-    return new NimbusJwtEncoder(jwks);
+fun jwtEncoder(privateKey: RSAPrivateKey, publicKey: RSAPublicKey): JwtEncoder {
+    val rsaKey = RSAKey.Builder(publicKey).privateKey(privateKey).build()
+    val jwks: JWKSource<SecurityContext> = ImmutableJWKSet(JWKSet(rsaKey))
+    return NimbusJwtEncoder(jwks)
 }
 ```
 
@@ -285,18 +232,17 @@ public JwtEncoder jwtEncoder(RSAPrivateKey privateKey, RSAPublicKey publicKey) {
 
 Spring Security의 `hasRole('SELLER')` SpEL은 내부적으로 `ROLE_SELLER`라는 이름의 `GrantedAuthority`를 찾는다. JWT의 `role` claim 값이 `SELLER`라면 자동으로 `ROLE_SELLER`로 변환해 주는 것이 `JwtAuthenticationConverter`다.
 
-```java
+```kotlin
 // SecurityConfig 내부 private 메서드 (1.2절에 이미 포함)
-private JwtAuthenticationConverter jwtAuthenticationConverter() {
-    JwtGrantedAuthoritiesConverter authoritiesConverter =
-        new JwtGrantedAuthoritiesConverter();
-    authoritiesConverter.setAuthoritiesClaimName("role");   // JWT claim 이름
-    authoritiesConverter.setAuthorityPrefix("ROLE_");       // prefix 추가
-
-    JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-    converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+private fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
+    val authoritiesConverter = JwtGrantedAuthoritiesConverter().apply {
+        setAuthoritiesClaimName("role")  // JWT claim 이름
+        setAuthorityPrefix("ROLE_")      // prefix 추가
+    }
     // principal name = sub claim (기본값) → userId가 들어있음
-    return converter;
+    return JwtAuthenticationConverter().apply {
+        setJwtGrantedAuthoritiesConverter(authoritiesConverter)
+    }
 }
 ```
 
@@ -343,130 +289,6 @@ sequenceDiagram
 
 **TokenService** — `JwtEncoder`로 발급, `JwtDecoder`로 파싱한다. JJWT의 `JwtTokenProvider`가 하던 역할을 Spring Security 추상화로 대체한다.
 
-```java
-@Service
-@RequiredArgsConstructor
-public class TokenService {
-
-    private final JwtEncoder jwtEncoder;
-    private final JwtDecoder jwtDecoder;
-
-    private static final Duration ACCESS_TOKEN_TTL = Duration.ofHours(1);
-    private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
-
-    public String createAccessToken(Long userId, String email, String role) {
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-            .issuer("self")
-            .issuedAt(now)
-            .expiresAt(now.plus(ACCESS_TOKEN_TTL))
-            .subject(userId.toString())
-            .claim("email", email)
-            .claim("role", role)
-            .build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
-    }
-
-    public String createRefreshToken(Long userId) {
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-            .issuer("self")
-            .issuedAt(now)
-            .expiresAt(now.plus(REFRESH_TOKEN_TTL))
-            .subject(userId.toString())
-            .claim("token_type", "refresh")
-            .build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
-    }
-
-    public Long parseUserId(String token) {
-        Jwt jwt = jwtDecoder.decode(token);  // 검증 + 파싱 한 번에
-        return Long.parseLong(jwt.getSubject());
-    }
-}
-```
-
-**AuthController + AuthService** — `TokenService`를 주입해서 쓴다.
-
-```java
-@RestController
-@RequestMapping("/api/v1/auth")
-@RequiredArgsConstructor
-public class AuthController {
-
-    private final AuthService authService;
-
-    @PostMapping("/signup")
-    public ResponseEntity<Void> signup(@Valid @RequestBody SignupRequest request) {
-        authService.signup(request.toCommand());
-        return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request.toCommand()));
-    }
-
-    @PostMapping("/refresh")
-    public ResponseEntity<TokenResponse> refresh(@RequestBody RefreshTokenRequest request) {
-        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
-    }
-}
-```
-
-```java
-@Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
-public class AuthService {
-
-    private final MemberRepository memberRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final TokenService tokenService;
-
-    @Transactional
-    public void signup(SignupCommand command) {
-        if (memberRepository.existsByEmail(command.getEmail())) {
-            throw new DuplicateEmailException(command.getEmail());
-        }
-        Member member = Member.builder()
-            .email(command.getEmail())
-            .password(passwordEncoder.encode(command.getPassword()))
-            .name(command.getName())
-            .role(MemberRole.USER)
-            .build();
-        memberRepository.save(member);
-    }
-
-    public TokenResponse login(LoginCommand command) {
-        Member member = memberRepository.findByEmail(command.getEmail())
-            .orElseThrow(InvalidCredentialsException::new);
-
-        if (!passwordEncoder.matches(command.getPassword(), member.getPassword())) {
-            throw new InvalidCredentialsException();
-        }
-
-        String accessToken = tokenService.createAccessToken(
-            member.getId(), member.getEmail(), member.getRole().name());
-        String refreshToken = tokenService.createRefreshToken(member.getId());
-        return new TokenResponse(accessToken, refreshToken);
-    }
-
-    public TokenResponse refresh(String refreshToken) {
-        Long userId = tokenService.parseUserId(refreshToken);  // 만료 시 JwtException
-        Member member = memberRepository.findById(userId)
-            .orElseThrow(() -> new MemberNotFoundException(userId));
-
-        String newAccessToken = tokenService.createAccessToken(
-            member.getId(), member.getEmail(), member.getRole().name());
-        return new TokenResponse(newAccessToken, refreshToken);
-    }
-}
-```
-
-<details>
-<summary>Kotlin 버전 — TokenService</summary>
-
 ```kotlin
 @Service
 class TokenService(
@@ -474,8 +296,8 @@ class TokenService(
     private val jwtDecoder: JwtDecoder
 ) {
     companion object {
-        private val ACCESS_TOKEN_TTL = Duration.ofHours(1)
-        private val REFRESH_TOKEN_TTL = Duration.ofDays(7)
+        private val ACCESS_TOKEN_TTL: Duration = Duration.ofHours(1)
+        private val REFRESH_TOKEN_TTL: Duration = Duration.ofDays(7)
     }
 
     fun createAccessToken(userId: Long, email: String, role: String): String {
@@ -504,37 +326,109 @@ class TokenService(
     }
 
     fun parseUserId(token: String): Long {
-        val jwt = jwtDecoder.decode(token)
+        val jwt = jwtDecoder.decode(token)  // 검증 + 파싱 한 번에
         return jwt.subject.toLong()
     }
 }
 ```
 
-</details>
+**AuthController + AuthService** — `TokenService`를 주입해서 쓴다.
+
+```kotlin
+@RestController
+@RequestMapping("/api/v1/auth")
+class AuthController(private val authService: AuthService) {
+
+    @PostMapping("/signup")
+    fun signup(@Valid @RequestBody request: SignupRequest): ResponseEntity<Void> {
+        authService.signup(request.toCommand())
+        return ResponseEntity.status(HttpStatus.CREATED).build()
+    }
+
+    @PostMapping("/login")
+    fun login(@Valid @RequestBody request: LoginRequest): ResponseEntity<TokenResponse> =
+        ResponseEntity.ok(authService.login(request.toCommand()))
+
+    @PostMapping("/refresh")
+    fun refresh(@RequestBody request: RefreshTokenRequest): ResponseEntity<TokenResponse> =
+        ResponseEntity.ok(authService.refresh(request.refreshToken))
+}
+```
+
+```kotlin
+@Service
+@Transactional(readOnly = true)
+class AuthService(
+    private val memberRepository: MemberRepository,
+    private val passwordEncoder: PasswordEncoder,
+    private val tokenService: TokenService
+) {
+
+    @Transactional
+    fun signup(command: SignupCommand) {
+        if (memberRepository.existsByEmail(command.email)) {
+            throw DuplicateEmailException(command.email)
+        }
+        val member = Member(
+            email = command.email,
+            password = passwordEncoder.encode(command.password),
+            name = command.name,
+            role = MemberRole.USER
+        )
+        memberRepository.save(member)
+    }
+
+    fun login(command: LoginCommand): TokenResponse {
+        val member = memberRepository.findByEmail(command.email)
+            ?: throw InvalidCredentialsException()
+
+        if (!passwordEncoder.matches(command.password, member.password)) {
+            throw InvalidCredentialsException()
+        }
+
+        val accessToken = tokenService.createAccessToken(
+            member.id, member.email, member.role.name
+        )
+        val refreshToken = tokenService.createRefreshToken(member.id)
+        return TokenResponse(accessToken, refreshToken)
+    }
+
+    fun refresh(refreshToken: String): TokenResponse {
+        val userId = tokenService.parseUserId(refreshToken)  // 만료 시 JwtException
+        val member = memberRepository.findById(userId)
+            .orElseThrow { MemberNotFoundException(userId) }
+
+        val newAccessToken = tokenService.createAccessToken(
+            member.id, member.email, member.role.name
+        )
+        return TokenResponse(newAccessToken, refreshToken)
+    }
+}
+```
 
 ### 2.5 Controller에서 현재 사용자 — @AuthenticationPrincipal Jwt
 
 `BearerTokenAuthenticationFilter`가 SecurityContext에 저장한 `JwtAuthenticationToken`의 principal은 `Jwt` 객체다. Controller에서 `@AuthenticationPrincipal Jwt jwt`로 직접 받으면 타입 캐스팅 없이 claim을 꺼낼 수 있다.
 
-```java
+```kotlin
 @GetMapping("/me")
-public MemberResponse getMyProfile(@AuthenticationPrincipal Jwt jwt) {
-    Long userId = Long.parseLong(jwt.getSubject());
-    return memberService.getMember(userId);
+fun getMyProfile(@AuthenticationPrincipal jwt: Jwt): MemberResponse {
+    val userId = jwt.subject.toLong()
+    return memberService.getMember(userId)
 }
 
 @PostMapping
 @PreAuthorize("hasRole('SELLER')")
-public ProductResponse createProduct(
-    @AuthenticationPrincipal Jwt jwt,
-    @Valid @RequestBody CreateProductRequest request
-) {
-    Long sellerId = Long.parseLong(jwt.getSubject());
-    return productService.createProduct(sellerId, request);
+fun createProduct(
+    @AuthenticationPrincipal jwt: Jwt,
+    @Valid @RequestBody request: CreateProductRequest
+): ProductResponse {
+    val sellerId = jwt.subject.toLong()
+    return productService.createProduct(sellerId, request)
 }
 ```
 
-`jwt.getSubject()` — userId(sub claim), `jwt.getClaim("email")` — 임의 claim, `jwt.getClaim("role")` — role claim이다.
+`jwt.subject` — userId(sub claim), `jwt.getClaim<String>("email")` — 임의 claim, `jwt.getClaim<String>("role")` — role claim이다.
 
 ### 2.6 참고: JJWT 직접 구현 vs oauth2-resource-server
 
@@ -591,52 +485,51 @@ oauth2-resource-server 방식의 실질적 장점은 두 가지다.
 
 Spring Security 7의 기본 알고리즘은 `{bcrypt}`다. SecurityConfig에서 이미 등록했다.
 
-```java
+```kotlin
 @Bean
-public PasswordEncoder passwordEncoder() {
-    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+fun passwordEncoder(): PasswordEncoder =
+    PasswordEncoderFactories.createDelegatingPasswordEncoder()
     // 저장 형식: {bcrypt}$2a$10$...
-}
 ```
 
 비밀번호 변경 로직의 올바른 패턴은 다음과 같다.
 
-```java
+```kotlin
 @Transactional
-public void changePassword(Long memberId, String currentPassword, String newPassword) {
-    Member member = memberRepository.findById(memberId)
-        .orElseThrow(() -> new MemberNotFoundException(memberId));
+fun changePassword(memberId: Long, currentPassword: String, newPassword: String) {
+    val member = memberRepository.findById(memberId)
+        .orElseThrow { MemberNotFoundException(memberId) }
 
-    if (!passwordEncoder.matches(currentPassword, member.getPassword())) {
-        throw new InvalidPasswordException();
+    if (!passwordEncoder.matches(currentPassword, member.password)) {
+        throw InvalidPasswordException()
     }
 
-    member.changePassword(passwordEncoder.encode(newPassword));
+    member.changePassword(passwordEncoder.encode(newPassword))
 }
 ```
 
 ### 3.2 비밀번호 정책 Validation
 
-Request DTO에서 `@Pattern`으로 입력 정책을 강제한다.
+Request DTO에서 `@Pattern`으로 입력 정책을 강제한다. Kotlin에서 Bean Validation 어노테이션은 `@field:` site target으로 붙여야 underlying field에 적용된다.
 
-```java
-public record SignupRequest(
-    @NotBlank @Email
-    String email,
+```kotlin
+data class SignupRequest(
+    @field:NotBlank
+    @field:Email
+    val email: String,
 
-    @NotBlank
-    @Pattern(
-        regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&])[A-Za-z\\d@$!%*#?&]{8,20}$",
+    @field:NotBlank
+    @field:Pattern(
+        regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@\$!%*#?&])[A-Za-z\\d@\$!%*#?&]{8,20}\$",
         message = "비밀번호는 8~20자, 영문·숫자·특수문자를 포함해야 합니다"
     )
-    String password,
+    val password: String,
 
-    @NotBlank @Size(min = 2, max = 20)
-    String name
+    @field:NotBlank
+    @field:Size(min = 2, max = 20)
+    val name: String
 ) {
-    public SignupCommand toCommand() {
-        return new SignupCommand(email, password, name);
-    }
+    fun toCommand(): SignupCommand = SignupCommand(email, password, name)
 }
 ```
 
@@ -650,15 +543,14 @@ public record SignupRequest(
 
 Spring Security 7에서 Argon2 사용:
 
-```java
+```kotlin
 @Bean
-public PasswordEncoder passwordEncoder() {
+fun passwordEncoder(): PasswordEncoder =
     // saltLength=16, hashLength=32, parallelism=1, memory=65536KB, iterations=3
-    return new Argon2PasswordEncoder(16, 32, 1, 65536, 3);
-}
+    Argon2PasswordEncoder(16, 32, 1, 65536, 3)
 ```
 
-> <strong>참고</strong>: 과제에서는 BCrypt가 사실상 표준이다. `PasswordEncoderFactories.createDelegatingPasswordEncoder()`를 쓰면 나중에 알고리즘을 교체해도 기존 해시와 하위 호환이 유지된다.
+> <strong>참고</strong>: 과제에서는 BCrypt가 사실상 표준이다. 위 예시처럼 단일 `Argon2PasswordEncoder` Bean으로 통째 교체하면 기존 `{bcrypt}` prefix 해시는 검증 실패한다. 점진 마이그레이션이 필요하면 `DelegatingPasswordEncoder` 구조를 유지하면서 인코더 맵에 Argon2를 추가하고 `idForEncode`만 `"argon2"`로 바꾸면 된다 — 새 해시는 `{argon2}`로 저장되고 기존 `{bcrypt}` 해시는 prefix 기반으로 BCrypt에서 계속 검증된다.
 
 ---
 
@@ -668,86 +560,38 @@ public PasswordEncoder passwordEncoder() {
 
 과제 요구사항에 맞게 역할을 정의한다. `@Enumerated(EnumType.STRING)`으로 저장하면 DB에 `USER`, `SELLER`, `ADMIN` 문자열이 들어가 쿼리가 읽기 편하다.
 
-```java
-public enum MemberRole {
+```kotlin
+enum class MemberRole {
     USER,    // 일반 사용자
     SELLER,  // 판매자
     ADMIN    // 관리자
 }
 ```
 
-```java
+```kotlin
 @Entity
-public class Member {
-
+class Member(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private MemberRole role;
-}
+    var role: MemberRole
+)
 ```
 
 ### 4.2 메서드 수준 보안 @PreAuthorize
 
 `@EnableMethodSecurity`를 선언하면 Controller 메서드에 `@PreAuthorize`를 붙일 수 있다. JWT의 role claim이 `JwtAuthenticationConverter`를 거쳐 `ROLE_SELLER`로 변환되기 때문에 `hasRole('SELLER')`가 작동한다.
 
-```java
-@RestController
-@RequestMapping("/api/v1/products")
-@RequiredArgsConstructor
-public class ProductController {
-
-    private final ProductService productService;
-
-    // SecurityConfig에서 permitAll 설정 → 누구나 조회
-    @GetMapping("/{productId}")
-    public ProductResponse getProduct(@PathVariable Long productId) {
-        return productService.getProduct(productId);
-    }
-
-    // SELLER 권한만 상품 등록
-    @PostMapping
-    @PreAuthorize("hasRole('SELLER')")
-    public ProductResponse createProduct(
-        @AuthenticationPrincipal Jwt jwt,
-        @Valid @RequestBody CreateProductRequest request
-    ) {
-        Long sellerId = Long.parseLong(jwt.getSubject());
-        return productService.createProduct(sellerId, request);
-    }
-
-    // SELLER 권한만 상품 수정
-    @PatchMapping("/{productId}")
-    @PreAuthorize("hasRole('SELLER')")
-    public ProductResponse updateProduct(
-        @AuthenticationPrincipal Jwt jwt,
-        @PathVariable Long productId,
-        @RequestBody UpdateProductRequest request
-    ) {
-        Long sellerId = Long.parseLong(jwt.getSubject());
-        return productService.updateProduct(sellerId, productId, request);
-    }
-
-    // ADMIN 권한만 전체 조회
-    @GetMapping("/admin/all")
-    @PreAuthorize("hasRole('ADMIN')")
-    public List<ProductResponse> getAllProductsForAdmin() {
-        return productService.getAllProductsForAdmin();
-    }
-}
-```
-
-<details>
-<summary>Kotlin 버전</summary>
-
 ```kotlin
 @RestController
 @RequestMapping("/api/v1/products")
 class ProductController(private val productService: ProductService) {
 
+    // SecurityConfig에서 permitAll 설정 → 누구나 조회
     @GetMapping("/{productId}")
     fun getProduct(@PathVariable productId: Long): ProductResponse =
         productService.getProduct(productId)
 
+    // SELLER 권한만 상품 등록
     @PostMapping
     @PreAuthorize("hasRole('SELLER')")
     fun createProduct(
@@ -758,6 +602,7 @@ class ProductController(private val productService: ProductService) {
         return productService.createProduct(sellerId, request)
     }
 
+    // SELLER 권한만 상품 수정
     @PatchMapping("/{productId}")
     @PreAuthorize("hasRole('SELLER')")
     fun updateProduct(
@@ -768,10 +613,14 @@ class ProductController(private val productService: ProductService) {
         val sellerId = jwt.subject.toLong()
         return productService.updateProduct(sellerId, productId, request)
     }
+
+    // ADMIN 권한만 전체 조회
+    @GetMapping("/admin/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    fun getAllProductsForAdmin(): List<ProductResponse> =
+        productService.getAllProductsForAdmin()
 }
 ```
-
-</details>
 
 ### 4.3 리소스 소유자 검증 — Service vs @PreAuthorize 두 방식
 
@@ -779,53 +628,49 @@ role 검증은 `@PreAuthorize`로 충분하지만, "본인 것인가"를 확인�
 
 **방식 1: Service에서 직접 검증 (과제 권장)**
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class ProductService {
-
-    private final ProductRepository productRepository;
+class ProductService(private val productRepository: ProductRepository) {
 
     @Transactional
-    public ProductResponse updateProduct(Long sellerId, Long productId,
-                                         UpdateProductRequest request) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+    fun updateProduct(
+        sellerId: Long,
+        productId: Long,
+        request: UpdateProductRequest
+    ): ProductResponse {
+        val product = productRepository.findById(productId)
+            .orElseThrow { BusinessException(ErrorCode.PRODUCT_NOT_FOUND) }
 
-        if (!product.getSellerId().equals(sellerId)) {
-            throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
+        if (product.sellerId != sellerId) {
+            throw BusinessException(ErrorCode.PRODUCT_NOT_OWNED)
         }
 
-        product.update(request.getName(), request.getPrice());
-        return ProductResponse.from(product);
+        product.update(request.name, request.price)
+        return ProductResponse.from(product)
     }
 }
 ```
 
 **방식 2: @PreAuthorize + SpEL 커스텀 서비스**
 
-```java
+```kotlin
 @GetMapping("/{orderId}")
 @PreAuthorize("@orderAuthorizationService.isOwner(#orderId, authentication.principal)")
-public OrderResponse getOrder(@PathVariable Long orderId) {
-    return orderService.getOrder(orderId);
-}
+fun getOrder(@PathVariable orderId: Long): OrderResponse =
+    orderService.getOrder(orderId)
 ```
 
-```java
+```kotlin
 @Service
-@RequiredArgsConstructor
-public class OrderAuthorizationService {
-
-    private final OrderRepository orderRepository;
+class OrderAuthorizationService(private val orderRepository: OrderRepository) {
 
     // authentication.principal은 Jwt 객체
-    public boolean isOwner(Long orderId, Jwt jwt) {
-        Long userId = Long.parseLong(jwt.getSubject());
+    fun isOwner(orderId: Long, jwt: Jwt): Boolean {
+        val userId = jwt.subject.toLong()
         return orderRepository.findById(orderId)
-            .map(order -> order.getBuyerId().equals(userId))
-            .orElse(false);
+            .map { it.buyerId == userId }
+            .orElse(false)
     }
 }
 ```
@@ -843,27 +688,24 @@ public class OrderAuthorizationService {
 
 `@AuthenticationPrincipal Jwt jwt` 패턴으로 Controller에서 현재 사용자의 정보를 꺼낸다.
 
-```java
+```kotlin
 @RestController
 @RequestMapping("/api/v1/members")
-@RequiredArgsConstructor
-public class MemberController {
-
-    private final MemberService memberService;
+class MemberController(private val memberService: MemberService) {
 
     @GetMapping("/me")
-    public MemberResponse getCurrentMember(@AuthenticationPrincipal Jwt jwt) {
-        Long userId = Long.parseLong(jwt.getSubject());
-        return memberService.getMember(userId);
+    fun getCurrentMember(@AuthenticationPrincipal jwt: Jwt): MemberResponse {
+        val userId = jwt.subject.toLong()
+        return memberService.getMember(userId)
     }
 
     @PatchMapping("/me")
-    public MemberResponse updateProfile(
-        @AuthenticationPrincipal Jwt jwt,
-        @Valid @RequestBody UpdateMemberRequest request
-    ) {
-        Long userId = Long.parseLong(jwt.getSubject());
-        return memberService.updateMember(userId, request);
+    fun updateProfile(
+        @AuthenticationPrincipal jwt: Jwt,
+        @Valid @RequestBody request: UpdateMemberRequest
+    ): MemberResponse {
+        val userId = jwt.subject.toLong()
+        return memberService.updateMember(userId, request)
     }
 }
 ```
@@ -873,15 +715,14 @@ public class MemberController {
 
 `@AuthenticationPrincipal`이 너무 길거나, userId 추출 코드가 반복된다면 커스텀 어노테이션으로 감쌀 수 있다.
 
-```java
-@Target(ElementType.PARAMETER)
-@Retention(RetentionPolicy.RUNTIME)
+```kotlin
+@Target(AnnotationTarget.VALUE_PARAMETER)
+@Retention(AnnotationRetention.RUNTIME)
 @AuthenticationPrincipal
-public @interface CurrentUser {
-}
+annotation class CurrentUser
 ```
 
-`@AuthenticationPrincipal`을 메타 어노테이션으로 붙이면 Spring이 동일하게 처리한다. Controller에서는 `@CurrentUser Jwt jwt`로 쓰면 된다.
+`@AuthenticationPrincipal`을 메타 어노테이션으로 붙이면 Spring이 동일하게 처리한다. Controller에서는 `@CurrentUser jwt: Jwt`로 쓰면 된다.
 
 </details>
 
@@ -914,41 +755,40 @@ flowchart TD
 
 Spring Security를 쓸 때는 반드시 `SecurityConfig`에서 `.cors(cors -> cors.configurationSource(...))`로 CORS 설정을 연결해야 한다. `CorsConfig`만 만들고 Security에 연결하지 않으면 preflight(OPTIONS) 요청이 401을 반환한다.
 
-```java
+```kotlin
 @Configuration
-public class CorsConfig {
+class CorsConfig {
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-            "http://localhost:3000",
-            "https://your-frontend-domain.com"
-        ));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+    fun corsConfigurationSource(): CorsConfigurationSource {
+        val configuration = CorsConfiguration().apply {
+            allowedOrigins = listOf(
+                "http://localhost:3000",
+                "https://your-frontend-domain.com"
+            )
+            allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            allowedHeaders = listOf("*")
+            exposedHeaders = listOf("Authorization")
+            allowCredentials = true
+            maxAge = 3600L
+        }
+        return UrlBasedCorsConfigurationSource().apply {
+            registerCorsConfiguration("/**", configuration)
+        }
     }
 }
 ```
 
 SecurityConfig의 `filterChain`에 `.cors(...)` 추가:
 
-```java
+```kotlin
 @Bean
-public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    return http
-        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-        .csrf(csrf -> csrf.disable())
+fun filterChain(http: HttpSecurity): SecurityFilterChain =
+    http
+        .cors { it.configurationSource(corsConfigurationSource()) }
+        .csrf { it.disable() }
         // ... 나머지 설정
-        .build();
-}
+        .build()
 ```
 
 > <strong>참고</strong>: `corsConfigurationSource`를 같은 `@Configuration` 클래스에 두거나, `@Autowired`로 주입해서 `SecurityConfig`에서 참조하면 된다.
@@ -957,11 +797,11 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
 특정 Controller에만 CORS를 다르게 적용할 때 쓴다.
 
-```java
+```kotlin
 @RestController
 @RequestMapping("/api/v1/public")
-@CrossOrigin(origins = "http://localhost:3000")
-public class PublicController {
+@CrossOrigin(origins = ["http://localhost:3000"])
+class PublicController {
     // 이 Controller에만 Origin 제한 적용
 }
 ```
@@ -1024,21 +864,22 @@ public class PublicController {
 
 <strong>Refresh Token Rotation</strong>이란 Refresh Token 사용 시 새 Refresh Token도 함께 발급하고 기존 것을 무효화하는 패턴이다. 탈취된 Refresh Token의 재사용을 감지할 수 있다.
 
-```java
-public TokenResponse refresh(String refreshToken) {
-    Long userId = tokenService.parseUserId(refreshToken);  // 만료 시 JwtException → 401
-    Member member = memberRepository.findById(userId)
-        .orElseThrow(() -> new MemberNotFoundException(userId));
+```kotlin
+fun refresh(refreshToken: String): TokenResponse {
+    val userId = tokenService.parseUserId(refreshToken)  // 만료 시 JwtException → 401
+    val member = memberRepository.findById(userId)
+        .orElseThrow { MemberNotFoundException(userId) }
 
     // Access Token + 새 Refresh Token 둘 다 발급
-    String newAccessToken = tokenService.createAccessToken(
-        member.getId(), member.getEmail(), member.getRole().name());
-    String newRefreshToken = tokenService.createRefreshToken(member.getId());
+    val newAccessToken = tokenService.createAccessToken(
+        member.id, member.email, member.role.name
+    )
+    val newRefreshToken = tokenService.createRefreshToken(member.id)
 
     // 기존 Refresh Token 무효화 (DB 저장 시)
-    // refreshTokenRepository.delete(refreshToken);
+    // refreshTokenRepository.delete(refreshToken)
 
-    return new TokenResponse(newAccessToken, newRefreshToken);
+    return TokenResponse(newAccessToken, newRefreshToken)
 }
 ```
 
