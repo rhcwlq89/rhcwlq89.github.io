@@ -16,7 +16,7 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide2.png"
 
 ## 서론
 
-[이전 글](/blog/aws-vpc-edge-routing-guide-1)에서 외부 트래픽이 VPC로 들어오는 진입점 결정을 다뤘다. 이번 편은 그 다음 결정이다 — <strong>VPC 안에 들어온(혹은 VPC 안에 있는) 트래픽이 다른 VPC, AWS 관리 서비스, 온프레미스로 어떻게 이어지는가</strong>.
+[이전 글](/blog/aws-vpc-edge-routing-guide-1)에서 외부 트래픽이 VPC로 들어오는 진입점 결정을 다뤘다. 이번 편은 그 다음 결정이다 — <strong>VPC 안에 들어온(혹은 VPC 안에 있는) 트래픽이 다른 VPC, AWS 관리 서비스, 또는 자사 데이터센터·사옥 같은 온프레미스(on-prem, AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라)로 어떻게 이어지는가</strong>.
 
 이 결정은 1편보다 훨씬 자주 틀린다. 후보가 6개고, 각자 동작 원리가 완전히 달라서 "비슷해 보이지만 정작 못 하는 것"이 많기 때문이다. VPC Peering으로 N:N 메시를 만들다 1년 만에 Transit Gateway로 갈아엎거나, NAT Gateway로 S3에 접근하면서 매월 수백 달러를 새는 경우 — 둘 다 흔하다.
 
@@ -229,7 +229,7 @@ Peering·TGW와 비교한 PrivateLink의 강점:
 
 ## 5. 온프레미스 — VPN과 Direct Connect
 
-온프레미스(자사 데이터센터, 사옥 서버실)와 VPC를 잇는 결정은 두 후보로 거의 정해진다 — Site-to-Site VPN과 Direct Connect. 그리고 둘은 경쟁이 아니라 <strong>"낮은 진입장벽 vs 고성능"의 단계 관계</strong>다.
+온프레미스와 VPC를 잇는 결정은 두 후보로 거의 정해진다 — Site-to-Site VPN과 Direct Connect. 그리고 둘은 경쟁이 아니라 <strong>"낮은 진입장벽 vs 고성능"의 단계 관계</strong>다.
 
 ### 5.1 Site-to-Site VPN — 인터넷 위에 IPsec 터널
 
@@ -395,6 +395,7 @@ DX 한 회선만 운영하다가 광케이블 사고로 통신이 끊긴 사례�
 
 | 약어 | 풀이 |
 | --- | --- |
+| 온프렘 / 온프레미스 | On-Premises. 자사 데이터센터·사옥 서버실 등 AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라 |
 | TGW | Transit Gateway. 다대다 VPC·온프레미스 허브 |
 | DX | Direct Connect. AWS와의 전용 회선 |
 | VPN | Virtual Private Network. 여기서는 Site-to-Site VPN |

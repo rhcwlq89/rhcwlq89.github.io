@@ -375,3 +375,4 @@ sequenceDiagram
 | ENI | Elastic Network Interface. VPC 안의 가상 NIC |
 | EIP | Elastic IP. 고정 공인 IP |
 | AZ | Availability Zone. 리전 안의 데이터센터 단위 |
+| 온프렘 / 온프레미스 | On-Premises. 자사 데이터센터·사옥 서버실 등 AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라 |

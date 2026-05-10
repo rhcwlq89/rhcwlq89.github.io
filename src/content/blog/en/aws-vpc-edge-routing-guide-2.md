@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/aws-vpc-edge-routing-guide-1) we covered picking the entry point that fronts a VPC. This post handles the next decision — <strong>once traffic is inside (or already lives inside) a VPC, how does it reach another VPC, an AWS-managed service, or on-premises?</strong>
+In the [previous post](/blog/en/aws-vpc-edge-routing-guide-1) we covered picking the entry point that fronts a VPC. This post handles the next decision — <strong>once traffic is inside (or already lives inside) a VPC, how does it reach another VPC, an AWS-managed service, or on-prem (on-premises — your own datacenter or office server room, infrastructure you operate outside the public cloud)?</strong>
 
 This decision goes wrong far more often than Part 1's. There are six candidates, each works on a fundamentally different mechanism, and "looks similar but actually can't do X" comes up everywhere. Building an N×N mesh of VPC Peerings only to rip it out for Transit Gateway a year later, or routing S3 traffic through a NAT Gateway and quietly burning hundreds of dollars a month — both are common.
 
@@ -222,7 +222,7 @@ Summary: <strong>"VPC-wide" → Peering/TGW. "One service" → PrivateLink.</str
 
 ## 5. On-prem — VPN and Direct Connect
 
-Connecting on-prem (your DC or office server room) to a VPC narrows to two options: Site-to-Site VPN and Direct Connect. They're not competitors — <strong>they're a "low-barrier vs high-performance" progression</strong>.
+Connecting on-prem to a VPC narrows to two options: Site-to-Site VPN and Direct Connect. They're not competitors — <strong>they're a "low-barrier vs high-performance" progression</strong>.
 
 ### 5.1 Site-to-Site VPN — IPsec tunnel over the internet
 
@@ -388,6 +388,7 @@ Part 3 covers <strong>routing inside the VPC</strong> — how IGW and NAT Gatewa
 
 | Acronym | Meaning |
 | --- | --- |
+| On-prem / On-premises | Your own datacenter or office server room — infrastructure you operate outside a public cloud like AWS |
 | TGW | Transit Gateway. N:N VPC and on-prem hub |
 | DX | Direct Connect. Dedicated fiber to AWS |
 | VPN | Virtual Private Network. Here, Site-to-Site VPN |

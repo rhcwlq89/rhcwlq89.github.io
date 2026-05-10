@@ -368,3 +368,4 @@ When "the packet isn't getting through" lands on your desk:
 | ENI | Elastic Network Interface. Virtual NIC inside a VPC |
 | EIP | Elastic IP. Static public IP |
 | AZ | Availability Zone. Datacenter unit within a region |
+| On-prem / On-premises | Your own datacenter or office server room — infrastructure you operate outside a public cloud like AWS |

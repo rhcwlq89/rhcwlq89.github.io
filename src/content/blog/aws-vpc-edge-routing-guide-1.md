@@ -114,7 +114,7 @@ API Gateway는 ALB와 같은 L7이지만 <strong>"API 운영에 필요한 부가
 | <strong>인증 (Auth)</strong> | "이 요청자가 누구이고, 무엇을 할 권한이 있는지" 백엔드 도달 전에 검증 | Spring Security · Passport · 자체 JWT 검증 미들웨어 | JWT/OIDC 검증, IAM 서명, Cognito User Pool, Lambda Authorizer (임의 검증 로직) |
 | <strong>쓰로틀 (Throttling)</strong> | "초당·분당 N건 이상 못 보내게" — 백엔드 보호 + burst·DDoS 흡수 | Bucket4j · Resilience4j RateLimiter · Redis 토큰 버킷 | account/stage/route 단위 RPS·burst 한도, 초과 시 429 자동 반환 |
 | <strong>요금제 (Usage Plan)</strong> | "Free는 분당 10건, Pro는 분당 1000건" — API Key로 등급 구분 후 한도·과금 적용 | 자체 API Key 발급·검증 + 미터링 시스템 + 결제 연동 | REST API의 Usage Plan + API Key 묶음, 일·월 quota와 rate 한도 |
-| <strong>관리형 통합 (Integration)</strong> | "받은 HTTP를 백엔드 호출로 <strong>변환</strong>해서 보내기" — 예: `GET /products/{id}` → DynamoDB GetItem 직접 호출 (Lambda·EC2 없이) | 자체 SDK 호출 코드 + 요청/응답 매핑 + 재시도·timeout 로직 | DynamoDB·Lambda·SQS·Step Functions·임의 AWS API 통합, VTL로 요청/응답 변환, 재시도·timeout은 설정으로 |
+| <strong>관리형 통합 (Integration)</strong> | "받은 HTTP를 백엔드 호출로 <strong>변환</strong>해서 보내기" — 예: `GET /products/{id}` → DynamoDB GetItem 직접 호출 (Lambda·EC2 없이) | 자체 SDK 호출 코드 + 요청/응답 매핑 + 재시도·timeout 로직 | DynamoDB·Lambda·SQS·Step Functions·임의 AWS API 통합, VTL(Velocity Template Language, Apache Velocity 기반 요청·응답 변환 템플릿 DSL — Lambda 코드 없이 설정만으로 변환 처리)로 요청/응답 변환, 재시도·timeout은 설정으로 |
 
 > <strong>관리형 통합이 ALB와 다른 결정적 한 가지</strong>: ALB는 받은 HTTP를 <strong>그대로</strong> 뒤의 컴퓨트(EC2·ECS·Lambda)로 던지고, 백엔드 코드가 알아서 처리하는 모델이다. API Gateway의 통합은 받은 HTTP를 <strong>AWS 서비스 API 호출 형식으로 변환해서 직접 호출</strong>하는 모델이라, 단순 CRUD 같은 경우 Lambda·EC2 같은 컴퓨트 자체가 필요 없어진다 — `GET /products/123` 한 줄이 곧 DynamoDB API 호출이 된다는 뜻. 다른 셋(인증·쓰로틀·요금제)이 "받은 요청을 어떻게 검증·제한하느냐"라면 통합은 "그 요청을 누구에게 어떤 형태로 전달하느냐"의 결정이다.
 
@@ -409,3 +409,5 @@ EC2 1대뿐인데 ALB를 끼운 구성. <strong>로드밸런싱할 대상이 없
 | EIP | Elastic IP. 고정 공인 IP |
 | TG | Target Group. ALB/NLB의 백엔드 묶음 |
 | OAC | Origin Access Control. CloudFront에서 S3 접근 보호 |
+| VTL | Velocity Template Language. API Gateway REST API의 요청·응답 변환 템플릿 DSL (Apache Velocity 기반) |
+| 온프렘 / 온프레미스 | On-Premises. 자사 데이터센터·사옥 서버실 등 AWS 같은 퍼블릭 클라우드 외부에서 자체 운영하는 인프라 |
