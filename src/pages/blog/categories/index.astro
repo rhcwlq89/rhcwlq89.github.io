@@ -1,0 +1,102 @@
+---
+import { getCollection } from "astro:content";
+import BaseHead from "../../../components/BaseHead.astro";
+import Footer from "../../../components/Footer.astro";
+import Header from "../../../components/Header.astro";
+import { SITE_TITLE } from "../../../consts";
+import { isPublished } from "../../../utils/posts";
+import { collectCategories } from "../../../utils/categories";
+
+const posts = (await getCollection("blog")).filter(
+  (post) => !post.id.startsWith("en/") && isPublished(post),
+);
+const categories = collectCategories(posts).filter((c) => c.posts.length > 0);
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <BaseHead
+      title={`카테고리 | ${SITE_TITLE}`}
+      description="블로그 글을 5개 카테고리로 묶어 봅니다."
+      lang="ko"
+    />
+    <style>
+      main {
+        width: 800px;
+        max-width: calc(100% - 2em);
+        margin: 2em auto;
+      }
+      h1 {
+        margin-bottom: 0.5em;
+      }
+      .lead {
+        color: rgb(var(--gray));
+        margin-bottom: 2em;
+      }
+      .breadcrumb {
+        font-size: 0.9em;
+        margin-bottom: 1em;
+        color: rgb(var(--gray));
+      }
+      .breadcrumb a {
+        color: rgb(var(--gray-dark));
+      }
+      ul.category-grid {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.2em;
+      }
+      ul.category-grid li a {
+        display: block;
+        padding: 1.2em 1.4em;
+        border-radius: 14px;
+        background: rgba(var(--gray), 0.08);
+        color: inherit;
+        text-decoration: none;
+        transition: background 0.2s;
+      }
+      ul.category-grid li a:hover {
+        background: rgba(var(--accent), 0.15);
+      }
+      ul.category-grid h2 {
+        margin: 0 0 0.3em;
+        font-size: 1.1em;
+        color: rgb(var(--black));
+      }
+      ul.category-grid li a:hover h2 {
+        color: rgb(var(--accent));
+      }
+      .count {
+        font-size: 0.9em;
+        color: rgb(var(--gray));
+      }
+    </style>
+  </head>
+  <body>
+    <Header lang="ko" />
+    <main>
+      <nav class="breadcrumb" aria-label="breadcrumb">
+        <a href="/">홈</a> &rsaquo; <a href="/blog/">블로그</a> &rsaquo; 카테고리
+      </nav>
+      <h1>카테고리</h1>
+      <p class="lead">총 {categories.length}개 카테고리, {posts.length}개의 글</p>
+      <ul class="category-grid">
+        {
+          categories.map((c) => (
+            <li>
+              <a href={`/blog/categories/${c.slug}/`}>
+                <h2>{c.ko}</h2>
+                <span class="count">{c.posts.length}개의 글</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </main>
+    <Footer lang="ko" />
+  </body>
+</html>

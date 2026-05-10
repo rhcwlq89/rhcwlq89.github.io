@@ -73,6 +73,7 @@ const posts = (await getCollection("blog"))
       .toolbar {
         display: flex;
         justify-content: flex-end;
+        gap: 0.6em;
         margin-bottom: 1.5rem;
       }
       .toolbar a {
@@ -109,6 +110,7 @@ const posts = (await getCollection("blog"))
     <Header lang="ko" />
     <main>
       <div class="toolbar">
+        <a href="/blog/categories/">카테고리로 보기 →</a>
         <a href="/blog/tags/">태그로 보기 →</a>
       </div>
       <section>

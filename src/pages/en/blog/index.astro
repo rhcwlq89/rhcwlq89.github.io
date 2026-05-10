@@ -75,6 +75,7 @@ const posts = (await getCollection("blog"))
       .toolbar {
         display: flex;
         justify-content: flex-end;
+        gap: 0.6em;
         margin-bottom: 1.5rem;
       }
       .toolbar a {
@@ -111,6 +112,7 @@ const posts = (await getCollection("blog"))
     <Header lang="en" />
     <main>
       <div class="toolbar">
+        <a href="/en/blog/categories/">Browse by category →</a>
         <a href="/en/blog/tags/">Browse by tag →</a>
       </div>
       <section>
