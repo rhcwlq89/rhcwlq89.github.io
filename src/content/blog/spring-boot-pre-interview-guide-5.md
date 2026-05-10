@@ -1,91 +1,162 @@
 ---
-title: "스프링 사전과제 가이드 5편: Security & Authentication"
-description: "인증/인가와 보안 설정 - Spring Security, JWT, 권한 관리"
+title: "스프링 사전과제 가이드 5편: Security & Authentication — Spring Security 7, JWT(oauth2-resource-server), BCrypt·Argon2, RBAC"
+description: "Spring Security 7과 spring-boot-starter-oauth2-resource-server로 JWT 인증을 표준대로 구현하는 법, JwtDecoder/JwtEncoder Bean 한 짝으로 검증·발급, JwtAuthenticationConverter로 role claim → ROLE_ 매핑, @AuthenticationPrincipal Jwt로 Controller에서 사용자 정보 추출, BCrypt/Argon2 선택 기준, @PreAuthorize와 Service에서의 리소스 소유자 검증, CORS 흔한 함정까지 — 사전과제 보안 영역에서 가점과 감점이 갈리는 포인트를 평가자 시점으로 정리."
 pubDate: 2026-01-17T10:00:00+09:00
-tags: ["Spring Boot", "Spring Security", "JWT", "Backend", "사전과제"]
-heroImage: "../../assets/PreinterviewTaskGuide.png"
----
-
-## 시리즈 네비게이션
-
-| 이전 | 현재 | 다음 |
-|:---:|:---:|:---:|
-| [4편: Performance](/blog/spring-boot-pre-interview-guide-4) | **5편: Security** | [6편: DevOps](/blog/spring-boot-pre-interview-guide-6) |
-
-> 📚 **전체 로드맵**: [스프링 사전과제 가이드 로드맵](/blog/spring-boot-pre-interview-guide-1) 참고
-
+tags:
+  - Spring Boot
+  - Spring Security
+  - JWT
+  - OAuth2
+  - Backend
+  - 사전과제
+heroImage: "../../assets/SpringBootPreInterviewGuide5.png"
 ---
 
 ## 서론
 
-과제에서 인증/인가가 요구될 때 참고할 수 있는 가이드다. JWT 기반 인증과 Spring Security 설정을 중심으로 정리했다.
+"보안 설정, 어디까지 해야 평가자가 고개를 끄덕일까?"
 
-**5편에서 다루는 내용:**
-- Spring Security 기초
-- JWT 인증
-- 비밀번호 관리
-- API 권한 관리
-- CORS 설정
+사전과제에서 Security 영역은 두 갈래다. JJWT를 직접 다루며 `OncePerRequestFilter`를 손으로 짠 것과, Spring Security가 제공하는 `oauth2-resource-server` 추상화를 쓴 것. 평가자는 후자를 보면 "Spring Security를 알고 있구나"라고 읽는다. 전자는 "동작하지만 표준과 다르다"는 인상을 남긴다.
 
-### 목차
+4편에서 N+1·캐시·페이지네이션을 다뤘다. 5편은 그 위에서 인증·인가 레이어를 쌓는다. 핵심은 세 가지다.
 
-- [Spring Security 기초](#spring-security-기초)
-- [JWT 인증](#jwt-인증)
-- [비밀번호 관리](#비밀번호-관리)
-- [API 권한 관리](#api-권한-관리)
-- [CORS 설정](#cors-설정)
-- [정리](#정리)
+- `spring-boot-starter-oauth2-resource-server`로 JWT 검증을 Spring Security에게 위임하는 방법
+- `JwtDecoder`·`JwtEncoder` Bean 한 짝으로 검증·발급을 표준 API로 처리하는 패턴
+- `@AuthenticationPrincipal Jwt`로 Controller에서 현재 사용자를 받는 방법
+
+대상 독자는 Spring Security는 아는데 사전과제 평가자가 어디를 보는지 모르는 주니어 백엔드 개발자다.
+
+[이전 글](/blog/spring-boot-pre-interview-guide-4)에서 Performance & Optimization을 다뤘다.
+
+- 1편 — [Core Application Layer](/blog/spring-boot-pre-interview-guide-1)
+- 2편 — [Database & Testing](/blog/spring-boot-pre-interview-guide-2)
+- 3편 — [Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
+- 4편 — [Performance & Optimization](/blog/spring-boot-pre-interview-guide-4)
+- <strong>5편 — Security & Authentication (이 글)</strong>
+- 6편 — [DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)
+- 7편 — [Advanced Patterns](/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
-## Spring Security 기초
+## TL;DR
 
-### 1. 의존성 추가
+- <strong>oauth2-resource-server가 Spring Security 7의 표준</strong> — `BearerTokenAuthenticationFilter`가 토큰 추출·검증·SecurityContext 설정을 자동으로 처리한다. 직접 `OncePerRequestFilter`를 만들 필요 없다.
+- <strong>JwtDecoder + JwtEncoder를 Bean으로 등록</strong> — `NimbusJwtDecoder`(검증)와 `NimbusJwtEncoder`(발급)를 Spring Security 추상화로 다룬다. HMAC과 RSA 모두 같은 API를 쓴다.
+- <strong>JwtAuthenticationConverter로 role claim → ROLE_ 매핑</strong> — JWT의 `role` claim을 Spring Security `GrantedAuthority`로 변환한다. `@PreAuthorize("hasRole('SELLER')")` 가 이 매핑에 의존한다.
+- <strong>@AuthenticationPrincipal Jwt로 Controller에서 현재 사용자</strong> — `jwt.getSubject()`로 userId, `jwt.getClaim("email")`로 임의 claim을 꺼낸다. 타입 캐스팅 없이 깔끔하다.
+- <strong>BCrypt는 기본, Argon2는 옵션</strong> — `PasswordEncoderFactories.createDelegatingPasswordEncoder()`가 기본값으로 BCrypt를 쓴다. 보안 요구사항이 높으면 Argon2로 교체한다.
+
+---
+
+## 1. Spring Security 7 — 평가의 출발선
+
+### 1.1 의존성과 Spring Security 6 → 7 주요 변경
+
+Spring Security 7에서는 `spring-boot-starter-oauth2-resource-server`를 함께 추가하는 것이 표준이다. 이 스타터는 Nimbus JOSE+JWT를 transitive 의존성으로 가져오기 때문에 JJWT 라이브러리를 별도로 추가할 필요가 없다.
 
 ```groovy
 // build.gradle
-implementation 'org.springframework.boot:spring-boot-starter-security'
-testImplementation 'org.springframework.security:spring-security-test'
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    // JJWT 라이브러리 불필요 — Nimbus JOSE+JWT가 transitive로 포함됨
+    testImplementation 'org.springframework.security:spring-security-test'
+}
 ```
 
-### 2. SecurityFilterChain 설정
+Spring Security 6에서 7로 올라오면서 평가자가 자주 확인하는 변경 포인트는 다음과 같다.
 
-Spring Security 6.x 기준 설정이다. `@EnableMethodSecurity`를 함께 사용하면 `@PreAuthorize` 등 메서드 수준 보안을 활성화할 수 있다.
+| 항목 | Spring Security 6 | Spring Security 7 |
+|------|-------------------|-------------------|
+| URL 권한 API | `antMatchers()` 제거 | `requestMatchers()`만 사용 |
+| HTTP DSL | 일부 구 API 병존 | Lambda DSL 전면 표준 |
+| 메서드 보안 | `@EnableGlobalMethodSecurity` | `@EnableMethodSecurity` |
+| JWT 필터 | 직접 `OncePerRequestFilter` 구현 | `oauth2ResourceServer` 설정 권장 |
+| `@EnableWebSecurity` | 명시 선언 필요 | Spring Boot 자동 설정, 생략 가능 |
+
+### 1.2 SecurityFilterChain 한 장으로 보기
+
+Spring Security 7에서 `oauth2ResourceServer`를 설정하면 `BearerTokenAuthenticationFilter`가 자동으로 필터 체인에 등록된다. 이 필터가 `Authorization: Bearer ...` 헤더를 추출하고, `JwtDecoder`에게 검증을 위임하고, `JwtAuthenticationConverter`로 Authority를 변환한 뒤 `SecurityContext`에 저장한다.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant F as BearerTokenAuthenticationFilter
+    participant D as JwtDecoder
+    participant V as JwtAuthenticationConverter
+    participant SC as SecurityContext
+    participant Ctrl as Controller
+
+    C->>F: GET /api/v1/me (Authorization: Bearer ...)
+    F->>D: decode(token)
+    D->>D: 서명·만료 검증
+    D-->>F: Jwt 객체
+    F->>V: convert(jwt)
+    V->>V: role claim → ROLE_ Authority
+    V-->>F: JwtAuthenticationToken
+    F->>SC: 저장
+    F->>Ctrl: @AuthenticationPrincipal Jwt 주입
+```
+
+SecurityConfig 전체 코드다. JJWT 기반 구현과의 차이는 `addFilterBefore(new JwtAuthenticationFilter(...))` 줄이 `oauth2ResourceServer(...)` 한 줄로 대체된다는 점이다.
 
 ```java
 @Configuration
-@EnableMethodSecurity  // @PreAuthorize, @PostAuthorize 활성화
+@EnableMethodSecurity
 public class SecurityConfig {
 
-    private final JwtTokenProvider jwtTokenProvider;
-
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
-        this.jwtTokenProvider = jwtTokenProvider;
-    }
+    @Value("${jwt.secret}")
+    private String secret;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
-            .csrf(csrf -> csrf.disable())  // REST API이므로 CSRF 비활성화
+            .csrf(csrf -> csrf.disable())
             .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))  // 세션 미사용
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()  // 인증 API는 허용
-                .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()  // 공개 조회 API
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Swagger
-                .requestMatchers("/h2-console/**").permitAll()  // H2 Console (개발용)
-                .anyRequest().authenticated()  // 나머지는 인증 필요
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .anyRequest().authenticated()
             )
-            .headers(headers ->
-                headers.frameOptions(frame -> frame.disable()))  // H2 Console iframe 허용
-            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
-                UsernamePasswordAuthenticationFilter.class)
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+            )
             .build();
     }
 
     @Bean
+    public JwtDecoder jwtDecoder() {
+        SecretKeySpec key = new SecretKeySpec(
+            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(key)
+            .macAlgorithm(MacAlgorithm.HS256)
+            .build();
+    }
+
+    @Bean
+    public JwtEncoder jwtEncoder() {
+        SecretKeySpec key = new SecretKeySpec(
+            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        JWKSource<SecurityContext> jwks = new ImmutableSecret<>(key);
+        return new NimbusJwtEncoder(jwks);
+    }
+
+    @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    private JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter =
+            new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("role");
+        authoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return converter;
     }
 }
 ```
@@ -96,465 +167,226 @@ public class SecurityConfig {
 ```kotlin
 @Configuration
 @EnableMethodSecurity
-class SecurityConfig(private val jwtTokenProvider: JwtTokenProvider) {
+class SecurityConfig {
 
-    @Bean
-    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
+    @Value("\${jwt.secret}")
+    private lateinit var secret: String
 
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
-        http.csrf { it.disable() }
+        return http
+            .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .authorizeHttpRequests { authz ->
-                authz
+            .authorizeHttpRequests { auth ->
+                auth
                     .requestMatchers("/api/v1/auth/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
-                    .requestMatchers(
-                        "/swagger-ui/**",
-                        "/swagger-ui.html",
-                        "/v3/api-docs/**"
-                    ).permitAll()
-                    .requestMatchers("/h2-console/**").permitAll()
+                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                     .anyRequest().authenticated()
             }
+            .oauth2ResourceServer { oauth2 ->
+                oauth2.jwt { jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()) }
+            }
+            .build()
+    }
 
-        http.addFilterBefore(
-            JwtAuthenticationFilter(jwtTokenProvider),
-            UsernamePasswordAuthenticationFilter::class.java
-        )
+    @Bean
+    fun jwtDecoder(): JwtDecoder {
+        val key = SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256")
+        return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build()
+    }
 
-        // H2 Console iframe 허용
-        http.headers { it.frameOptions { fo -> fo.disable() } }
+    @Bean
+    fun jwtEncoder(): JwtEncoder {
+        val key = SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256")
+        val jwks: JWKSource<SecurityContext> = ImmutableSecret(key)
+        return NimbusJwtEncoder(jwks)
+    }
 
-        return http.build()
+    @Bean
+    fun passwordEncoder(): PasswordEncoder =
+        PasswordEncoderFactories.createDelegatingPasswordEncoder()
+
+    private fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
+        val authoritiesConverter = JwtGrantedAuthoritiesConverter()
+        authoritiesConverter.setAuthoritiesClaimName("role")
+        authoritiesConverter.setAuthorityPrefix("ROLE_")
+
+        val converter = JwtAuthenticationConverter()
+        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter)
+        return converter
     }
 }
 ```
 
 </details>
 
-> **@EnableWebSecurity vs @EnableMethodSecurity**
-> - `@EnableWebSecurity`: Spring Boot 3.x에서는 자동 설정되므로 생략 가능
-> - `@EnableMethodSecurity`: `@PreAuthorize`, `@PostAuthorize` 사용을 위해 명시적으로 선언 필요
+### 1.3 @EnableWebSecurity vs @EnableMethodSecurity
 
-### 3. 인증 흐름 이해
+두 어노테이션을 혼동하는 경우가 많다.
 
-```
-[요청] → [SecurityFilterChain] → [AuthenticationFilter] → [AuthenticationManager]
-                                                                    ↓
-[응답] ← [SecurityContext에 저장] ← [Authentication 객체 생성] ← [UserDetailsService]
-```
+| 어노테이션 | 역할 | Spring Boot 3.x에서 |
+|-----------|------|---------------------|
+| `@EnableWebSecurity` | 웹 보안 자동 설정 활성화 | Spring Boot가 자동 적용 → 생략 가능 |
+| `@EnableMethodSecurity` | `@PreAuthorize`·`@PostAuthorize` 활성화 | 명시적으로 선언 필요 |
 
-1. **SecurityFilterChain**: 요청을 가로채서 보안 처리
-2. **AuthenticationFilter**: 인증 정보 추출 (토큰, 세션 등)
-3. **AuthenticationManager**: 인증 처리 위임
-4. **UserDetailsService**: 사용자 정보 조회
-5. **SecurityContext**: 인증된 사용자 정보 저장
+`@EnableMethodSecurity`가 없으면 `@PreAuthorize("hasRole('SELLER')")`를 붙여도 무시된다. `@Configuration` 클래스 어딘가에 반드시 선언해야 한다.
 
 ---
 
-## JWT 인증
+## 2. JWT 인증 — oauth2-resource-server로 검증·발급
 
-### 1. 의존성 추가
+### 2.1 의존성과 secret 관리
 
-```groovy
-// build.gradle
-implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
-runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
-runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
-```
-
-### 2. JWT 프로퍼티 설정
+`application.yml`에 secret을 환경변수로 받아 설정한다. 소스 코드에 평문으로 넣으면 감점이다.
 
 ```yaml
 # application.yml
 jwt:
-  secret: your-256-bit-secret-key-here-must-be-at-least-32-characters
-  access-token-validity: 3600000   # 1시간 (밀리초)
-  refresh-token-validity: 604800000  # 7일 (밀리초)
+  secret: ${JWT_SECRET:your-256-bit-secret-key-must-be-at-least-32-characters}
 ```
 
-```java
-@Getter
-@ConfigurationProperties(prefix = "jwt")
-public class JwtProperties {
-    private final String secret;
-    private final long accessTokenValidity;
-    private final long refreshTokenValidity;
+Secret은 256비트(32바이트) 이상이어야 HMAC-SHA256 서명 검증 시 오류가 발생하지 않는다.
 
-    public JwtProperties(String secret, long accessTokenValidity, long refreshTokenValidity) {
-        this.secret = secret;
-        this.accessTokenValidity = accessTokenValidity;
-        this.refreshTokenValidity = refreshTokenValidity;
-    }
-}
-```
+> <strong>참고</strong>: 프로덕션에서는 AWS Secrets Manager 또는 Vault 같은 시크릿 관리 시스템을 쓴다. 과제에서는 `.env` 파일 + `.gitignore` 처리로 충분하다.
 
-```java
-@SpringBootApplication
-@ConfigurationPropertiesScan  // 또는 @EnableConfigurationProperties(JwtProperties.class)
-public class Application {
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-    }
-}
-```
+### 2.2 JwtDecoder · JwtEncoder Bean — 검증·발급의 한 짝
 
-### 3. JwtTokenProvider 구현
+<strong>JwtDecoder는 수신한 토큰을 검증하고 파싱하는 Bean이고, JwtEncoder는 새 토큰을 발급하는 Bean이다.</strong> oauth2-resource-server 스타터를 추가하면 `JwtDecoder` Bean을 컨테이너에서 자동으로 찾아 `BearerTokenAuthenticationFilter`에 연결한다.
 
-```java
-@Component
-@RequiredArgsConstructor
-public class JwtTokenProvider {
-
-    private final JwtProperties jwtProperties;
-    private SecretKey secretKey;
-
-    @PostConstruct
-    protected void init() {
-        this.secretKey = Keys.hmacShaKeyFor(
-            jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
-     * Access Token 생성
-     */
-    public String createAccessToken(Long userId, String email, String role) {
-        Date now = new Date();
-        Date validity = new Date(now.getTime() + jwtProperties.getAccessTokenValidity());
-
-        return Jwts.builder()
-            .subject(String.valueOf(userId))
-            .claim("email", email)
-            .claim("role", role)
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact();
-    }
-
-    /**
-     * Refresh Token 생성
-     */
-    public String createRefreshToken(Long userId) {
-        Date now = new Date();
-        Date validity = new Date(now.getTime() + jwtProperties.getRefreshTokenValidity());
-
-        return Jwts.builder()
-            .subject(String.valueOf(userId))
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact();
-    }
-
-    /**
-     * 토큰에서 사용자 ID 추출
-     */
-    public Long getUserId(String token) {
-        return Long.parseLong(getClaims(token).getSubject());
-    }
-
-    /**
-     * 토큰에서 역할 추출
-     */
-    public String getRole(String token) {
-        return getClaims(token).get("role", String.class);
-    }
-
-    /**
-     * 토큰 유효성 검증
-     */
-    public boolean validateToken(String token) {
-        try {
-            getClaims(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
-    }
-
-    private Claims getClaims(String token) {
-        return Jwts.parser()
-            .verifyWith(secretKey)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload();
-    }
-}
-```
+SecurityConfig에 이미 두 Bean을 등록했다(1.2절 참조). HMAC 방식의 경우 `SecretKeySpec`을 공유해 쓴다. RSA 방식이 필요한 경우는 아래를 참고한다.
 
 <details>
-<summary>Kotlin 버전</summary>
+<summary>RSA 비대칭 키 방식 (더 자세히)</summary>
 
-```kotlin
-@Component
-class JwtTokenProvider(
-    private val jwtProperties: JwtProperties
-) {
-    private lateinit var secretKey: SecretKey
+RSA 키 쌍을 사용하면 공개키 배포만으로 외부 서비스가 토큰을 검증할 수 있다. 인증 서버가 분리된 MSA 구조에서 주로 쓴다.
 
-    @PostConstruct
-    fun init() {
-        secretKey = Keys.hmacShaKeyFor(jwtProperties.secret.toByteArray(Charsets.UTF_8))
-    }
+```java
+@Bean
+public JwtDecoder jwtDecoder(RSAPublicKey publicKey) {
+    return NimbusJwtDecoder.withPublicKey(publicKey).build();
+}
 
-    fun createAccessToken(userId: Long, email: String, role: String): String {
-        val now = Date()
-        val validity = Date(now.time + jwtProperties.accessTokenValidity)
-
-        return Jwts.builder()
-            .subject(userId.toString())
-            .claim("email", email)
-            .claim("role", role)
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact()
-    }
-
-    fun createRefreshToken(userId: Long): String {
-        val now = Date()
-        val validity = Date(now.time + jwtProperties.refreshTokenValidity)
-
-        return Jwts.builder()
-            .subject(userId.toString())
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact()
-    }
-
-    fun getUserId(token: String): Long = getClaims(token).subject.toLong()
-
-    fun getRole(token: String): String = getClaims(token).get("role", String::class.java)
-
-    fun validateToken(token: String): Boolean {
-        return runCatching { getClaims(token) }.isSuccess
-    }
-
-    private fun getClaims(token: String): Claims {
-        return Jwts.parser()
-            .verifyWith(secretKey)
-            .build()
-            .parseSignedClaims(token)
-            .payload
-    }
+@Bean
+public JwtEncoder jwtEncoder(RSAPrivateKey privateKey, RSAPublicKey publicKey) {
+    RSAKey rsaKey = new RSAKey.Builder(publicKey)
+        .privateKey(privateKey)
+        .build();
+    JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(rsaKey));
+    return new NimbusJwtEncoder(jwks);
 }
 ```
+
+과제에서는 HMAC이 충분하다. RSA는 "MSA에서 공개키만 배포해 검증한다"는 개념만 알면 된다.
 
 </details>
 
-### 4. JwtAuthenticationFilter 구현
+### 2.3 JwtAuthenticationConverter — role claim → ROLE_ Authority 매핑
 
-JWT 필터 구현 방식은 두 가지가 있다.
-
-#### 방식 1: userId를 Principal로 직접 사용 (권장)
-
-DB 조회 없이 토큰에서 바로 사용자 정보를 추출하는 방식이다. 더 심플하고 성능상 이점이 있다.
+Spring Security의 `hasRole('SELLER')` SpEL은 내부적으로 `ROLE_SELLER`라는 이름의 `GrantedAuthority`를 찾는다. JWT의 `role` claim 값이 `SELLER`라면 자동으로 `ROLE_SELLER`로 변환해 주는 것이 `JwtAuthenticationConverter`다.
 
 ```java
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
+// SecurityConfig 내부 private 메서드 (1.2절에 이미 포함)
+private JwtAuthenticationConverter jwtAuthenticationConverter() {
+    JwtGrantedAuthoritiesConverter authoritiesConverter =
+        new JwtGrantedAuthoritiesConverter();
+    authoritiesConverter.setAuthoritiesClaimName("role");   // JWT claim 이름
+    authoritiesConverter.setAuthorityPrefix("ROLE_");       // prefix 추가
 
-    private final JwtTokenProvider jwtTokenProvider;
-
-    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
-        this.jwtTokenProvider = jwtTokenProvider;
-    }
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-
-        String header = request.getHeader("Authorization");
-
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
-
-            if (jwtTokenProvider.validateToken(token)) {
-                Long userId = jwtTokenProvider.getUserId(token);
-                String role = jwtTokenProvider.getRole(token);
-
-                // Principal로 userId(Long)를 직접 설정
-                UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                        userId,
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                    );
-
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            }
-        }
-
-        filterChain.doFilter(request, response);
-    }
+    JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+    converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+    // principal name = sub claim (기본값) → userId가 들어있음
+    return converter;
 }
 ```
 
-<details>
-<summary>Kotlin 버전</summary>
+`setAuthoritiesClaimName("role")`을 빠뜨리면 기본값 `scope` claim을 바라봐서 `@PreAuthorize`가 항상 실패한다. 과제에서 자주 빠지는 부분이다.
 
-```kotlin
-class JwtAuthenticationFilter(
-    private val jwtTokenProvider: JwtTokenProvider
-) : OncePerRequestFilter() {
+### 2.4 인증 API — signup · login · refresh 흐름
 
-    override fun doFilterInternal(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        filterChain: FilterChain
-    ) {
-        val header = request.getHeader("Authorization")
+인증 흐름 세 가지를 시퀀스로 먼저 보고 코드로 들어간다.
 
-        if (header != null && header.startsWith("Bearer ")) {
-            val token = header.substring(7)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant AC as AuthController
+    participant AS as AuthService
+    participant TS as TokenService
+    participant E as JwtEncoder
 
-            if (jwtTokenProvider.validateToken(token)) {
-                val userId = jwtTokenProvider.getUserId(token)
-                val role = jwtTokenProvider.getRole(token)
+    Note over C,E: 1. Login 흐름
+    C->>AC: POST /api/v1/auth/login
+    AC->>AS: login(command)
+    AS->>TS: createAccessToken(userId, email, role)
+    TS->>E: encode(JwtClaimsSet)
+    E-->>TS: accessToken
+    AS->>TS: createRefreshToken(userId)
+    TS->>E: encode(JwtClaimsSet)
+    E-->>TS: refreshToken
+    AS-->>AC: TokenResponse
+    AC-->>C: { accessToken, refreshToken }
 
-                val auth = UsernamePasswordAuthenticationToken(
-                    userId,
-                    null,
-                    listOf(SimpleGrantedAuthority("ROLE_$role"))
-                )
-                auth.details = WebAuthenticationDetailsSource().buildDetails(request)
-                SecurityContextHolder.getContext().authentication = auth
-            }
-        }
+    Note over C,E: 2. 인증 요청 흐름 (자동 검증)
+    C->>AC: GET /api/v1/me (Bearer accessToken)
+    Note right of AC: BearerTokenAuthenticationFilter가<br/>JwtDecoder로 자동 검증
 
-        filterChain.doFilter(request, response)
-    }
-}
+    Note over C,E: 3. Refresh 흐름
+    C->>AC: POST /api/v1/auth/refresh
+    AC->>AS: refresh(refreshToken)
+    AS->>TS: parseUserId(refreshToken)
+    TS-->>AS: userId
+    AS->>TS: createAccessToken(userId, email, role)
+    TS-->>AS: newAccessToken
+    AS-->>AC: TokenResponse
+    AC-->>C: { newAccessToken, refreshToken }
 ```
 
-</details>
-
-이 방식을 사용하면 Controller에서 `@AuthenticationPrincipal Long userId`로 바로 사용자 ID를 받을 수 있다.
-
-```java
-@GetMapping("/me")
-public MemberResponse getMyProfile(@AuthenticationPrincipal Long userId) {
-    return memberService.getMember(userId);
-}
-
-@PostMapping
-@PreAuthorize("hasRole('SELLER')")
-public ProductResponse createProduct(
-    @AuthenticationPrincipal Long sellerId,
-    @Valid @RequestBody CreateProductRequest request
-) {
-    return productService.createProduct(sellerId, request);
-}
-```
-
-#### 방식 2: UserDetails 사용 (전통적인 방식)
-
-UserDetailsService를 통해 DB에서 사용자 정보를 조회하는 방식이다. 사용자의 최신 상태(권한 변경, 계정 잠금 등)를 확인해야 할 때 유용하다.
-
-<details>
-<summary>UserDetails 방식 코드</summary>
-
-```java
-@Component
-@RequiredArgsConstructor
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    private final JwtTokenProvider jwtTokenProvider;
-    private final UserDetailsService userDetailsService;
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-
-        String token = resolveToken(request);
-
-        if (token != null && jwtTokenProvider.validateToken(token)) {
-            Long userId = jwtTokenProvider.getUserId(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(String.valueOf(userId));
-
-            UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-        }
-
-        filterChain.doFilter(request, response);
-    }
-
-    private String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader("Authorization");
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        return null;
-    }
-}
-```
-
-이 방식은 `@AuthenticationPrincipal UserDetails userDetails`로 받아서 사용한다.
-
-```java
-@GetMapping("/me")
-public MemberResponse getMyProfile(@AuthenticationPrincipal UserDetails userDetails) {
-    Long userId = Long.parseLong(userDetails.getUsername());
-    return memberService.getMember(userId);
-}
-```
-
-</details>
-
-<details>
-<summary>💬 어떤 방식을 선택해야 할까?</summary>
-
-| 구분 | userId 직접 사용 | UserDetails 사용 |
-|------|-----------------|-----------------|
-| **DB 조회** | 없음 | 매 요청마다 조회 |
-| **성능** | 더 좋음 | 상대적으로 느림 |
-| **최신 상태 반영** | 토큰 발급 시점 정보 | 실시간 반영 |
-| **구현 복잡도** | 단순 | UserDetailsService 필요 |
-| **활용** | 대부분의 과제/실무 | 계정 잠금 등 실시간 검증 필요 시 |
-
-**권장**: 대부분의 경우 **방식 1 (userId 직접 사용)** 이 적합하다. 단, 권한이 자주 변경되거나 계정 상태를 실시간으로 확인해야 하는 경우에는 방식 2를 고려한다.
-
-</details>
-
-### 5. UserDetailsService 구현 (선택사항)
-
-> **Note**: 앞서 설명한 **방식 1 (userId 직접 사용)** 을 선택했다면 UserDetailsService는 필요하지 않다. 방식 2 (UserDetails 사용)를 선택한 경우에만 구현한다.
-
-<details>
-<summary>UserDetailsService 구현 (방식 2 사용 시)</summary>
+**TokenService** — `JwtEncoder`로 발급, `JwtDecoder`로 파싱한다. JJWT의 `JwtTokenProvider`가 하던 역할을 Spring Security 추상화로 대체한다.
 
 ```java
 @Service
 @RequiredArgsConstructor
-public class CustomUserDetailsService implements UserDetailsService {
+public class TokenService {
 
-    private final MemberRepository memberRepository;
+    private final JwtEncoder jwtEncoder;
+    private final JwtDecoder jwtDecoder;
 
-    @Override
-    public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
-        Member member = memberRepository.findById(Long.parseLong(userId))
-            .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
+    private static final Duration ACCESS_TOKEN_TTL = Duration.ofHours(1);
+    private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
 
-        return User.builder()
-            .username(String.valueOf(member.getId()))
-            .password(member.getPassword())
-            .roles(member.getRole().name())
+    public String createAccessToken(Long userId, String email, String role) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(ACCESS_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("email", email)
+            .claim("role", role)
             .build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+
+    public String createRefreshToken(Long userId) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(REFRESH_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("token_type", "refresh")
+            .build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+
+    public Long parseUserId(String token) {
+        Jwt jwt = jwtDecoder.decode(token);  // 검증 + 파싱 한 번에
+        return Long.parseLong(jwt.getSubject());
     }
 }
 ```
 
-</details>
-
-### 6. 인증 API 구현
+**AuthController + AuthService** — `TokenService`를 주입해서 쓴다.
 
 ```java
 @RestController
@@ -572,14 +404,12 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        TokenResponse response = authService.login(request.toCommand());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(authService.login(request.toCommand()));
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponse> refresh(@RequestBody RefreshTokenRequest request) {
-        TokenResponse response = authService.refresh(request.getRefreshToken());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
     }
 }
 ```
@@ -592,118 +422,202 @@ public class AuthService {
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenService tokenService;
 
     @Transactional
     public void signup(SignupCommand command) {
         if (memberRepository.existsByEmail(command.getEmail())) {
             throw new DuplicateEmailException(command.getEmail());
         }
-
         Member member = Member.builder()
             .email(command.getEmail())
             .password(passwordEncoder.encode(command.getPassword()))
             .name(command.getName())
             .role(MemberRole.USER)
             .build();
-
         memberRepository.save(member);
     }
 
     public TokenResponse login(LoginCommand command) {
         Member member = memberRepository.findByEmail(command.getEmail())
-            .orElseThrow(() -> new InvalidCredentialsException());
+            .orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordEncoder.matches(command.getPassword(), member.getPassword())) {
             throw new InvalidCredentialsException();
         }
 
-        String accessToken = jwtTokenProvider.createAccessToken(
+        String accessToken = tokenService.createAccessToken(
             member.getId(), member.getEmail(), member.getRole().name());
-        String refreshToken = jwtTokenProvider.createRefreshToken(member.getId());
-
+        String refreshToken = tokenService.createRefreshToken(member.getId());
         return new TokenResponse(accessToken, refreshToken);
     }
 
     public TokenResponse refresh(String refreshToken) {
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new InvalidTokenException();
-        }
-
-        Long userId = jwtTokenProvider.getUserId(refreshToken);
+        Long userId = tokenService.parseUserId(refreshToken);  // 만료 시 JwtException
         Member member = memberRepository.findById(userId)
             .orElseThrow(() -> new MemberNotFoundException(userId));
 
-        String newAccessToken = jwtTokenProvider.createAccessToken(
+        String newAccessToken = tokenService.createAccessToken(
             member.getId(), member.getEmail(), member.getRole().name());
-
         return new TokenResponse(newAccessToken, refreshToken);
     }
 }
 ```
 
 <details>
-<summary>💬 Session vs JWT 논쟁</summary>
+<summary>Kotlin 버전 — TokenService</summary>
 
-| 구분 | Session | JWT |
-|------|---------|-----|
-| **저장 위치** | 서버 (메모리/Redis) | 클라이언트 |
-| **확장성** | 서버 간 세션 공유 필요 | Stateless로 확장 용이 |
-| **보안** | 세션 ID만 노출 | 토큰 탈취 시 위험 |
-| **로그아웃** | 서버에서 즉시 무효화 | 블랙리스트 관리 필요 |
-| **복잡도** | 단순 | 토큰 관리 로직 필요 |
+```kotlin
+@Service
+class TokenService(
+    private val jwtEncoder: JwtEncoder,
+    private val jwtDecoder: JwtDecoder
+) {
+    companion object {
+        private val ACCESS_TOKEN_TTL = Duration.ofHours(1)
+        private val REFRESH_TOKEN_TTL = Duration.ofDays(7)
+    }
 
-**과제에서 권장**: REST API 과제는 대부분 JWT를 기대한다. 단, README에 선택 이유를 명시하면 좋다.
+    fun createAccessToken(userId: Long, email: String, role: String): String {
+        val now = Instant.now()
+        val claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(ACCESS_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("email", email)
+            .claim("role", role)
+            .build()
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).tokenValue
+    }
+
+    fun createRefreshToken(userId: Long): String {
+        val now = Instant.now()
+        val claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(REFRESH_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("token_type", "refresh")
+            .build()
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).tokenValue
+    }
+
+    fun parseUserId(token: String): Long {
+        val jwt = jwtDecoder.decode(token)
+        return jwt.subject.toLong()
+    }
+}
+```
 
 </details>
 
+### 2.5 Controller에서 현재 사용자 — @AuthenticationPrincipal Jwt
+
+`BearerTokenAuthenticationFilter`가 SecurityContext에 저장한 `JwtAuthenticationToken`의 principal은 `Jwt` 객체다. Controller에서 `@AuthenticationPrincipal Jwt jwt`로 직접 받으면 타입 캐스팅 없이 claim을 꺼낼 수 있다.
+
+```java
+@GetMapping("/me")
+public MemberResponse getMyProfile(@AuthenticationPrincipal Jwt jwt) {
+    Long userId = Long.parseLong(jwt.getSubject());
+    return memberService.getMember(userId);
+}
+
+@PostMapping
+@PreAuthorize("hasRole('SELLER')")
+public ProductResponse createProduct(
+    @AuthenticationPrincipal Jwt jwt,
+    @Valid @RequestBody CreateProductRequest request
+) {
+    Long sellerId = Long.parseLong(jwt.getSubject());
+    return productService.createProduct(sellerId, request);
+}
+```
+
+`jwt.getSubject()` — userId(sub claim), `jwt.getClaim("email")` — 임의 claim, `jwt.getClaim("role")` — role claim이다.
+
+### 2.6 참고: JJWT 직접 구현 vs oauth2-resource-server
+
 <details>
-<summary>💬 Access Token 저장 위치 논쟁</summary>
+<summary>두 방식의 차이 — 더 자세히</summary>
 
-| 저장 위치 | 장점 | 단점 |
-|----------|------|------|
-| **LocalStorage** | 간단, JavaScript 접근 용이 | XSS 공격에 취약 |
-| **SessionStorage** | 탭 닫으면 삭제 | XSS 공격에 취약 |
-| **Cookie (HttpOnly)** | XSS 방어 | CSRF 공격에 취약 |
-| **메모리** | 가장 안전 | 새로고침 시 사라짐 |
+| 비교 항목 | JJWT 직접 구현 | oauth2-resource-server |
+|-----------|---------------|------------------------|
+| 의존성 | `jjwt-api` + `jjwt-impl` + `jjwt-jackson` | `oauth2-resource-server` 하나 |
+| JWT 필터 | `OncePerRequestFilter` 직접 작성 | `BearerTokenAuthenticationFilter` 자동 등록 |
+| 토큰 검증 | `validateToken()` 직접 구현 | `JwtDecoder` Bean이 처리 |
+| Authority 매핑 | 필터에서 `SimpleGrantedAuthority` 수동 생성 | `JwtAuthenticationConverter` |
+| OAuth2 표준 호환 | 없음 | RFC 6750 Bearer Token 표준 준수 |
+| Spring Security 7 권장도 | 비표준 | 표준 |
 
-**현업에서의 일반적인 패턴**:
-- Access Token: 메모리 (전역 변수/상태 관리)
-- Refresh Token: HttpOnly + Secure + SameSite Cookie
+oauth2-resource-server 방식의 실질적 장점은 두 가지다.
+- <strong>검증과 파싱이 분리되지 않는다</strong> — `decode()` 한 번에 서명 검증 + 파싱을 같이 한다. JJWT 방식은 `validateToken()` + `getClaims()` 두 번 호출하는 패턴이 자주 나온다.
+- <strong>Filter 보일러플레이트가 없다</strong> — 200줄짜리 `JwtAuthenticationFilter`가 SecurityConfig 설정 몇 줄로 대체된다.
 
-**과제에서**: 프론트엔드가 없는 백엔드 과제라면 응답 Body로 반환해도 무방하다.
+</details>
+
+### 2.7 참고: Session vs JWT, 토큰 저장 위치
+
+<details>
+<summary>Session vs JWT, 저장 위치 비교</summary>
+
+| 구분 | Session | JWT |
+|------|---------|-----|
+| <strong>저장 위치</strong> | 서버(메모리/Redis) | 클라이언트 |
+| <strong>확장성</strong> | 서버 간 세션 공유 필요 | Stateless, 수평 확장 용이 |
+| <strong>로그아웃</strong> | 서버에서 즉시 무효화 | 블랙리스트 관리 필요 |
+| <strong>과제 권장</strong> | 불필요 | REST API 과제의 사실상 표준 |
+
+**토큰 저장 위치**:
+
+| 위치 | 장점 | 단점 |
+|------|------|------|
+| LocalStorage | 구현 간단 | XSS 취약 |
+| SessionStorage | 탭 닫으면 삭제 | XSS 취약 |
+| HttpOnly Cookie | XSS 방어 | CSRF 대응 필요 |
+| 메모리 | 가장 안전 | 새로고침 시 소멸 |
+
+프로덕션 권장: Access Token → 메모리, Refresh Token → HttpOnly + Secure + SameSite Cookie. 백엔드만 있는 과제라면 응답 Body로 반환해도 무방하다.
 
 </details>
 
 ---
 
-## 비밀번호 관리
+## 3. 비밀번호 관리 — BCrypt와 Argon2
 
-### 1. BCrypt 암호화
+### 3.1 PasswordEncoderFactories.createDelegatingPasswordEncoder() — 기본
+
+<strong>`PasswordEncoderFactories.createDelegatingPasswordEncoder()`는 저장된 해시의 알고리즘 prefix(`{bcrypt}`, `{argon2}` 등)를 보고 자동으로 적절한 인코더를 선택하는 팩토리다.</strong>
+
+Spring Security 7의 기본 알고리즘은 `{bcrypt}`다. SecurityConfig에서 이미 등록했다.
 
 ```java
-@Service
-@RequiredArgsConstructor
-public class MemberService {
-
-    private final PasswordEncoder passwordEncoder;
-
-    public void changePassword(Long memberId, String currentPassword, String newPassword) {
-        Member member = memberRepository.findById(memberId)
-            .orElseThrow(() -> new MemberNotFoundException(memberId));
-
-        // 현재 비밀번호 확인
-        if (!passwordEncoder.matches(currentPassword, member.getPassword())) {
-            throw new InvalidPasswordException();
-        }
-
-        // 새 비밀번호 암호화 후 저장
-        member.changePassword(passwordEncoder.encode(newPassword));
-    }
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    // 저장 형식: {bcrypt}$2a$10$...
 }
 ```
 
-### 2. 비밀번호 정책 Validation
+비밀번호 변경 로직의 올바른 패턴은 다음과 같다.
+
+```java
+@Transactional
+public void changePassword(Long memberId, String currentPassword, String newPassword) {
+    Member member = memberRepository.findById(memberId)
+        .orElseThrow(() -> new MemberNotFoundException(memberId));
+
+    if (!passwordEncoder.matches(currentPassword, member.getPassword())) {
+        throw new InvalidPasswordException();
+    }
+
+    member.changePassword(passwordEncoder.encode(newPassword));
+}
+```
+
+### 3.2 비밀번호 정책 Validation
+
+Request DTO에서 `@Pattern`으로 입력 정책을 강제한다.
 
 ```java
 public record SignupRequest(
@@ -711,8 +625,10 @@ public record SignupRequest(
     String email,
 
     @NotBlank
-    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&])[A-Za-z\\d@$!%*#?&]{8,20}$",
-             message = "비밀번호는 8~20자, 영문, 숫자, 특수문자를 포함해야 합니다")
+    @Pattern(
+        regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&])[A-Za-z\\d@$!%*#?&]{8,20}$",
+        message = "비밀번호는 8~20자, 영문·숫자·특수문자를 포함해야 합니다"
+    )
     String password,
 
     @NotBlank @Size(min = 2, max = 20)
@@ -724,55 +640,39 @@ public record SignupRequest(
 }
 ```
 
-<details>
-<summary>💡 비밀번호 보안 팁</summary>
+### 3.3 참고: BCrypt vs Argon2 비교 표 + Spring Security 7에서의 권장도
 
-**BCrypt가 안전한 이유**:
-1. **Salt 자동 생성**: 같은 비밀번호도 매번 다른 해시값
-2. **Work Factor**: 연산 비용 조절 가능 (기본값 10)
-3. **느린 해시**: 무차별 대입 공격 방어
+| 알고리즘 | 특징 | 권장 상황 |
+|---------|------|----------|
+| <strong>BCrypt</strong> | 1999년부터 검증된 알고리즘, 광범위 사용 | 일반 웹 애플리케이션, 사전과제 |
+| <strong>Argon2</strong> | 2015 PHC 우승, 메모리 비용 조절 가능, GPU 공격에 강함 | 높은 보안 요구사항 |
+| <strong>scrypt</strong> | 메모리 집약적, 병렬 공격 방어 | 일부 금융 서비스 |
 
-**주의사항**:
-- 평문 비밀번호를 로그에 출력하지 말 것
-- 비밀번호 변경 시 이전 비밀번호와 동일한지 체크
-- 비밀번호 찾기는 재설정 링크 발송 (평문 발송 금지)
+Spring Security 7에서 Argon2 사용:
 
-</details>
+```java
+@Bean
+public PasswordEncoder passwordEncoder() {
+    // saltLength=16, hashLength=32, parallelism=1, memory=65536KB, iterations=3
+    return new Argon2PasswordEncoder(16, 32, 1, 65536, 3);
+}
+```
 
-
-> **Argon2 암호화란?**
->
-> BCrypt보다 최신의 비밀번호 해싱 알고리즘으로, **2015년 Password Hashing Competition 우승작** 이다.
->
-> | 알고리즘 | 특징 | 권장 상황 |
-> |---------|------|----------|
-> | **BCrypt** | 검증된 알고리즘, 널리 사용 | 일반적인 웹 애플리케이션 |
-> | **Argon2** | 메모리 사용량 조절 가능, GPU 공격에 강함 | 높은 보안이 필요한 경우 |
->
-> Spring Security에서 Argon2 사용:
-> ```java
-> @Bean
-> public PasswordEncoder passwordEncoder() {
->     return new Argon2PasswordEncoder(16, 32, 1, 65536, 3);
->     // saltLength, hashLength, parallelism, memory, iterations
-> }
-> ```
->
-> **과제에서**: BCrypt가 표준이므로 BCrypt 사용을 권장한다. Argon2는 "알고 있다"는 수준이면 충분.
+> <strong>참고</strong>: 과제에서는 BCrypt가 사실상 표준이다. `PasswordEncoderFactories.createDelegatingPasswordEncoder()`를 쓰면 나중에 알고리즘을 교체해도 기존 해시와 하위 호환이 유지된다.
 
 ---
 
-## API 권한 관리
+## 4. API 권한 관리 — RBAC와 리소스 소유자 검증
 
-### 1. 역할 기반 접근 제어 (RBAC)
+### 4.1 역할 정의 (Role enum + Member entity)
 
-과제 요구사항에 따라 적절한 역할을 정의한다.
+과제 요구사항에 맞게 역할을 정의한다. `@Enumerated(EnumType.STRING)`으로 저장하면 DB에 `USER`, `SELLER`, `ADMIN` 문자열이 들어가 쿼리가 읽기 편하다.
 
 ```java
-public enum Role {
-    USER,     // 일반 사용자
-    SELLER,   // 판매자 (마켓플레이스 등)
-    ADMIN     // 관리자
+public enum MemberRole {
+    USER,    // 일반 사용자
+    SELLER,  // 판매자
+    ADMIN    // 관리자
 }
 ```
 
@@ -786,11 +686,9 @@ public class Member {
 }
 ```
 
-### 2. 메서드 수준 보안
+### 4.2 메서드 수준 보안 @PreAuthorize
 
-> **Note**: `@EnableMethodSecurity`는 앞서 SecurityConfig에서 이미 설정했다. 별도의 Config 클래스가 필요하지 않다.
-
-`@PreAuthorize`를 사용하면 메서드 수준에서 세밀한 권한 제어가 가능하다.
+`@EnableMethodSecurity`를 선언하면 Controller 메서드에 `@PreAuthorize`를 붙일 수 있다. JWT의 role claim이 `JwtAuthenticationConverter`를 거쳐 `ROLE_SELLER`로 변환되기 때문에 `hasRole('SELLER')`가 작동한다.
 
 ```java
 @RestController
@@ -800,34 +698,36 @@ public class ProductController {
 
     private final ProductService productService;
 
-    // 누구나 조회 가능 (SecurityConfig에서 permitAll 설정)
+    // SecurityConfig에서 permitAll 설정 → 누구나 조회
     @GetMapping("/{productId}")
     public ProductResponse getProduct(@PathVariable Long productId) {
         return productService.getProduct(productId);
     }
 
-    // SELLER 권한만 상품 등록 가능
+    // SELLER 권한만 상품 등록
     @PostMapping
     @PreAuthorize("hasRole('SELLER')")
     public ProductResponse createProduct(
-        @AuthenticationPrincipal Long sellerId,
+        @AuthenticationPrincipal Jwt jwt,
         @Valid @RequestBody CreateProductRequest request
     ) {
+        Long sellerId = Long.parseLong(jwt.getSubject());
         return productService.createProduct(sellerId, request);
     }
 
-    // SELLER 권한만 상품 수정 가능
+    // SELLER 권한만 상품 수정
     @PatchMapping("/{productId}")
     @PreAuthorize("hasRole('SELLER')")
     public ProductResponse updateProduct(
-        @AuthenticationPrincipal Long sellerId,
+        @AuthenticationPrincipal Jwt jwt,
         @PathVariable Long productId,
         @RequestBody UpdateProductRequest request
     ) {
+        Long sellerId = Long.parseLong(jwt.getSubject());
         return productService.updateProduct(sellerId, productId, request);
     }
 
-    // ADMIN 권한만 접근 가능
+    // ADMIN 권한만 전체 조회
     @GetMapping("/admin/all")
     @PreAuthorize("hasRole('ADMIN')")
     public List<ProductResponse> getAllProductsForAdmin() {
@@ -845,26 +745,27 @@ public class ProductController {
 class ProductController(private val productService: ProductService) {
 
     @GetMapping("/{productId}")
-    fun getProduct(@PathVariable productId: Long): ProductResponse {
-        return productService.getProduct(productId)
-    }
+    fun getProduct(@PathVariable productId: Long): ProductResponse =
+        productService.getProduct(productId)
 
     @PostMapping
     @PreAuthorize("hasRole('SELLER')")
     fun createProduct(
-        @AuthenticationPrincipal sellerId: Long,
+        @AuthenticationPrincipal jwt: Jwt,
         @Valid @RequestBody request: CreateProductRequest
     ): ProductResponse {
+        val sellerId = jwt.subject.toLong()
         return productService.createProduct(sellerId, request)
     }
 
     @PatchMapping("/{productId}")
     @PreAuthorize("hasRole('SELLER')")
     fun updateProduct(
-        @AuthenticationPrincipal sellerId: Long,
+        @AuthenticationPrincipal jwt: Jwt,
         @PathVariable productId: Long,
         @RequestBody request: UpdateProductRequest
     ): ProductResponse {
+        val sellerId = jwt.subject.toLong()
         return productService.updateProduct(sellerId, productId, request)
     }
 }
@@ -872,13 +773,11 @@ class ProductController(private val productService: ProductService) {
 
 </details>
 
-### 3. 리소스 소유자 검증
+### 4.3 리소스 소유자 검증 — Service vs @PreAuthorize 두 방식
 
-다른 사용자의 리소스에 접근하지 못하도록 소유자 검증이 필요하다.
+role 검증은 `@PreAuthorize`로 충분하지만, "본인 것인가"를 확인하는 소유자 검증은 별도로 필요하다.
 
-#### 방식 1: Service에서 직접 검증 (권장)
-
-가장 직관적이고 간단한 방법이다. Service 메서드에서 소유자 검증 후 예외를 던진다.
+**방식 1: Service에서 직접 검증 (과제 권장)**
 
 ```java
 @Service
@@ -889,11 +788,11 @@ public class ProductService {
     private final ProductRepository productRepository;
 
     @Transactional
-    public ProductResponse updateProduct(Long sellerId, Long productId, UpdateProductRequest request) {
+    public ProductResponse updateProduct(Long sellerId, Long productId,
+                                         UpdateProductRequest request) {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        // 소유자 검증
         if (!product.getSellerId().equals(sellerId)) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
         }
@@ -901,38 +800,16 @@ public class ProductService {
         product.update(request.getName(), request.getPrice());
         return ProductResponse.from(product);
     }
-
-    @Transactional
-    public void deleteProduct(Long sellerId, Long productId) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
-
-        if (!product.getSellerId().equals(sellerId)) {
-            throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
-        }
-
-        productRepository.delete(product);
-    }
 }
 ```
 
-#### 방식 2: @PreAuthorize + 커스텀 서비스
-
-SpEL을 활용하여 선언적으로 권한을 검증하는 방법이다.
+**방식 2: @PreAuthorize + SpEL 커스텀 서비스**
 
 ```java
-@RestController
-@RequestMapping("/api/v1/orders")
-@RequiredArgsConstructor
-public class OrderController {
-
-    private final OrderService orderService;
-
-    @GetMapping("/{orderId}")
-    @PreAuthorize("@orderAuthorizationService.isOwner(#orderId, authentication.principal)")
-    public OrderResponse getOrder(@PathVariable Long orderId) {
-        return orderService.getOrder(orderId);
-    }
+@GetMapping("/{orderId}")
+@PreAuthorize("@orderAuthorizationService.isOwner(#orderId, authentication.principal)")
+public OrderResponse getOrder(@PathVariable Long orderId) {
+    return orderService.getOrder(orderId);
 }
 ```
 
@@ -943,8 +820,9 @@ public class OrderAuthorizationService {
 
     private final OrderRepository orderRepository;
 
-    // principal이 Long (userId)인 경우
-    public boolean isOwner(Long orderId, Long userId) {
+    // authentication.principal은 Jwt 객체
+    public boolean isOwner(Long orderId, Jwt jwt) {
+        Long userId = Long.parseLong(jwt.getSubject());
         return orderRepository.findById(orderId)
             .map(order -> order.getBuyerId().equals(userId))
             .orElse(false);
@@ -952,23 +830,18 @@ public class OrderAuthorizationService {
 }
 ```
 
-<details>
-<summary>💬 어떤 방식을 선택해야 할까?</summary>
+두 방식의 비교:
 
-| 구분 | Service 검증 | @PreAuthorize |
-|------|-------------|---------------|
-| **가독성** | 로직이 명시적 | 어노테이션으로 간결 |
-| **테스트** | 단위 테스트 용이 | SpEL 테스트 복잡 |
-| **유연성** | 비즈니스 로직과 결합 가능 | 검증 로직 분리 |
-| **디버깅** | 직관적 | SpEL 디버깅 어려움 |
+| 구분 | Service 검증 | @PreAuthorize + SpEL |
+|------|-------------|----------------------|
+| <strong>가독성</strong> | 로직이 코드에 명시적 | 어노테이션으로 간결 |
+| <strong>단위 테스트</strong> | Service 테스트로 커버 | SpEL 테스트 복잡 |
+| <strong>디버깅</strong> | 일반 예외 추적 | SpEL 실패 메시지 불명확 |
+| <strong>과제 권장</strong> | 권장 | 심화 옵션 |
 
-**권장**: 과제에서는 **방식 1 (Service 검증)** 이 더 직관적이고 테스트하기 쉽다.
+### 4.4 현재 사용자 정보 접근 — @AuthenticationPrincipal Jwt
 
-</details>
-
-### 4. 현재 사용자 정보 접근
-
-앞서 JwtAuthenticationFilter에서 `principal`로 `userId (Long)`를 직접 설정했기 때문에, Controller에서 `@AuthenticationPrincipal Long`으로 바로 받을 수 있다.
+`@AuthenticationPrincipal Jwt jwt` 패턴으로 Controller에서 현재 사용자의 정보를 꺼낸다.
 
 ```java
 @RestController
@@ -979,112 +852,67 @@ public class MemberController {
     private final MemberService memberService;
 
     @GetMapping("/me")
-    public MemberResponse getCurrentMember(@AuthenticationPrincipal Long userId) {
+    public MemberResponse getCurrentMember(@AuthenticationPrincipal Jwt jwt) {
+        Long userId = Long.parseLong(jwt.getSubject());
         return memberService.getMember(userId);
     }
 
     @PatchMapping("/me")
     public MemberResponse updateProfile(
-        @AuthenticationPrincipal Long userId,
+        @AuthenticationPrincipal Jwt jwt,
         @Valid @RequestBody UpdateMemberRequest request
     ) {
+        Long userId = Long.parseLong(jwt.getSubject());
         return memberService.updateMember(userId, request);
     }
 }
 ```
 
 <details>
-<summary>Kotlin 버전</summary>
-
-```kotlin
-@RestController
-@RequestMapping("/api/v1/members")
-class MemberController(private val memberService: MemberService) {
-
-    @GetMapping("/me")
-    fun getCurrentMember(@AuthenticationPrincipal userId: Long): MemberResponse {
-        return memberService.getMember(userId)
-    }
-
-    @PatchMapping("/me")
-    fun updateProfile(
-        @AuthenticationPrincipal userId: Long,
-        @Valid @RequestBody request: UpdateMemberRequest
-    ): MemberResponse {
-        return memberService.updateMember(userId, request)
-    }
-}
-```
-
-</details>
-
-<details>
 <summary>커스텀 어노테이션 방식 (선택사항)</summary>
 
-`@AuthenticationPrincipal` 대신 더 명시적인 어노테이션을 사용하고 싶다면:
+`@AuthenticationPrincipal`이 너무 길거나, userId 추출 코드가 반복된다면 커스텀 어노테이션으로 감쌀 수 있다.
 
 ```java
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
+@AuthenticationPrincipal
 public @interface CurrentUser {
 }
-
-@Component
-public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolver {
-
-    @Override
-    public boolean supportsParameter(MethodParameter parameter) {
-        return parameter.hasParameterAnnotation(CurrentUser.class)
-            && parameter.getParameterType().equals(Long.class);
-    }
-
-    @Override
-    public Object resolveArgument(MethodParameter parameter,
-                                  ModelAndViewContainer mavContainer,
-                                  NativeWebRequest webRequest,
-                                  WebDataBinderFactory binderFactory) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-
-        // principal이 Long인 경우
-        return (Long) authentication.getPrincipal();
-    }
-}
 ```
 
-```java
-@GetMapping("/me")
-public MemberResponse getCurrentMember(@CurrentUser Long userId) {
-    return memberService.getMember(userId);
-}
-```
-
-> 단, `@AuthenticationPrincipal Long userId`가 충분히 명확하고 간단하므로, 과제에서는 커스텀 어노테이션 없이 사용해도 무방하다.
+`@AuthenticationPrincipal`을 메타 어노테이션으로 붙이면 Spring이 동일하게 처리한다. Controller에서는 `@CurrentUser Jwt jwt`로 쓰면 된다.
 
 </details>
 
-<details>
-<summary>💬 권한 체크 위치: Filter vs AOP vs Service</summary>
+### 4.5 권한 체크 위치 — Filter / @PreAuthorize / Service
 
-| 위치 | 특징 | 사용 시점 |
-|------|------|----------|
-| **SecurityFilterChain** | URL 패턴 기반, 가장 먼저 실행 | 전체 API 그룹 권한 (예: /admin/** → ADMIN) |
-| **@PreAuthorize** | 메서드 수준, SpEL 지원 | 개별 메서드 권한, 동적 권한 검사 |
-| **Service** | 비즈니스 로직과 함께 | 복잡한 권한 로직, 데이터 기반 권한 |
+권한 검사는 세 곳에서 할 수 있다. 각각 역할이 다르다.
 
-**과제에서 권장**: URL 기반 기본 권한은 SecurityFilterChain, 리소스 소유자 검증은 @PreAuthorize 또는 Service에서 처리
+```mermaid
+flowchart TD
+    Start([요청]) --> Q1{URL 패턴 단위 권한?}
+    Q1 -->|Yes| A1[SecurityFilterChain<br/>requestMatchers + .hasRole]
+    Q1 -->|No| Q2{메서드 단위 + 단순 role?}
+    Q2 -->|Yes| A2["@PreAuthorize<br/>hasRole('SELLER')"]
+    Q2 -->|No| Q3{리소스 소유자 검증<br/>또는 복잡한 비즈니스 조건?}
+    Q3 -->|Yes| A3[Service 메서드<br/>소유자 ID 비교]
+    Q3 -->|No| A4[설계 재검토]
+```
 
-</details>
+| 위치 | 역할 | 예시 |
+|------|------|------|
+| <strong>SecurityFilterChain</strong> | URL 그룹 단위 진입 제어 | `/admin/**` → ADMIN만 허용 |
+| <strong>@PreAuthorize</strong> | 메서드 단위 role 검사 | `hasRole('SELLER')` |
+| <strong>Service</strong> | 데이터 기반 소유자 검증 | `product.getSellerId().equals(sellerId)` |
 
 ---
 
-## CORS 설정
+## 5. CORS 설정
 
-> CORS의 동작 원리(SOP, Simple/Preflight/Credentialed 요청, 에러 패턴별 해결법 등)를 자세히 알고 싶다면 [CORS를 이해하기: 브라우저 보안 정책부터 Spring Boot 설정까지](/blog/cors-understanding-guide/) 글을 참고하라.
+### 5.1 전역 CORS — CorsConfigurationSource + SecurityConfig 통합
 
-### 1. 전역 CORS 설정
+Spring Security를 쓸 때는 반드시 `SecurityConfig`에서 `.cors(cors -> cors.configurationSource(...))`로 CORS 설정을 연결해야 한다. `CorsConfig`만 만들고 Security에 연결하지 않으면 preflight(OPTIONS) 요청이 401을 반환한다.
 
 ```java
 @Configuration
@@ -1093,7 +921,6 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
         configuration.setAllowedOrigins(List.of(
             "http://localhost:3000",
             "https://your-frontend-domain.com"
@@ -1111,8 +938,9 @@ public class CorsConfig {
 }
 ```
 
+SecurityConfig의 `filterChain`에 `.cors(...)` 추가:
+
 ```java
-// SecurityConfig에 CORS 설정 추가
 @Bean
 public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     return http
@@ -1123,211 +951,102 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 }
 ```
 
-### 2. Controller 수준 CORS
+> <strong>참고</strong>: `corsConfigurationSource`를 같은 `@Configuration` 클래스에 두거나, `@Autowired`로 주입해서 `SecurityConfig`에서 참조하면 된다.
+
+### 5.2 Controller 수준 — @CrossOrigin
+
+특정 Controller에만 CORS를 다르게 적용할 때 쓴다.
 
 ```java
 @RestController
 @RequestMapping("/api/v1/public")
 @CrossOrigin(origins = "http://localhost:3000")
 public class PublicController {
-    // 특정 컨트롤러에만 CORS 적용
+    // 이 Controller에만 Origin 제한 적용
 }
 ```
 
-<details>
-<summary>💡 CORS 설정 팁</summary>
+전역 설정과 Controller 수준 설정이 동시에 있으면 Spring은 두 설정을 병합한다.
 
-**Preflight 요청**:
-- 브라우저가 실제 요청 전에 OPTIONS 요청을 보냄
-- `Access-Control-*` 헤더로 허용 여부 확인
+### 5.3 흔한 실수 — allowedOrigins("*") + allowCredentials(true) 충돌
 
-**흔한 실수**:
-- `allowCredentials(true)`와 `allowedOrigins("*")` 동시 사용 불가
-- 와일드카드 허용 시 `allowedOriginPatterns("*")` 사용
+`allowedOrigins("*")`와 `allowCredentials(true)`를 함께 쓰면 브라우저가 CORS 오류를 내고, Spring도 시작 시 경고를 출력한다.
 
-**과제에서**:
-- 프론트엔드가 없으면 CORS 설정 생략 가능
-- Swagger UI 사용 시 해당 Origin 허용 필요
+| 상황 | 올바른 설정 |
+|------|-----------|
+| 개발 환경, 인증 필요 | `setAllowedOrigins(List.of("http://localhost:3000"))` + `setAllowCredentials(true)` |
+| 공개 API, 인증 불필요 | `setAllowedOriginPatterns(List.of("*"))` + `setAllowCredentials(false)` |
 
-</details>
+와일드카드를 쓰면서 쿠키·Authorization 헤더를 보내야 한다면 `allowedOriginPatterns("*")`를 사용한다. 이 설정은 `allowedOrigins("*")`와 달리 `allowCredentials(true)`와 공존할 수 있다.
 
 ---
 
 ## 정리
 
-### 체크리스트
+- <strong>oauth2-resource-server가 Spring Security 7 표준</strong> — `JwtDecoder` Bean 하나로 BearerTokenAuthenticationFilter에서 자동 검증이 돌아간다. 필터를 직접 만들 필요 없다.
+- <strong>JwtDecoder + JwtEncoder를 Bean으로 관리</strong> — 검증(`decode`)과 발급(`encode`)이 같은 API 레벨에서 움직인다. HMAC과 RSA 모두 설정 차이만 있을 뿐 사용 방법이 같다.
+- <strong>JwtAuthenticationConverter로 role claim → ROLE_ 변환</strong> — `setAuthoritiesClaimName("role")` 한 줄이 없으면 `@PreAuthorize`가 전부 실패한다. 빠뜨리기 쉬운 부분이다.
+- <strong>@AuthenticationPrincipal Jwt가 표준 패턴</strong> — `jwt.getSubject()`로 userId, `jwt.getClaim()`으로 임의 claim. 타입 캐스팅 없이 깔끔하다.
+- <strong>BCrypt 기본, CORS는 Security와 반드시 연결</strong> — `PasswordEncoderFactories.createDelegatingPasswordEncoder()`가 알고리즘 전환을 하위 호환으로 처리한다. CORS는 Security에 연결하지 않으면 preflight가 401이다.
+
+**체크리스트**:
 
 | 항목 | 확인 |
 |------|------|
-| SecurityFilterChain이 올바르게 설정되어 있는가? | ⬜ |
-| `@EnableMethodSecurity`가 선언되어 있는가? | ⬜ |
-| JWT 생성/검증 로직이 구현되어 있는가? | ⬜ |
-| JwtAuthenticationFilter에서 userId를 principal로 설정하는가? | ⬜ |
-| 비밀번호가 BCrypt로 암호화되어 저장되는가? | ⬜ |
-| 인증이 필요한 API와 공개 API가 구분되어 있는가? | ⬜ |
-| `@PreAuthorize`로 역할 기반 권한 제어가 적용되어 있는가? | ⬜ |
-| `@AuthenticationPrincipal Long userId`로 현재 사용자를 받는가? | ⬜ |
-| 리소스 소유자 검증이 구현되어 있는가? | ⬜ |
-| JWT Secret이 설정 파일로 분리되어 있는가? | ⬜ |
+| `spring-boot-starter-oauth2-resource-server` 의존성 추가 | ⬜ |
+| `JwtDecoder` + `JwtEncoder` Bean 등록 | ⬜ |
+| `JwtAuthenticationConverter` — `setAuthoritiesClaimName("role")` 설정 | ⬜ |
+| `oauth2ResourceServer` 설정으로 `BearerTokenAuthenticationFilter` 활성화 | ⬜ |
+| `@EnableMethodSecurity` 선언 | ⬜ |
+| JWT secret을 환경변수로 분리 (`${JWT_SECRET}`) | ⬜ |
+| 비밀번호 BCrypt 암호화 확인 | ⬜ |
+| 리소스 소유자 검증 (Service 내 ID 비교) | ⬜ |
+| CORS를 SecurityConfig에 연결 (`cors.configurationSource(...)`) | ⬜ |
+| `allowedOrigins("*")` + `allowCredentials(true)` 혼용 확인 | ⬜ |
 
-### 핵심 포인트
+다음 편에서는 <strong>Docker · Docker Compose · GitHub Actions CI/CD</strong>를 다룬다. 6편에서는 사전과제 제출 전에 꼭 넣어야 할 Dockerfile 패턴과 배포 파이프라인을 평가자 시점으로 정리한다.
 
-1. **Spring Security**: SecurityFilterChain + `@EnableMethodSecurity`로 보안 설정, Stateless 세션 정책
-2. **JWT**: Access Token + Refresh Token 구조, userId를 principal로 직접 설정
-3. **비밀번호**: BCrypt 암호화, 평문 저장/전송 금지
-4. **권한 관리**: URL 기반(SecurityFilterChain) + 메서드 수준(`@PreAuthorize`) 보안 조합
-5. **현재 사용자**: `@AuthenticationPrincipal Long userId`로 간편하게 접근
+---
 
-<details>
-<summary>⚠️ 과제에서 흔한 실수</summary>
+## 부록
 
-1. **JWT Secret 하드코딩**
-   - 소스 코드에 Secret 직접 작성
-   - 반드시 application.yml 또는 환경변수로 분리
+### 흔한 실수 5종
 
-2. **토큰 만료 처리 누락**
-   - 토큰 검증 시 만료 여부 확인 필요
-   - 만료된 토큰에 대한 적절한 에러 응답 (401)
+| 실수 | 증상 | 올바른 처리 |
+|------|------|------------|
+| <strong>JWT secret 하드코딩</strong> | GitHub에 노출, 보안 취약점 | `${JWT_SECRET}` 환경변수 + `.gitignore` |
+| <strong>토큰 만료 처리 누락</strong> | 만료 토큰으로 계속 요청 성공 | `JwtDecoder`가 만료 시 `JwtException` 발생 → `401` 응답 처리 |
+| <strong>비밀번호 평문 노출</strong> | Response DTO에 password 필드 포함, 로그 출력 | DTO에서 password 제거, 로그 필터 적용 |
+| <strong>권한 검사 누락</strong> | 다른 사용자 리소스 접근 가능 | Service에서 `sellerId.equals(product.getSellerId())` 검증 |
+| <strong>CORS allowedOrigins("*") + allowCredentials(true)</strong> | 브라우저 CORS 오류 | 특정 Origin 명시 또는 `allowedOriginPatterns("*")` 사용 |
 
-3. **비밀번호 평문 노출**
-   - Response DTO에 비밀번호 필드 포함
-   - 로그에 비밀번호 출력
+### Refresh Token Rotation
 
-4. **권한 검사 누락**
-   - 다른 사용자의 리소스 접근 가능
-   - 리소스 소유자 검증 필수
-
-5. **CORS 전체 허용**
-   - `allowedOrigins("*")` + `allowCredentials(true)` 조합 불가
-   - 프로덕션에서는 특정 Origin만 허용
-
-</details>
-
-<details>
-<summary>💡 Refresh Token Rotation</summary>
-
-**Refresh Token Rotation** 이란 Refresh Token 사용 시 새로운 Refresh Token도 함께 발급하는 방식이다.
+<strong>Refresh Token Rotation</strong>이란 Refresh Token 사용 시 새 Refresh Token도 함께 발급하고 기존 것을 무효화하는 패턴이다. 탈취된 Refresh Token의 재사용을 감지할 수 있다.
 
 ```java
 public TokenResponse refresh(String refreshToken) {
-    if (!jwtTokenProvider.validateToken(refreshToken)) {
-        throw new InvalidTokenException();
-    }
-
-    Long userId = jwtTokenProvider.getUserId(refreshToken);
+    Long userId = tokenService.parseUserId(refreshToken);  // 만료 시 JwtException → 401
     Member member = memberRepository.findById(userId)
         .orElseThrow(() -> new MemberNotFoundException(userId));
 
-    // 새로운 Access Token과 Refresh Token 모두 발급
-    String newAccessToken = jwtTokenProvider.createAccessToken(
+    // Access Token + 새 Refresh Token 둘 다 발급
+    String newAccessToken = tokenService.createAccessToken(
         member.getId(), member.getEmail(), member.getRole().name());
-    String newRefreshToken = jwtTokenProvider.createRefreshToken(member.getId());
+    String newRefreshToken = tokenService.createRefreshToken(member.getId());
 
-    // 기존 Refresh Token 무효화 (DB에 저장하는 경우)
+    // 기존 Refresh Token 무효화 (DB 저장 시)
     // refreshTokenRepository.delete(refreshToken);
 
     return new TokenResponse(newAccessToken, newRefreshToken);
 }
 ```
 
-**장점**: Refresh Token 탈취 시에도 지속적인 악용 방지
+과제에서 구현하면 가산점, 구현하지 않아도 감점은 아니다.
 
-**과제에서**: 구현하면 가산점, 구현하지 않아도 감점은 아님
+### 외부 참조
 
-</details>
-
-<details>
-<summary>💼 실무에서의 JWT 관리 팁</summary>
-
-**1. Access Token 만료 시간 설정**
-
-| 환경 | Access Token | Refresh Token |
-|------|--------------|---------------|
-| 일반 웹 서비스 | 15분 ~ 1시간 | 7일 ~ 30일 |
-| 금융/보안 민감 서비스 | 5분 ~ 15분 | 1일 ~ 7일 |
-| 모바일 앱 | 1시간 ~ 24시간 | 30일 ~ 90일 |
-
-**2. Token 저장 위치**
-
-| 저장 위치 | 장점 | 단점 |
-|----------|------|------|
-| **LocalStorage** | 구현 간단 | XSS 취약 |
-| **HttpOnly Cookie** | XSS 방지 | CSRF 대응 필요 |
-| **메모리 (변수)** | 가장 안전 | 새로고침 시 유실 |
-
-> **실무 권장**: Access Token은 메모리에, Refresh Token은 HttpOnly Cookie에 저장
-
-**3. 토큰 무효화 전략**
-
-JWT는 Stateless하므로 발급 후 서버에서 무효화가 어렵다. 실무에서는 다음 방법을 사용한다:
-
-```java
-// 방법 1: 블랙리스트 (Redis 활용)
-@Service
-@RequiredArgsConstructor
-public class TokenBlacklistService {
-
-    private final StringRedisTemplate redisTemplate;
-
-    public void addToBlacklist(String token, long expirationMs) {
-        redisTemplate.opsForValue().set(
-            "blacklist:" + token,
-            "true",
-            expirationMs,
-            TimeUnit.MILLISECONDS
-        );
-    }
-
-    public boolean isBlacklisted(String token) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + token));
-    }
-}
-
-// 방법 2: Token Version (DB에 버전 관리)
-@Entity
-public class Member {
-    // ...
-    private int tokenVersion = 0;  // 로그아웃 시 증가
-
-    public void invalidateTokens() {
-        this.tokenVersion++;
-    }
-}
-```
-
-**4. 다중 디바이스 로그인 관리**
-
-```java
-// 사용자별 활성 세션 관리
-@Service
-public class SessionService {
-
-    private final StringRedisTemplate redisTemplate;
-
-    public void registerSession(Long userId, String deviceId, String refreshToken) {
-        String key = "sessions:" + userId;
-        redisTemplate.opsForHash().put(key, deviceId, refreshToken);
-    }
-
-    // 특정 디바이스 로그아웃
-    public void logoutDevice(Long userId, String deviceId) {
-        redisTemplate.opsForHash().delete("sessions:" + userId, deviceId);
-    }
-
-    // 모든 디바이스 로그아웃
-    public void logoutAllDevices(Long userId) {
-        redisTemplate.delete("sessions:" + userId);
-    }
-}
-```
-
-**과제에서**: 기본 JWT 인증만 구현해도 충분. 위 내용은 면접 대비 개념 정리용.
-
-</details>
-
----
-
-다음 편에서는 **Docker**, **Docker Compose**, **GitHub Actions CI/CD** 에 대해 다룹니다.
-
-👉 [이전: 4편 - Performance & Optimization](/blog/spring-boot-pre-interview-guide-4)
-👉 [다음: 6편 - DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)
+- [Spring Security Reference — OAuth2 Resource Server](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/index.html)
+- [Spring Security Reference — JWT Decoder](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html)
+- [RFC 6749 — The OAuth 2.0 Authorization Framework](https://datatracker.ietf.org/doc/html/rfc6749)
+- [RFC 6750 — Bearer Token Usage](https://datatracker.ietf.org/doc/html/rfc6750)

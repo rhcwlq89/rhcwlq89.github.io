@@ -1,92 +1,157 @@
 ---
-title: "Spring Boot Pre-Interview Guide Part 5: Security & Authentication"
-description: "Authentication/authorization and security configuration — Spring Security, JWT, and role management"
+title: "Spring Boot Pre-Interview Guide Part 5: Security & Authentication — Spring Security 7, JWT (oauth2-resource-server), BCrypt vs Argon2, RBAC"
+description: "How to implement standard JWT authentication with Spring Security 7 and spring-boot-starter-oauth2-resource-server — JwtDecoder/JwtEncoder bean pair for verify and issue, JwtAuthenticationConverter mapping the role claim to ROLE_ authorities, @AuthenticationPrincipal Jwt for extracting the current user in controllers, picking between BCrypt and Argon2, @PreAuthorize plus service-layer resource ownership checks, and the common CORS traps — written from an evaluator's perspective on the security pieces of pre-interview assignments."
 pubDate: "2026-01-17T10:00:00+09:00"
 lang: en
-tags: ["Spring Boot", "Spring Security", "JWT", "Authentication", "Interview", "Practical Guide"]
-heroImage: "../../../assets/PreinterviewTaskGuide.png"
----
-
-## Series Navigation
-
-| Previous | Current | Next |
-|:---:|:---:|:---:|
-| [Part 4: Performance](/en/blog/spring-boot-pre-interview-guide-4) | **Part 5: Security** | [Part 6: DevOps](/en/blog/spring-boot-pre-interview-guide-6) |
-
-> **Full Roadmap**: See [Spring Boot Pre-Interview Guide Roadmap](/en/blog/spring-boot-pre-interview-guide-1)
-
+tags: ["Spring Boot", "Spring Security", "JWT", "OAuth2", "Interview", "Practical Guide"]
+heroImage: "../../../assets/SpringBootPreInterviewGuide5.png"
 ---
 
 ## Introduction
 
-This guide serves as a reference when authentication/authorization is required in your assignment. It focuses on JWT-based authentication and Spring Security configuration.
+"How much security setup does it take for an evaluator to nod in approval?"
 
-**Topics covered in Part 5:**
-- Spring Security basics
-- JWT authentication
-- Password management
-- API authorization management
-- CORS configuration
+Security in a pre-interview assignment comes in two flavors. One is managing JJWT directly, hand-writing an `OncePerRequestFilter`. The other uses the `oauth2-resource-server` abstraction Spring Security provides. Evaluators read the latter as "this person knows Spring Security." The former leaves an impression of "it works, but it deviates from the standard."
 
-### Table of Contents
+Part 4 covered N+1, caching, and pagination. Part 5 builds the authentication and authorization layer on top of that. Three things are at the core:
 
-- [Spring Security Basics](#spring-security-basics)
-- [JWT Authentication](#jwt-authentication)
-- [Password Management](#password-management)
-- [API Authorization Management](#api-authorization-management)
-- [CORS Configuration](#cors-configuration)
-- [Summary](#summary)
+- Delegating JWT verification to Spring Security via `spring-boot-starter-oauth2-resource-server`
+- Using the `JwtDecoder` + `JwtEncoder` bean pair as the standard API for verification and issuance
+- Receiving the current user in a Controller with `@AuthenticationPrincipal Jwt`
+
+The target reader is a junior backend developer who knows Spring Security but is unsure where evaluators actually look.
+
+See the [previous post](/blog/en/spring-boot-pre-interview-guide-4) for Performance & Optimization.
+
+- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
+- <strong>Part 5 — Security & Authentication (this post)</strong>
+- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
 
 ---
 
-## Spring Security Basics
+## TL;DR
 
-### 1. Adding Dependencies
+- <strong>oauth2-resource-server is the Spring Security 7 standard</strong> — `BearerTokenAuthenticationFilter` handles token extraction, verification, and `SecurityContext` population automatically. No custom `OncePerRequestFilter` needed.
+- <strong>Register JwtDecoder + JwtEncoder as beans</strong> — `NimbusJwtDecoder` (verify) and `NimbusJwtEncoder` (issue) are managed through the Spring Security abstraction. HMAC and RSA use the same API.
+- <strong>JwtAuthenticationConverter maps the role claim to ROLE_ authorities</strong> — Converts the JWT `role` claim to a Spring Security `GrantedAuthority`. `@PreAuthorize("hasRole('SELLER')")` depends on this mapping.
+- <strong>@AuthenticationPrincipal Jwt delivers the current user in Controllers</strong> — `jwt.getSubject()` for userId, `jwt.getClaim("email")` for any arbitrary claim. Clean, no casting.
+- <strong>BCrypt by default, Argon2 as an option</strong> — `PasswordEncoderFactories.createDelegatingPasswordEncoder()` defaults to BCrypt. Switch to Argon2 for higher security requirements.
+
+---
+
+## 1. Spring Security 7 — The Evaluator's Starting Line
+
+### §1.1 Dependencies and Key Changes from Spring Security 6 to 7
+
+In Spring Security 7, adding `spring-boot-starter-oauth2-resource-server` alongside the main security starter is standard practice. This starter pulls in Nimbus JOSE+JWT as a transitive dependency, so no separate JJWT library is needed.
 
 ```groovy
 // build.gradle
-implementation 'org.springframework.boot:spring-boot-starter-security'
-testImplementation 'org.springframework.security:spring-security-test'
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    // JJWT not needed — Nimbus JOSE+JWT is included transitively
+    testImplementation 'org.springframework.security:spring-security-test'
+}
 ```
 
-### 2. SecurityFilterChain Configuration
+The change points evaluators most commonly check when moving from Spring Security 6 to 7:
 
-This configuration is based on Spring Security 6.x. Using `@EnableMethodSecurity` together enables method-level security such as `@PreAuthorize`.
+| Topic | Spring Security 6 | Spring Security 7 |
+|-------|-------------------|-------------------|
+| URL authorization API | `antMatchers()` removed | `requestMatchers()` only |
+| HTTP DSL | Some legacy APIs coexisted | Lambda DSL fully standard |
+| Method security | `@EnableGlobalMethodSecurity` | `@EnableMethodSecurity` |
+| JWT filter | Custom `OncePerRequestFilter` | `oauth2ResourceServer` recommended |
+| `@EnableWebSecurity` | Explicit declaration needed | Auto-configured by Spring Boot |
+
+### §1.2 SecurityFilterChain at a Glance
+
+When `oauth2ResourceServer` is configured in Spring Security 7, `BearerTokenAuthenticationFilter` is automatically registered in the filter chain. This filter extracts the `Authorization: Bearer ...` header, delegates verification to `JwtDecoder`, converts authorities via `JwtAuthenticationConverter`, and stores the result in `SecurityContext`.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant F as BearerTokenAuthenticationFilter
+    participant D as JwtDecoder
+    participant V as JwtAuthenticationConverter
+    participant SC as SecurityContext
+    participant Ctrl as Controller
+
+    C->>F: GET /api/v1/me (Authorization: Bearer ...)
+    F->>D: decode(token)
+    D->>D: Verify signature and expiry
+    D-->>F: Jwt object
+    F->>V: convert(jwt)
+    V->>V: role claim → ROLE_ Authority
+    V-->>F: JwtAuthenticationToken
+    F->>SC: Store
+    F->>Ctrl: Inject @AuthenticationPrincipal Jwt
+```
+
+Here is the full SecurityConfig. The key difference from JJWT-based implementations: `addFilterBefore(new JwtAuthenticationFilter(...))` is replaced by `oauth2ResourceServer(...)`.
 
 ```java
 @Configuration
-@EnableMethodSecurity  // Enables @PreAuthorize, @PostAuthorize
+@EnableMethodSecurity
 public class SecurityConfig {
 
-    private final JwtTokenProvider jwtTokenProvider;
-
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
-        this.jwtTokenProvider = jwtTokenProvider;
-    }
+    @Value("${jwt.secret}")
+    private String secret;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
-            .csrf(csrf -> csrf.disable())  // Disable CSRF for REST API
+            .csrf(csrf -> csrf.disable())
             .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))  // No session usage
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()  // Allow auth APIs
-                .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()  // Public read APIs
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Swagger
-                .requestMatchers("/h2-console/**").permitAll()  // H2 Console (dev only)
-                .anyRequest().authenticated()  // All other requests require authentication
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .anyRequest().authenticated()
             )
-            .headers(headers ->
-                headers.frameOptions(frame -> frame.disable()))  // Allow H2 Console iframe
-            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
-                UsernamePasswordAuthenticationFilter.class)
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+            )
             .build();
     }
 
     @Bean
+    public JwtDecoder jwtDecoder() {
+        SecretKeySpec key = new SecretKeySpec(
+            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(key)
+            .macAlgorithm(MacAlgorithm.HS256)
+            .build();
+    }
+
+    @Bean
+    public JwtEncoder jwtEncoder() {
+        SecretKeySpec key = new SecretKeySpec(
+            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        JWKSource<SecurityContext> jwks = new ImmutableSecret<>(key);
+        return new NimbusJwtEncoder(jwks);
+    }
+
+    @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    private JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter =
+            new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("role");
+        authoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return converter;
     }
 }
 ```
@@ -97,465 +162,226 @@ public class SecurityConfig {
 ```kotlin
 @Configuration
 @EnableMethodSecurity
-class SecurityConfig(private val jwtTokenProvider: JwtTokenProvider) {
+class SecurityConfig {
 
-    @Bean
-    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
+    @Value("\${jwt.secret}")
+    private lateinit var secret: String
 
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
-        http.csrf { it.disable() }
+        return http
+            .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .authorizeHttpRequests { authz ->
-                authz
+            .authorizeHttpRequests { auth ->
+                auth
                     .requestMatchers("/api/v1/auth/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
-                    .requestMatchers(
-                        "/swagger-ui/**",
-                        "/swagger-ui.html",
-                        "/v3/api-docs/**"
-                    ).permitAll()
-                    .requestMatchers("/h2-console/**").permitAll()
+                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                     .anyRequest().authenticated()
             }
+            .oauth2ResourceServer { oauth2 ->
+                oauth2.jwt { jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()) }
+            }
+            .build()
+    }
 
-        http.addFilterBefore(
-            JwtAuthenticationFilter(jwtTokenProvider),
-            UsernamePasswordAuthenticationFilter::class.java
-        )
+    @Bean
+    fun jwtDecoder(): JwtDecoder {
+        val key = SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256")
+        return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build()
+    }
 
-        // Allow H2 Console iframe
-        http.headers { it.frameOptions { fo -> fo.disable() } }
+    @Bean
+    fun jwtEncoder(): JwtEncoder {
+        val key = SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256")
+        val jwks: JWKSource<SecurityContext> = ImmutableSecret(key)
+        return NimbusJwtEncoder(jwks)
+    }
 
-        return http.build()
+    @Bean
+    fun passwordEncoder(): PasswordEncoder =
+        PasswordEncoderFactories.createDelegatingPasswordEncoder()
+
+    private fun jwtAuthenticationConverter(): JwtAuthenticationConverter {
+        val authoritiesConverter = JwtGrantedAuthoritiesConverter()
+        authoritiesConverter.setAuthoritiesClaimName("role")
+        authoritiesConverter.setAuthorityPrefix("ROLE_")
+
+        val converter = JwtAuthenticationConverter()
+        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter)
+        return converter
     }
 }
 ```
 
 </details>
 
-> **@EnableWebSecurity vs @EnableMethodSecurity**
-> - `@EnableWebSecurity`: Auto-configured in Spring Boot 3.x, so it can be omitted
-> - `@EnableMethodSecurity`: Must be explicitly declared to use `@PreAuthorize` and `@PostAuthorize`
+### §1.3 @EnableWebSecurity vs @EnableMethodSecurity
 
-### 3. Understanding the Authentication Flow
+These two annotations are often confused.
 
-```
-[Request] -> [SecurityFilterChain] -> [AuthenticationFilter] -> [AuthenticationManager]
-                                                                        |
-[Response] <- [Stored in SecurityContext] <- [Authentication object created] <- [UserDetailsService]
-```
+| Annotation | Role | In Spring Boot 3.x |
+|-----------|------|--------------------|
+| `@EnableWebSecurity` | Activates web security auto-configuration | Applied automatically — can be omitted |
+| `@EnableMethodSecurity` | Enables `@PreAuthorize` and `@PostAuthorize` | Must be declared explicitly |
 
-1. **SecurityFilterChain**: Intercepts requests for security processing
-2. **AuthenticationFilter**: Extracts authentication information (token, session, etc.)
-3. **AuthenticationManager**: Delegates authentication processing
-4. **UserDetailsService**: Looks up user information
-5. **SecurityContext**: Stores authenticated user information
+Without `@EnableMethodSecurity`, `@PreAuthorize("hasRole('SELLER')")` is silently ignored. It must appear somewhere in a `@Configuration` class.
 
 ---
 
-## JWT Authentication
+## 2. JWT Authentication — Verify and Issue with oauth2-resource-server
 
-### 1. Adding Dependencies
+### §2.1 Dependencies and Secret Management
 
-```groovy
-// build.gradle
-implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
-runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
-runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
-```
-
-### 2. JWT Property Configuration
+Set the secret in `application.yml` as an environment variable reference. Hard-coding it in source is a deduction point.
 
 ```yaml
 # application.yml
 jwt:
-  secret: your-256-bit-secret-key-here-must-be-at-least-32-characters
-  access-token-validity: 3600000   # 1 hour (milliseconds)
-  refresh-token-validity: 604800000  # 7 days (milliseconds)
+  secret: ${JWT_SECRET:your-256-bit-secret-key-must-be-at-least-32-characters}
 ```
 
-```java
-@Getter
-@ConfigurationProperties(prefix = "jwt")
-public class JwtProperties {
-    private final String secret;
-    private final long accessTokenValidity;
-    private final long refreshTokenValidity;
+The secret must be at least 256 bits (32 bytes) to avoid errors when verifying HMAC-SHA256 signatures.
 
-    public JwtProperties(String secret, long accessTokenValidity, long refreshTokenValidity) {
-        this.secret = secret;
-        this.accessTokenValidity = accessTokenValidity;
-        this.refreshTokenValidity = refreshTokenValidity;
-    }
-}
-```
+> <strong>Note</strong>: In production, use a secret management system like AWS Secrets Manager or HashiCorp Vault. For assignments, a `.env` file with `.gitignore` coverage is sufficient.
 
-```java
-@SpringBootApplication
-@ConfigurationPropertiesScan  // Or @EnableConfigurationProperties(JwtProperties.class)
-public class Application {
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-    }
-}
-```
+### §2.2 JwtDecoder · JwtEncoder Beans — the Verify/Issue Pair
 
-### 3. JwtTokenProvider Implementation
+<strong>`JwtDecoder` is the bean that validates and parses incoming tokens; `JwtEncoder` is the bean that issues new tokens.</strong> When the `oauth2-resource-server` starter is on the classpath, Spring auto-discovers the `JwtDecoder` bean and wires it into `BearerTokenAuthenticationFilter`.
 
-```java
-@Component
-@RequiredArgsConstructor
-public class JwtTokenProvider {
-
-    private final JwtProperties jwtProperties;
-    private SecretKey secretKey;
-
-    @PostConstruct
-    protected void init() {
-        this.secretKey = Keys.hmacShaKeyFor(
-            jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
-     * Create Access Token
-     */
-    public String createAccessToken(Long userId, String email, String role) {
-        Date now = new Date();
-        Date validity = new Date(now.getTime() + jwtProperties.getAccessTokenValidity());
-
-        return Jwts.builder()
-            .subject(String.valueOf(userId))
-            .claim("email", email)
-            .claim("role", role)
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact();
-    }
-
-    /**
-     * Create Refresh Token
-     */
-    public String createRefreshToken(Long userId) {
-        Date now = new Date();
-        Date validity = new Date(now.getTime() + jwtProperties.getRefreshTokenValidity());
-
-        return Jwts.builder()
-            .subject(String.valueOf(userId))
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact();
-    }
-
-    /**
-     * Extract user ID from token
-     */
-    public Long getUserId(String token) {
-        return Long.parseLong(getClaims(token).getSubject());
-    }
-
-    /**
-     * Extract role from token
-     */
-    public String getRole(String token) {
-        return getClaims(token).get("role", String.class);
-    }
-
-    /**
-     * Validate token
-     */
-    public boolean validateToken(String token) {
-        try {
-            getClaims(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
-    }
-
-    private Claims getClaims(String token) {
-        return Jwts.parser()
-            .verifyWith(secretKey)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload();
-    }
-}
-```
+Both beans are already registered in SecurityConfig (see §1.2). For HMAC, the `SecretKeySpec` is shared between them. RSA asymmetric keys are covered in the collapsible section below.
 
 <details>
-<summary>Kotlin version</summary>
+<summary>RSA asymmetric key approach — more detail</summary>
 
-```kotlin
-@Component
-class JwtTokenProvider(
-    private val jwtProperties: JwtProperties
-) {
-    private lateinit var secretKey: SecretKey
+With an RSA key pair, external services can verify tokens by distributing only the public key — a pattern common in microservice architectures where the auth server is separate.
 
-    @PostConstruct
-    fun init() {
-        secretKey = Keys.hmacShaKeyFor(jwtProperties.secret.toByteArray(Charsets.UTF_8))
-    }
+```java
+@Bean
+public JwtDecoder jwtDecoder(RSAPublicKey publicKey) {
+    return NimbusJwtDecoder.withPublicKey(publicKey).build();
+}
 
-    fun createAccessToken(userId: Long, email: String, role: String): String {
-        val now = Date()
-        val validity = Date(now.time + jwtProperties.accessTokenValidity)
-
-        return Jwts.builder()
-            .subject(userId.toString())
-            .claim("email", email)
-            .claim("role", role)
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact()
-    }
-
-    fun createRefreshToken(userId: Long): String {
-        val now = Date()
-        val validity = Date(now.time + jwtProperties.refreshTokenValidity)
-
-        return Jwts.builder()
-            .subject(userId.toString())
-            .issuedAt(now)
-            .expiration(validity)
-            .signWith(secretKey)
-            .compact()
-    }
-
-    fun getUserId(token: String): Long = getClaims(token).subject.toLong()
-
-    fun getRole(token: String): String = getClaims(token).get("role", String::class.java)
-
-    fun validateToken(token: String): Boolean {
-        return runCatching { getClaims(token) }.isSuccess
-    }
-
-    private fun getClaims(token: String): Claims {
-        return Jwts.parser()
-            .verifyWith(secretKey)
-            .build()
-            .parseSignedClaims(token)
-            .payload
-    }
+@Bean
+public JwtEncoder jwtEncoder(RSAPrivateKey privateKey, RSAPublicKey publicKey) {
+    RSAKey rsaKey = new RSAKey.Builder(publicKey)
+        .privateKey(privateKey)
+        .build();
+    JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(rsaKey));
+    return new NimbusJwtEncoder(jwks);
 }
 ```
+
+HMAC is sufficient for assignments. For RSA, knowing "public key distribution enables verification without the private key" is enough.
 
 </details>
 
-### 4. JwtAuthenticationFilter Implementation
+### §2.3 JwtAuthenticationConverter — Mapping the role Claim to ROLE_ Authorities
 
-There are two approaches for implementing the JWT filter.
-
-#### Approach 1: Using userId Directly as Principal (Recommended)
-
-This approach extracts user information directly from the token without a DB query. It is simpler and has performance advantages.
+Spring Security's `hasRole('SELLER')` SpEL internally looks for a `GrantedAuthority` named `ROLE_SELLER`. If the JWT's `role` claim contains `SELLER`, `JwtAuthenticationConverter` automatically prepends `ROLE_` to produce `ROLE_SELLER`.
 
 ```java
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
+// Private method inside SecurityConfig (already included in §1.2)
+private JwtAuthenticationConverter jwtAuthenticationConverter() {
+    JwtGrantedAuthoritiesConverter authoritiesConverter =
+        new JwtGrantedAuthoritiesConverter();
+    authoritiesConverter.setAuthoritiesClaimName("role");   // JWT claim name
+    authoritiesConverter.setAuthorityPrefix("ROLE_");       // add prefix
 
-    private final JwtTokenProvider jwtTokenProvider;
-
-    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
-        this.jwtTokenProvider = jwtTokenProvider;
-    }
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-
-        String header = request.getHeader("Authorization");
-
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
-
-            if (jwtTokenProvider.validateToken(token)) {
-                Long userId = jwtTokenProvider.getUserId(token);
-                String role = jwtTokenProvider.getRole(token);
-
-                // Set userId (Long) directly as the principal
-                UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                        userId,
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                    );
-
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            }
-        }
-
-        filterChain.doFilter(request, response);
-    }
+    JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+    converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+    // principal name = sub claim (default) — userId lives here
+    return converter;
 }
 ```
 
-<details>
-<summary>Kotlin version</summary>
+Omitting `setAuthoritiesClaimName("role")` causes the converter to fall back to the default `scope` claim, making every `@PreAuthorize` check fail. This is one of the most commonly missed lines in assignments.
 
-```kotlin
-class JwtAuthenticationFilter(
-    private val jwtTokenProvider: JwtTokenProvider
-) : OncePerRequestFilter() {
+### §2.4 Authentication API — signup, login, and refresh Flows
 
-    override fun doFilterInternal(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        filterChain: FilterChain
-    ) {
-        val header = request.getHeader("Authorization")
+Start with the sequence diagram, then move to the code.
 
-        if (header != null && header.startsWith("Bearer ")) {
-            val token = header.substring(7)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant AC as AuthController
+    participant AS as AuthService
+    participant TS as TokenService
+    participant E as JwtEncoder
 
-            if (jwtTokenProvider.validateToken(token)) {
-                val userId = jwtTokenProvider.getUserId(token)
-                val role = jwtTokenProvider.getRole(token)
+    Note over C,E: 1. Login flow
+    C->>AC: POST /api/v1/auth/login
+    AC->>AS: login(command)
+    AS->>TS: createAccessToken(userId, email, role)
+    TS->>E: encode(JwtClaimsSet)
+    E-->>TS: accessToken
+    AS->>TS: createRefreshToken(userId)
+    TS->>E: encode(JwtClaimsSet)
+    E-->>TS: refreshToken
+    AS-->>AC: TokenResponse
+    AC-->>C: { accessToken, refreshToken }
 
-                val auth = UsernamePasswordAuthenticationToken(
-                    userId,
-                    null,
-                    listOf(SimpleGrantedAuthority("ROLE_$role"))
-                )
-                auth.details = WebAuthenticationDetailsSource().buildDetails(request)
-                SecurityContextHolder.getContext().authentication = auth
-            }
-        }
+    Note over C,E: 2. Authenticated request (auto-verified)
+    C->>AC: GET /api/v1/me (Bearer accessToken)
+    Note right of AC: BearerTokenAuthenticationFilter verifies<br/>via JwtDecoder automatically
 
-        filterChain.doFilter(request, response)
-    }
-}
+    Note over C,E: 3. Refresh flow
+    C->>AC: POST /api/v1/auth/refresh
+    AC->>AS: refresh(refreshToken)
+    AS->>TS: parseUserId(refreshToken)
+    TS-->>AS: userId
+    AS->>TS: createAccessToken(userId, email, role)
+    TS-->>AS: newAccessToken
+    AS-->>AC: TokenResponse
+    AC-->>C: { newAccessToken, refreshToken }
 ```
 
-</details>
-
-With this approach, you can directly receive the user ID in the Controller using `@AuthenticationPrincipal Long userId`.
-
-```java
-@GetMapping("/me")
-public MemberResponse getMyProfile(@AuthenticationPrincipal Long userId) {
-    return memberService.getMember(userId);
-}
-
-@PostMapping
-@PreAuthorize("hasRole('SELLER')")
-public ProductResponse createProduct(
-    @AuthenticationPrincipal Long sellerId,
-    @Valid @RequestBody CreateProductRequest request
-) {
-    return productService.createProduct(sellerId, request);
-}
-```
-
-#### Approach 2: Using UserDetails (Traditional Approach)
-
-This approach loads user information from the DB via UserDetailsService. It is useful when you need to check the user's latest state (permission changes, account locking, etc.).
-
-<details>
-<summary>UserDetails approach code</summary>
-
-```java
-@Component
-@RequiredArgsConstructor
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    private final JwtTokenProvider jwtTokenProvider;
-    private final UserDetailsService userDetailsService;
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-
-        String token = resolveToken(request);
-
-        if (token != null && jwtTokenProvider.validateToken(token)) {
-            Long userId = jwtTokenProvider.getUserId(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(String.valueOf(userId));
-
-            UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-        }
-
-        filterChain.doFilter(request, response);
-    }
-
-    private String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader("Authorization");
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        return null;
-    }
-}
-```
-
-With this approach, you use `@AuthenticationPrincipal UserDetails userDetails` to receive the user details.
-
-```java
-@GetMapping("/me")
-public MemberResponse getMyProfile(@AuthenticationPrincipal UserDetails userDetails) {
-    Long userId = Long.parseLong(userDetails.getUsername());
-    return memberService.getMember(userId);
-}
-```
-
-</details>
-
-<details>
-<summary>Which approach should you choose?</summary>
-
-| Criteria | Direct userId | UserDetails |
-|------|-----------------|-----------------|
-| **DB Query** | None | Query on every request |
-| **Performance** | Better | Relatively slower |
-| **Real-time State** | Info from token issuance time | Reflected in real-time |
-| **Implementation Complexity** | Simple | Requires UserDetailsService |
-| **Use Cases** | Most assignments/production | When real-time verification like account locking is needed |
-
-**Recommendation**: In most cases, **Approach 1 (direct userId)** is suitable. However, consider Approach 2 when permissions change frequently or account status must be verified in real-time.
-
-</details>
-
-### 5. UserDetailsService Implementation (Optional)
-
-> **Note**: If you chose **Approach 1 (direct userId)** described above, UserDetailsService is not needed. Only implement this if you chose Approach 2 (UserDetails).
-
-<details>
-<summary>UserDetailsService implementation (for Approach 2)</summary>
+**TokenService** — issues tokens with `JwtEncoder`, parses them with `JwtDecoder`. This replaces the role that `JwtTokenProvider` played in the JJWT-based approach.
 
 ```java
 @Service
 @RequiredArgsConstructor
-public class CustomUserDetailsService implements UserDetailsService {
+public class TokenService {
 
-    private final MemberRepository memberRepository;
+    private final JwtEncoder jwtEncoder;
+    private final JwtDecoder jwtDecoder;
 
-    @Override
-    public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
-        Member member = memberRepository.findById(Long.parseLong(userId))
-            .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
+    private static final Duration ACCESS_TOKEN_TTL = Duration.ofHours(1);
+    private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
 
-        return User.builder()
-            .username(String.valueOf(member.getId()))
-            .password(member.getPassword())
-            .roles(member.getRole().name())
+    public String createAccessToken(Long userId, String email, String role) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(ACCESS_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("email", email)
+            .claim("role", role)
             .build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+
+    public String createRefreshToken(Long userId) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(REFRESH_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("token_type", "refresh")
+            .build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+
+    public Long parseUserId(String token) {
+        Jwt jwt = jwtDecoder.decode(token);  // verify + parse in one call
+        return Long.parseLong(jwt.getSubject());
     }
 }
 ```
 
-</details>
-
-### 6. Authentication API Implementation
+**AuthController + AuthService** — inject and use `TokenService`.
 
 ```java
 @RestController
@@ -573,14 +399,12 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        TokenResponse response = authService.login(request.toCommand());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(authService.login(request.toCommand()));
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponse> refresh(@RequestBody RefreshTokenRequest request) {
-        TokenResponse response = authService.refresh(request.getRefreshToken());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
     }
 }
 ```
@@ -593,118 +417,202 @@ public class AuthService {
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenService tokenService;
 
     @Transactional
     public void signup(SignupCommand command) {
         if (memberRepository.existsByEmail(command.getEmail())) {
             throw new DuplicateEmailException(command.getEmail());
         }
-
         Member member = Member.builder()
             .email(command.getEmail())
             .password(passwordEncoder.encode(command.getPassword()))
             .name(command.getName())
             .role(MemberRole.USER)
             .build();
-
         memberRepository.save(member);
     }
 
     public TokenResponse login(LoginCommand command) {
         Member member = memberRepository.findByEmail(command.getEmail())
-            .orElseThrow(() -> new InvalidCredentialsException());
+            .orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordEncoder.matches(command.getPassword(), member.getPassword())) {
             throw new InvalidCredentialsException();
         }
 
-        String accessToken = jwtTokenProvider.createAccessToken(
+        String accessToken = tokenService.createAccessToken(
             member.getId(), member.getEmail(), member.getRole().name());
-        String refreshToken = jwtTokenProvider.createRefreshToken(member.getId());
-
+        String refreshToken = tokenService.createRefreshToken(member.getId());
         return new TokenResponse(accessToken, refreshToken);
     }
 
     public TokenResponse refresh(String refreshToken) {
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new InvalidTokenException();
-        }
-
-        Long userId = jwtTokenProvider.getUserId(refreshToken);
+        Long userId = tokenService.parseUserId(refreshToken);  // throws JwtException if expired
         Member member = memberRepository.findById(userId)
             .orElseThrow(() -> new MemberNotFoundException(userId));
 
-        String newAccessToken = jwtTokenProvider.createAccessToken(
+        String newAccessToken = tokenService.createAccessToken(
             member.getId(), member.getEmail(), member.getRole().name());
-
         return new TokenResponse(newAccessToken, refreshToken);
     }
 }
 ```
 
 <details>
-<summary>Session vs JWT Debate</summary>
+<summary>Kotlin version — TokenService</summary>
 
-| Criteria | Session | JWT |
-|------|---------|-----|
-| **Storage Location** | Server (memory/Redis) | Client |
-| **Scalability** | Requires session sharing between servers | Easily scalable as stateless |
-| **Security** | Only session ID exposed | Risk if token is stolen |
-| **Logout** | Immediately invalidated on server | Requires blacklist management |
-| **Complexity** | Simple | Requires token management logic |
+```kotlin
+@Service
+class TokenService(
+    private val jwtEncoder: JwtEncoder,
+    private val jwtDecoder: JwtDecoder
+) {
+    companion object {
+        private val ACCESS_TOKEN_TTL = Duration.ofHours(1)
+        private val REFRESH_TOKEN_TTL = Duration.ofDays(7)
+    }
 
-**Recommended for assignments**: REST API assignments mostly expect JWT. However, it is good to explain your reasoning in the README.
+    fun createAccessToken(userId: Long, email: String, role: String): String {
+        val now = Instant.now()
+        val claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(ACCESS_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("email", email)
+            .claim("role", role)
+            .build()
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).tokenValue
+    }
+
+    fun createRefreshToken(userId: Long): String {
+        val now = Instant.now()
+        val claims = JwtClaimsSet.builder()
+            .issuer("self")
+            .issuedAt(now)
+            .expiresAt(now.plus(REFRESH_TOKEN_TTL))
+            .subject(userId.toString())
+            .claim("token_type", "refresh")
+            .build()
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).tokenValue
+    }
+
+    fun parseUserId(token: String): Long {
+        val jwt = jwtDecoder.decode(token)
+        return jwt.subject.toLong()
+    }
+}
+```
 
 </details>
 
+### §2.5 Getting the Current User in Controllers — @AuthenticationPrincipal Jwt
+
+The principal stored in `SecurityContext` by `BearerTokenAuthenticationFilter` is a `Jwt` object. Receiving it with `@AuthenticationPrincipal Jwt jwt` in a Controller gives direct access to claims without any casting.
+
+```java
+@GetMapping("/me")
+public MemberResponse getMyProfile(@AuthenticationPrincipal Jwt jwt) {
+    Long userId = Long.parseLong(jwt.getSubject());
+    return memberService.getMember(userId);
+}
+
+@PostMapping
+@PreAuthorize("hasRole('SELLER')")
+public ProductResponse createProduct(
+    @AuthenticationPrincipal Jwt jwt,
+    @Valid @RequestBody CreateProductRequest request
+) {
+    Long sellerId = Long.parseLong(jwt.getSubject());
+    return productService.createProduct(sellerId, request);
+}
+```
+
+`jwt.getSubject()` → userId (sub claim), `jwt.getClaim("email")` → any custom claim, `jwt.getClaim("role")` → role claim.
+
+### §2.6 Aside: JJWT direct implementation vs oauth2-resource-server
+
 <details>
-<summary>Access Token Storage Location Debate</summary>
+<summary>The difference between the two approaches — more detail</summary>
 
-| Storage Location | Pros | Cons |
+| Comparison | JJWT direct | oauth2-resource-server |
+|-----------|-------------|------------------------|
+| Dependencies | `jjwt-api` + `jjwt-impl` + `jjwt-jackson` | `oauth2-resource-server` alone |
+| JWT filter | Write `OncePerRequestFilter` by hand | `BearerTokenAuthenticationFilter` auto-registered |
+| Token verification | Implement `validateToken()` manually | `JwtDecoder` bean handles it |
+| Authority mapping | Manually create `SimpleGrantedAuthority` in filter | `JwtAuthenticationConverter` |
+| OAuth2 standard compliance | None | RFC 6750 Bearer Token standard |
+| Spring Security 7 recommendation | Non-standard | Standard |
+
+Two practical advantages of the oauth2-resource-server approach:
+- <strong>Verification and parsing are not separated</strong> — A single `decode()` call verifies the signature and parses the claims. The JJWT pattern often ends up calling `validateToken()` and then `getClaims()` separately.
+- <strong>No filter boilerplate</strong> — A 200-line `JwtAuthenticationFilter` is replaced by a few lines in SecurityConfig.
+
+</details>
+
+### §2.7 Aside: Session vs JWT, Token Storage Locations
+
+<details>
+<summary>Session vs JWT, storage location comparison</summary>
+
+| Criteria | Session | JWT |
+|----------|---------|-----|
+| <strong>Storage</strong> | Server (memory/Redis) | Client |
+| <strong>Scalability</strong> | Session sharing required across servers | Stateless, horizontal scaling easy |
+| <strong>Logout</strong> | Immediately invalidated server-side | Requires blacklist management |
+| <strong>Assignment recommendation</strong> | Not expected | De facto standard for REST API assignments |
+
+**Token storage locations**:
+
+| Location | Pros | Cons |
 |----------|------|------|
-| **LocalStorage** | Simple, easy JavaScript access | Vulnerable to XSS attacks |
-| **SessionStorage** | Deleted when tab closes | Vulnerable to XSS attacks |
-| **Cookie (HttpOnly)** | XSS protection | Vulnerable to CSRF attacks |
-| **Memory** | Most secure | Lost on page refresh |
+| LocalStorage | Simple | Vulnerable to XSS |
+| SessionStorage | Deleted on tab close | Vulnerable to XSS |
+| HttpOnly Cookie | XSS protection | Requires CSRF mitigation |
+| Memory | Most secure | Lost on page refresh |
 
-**Common pattern in production**:
-- Access Token: Memory (global variable/state management)
-- Refresh Token: HttpOnly + Secure + SameSite Cookie
-
-**For assignments**: If it is a backend-only assignment without a frontend, returning tokens in the response body is acceptable.
+Production recommendation: Access Token in memory, Refresh Token in HttpOnly + Secure + SameSite Cookie. For backend-only assignments with no frontend, returning tokens in the response body is acceptable.
 
 </details>
 
 ---
 
-## Password Management
+## 3. Password Management — BCrypt and Argon2
 
-### 1. BCrypt Encryption
+### §3.1 PasswordEncoderFactories.createDelegatingPasswordEncoder() — The Default
+
+<strong>`PasswordEncoderFactories.createDelegatingPasswordEncoder()` is a factory that reads the algorithm prefix stored with the hash (`{bcrypt}`, `{argon2}`, etc.) and automatically selects the right encoder.</strong>
+
+The default algorithm in Spring Security 7 is `{bcrypt}`. The bean is already registered in SecurityConfig.
 
 ```java
-@Service
-@RequiredArgsConstructor
-public class MemberService {
-
-    private final PasswordEncoder passwordEncoder;
-
-    public void changePassword(Long memberId, String currentPassword, String newPassword) {
-        Member member = memberRepository.findById(memberId)
-            .orElseThrow(() -> new MemberNotFoundException(memberId));
-
-        // Verify current password
-        if (!passwordEncoder.matches(currentPassword, member.getPassword())) {
-            throw new InvalidPasswordException();
-        }
-
-        // Encrypt and save new password
-        member.changePassword(passwordEncoder.encode(newPassword));
-    }
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    // Stored format: {bcrypt}$2a$10$...
 }
 ```
 
-### 2. Password Policy Validation
+The correct pattern for a password change:
+
+```java
+@Transactional
+public void changePassword(Long memberId, String currentPassword, String newPassword) {
+    Member member = memberRepository.findById(memberId)
+        .orElseThrow(() -> new MemberNotFoundException(memberId));
+
+    if (!passwordEncoder.matches(currentPassword, member.getPassword())) {
+        throw new InvalidPasswordException();
+    }
+
+    member.changePassword(passwordEncoder.encode(newPassword));
+}
+```
+
+### §3.2 Password Policy Validation
+
+Enforce input policy with `@Pattern` in the request DTO.
 
 ```java
 public record SignupRequest(
@@ -712,8 +620,10 @@ public record SignupRequest(
     String email,
 
     @NotBlank
-    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&])[A-Za-z\\d@$!%*#?&]{8,20}$",
-             message = "Password must be 8-20 characters and include letters, numbers, and special characters")
+    @Pattern(
+        regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&])[A-Za-z\\d@$!%*#?&]{8,20}$",
+        message = "Password must be 8-20 characters and include letters, numbers, and a special character"
+    )
     String password,
 
     @NotBlank @Size(min = 2, max = 20)
@@ -725,55 +635,39 @@ public record SignupRequest(
 }
 ```
 
-<details>
-<summary>Password Security Tips</summary>
+### §3.3 Aside: BCrypt vs Argon2 and Spring Security 7 Recommendation
 
-**Why BCrypt is secure**:
-1. **Automatic salt generation**: Same password produces different hashes every time
-2. **Work Factor**: Adjustable computation cost (default 10)
-3. **Slow hashing**: Defends against brute-force attacks
+| Algorithm | Features | Recommended For |
+|---------|----------|-----------------|
+| <strong>BCrypt</strong> | Proven since 1999, broadly deployed | General web apps, assignments |
+| <strong>Argon2</strong> | 2015 PHC winner, configurable memory cost, resistant to GPU attacks | High-security requirements |
+| <strong>scrypt</strong> | Memory-intensive, defends parallel attacks | Some financial services |
 
-**Precautions**:
-- Never log plaintext passwords
-- Check that the new password is different from the previous one when changing passwords
-- For password recovery, send a reset link (never send plaintext passwords)
+Using Argon2 in Spring Security 7:
 
-</details>
+```java
+@Bean
+public PasswordEncoder passwordEncoder() {
+    // saltLength=16, hashLength=32, parallelism=1, memory=65536 KB, iterations=3
+    return new Argon2PasswordEncoder(16, 32, 1, 65536, 3);
+}
+```
 
-
-> **What is Argon2 encryption?**
->
-> Argon2 is a more modern password hashing algorithm than BCrypt, and was the **winner of the 2015 Password Hashing Competition**.
->
-> | Algorithm | Features | Recommended For |
-> |---------|------|----------|
-> | **BCrypt** | Proven algorithm, widely used | General web applications |
-> | **Argon2** | Configurable memory usage, strong against GPU attacks | Cases requiring high security |
->
-> Using Argon2 in Spring Security:
-> ```java
-> @Bean
-> public PasswordEncoder passwordEncoder() {
->     return new Argon2PasswordEncoder(16, 32, 1, 65536, 3);
->     // saltLength, hashLength, parallelism, memory, iterations
-> }
-> ```
->
-> **For assignments**: BCrypt is the standard, so using BCrypt is recommended. Knowing about Argon2 is sufficient.
+> <strong>Note</strong>: BCrypt is the de facto standard for assignments. Using `PasswordEncoderFactories.createDelegatingPasswordEncoder()` means switching algorithms later remains backward-compatible with existing hashes.
 
 ---
 
-## API Authorization Management
+## 4. API Authorization — RBAC and Resource Ownership Checks
 
-### 1. Role-Based Access Control (RBAC)
+### §4.1 Role Definition (Role enum + Member entity)
 
-Define appropriate roles based on the assignment requirements.
+Define roles to match the assignment requirements. Storing with `@Enumerated(EnumType.STRING)` writes `USER`, `SELLER`, `ADMIN` as strings in the DB, making queries readable.
 
 ```java
-public enum Role {
-    USER,     // Regular user
-    SELLER,   // Seller (for marketplaces, etc.)
-    ADMIN     // Administrator
+public enum MemberRole {
+    USER,    // Regular user
+    SELLER,  // Seller
+    ADMIN    // Administrator
 }
 ```
 
@@ -787,11 +681,9 @@ public class Member {
 }
 ```
 
-### 2. Method-Level Security
+### §4.2 Method-Level Security with @PreAuthorize
 
-> **Note**: `@EnableMethodSecurity` was already configured in the SecurityConfig above. No separate Config class is needed.
-
-Using `@PreAuthorize` enables fine-grained authorization control at the method level.
+Declaring `@EnableMethodSecurity` allows `@PreAuthorize` on Controller methods. Because the JWT's role claim flows through `JwtAuthenticationConverter` to become `ROLE_SELLER`, `hasRole('SELLER')` resolves correctly.
 
 ```java
 @RestController
@@ -801,7 +693,7 @@ public class ProductController {
 
     private final ProductService productService;
 
-    // Anyone can view (permitAll configured in SecurityConfig)
+    // permitAll in SecurityConfig — anyone can view
     @GetMapping("/{productId}")
     public ProductResponse getProduct(@PathVariable Long productId) {
         return productService.getProduct(productId);
@@ -811,9 +703,10 @@ public class ProductController {
     @PostMapping
     @PreAuthorize("hasRole('SELLER')")
     public ProductResponse createProduct(
-        @AuthenticationPrincipal Long sellerId,
+        @AuthenticationPrincipal Jwt jwt,
         @Valid @RequestBody CreateProductRequest request
     ) {
+        Long sellerId = Long.parseLong(jwt.getSubject());
         return productService.createProduct(sellerId, request);
     }
 
@@ -821,14 +714,15 @@ public class ProductController {
     @PatchMapping("/{productId}")
     @PreAuthorize("hasRole('SELLER')")
     public ProductResponse updateProduct(
-        @AuthenticationPrincipal Long sellerId,
+        @AuthenticationPrincipal Jwt jwt,
         @PathVariable Long productId,
         @RequestBody UpdateProductRequest request
     ) {
+        Long sellerId = Long.parseLong(jwt.getSubject());
         return productService.updateProduct(sellerId, productId, request);
     }
 
-    // Only ADMIN role can access
+    // Only ADMIN can access
     @GetMapping("/admin/all")
     @PreAuthorize("hasRole('ADMIN')")
     public List<ProductResponse> getAllProductsForAdmin() {
@@ -846,26 +740,27 @@ public class ProductController {
 class ProductController(private val productService: ProductService) {
 
     @GetMapping("/{productId}")
-    fun getProduct(@PathVariable productId: Long): ProductResponse {
-        return productService.getProduct(productId)
-    }
+    fun getProduct(@PathVariable productId: Long): ProductResponse =
+        productService.getProduct(productId)
 
     @PostMapping
     @PreAuthorize("hasRole('SELLER')")
     fun createProduct(
-        @AuthenticationPrincipal sellerId: Long,
+        @AuthenticationPrincipal jwt: Jwt,
         @Valid @RequestBody request: CreateProductRequest
     ): ProductResponse {
+        val sellerId = jwt.subject.toLong()
         return productService.createProduct(sellerId, request)
     }
 
     @PatchMapping("/{productId}")
     @PreAuthorize("hasRole('SELLER')")
     fun updateProduct(
-        @AuthenticationPrincipal sellerId: Long,
+        @AuthenticationPrincipal jwt: Jwt,
         @PathVariable productId: Long,
         @RequestBody request: UpdateProductRequest
     ): ProductResponse {
+        val sellerId = jwt.subject.toLong()
         return productService.updateProduct(sellerId, productId, request)
     }
 }
@@ -873,13 +768,11 @@ class ProductController(private val productService: ProductService) {
 
 </details>
 
-### 3. Resource Owner Verification
+### §4.3 Resource Ownership Checks — Service vs @PreAuthorize
 
-Owner verification is needed to prevent access to other users' resources.
+Role checks are handled by `@PreAuthorize`, but "does this resource belong to the caller?" requires a separate ownership check.
 
-#### Approach 1: Direct Verification in Service (Recommended)
-
-The most intuitive and simple method. Verify ownership in the service method and throw an exception if it fails.
+**Approach 1: Direct check in the Service (recommended for assignments)**
 
 ```java
 @Service
@@ -890,11 +783,11 @@ public class ProductService {
     private final ProductRepository productRepository;
 
     @Transactional
-    public ProductResponse updateProduct(Long sellerId, Long productId, UpdateProductRequest request) {
+    public ProductResponse updateProduct(Long sellerId, Long productId,
+                                         UpdateProductRequest request) {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        // Owner verification
         if (!product.getSellerId().equals(sellerId)) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
         }
@@ -902,38 +795,16 @@ public class ProductService {
         product.update(request.getName(), request.getPrice());
         return ProductResponse.from(product);
     }
-
-    @Transactional
-    public void deleteProduct(Long sellerId, Long productId) {
-        Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
-
-        if (!product.getSellerId().equals(sellerId)) {
-            throw new BusinessException(ErrorCode.PRODUCT_NOT_OWNED);
-        }
-
-        productRepository.delete(product);
-    }
 }
 ```
 
-#### Approach 2: @PreAuthorize + Custom Service
-
-A declarative approach to authorization verification using SpEL.
+**Approach 2: @PreAuthorize + custom SpEL service**
 
 ```java
-@RestController
-@RequestMapping("/api/v1/orders")
-@RequiredArgsConstructor
-public class OrderController {
-
-    private final OrderService orderService;
-
-    @GetMapping("/{orderId}")
-    @PreAuthorize("@orderAuthorizationService.isOwner(#orderId, authentication.principal)")
-    public OrderResponse getOrder(@PathVariable Long orderId) {
-        return orderService.getOrder(orderId);
-    }
+@GetMapping("/{orderId}")
+@PreAuthorize("@orderAuthorizationService.isOwner(#orderId, authentication.principal)")
+public OrderResponse getOrder(@PathVariable Long orderId) {
+    return orderService.getOrder(orderId);
 }
 ```
 
@@ -944,8 +815,9 @@ public class OrderAuthorizationService {
 
     private final OrderRepository orderRepository;
 
-    // When principal is Long (userId)
-    public boolean isOwner(Long orderId, Long userId) {
+    // authentication.principal is a Jwt object
+    public boolean isOwner(Long orderId, Jwt jwt) {
+        Long userId = Long.parseLong(jwt.getSubject());
         return orderRepository.findById(orderId)
             .map(order -> order.getBuyerId().equals(userId))
             .orElse(false);
@@ -953,23 +825,18 @@ public class OrderAuthorizationService {
 }
 ```
 
-<details>
-<summary>Which approach should you choose?</summary>
+Comparing the two:
 
-| Criteria | Service Verification | @PreAuthorize |
-|------|-------------|---------------|
-| **Readability** | Logic is explicit | Concise with annotations |
-| **Testing** | Easy to unit test | SpEL testing is complex |
-| **Flexibility** | Can be combined with business logic | Verification logic is separated |
-| **Debugging** | Intuitive | SpEL debugging is difficult |
+| Criteria | Service check | @PreAuthorize + SpEL |
+|----------|--------------|----------------------|
+| <strong>Readability</strong> | Logic explicit in code | Concise via annotation |
+| <strong>Unit testing</strong> | Covered by Service tests | SpEL testing is complex |
+| <strong>Debugging</strong> | Standard exception traces | SpEL failure messages unclear |
+| <strong>Assignment recommendation</strong> | Recommended | Advanced option |
 
-**Recommendation**: For assignments, **Approach 1 (Service verification)** is more intuitive and easier to test.
+### §4.4 Accessing the Current User — @AuthenticationPrincipal Jwt
 
-</details>
-
-### 4. Accessing Current User Information
-
-Since we set `userId (Long)` as the `principal` in JwtAuthenticationFilter earlier, you can receive it directly in the Controller with `@AuthenticationPrincipal Long`.
+Use `@AuthenticationPrincipal Jwt jwt` in Controllers to access the current user's information.
 
 ```java
 @RestController
@@ -980,112 +847,67 @@ public class MemberController {
     private final MemberService memberService;
 
     @GetMapping("/me")
-    public MemberResponse getCurrentMember(@AuthenticationPrincipal Long userId) {
+    public MemberResponse getCurrentMember(@AuthenticationPrincipal Jwt jwt) {
+        Long userId = Long.parseLong(jwt.getSubject());
         return memberService.getMember(userId);
     }
 
     @PatchMapping("/me")
     public MemberResponse updateProfile(
-        @AuthenticationPrincipal Long userId,
+        @AuthenticationPrincipal Jwt jwt,
         @Valid @RequestBody UpdateMemberRequest request
     ) {
+        Long userId = Long.parseLong(jwt.getSubject());
         return memberService.updateMember(userId, request);
     }
 }
 ```
 
 <details>
-<summary>Kotlin version</summary>
+<summary>Custom annotation approach (optional)</summary>
 
-```kotlin
-@RestController
-@RequestMapping("/api/v1/members")
-class MemberController(private val memberService: MemberService) {
-
-    @GetMapping("/me")
-    fun getCurrentMember(@AuthenticationPrincipal userId: Long): MemberResponse {
-        return memberService.getMember(userId)
-    }
-
-    @PatchMapping("/me")
-    fun updateProfile(
-        @AuthenticationPrincipal userId: Long,
-        @Valid @RequestBody request: UpdateMemberRequest
-    ): MemberResponse {
-        return memberService.updateMember(userId, request)
-    }
-}
-```
-
-</details>
-
-<details>
-<summary>Custom Annotation Approach (Optional)</summary>
-
-If you want a more explicit annotation instead of `@AuthenticationPrincipal`:
+If `@AuthenticationPrincipal` feels too verbose or the userId extraction is repetitive, wrap it in a custom annotation.
 
 ```java
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
+@AuthenticationPrincipal
 public @interface CurrentUser {
 }
-
-@Component
-public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolver {
-
-    @Override
-    public boolean supportsParameter(MethodParameter parameter) {
-        return parameter.hasParameterAnnotation(CurrentUser.class)
-            && parameter.getParameterType().equals(Long.class);
-    }
-
-    @Override
-    public Object resolveArgument(MethodParameter parameter,
-                                  ModelAndViewContainer mavContainer,
-                                  NativeWebRequest webRequest,
-                                  WebDataBinderFactory binderFactory) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-
-        // When principal is Long
-        return (Long) authentication.getPrincipal();
-    }
-}
 ```
 
-```java
-@GetMapping("/me")
-public MemberResponse getCurrentMember(@CurrentUser Long userId) {
-    return memberService.getMember(userId);
-}
-```
-
-> However, since `@AuthenticationPrincipal Long userId` is sufficiently clear and simple, using it without a custom annotation is perfectly fine for assignments.
+Using `@AuthenticationPrincipal` as a meta-annotation lets Spring handle it identically. Controllers then use `@CurrentUser Jwt jwt`.
 
 </details>
 
-<details>
-<summary>Authorization Check Location: Filter vs AOP vs Service</summary>
+### §4.5 Where to Put Authorization Checks — Filter / @PreAuthorize / Service
 
-| Location | Characteristics | When to Use |
-|------|------|----------|
-| **SecurityFilterChain** | URL pattern-based, executed first | API group-level permissions (e.g., /admin/** -> ADMIN) |
-| **@PreAuthorize** | Method-level, supports SpEL | Individual method permissions, dynamic authorization checks |
-| **Service** | Combined with business logic | Complex authorization logic, data-based permissions |
+Authorization checks can live in three places, each with a different purpose.
 
-**Recommended for assignments**: Use SecurityFilterChain for URL-based basic permissions, and @PreAuthorize or Service for resource owner verification.
+```mermaid
+flowchart TD
+    Start([Request]) --> Q1{URL-pattern-level authorization?}
+    Q1 -->|Yes| A1[SecurityFilterChain<br/>requestMatchers + hasRole]
+    Q1 -->|No| Q2{Method-level + simple role check?}
+    Q2 -->|Yes| A2["@PreAuthorize<br/>hasRole('SELLER')"]
+    Q2 -->|No| Q3{Resource ownership<br/>or complex business condition?}
+    Q3 -->|Yes| A3[Service method<br/>compare owner IDs]
+    Q3 -->|No| A4[Revisit design]
+```
 
-</details>
+| Location | Purpose | Example |
+|----------|---------|---------|
+| <strong>SecurityFilterChain</strong> | URL group entry control | `/admin/**` → ADMIN only |
+| <strong>@PreAuthorize</strong> | Per-method role check | `hasRole('SELLER')` |
+| <strong>Service</strong> | Data-driven ownership check | `product.getSellerId().equals(sellerId)` |
 
 ---
 
-## CORS Configuration
+## 5. CORS Configuration
 
-> For a deeper understanding of how CORS works (SOP, Simple/Preflight/Credentialed requests, error pattern solutions, etc.), see [Understanding CORS: From Browser Security Policy to Spring Boot Configuration](/en/blog/cors-understanding-guide/).
+### §5.1 Global CORS — CorsConfigurationSource + SecurityConfig Integration
 
-### 1. Global CORS Configuration
+When using Spring Security, the `CorsConfigurationSource` bean must be wired into SecurityConfig via `.cors(cors -> cors.configurationSource(...))`. Creating a `CorsConfig` class alone without connecting it to Security causes preflight (OPTIONS) requests to return 401.
 
 ```java
 @Configuration
@@ -1094,7 +916,6 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
         configuration.setAllowedOrigins(List.of(
             "http://localhost:3000",
             "https://your-frontend-domain.com"
@@ -1112,223 +933,115 @@ public class CorsConfig {
 }
 ```
 
+Add `.cors(...)` to the `filterChain` in SecurityConfig:
+
 ```java
-// Add CORS configuration to SecurityConfig
 @Bean
 public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     return http
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .csrf(csrf -> csrf.disable())
-        // ... remaining configuration
+        // ... rest of the config
         .build();
 }
 ```
 
-### 2. Controller-Level CORS
+> <strong>Note</strong>: Place `corsConfigurationSource` in the same `@Configuration` class as SecurityConfig, or inject it with `@Autowired` and reference it there.
+
+### §5.2 Controller-Level CORS — @CrossOrigin
+
+Use this when a specific Controller needs a different CORS policy from the global one.
 
 ```java
 @RestController
 @RequestMapping("/api/v1/public")
 @CrossOrigin(origins = "http://localhost:3000")
 public class PublicController {
-    // Apply CORS to a specific controller only
+    // CORS origin restriction applied to this controller only
 }
 ```
 
-<details>
-<summary>CORS Configuration Tips</summary>
+When both global and controller-level settings exist, Spring merges them.
 
-**Preflight Requests**:
-- The browser sends an OPTIONS request before the actual request
-- `Access-Control-*` headers are used to confirm whether the request is allowed
+### §5.3 Common Mistake — allowedOrigins("*") + allowCredentials(true) Conflict
 
-**Common Mistakes**:
-- `allowCredentials(true)` and `allowedOrigins("*")` cannot be used together
-- Use `allowedOriginPatterns("*")` when allowing wildcards
+Using `allowedOrigins("*")` together with `allowCredentials(true)` causes browser CORS errors. Spring itself logs a warning at startup.
 
-**For assignments**:
-- CORS configuration can be omitted if there is no frontend
-- If using Swagger UI, the corresponding origin must be allowed
+| Scenario | Correct configuration |
+|----------|-----------------------|
+| Dev environment, authentication needed | `setAllowedOrigins(List.of("http://localhost:3000"))` + `setAllowCredentials(true)` |
+| Public API, no auth needed | `setAllowedOriginPatterns(List.of("*"))` + `setAllowCredentials(false)` |
 
-</details>
+If you need wildcard origins while sending cookies or `Authorization` headers, use `allowedOriginPatterns("*")` instead of `allowedOrigins("*")`. Unlike the latter, the pattern form can coexist with `allowCredentials(true)`.
 
 ---
 
-## Summary
+## Recap
 
-### Checklist
+- <strong>oauth2-resource-server is the Spring Security 7 standard</strong> — A single `JwtDecoder` bean powers automatic verification in `BearerTokenAuthenticationFilter`. No custom filter needed.
+- <strong>Manage JwtDecoder + JwtEncoder as beans</strong> — Verification (`decode`) and issuance (`encode`) operate at the same API level. The configuration differs between HMAC and RSA, but the usage is identical.
+- <strong>JwtAuthenticationConverter maps the role claim to ROLE_</strong> — The single line `setAuthoritiesClaimName("role")` is the most commonly missed piece. Without it, every `@PreAuthorize` check fails.
+- <strong>@AuthenticationPrincipal Jwt is the standard pattern</strong> — `jwt.getSubject()` for userId, `jwt.getClaim()` for any claim. No casting, clean.
+- <strong>BCrypt by default, wire CORS into Security</strong> — `PasswordEncoderFactories.createDelegatingPasswordEncoder()` keeps algorithm migrations backward-compatible. CORS not connected to Security returns 401 on preflight.
+
+**Checklist**:
 
 | Item | Check |
-|------|------|
-| Is SecurityFilterChain properly configured? | ⬜ |
-| Is `@EnableMethodSecurity` declared? | ⬜ |
-| Is JWT creation/validation logic implemented? | ⬜ |
-| Does JwtAuthenticationFilter set userId as the principal? | ⬜ |
-| Are passwords encrypted with BCrypt before storage? | ⬜ |
-| Are authenticated and public APIs properly separated? | ⬜ |
-| Is role-based access control applied with `@PreAuthorize`? | ⬜ |
-| Is the current user retrieved via `@AuthenticationPrincipal Long userId`? | ⬜ |
-| Is resource owner verification implemented? | ⬜ |
-| Is the JWT secret externalized to a configuration file? | ⬜ |
+|------|-------|
+| `spring-boot-starter-oauth2-resource-server` dependency added | ⬜ |
+| `JwtDecoder` + `JwtEncoder` beans registered | ⬜ |
+| `JwtAuthenticationConverter` — `setAuthoritiesClaimName("role")` configured | ⬜ |
+| `oauth2ResourceServer` configured, activating `BearerTokenAuthenticationFilter` | ⬜ |
+| `@EnableMethodSecurity` declared | ⬜ |
+| JWT secret externalized as environment variable (`${JWT_SECRET}`) | ⬜ |
+| Passwords encoded with BCrypt confirmed | ⬜ |
+| Resource ownership check implemented (ID comparison in Service) | ⬜ |
+| CORS wired into SecurityConfig (`cors.configurationSource(...)`) | ⬜ |
+| `allowedOrigins("*")` + `allowCredentials(true)` combination verified absent | ⬜ |
 
-### Key Points
+Part 6 covers <strong>Docker, Docker Compose, and GitHub Actions CI/CD</strong>. It will walk through the Dockerfile patterns and deployment pipeline pieces that should be in place before submitting an assignment — written from an evaluator's perspective.
 
-1. **Spring Security**: Security configuration with SecurityFilterChain + `@EnableMethodSecurity`, stateless session policy
-2. **JWT**: Access Token + Refresh Token structure, setting userId directly as the principal
-3. **Password**: BCrypt encryption, never store or transmit in plaintext
-4. **Authorization Management**: Combination of URL-based (SecurityFilterChain) + method-level (`@PreAuthorize`) security
-5. **Current User**: Convenient access via `@AuthenticationPrincipal Long userId`
+---
 
-<details>
-<summary>Common Mistakes in Assignments</summary>
+## Appendix
 
-1. **Hardcoding JWT Secret**
-   - Writing the secret directly in source code
-   - Always externalize to application.yml or environment variables
+### Five Common Mistakes
 
-2. **Missing Token Expiration Handling**
-   - Token validation must check for expiration
-   - Appropriate error response (401) for expired tokens
+| Mistake | Symptom | Correct Approach |
+|---------|---------|-----------------|
+| <strong>Hardcoding the JWT secret</strong> | Exposed on GitHub, security vulnerability | Use `${JWT_SECRET}` env var + `.gitignore` |
+| <strong>Missing token expiry handling</strong> | Expired tokens continue to authenticate | `JwtDecoder` throws `JwtException` on expiry → map to `401` response |
+| <strong>Exposing plaintext passwords</strong> | Password field in response DTO, logged to console | Remove password from DTOs, add log filter |
+| <strong>Missing authorization checks</strong> | Users can access other users' resources | Verify ownership in Service: `sellerId.equals(product.getSellerId())` |
+| <strong>allowedOrigins("*") + allowCredentials(true)</strong> | Browser CORS error | Use specific origins or `allowedOriginPatterns("*")` |
 
-3. **Exposing Plaintext Passwords**
-   - Including the password field in response DTOs
-   - Logging passwords
+### Refresh Token Rotation
 
-4. **Missing Authorization Checks**
-   - Allowing access to other users' resources
-   - Resource owner verification is essential
-
-5. **Allowing All CORS Origins**
-   - `allowedOrigins("*")` + `allowCredentials(true)` combination is not allowed
-   - In production, only allow specific origins
-
-</details>
-
-<details>
-<summary>Refresh Token Rotation</summary>
-
-**Refresh Token Rotation** is a pattern where a new Refresh Token is also issued when a Refresh Token is used.
+<strong>Refresh Token Rotation</strong> is the pattern of issuing a new Refresh Token alongside the new Access Token whenever the Refresh Token is used, and invalidating the old one. This makes reuse of a stolen Refresh Token detectable.
 
 ```java
 public TokenResponse refresh(String refreshToken) {
-    if (!jwtTokenProvider.validateToken(refreshToken)) {
-        throw new InvalidTokenException();
-    }
-
-    Long userId = jwtTokenProvider.getUserId(refreshToken);
+    Long userId = tokenService.parseUserId(refreshToken);  // throws JwtException if expired → 401
     Member member = memberRepository.findById(userId)
         .orElseThrow(() -> new MemberNotFoundException(userId));
 
-    // Issue both new Access Token and Refresh Token
-    String newAccessToken = jwtTokenProvider.createAccessToken(
+    // Issue both a new Access Token and a new Refresh Token
+    String newAccessToken = tokenService.createAccessToken(
         member.getId(), member.getEmail(), member.getRole().name());
-    String newRefreshToken = jwtTokenProvider.createRefreshToken(member.getId());
+    String newRefreshToken = tokenService.createRefreshToken(member.getId());
 
-    // Invalidate the old Refresh Token (if stored in DB)
+    // Invalidate the old Refresh Token (when stored in DB)
     // refreshTokenRepository.delete(refreshToken);
 
     return new TokenResponse(newAccessToken, newRefreshToken);
 }
 ```
 
-**Advantage**: Prevents continued misuse even if a Refresh Token is stolen
+Implementing this earns bonus points in an assignment; not implementing it does not lose points.
 
-**For assignments**: Implementing this earns bonus points, but not implementing it does not incur penalties
+### External References
 
-</details>
-
-<details>
-<summary>JWT Management Tips for Production</summary>
-
-**1. Access Token Expiration Time Settings**
-
-| Environment | Access Token | Refresh Token |
-|------|--------------|---------------|
-| General web services | 15 min ~ 1 hour | 7 days ~ 30 days |
-| Financial/security-sensitive services | 5 min ~ 15 min | 1 day ~ 7 days |
-| Mobile apps | 1 hour ~ 24 hours | 30 days ~ 90 days |
-
-**2. Token Storage Location**
-
-| Storage Location | Pros | Cons |
-|----------|------|------|
-| **LocalStorage** | Easy to implement | Vulnerable to XSS |
-| **HttpOnly Cookie** | Prevents XSS | Requires CSRF protection |
-| **Memory (variable)** | Most secure | Lost on page refresh |
-
-> **Production recommendation**: Store Access Token in memory, Refresh Token in an HttpOnly Cookie
-
-**3. Token Invalidation Strategies**
-
-Since JWT is stateless, it is difficult to invalidate on the server after issuance. In production, the following methods are used:
-
-```java
-// Method 1: Blacklist (using Redis)
-@Service
-@RequiredArgsConstructor
-public class TokenBlacklistService {
-
-    private final StringRedisTemplate redisTemplate;
-
-    public void addToBlacklist(String token, long expirationMs) {
-        redisTemplate.opsForValue().set(
-            "blacklist:" + token,
-            "true",
-            expirationMs,
-            TimeUnit.MILLISECONDS
-        );
-    }
-
-    public boolean isBlacklisted(String token) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + token));
-    }
-}
-
-// Method 2: Token Version (version management in DB)
-@Entity
-public class Member {
-    // ...
-    private int tokenVersion = 0;  // Incremented on logout
-
-    public void invalidateTokens() {
-        this.tokenVersion++;
-    }
-}
-```
-
-**4. Multi-Device Login Management**
-
-```java
-// Managing active sessions per user
-@Service
-public class SessionService {
-
-    private final StringRedisTemplate redisTemplate;
-
-    public void registerSession(Long userId, String deviceId, String refreshToken) {
-        String key = "sessions:" + userId;
-        redisTemplate.opsForHash().put(key, deviceId, refreshToken);
-    }
-
-    // Logout from a specific device
-    public void logoutDevice(Long userId, String deviceId) {
-        redisTemplate.opsForHash().delete("sessions:" + userId, deviceId);
-    }
-
-    // Logout from all devices
-    public void logoutAllDevices(Long userId) {
-        redisTemplate.delete("sessions:" + userId);
-    }
-}
-```
-
-**For assignments**: Implementing basic JWT authentication is sufficient. The above content is for interview preparation and concept review.
-
-</details>
-
----
-
-The next part covers **Docker**, **Docker Compose**, and **GitHub Actions CI/CD**.
-
--> [Previous: Part 4 - Performance & Optimization](/en/blog/spring-boot-pre-interview-guide-4)
--> [Next: Part 6 - DevOps & Deployment](/en/blog/spring-boot-pre-interview-guide-6)
+- [Spring Security Reference — OAuth2 Resource Server](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/index.html)
+- [Spring Security Reference — JWT Decoder](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html)
+- [RFC 6749 — The OAuth 2.0 Authorization Framework](https://datatracker.ietf.org/doc/html/rfc6749)
+- [RFC 6750 — Bearer Token Usage](https://datatracker.ietf.org/doc/html/rfc6750)
