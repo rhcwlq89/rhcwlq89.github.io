@@ -87,6 +87,8 @@ AWS 네트워크 글을 처음 펼치면 절반 이상이 약어와 jargon이다
 
 핵심: <strong>"HTTP 의미를 진입점이 알아야 하는가"</strong>가 첫 갈림길. host·path 라우팅이나 HTTPS 종료가 필요하면 L7, 아니면 L4.
 
+> <strong>참고 — URI vs URL</strong>: 위 표에서 "L7은 host·path·header·cookie를 본다"고 했는데, 이때 <strong>path는 정확히는 URI의 path 컴포넌트</strong>다. URI(Uniform Resource Identifier)는 자원을 식별하는 모든 문자열, URL(Uniform Resource Locator)은 그중 위치 정보가 있는 부분집합 — 즉 <strong>URI ⊃ URL</strong>의 관계다. `https://api.example.com/users/123?id=42`에서 `/users/123` 부분을 ALB·API Gateway가 라우팅에 쓴다. 실무 대화에서는 "URL의 path"라고 해도 거의 통하지만, HTTP RFC(7230·9110)나 Java `java.net.URI`/`URL` 클래스 같은 표준에서는 URI가 더 정확한 용어 — 차이를 알면 RFC·라이브러리 문서를 읽을 때 막히지 않는다.
+
 > <strong>참고 — TLS는 L4인가 L7인가</strong>: TLS는 엄밀히 L6(표현 계층)지만 실무에서는 "L4(TCP) 위에서 동작하는 암호화 layer"로 언급되는 경우가 많다. NLB도 TLS listener를 지원해서 "L4 진입점이지만 TLS 종료는 한다"는 시나리오가 가능 — 본 시리즈에서 자주 등장.
 
 ---
@@ -455,6 +457,7 @@ AWS 서비스가 200개가 넘지만, 본 시리즈에서 등장하는 건 30개
 | 서비스 | 한 줄 설명 |
 | --- | --- |
 | <strong>VPC</strong> | Virtual Private Cloud. 가상 네트워크 |
+| <strong>VPC Peering</strong> | 두 VPC를 L3 라우팅으로 직접 잇는 1:1 연결. 양쪽 Route Table에 상대 CIDR 경로 추가. 비전이성(A↔B, B↔C가 있어도 A↔C는 불가), CIDR 겹침 불가 (2편) |
 | <strong>VPC Endpoint</strong> | VPC 안에서 AWS 서비스로 인터넷 우회 없이 직접 통신 (2편) |
 | <strong>PrivateLink</strong> | 다른 조직 서비스를 VPC에 단방향 노출 (2편) |
 | <strong>Transit Gateway</strong> | 다대다 VPC·온프레미스 허브 (2편) |
@@ -522,6 +525,7 @@ AWS 서비스가 200개가 넘지만, 본 시리즈에서 등장하는 건 30개
 
 | 약어 | 풀이 |
 | --- | --- |
+| VPC Peering | 두 VPC 사이의 L3 직접 라우팅 연결. 1:1 비전이성, CIDR 겹침 불가 |
 | VPC Endpoint | VPC 안에서 AWS 서비스로 직접 통신 (Gateway·Interface 두 종류) |
 | PrivateLink | 다른 조직 서비스를 NLB 뒤에 단방향 노출 |
 | TGW | Transit Gateway. 다대다 VPC·온프레미스 허브 |

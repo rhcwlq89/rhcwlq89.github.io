@@ -80,6 +80,8 @@ For this series, only <strong>L3, L4, and L7</strong> matter. The rest barely co
 
 In one line: <strong>"Does the entry point need to understand HTTP?"</strong> is the gate. Yes → L7 (host/path routing, HTTPS termination). No → L4.
 
+> <strong>Note — URI vs URL</strong>: When the table says "L7 routes by host / path / header / cookie," <strong>path technically refers to the URI path component</strong>. A URI (Uniform Resource Identifier) is any string that identifies a resource; a URL (Uniform Resource Locator) is the subset that includes location info — so <strong>URI ⊃ URL</strong>. In `https://api.example.com/users/123?id=42`, the `/users/123` portion is what ALB or API Gateway uses for routing. "URL path" works fine in everyday speech, but HTTP RFCs (7230, 9110) and standard libraries like Java's `java.net.URI`/`URL` use URI as the more precise term — knowing the distinction stops you stalling on RFC or library docs.
+
 > <strong>Note — TLS: L4 or L7?</strong> Strictly TLS is L6 (presentation), but in practice it's referred to as "an encryption layer over L4 (TCP)." NLB also supports TLS listeners, so "L4 entry point that still terminates TLS" is a valid scenario — and it shows up often in this series.
 
 ---
@@ -446,6 +448,7 @@ Where code runs.
 | Service | Description |
 | --- | --- |
 | <strong>VPC</strong> | Virtual Private Cloud. Your virtual network |
+| <strong>VPC Peering</strong> | A direct L3 routing connection between two VPCs (1:1). Each side adds a route for the other's CIDR. Non-transitive (A↔B + B↔C does NOT give you A↔C); CIDRs cannot overlap (Part 2) |
 | <strong>VPC Endpoint</strong> | Path inside the VPC to AWS services without going through the internet (Part 2) |
 | <strong>PrivateLink</strong> | One-way exposure of another org's service to your VPC (Part 2) |
 | <strong>Transit Gateway</strong> | N:N hub for VPCs and on-prem (Part 2) |
@@ -513,6 +516,7 @@ Every acronym in the series, organized by category. When something stops making 
 
 | Acronym | Meaning |
 | --- | --- |
+| VPC Peering | A direct L3 routing connection between two VPCs. 1:1, non-transitive, CIDRs cannot overlap |
 | VPC Endpoint | Path inside the VPC to AWS services without going through the internet (Gateway / Interface) |
 | PrivateLink | One-way exposure of another org's service through an NLB |
 | TGW | Transit Gateway. N:N VPC and on-prem hub |
