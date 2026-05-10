@@ -141,6 +141,8 @@ API Gateway는 ALB와 같은 L7이지만 <strong>"API 운영에 필요한 부가
 
 API Gateway가 ALB보다 비싼 만큼, <strong>비싼 이유에 해당하는 기능을 실제로 쓰고 있어야 정당화된다</strong>. 단순히 "Lambda 앞에 뭔가 두려고" API Gateway를 쓰는 패턴이 가장 흔한 낭비다 — Lambda Function URL이나 ALB + Lambda 타깃이 거의 항상 더 싸다.
 
+> <strong>참고 — API Gateway에서 VPC 안 백엔드로 가는 길: VPC Link</strong>: API Gateway는 기본적으로 public endpoint라, VPC 안 ALB·NLB·EC2 백엔드를 직접 호출할 수 없다. 이때 거치는 게 <strong>VPC Link</strong>로, API Gateway가 PrivateLink를 타고 VPC 안 endpoint에 연결하기 위한 메커니즘이다. <strong>REST API의 VPC Link는 NLB만</strong> 받고, <strong>HTTP API의 VPC Link는 ALB·NLB·Cloud Map(서비스 디스커버리) 셋 다</strong> 가능하다. "API Gateway 뒤에 NLB가 따라온다"는 패턴의 정체가 이거다 — REST API가 더 비싼 이유 중 하나이기도 하다(ALB 직접 연결 불가). 이 NLB는 5.1절 안티패턴(ALB 앞 NLB)과 다른 케이스로, 정적 IP·화이트리스트 목적이 아니라 메커니즘 자체가 NLB를 강제한다.
+
 ### 2.3 CloudFront — 진입점이 아니라 "캐시 + 글로벌 가속"
 
 CloudFront는 AWS의 CDN이다. 전 세계 600+ edge 로케이션에서 콘텐츠를 캐시해서 사용자에게 가까운 곳에서 응답한다. <strong>CloudFront만 단독으로 쓰는 경우는 거의 없다</strong> — 항상 origin(S3, ALB, API Gateway, 외부 HTTP 서버)이 뒤에 붙는다.
@@ -352,7 +354,7 @@ EC2 1대뿐인데 ALB를 끼운 구성. <strong>로드밸런싱할 대상이 없
 
 ### 5.5 NAT Gateway로 S3·DynamoDB 접근
 
-진입점 결정과는 약간 다른 layer지만, 시리즈 전체에서 가장 자주 새는 비용 함정이라 1편에서도 짚는다. Private Subnet의 EC2가 S3·DynamoDB에 호출할 때 default 경로는 NAT Gateway → 인터넷 → S3 — 이러면 <strong>매 GB마다 NAT GW 데이터 처리 요금 $0.045가 발생</strong>한다. 데이터 분석·로그 적재·이미지 업로드 워크로드면 월 수백 GB~TB가 보통이라 그대로 청구서에 누적. <strong>Gateway Endpoint(2편 §2)를 만들면 무료</strong>고 5분 작업으로 해결되는데, 진입점만 결정하고 이 단계를 안 챙기면 그냥 새는 돈. 1편 결정이 끝났으면 곧장 2편 §2의 Endpoint 결정으로 이어가야 하는 이유.
+진입점 결정과는 약간 다른 layer지만, 시리즈 전체에서 가장 자주 새는 비용 함정이라 1편에서도 짚는다. Private Subnet의 EC2가 S3·DynamoDB에 호출할 때 default 경로는 NAT Gateway → 인터넷 → S3 — 이러면 <strong>매 GB마다 NAT GW 데이터 처리 요금 $0.045가 발생</strong>한다. 데이터 분석·로그 적재·이미지 업로드 워크로드면 월 수백 GB~TB가 보통이라 그대로 청구서에 누적. <strong>Gateway Endpoint(2편 2절)를 만들면 무료</strong>고 5분 작업으로 해결되는데, 진입점만 결정하고 이 단계를 안 챙기면 그냥 새는 돈. 1편 결정이 끝났으면 곧장 2편 2절의 Endpoint 결정으로 이어가야 하는 이유.
 
 ### 5.6 WebSocket을 REST API로 받으려는 시도
 
@@ -435,6 +437,7 @@ EC2 1대뿐인데 ALB를 끼운 구성. <strong>로드밸런싱할 대상이 없
 | EIP | Elastic IP. 고정 공인 IP |
 | TG | Target Group. ALB/NLB의 백엔드 묶음 |
 | OAC | Origin Access Control. CloudFront에서 S3 접근 보호 |
+| VPC Link | API Gateway가 PrivateLink로 VPC 안 endpoint(REST=NLB만, HTTP=ALB·NLB·Cloud Map)에 연결하기 위한 통합 메커니즘 |
 
 **네트워크·프로토콜**
 

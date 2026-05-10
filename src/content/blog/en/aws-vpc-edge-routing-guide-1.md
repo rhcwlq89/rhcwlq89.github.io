@@ -134,6 +134,8 @@ There are two variants and they get confused all the time.
 
 API Gateway costs more than ALB, so the rule is simple: <strong>if you aren't actually using the features that justify the price, you're wasting money.</strong> The most common waste pattern is "I want something in front of Lambda" — Lambda Function URLs or ALB + Lambda targets are almost always cheaper.
 
+> <strong>Note — How API Gateway reaches a private VPC backend: VPC Link</strong>: API Gateway endpoints are public by default, so they can't directly call ALB/NLB/EC2 backends inside a VPC. <strong>VPC Link</strong> is the bridge — the mechanism by which API Gateway dials into a VPC endpoint over PrivateLink. <strong>REST API's VPC Link accepts only NLB</strong>, while <strong>HTTP API's VPC Link accepts ALB, NLB, and Cloud Map (service discovery)</strong>. That's the actual identity of the "API Gateway with NLB behind it" pattern — and one of the reasons REST API costs more (no direct ALB connection). This NLB is a different case from the §5.1 antipattern (NLB in front of ALB): it's not for static IP or whitelisting, the mechanism itself forces NLB.
+
 ### 2.3 CloudFront — not an entry point, a cache + global accelerator
 
 CloudFront is AWS's CDN. It caches content at 600+ edge locations worldwide and serves users from the closest one. <strong>You almost never use CloudFront standalone</strong> — there's always an origin behind it (S3, ALB, API Gateway, an external HTTP server).
@@ -428,6 +430,7 @@ Bookmark this section for quick reference.
 | EIP | Elastic IP. Static public IP |
 | TG | Target Group. ALB/NLB backend pool |
 | OAC | Origin Access Control. CloudFront-to-S3 access protection |
+| VPC Link | Integration mechanism API Gateway uses to reach VPC endpoints over PrivateLink (REST = NLB only; HTTP = ALB / NLB / Cloud Map) |
 
 **Network and protocols**
 
