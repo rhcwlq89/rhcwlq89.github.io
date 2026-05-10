@@ -159,20 +159,37 @@ This blog has a consistent visual identity across all hero images. Every hero im
 - Objects have subtle shadows, reflections, and glass-like transparency
 - Items appear to float on or above dark surfaces with gentle elevation
 
-**Density & Layering (CRITICAL — most-violated rule):**
-- The composition MUST populate three depth layers — foreground, midground, background — none empty.
-- <strong>Foreground</strong>: small auxiliary objects close to the camera (small server nodes, laptops, mobile devices, satellites, signal towers, drifting cubes/spheres, individual user icons)
-- <strong>Midground</strong>: the main subject (central platform, hub, hexagonal slab) with its 3-5 supporting elements
-- <strong>Background</strong>: clouds, distant network grids, floating data fragments, additional faint platforms/datacenters, particle fields, holographic UI panels
-- <strong>Avoid empty corners</strong> — every quadrant of the image should contain at least secondary detail. Empty dark voids signal a sparse, weak composition.
-- Smell test: if you mentally delete the central subject, the remaining canvas should still feel populated with ambient richness.
-- Reference benchmarks for density: EKS Production Setup, Private EC2 Guide 1, Bastion Setting Guide — these are correctly populated. Aim for that level.
+**Focal Hierarchy & Depth (CRITICAL):**
+- ONE dominant focal element that the eye lands on first — an unmistakable visual anchor.
+- 3-5 supporting elements with clear visual hierarchy (smaller / less saturated than the focal).
+- Foreground should be MINIMAL — at most 1-2 small grounding objects, or none. Avoid stuffing laptops + mobiles + satellites + dishes + drifting cubes; that pile becomes clutter without narrative.
+- Detail comes from <strong>cluster density within elements</strong> (multi-colored cube clusters per element) and color semantics, NOT from adding more distinct element types.
+- Smell test: every element should answer "why is this here, narratively?" in one sentence. If it can't, it's clutter.
+- Reference benchmarks: DB Deadlock has ~6-8 distinct elements with empty navy corners (just grid + particles). Private EC2 Guide 1 has corners with only clouds/grids, no console monitors. Aim for that focal clarity, not maximum element count.
 
-**Cluster Patterns (key technique for richness):**
-- Server racks should be rendered as <strong>clusters of small cubes</strong> (5-15 stacked / arranged on a platform), not single monolithic boxes. This is what makes EKS / Kubernetes / Private EC2 hero images feel rich.
-- Multiple small node-like cubes scattered on or near platforms suggest distributed systems and add visual texture.
-- Vary cube colors within a cluster (mostly cyan, accented with green/orange/yellow cubes) to break monotony.
-- For abstract concepts (gateways, services), still surround the main icon with a cluster of supporting cubes/spheres.
+**Ambient Depth ≠ Clutter (the key distinction):**
+- "Empty navy corners" doesn't mean "literally flat black." Corners and background should still feel ATMOSPHERIC — depth lives there, just not new element types.
+- <strong>Ambient depth (good — adds richness)</strong>:
+  - Glowing hexagonal grid floor whose lines fade into the distance
+  - Soft volumetric mist / atmospheric haze in subtle accent colors
+  - Sparse drifting particles in the air (not swarms, but enough to suggest atmosphere)
+  - A few very faint distant cube clusters at low opacity in the deep background, hinting "more workloads exist" without competing for attention
+  - Strong glow halos around focal elements that bleed into the surrounding navy
+  - Soft glow rays emitting from focal elements upward into the void
+  - Floor reflections of the focal elements
+- <strong>Clutter (bad — adds noise)</strong>:
+  - Console monitors at corners
+  - Decorative world maps
+  - Multiple holograms hovering above the scene
+  - Foreground laptop / mobile / satellite / dish pile-ups
+  - Many drifting cubes scattered close to the camera
+  - Repeating the focal concept (e.g., main decision tree + a hovering decision-tree hologram)
+- The trick: when the scene feels too sparse, add ambient depth (atmosphere, glow, faint distant hints), NOT new element types.
+
+**Cluster Patterns (key technique for richness without clutter):**
+- Server racks should be rendered as <strong>clusters of small cubes</strong> (5-15 stacked / arranged on a platform), not single monolithic boxes. This is what makes EKS / Kubernetes / Private EC2 hero images feel rich while staying clean — the richness lives INSIDE one element, not across many element types.
+- Vary cube colors within a cluster (mostly cyan, accented with green/orange/yellow cubes) to break monotony — multi-color cube clusters are the main richness device.
+- For abstract concepts (gateways, services), still surround the main icon with a cluster of supporting cubes/spheres rather than adding new element types.
 
 **Lighting & Glow:**
 - Primary glow: Blue and cyan (#00b4d8, #48cae4) — used for connections, outlines, and ambient light
@@ -209,41 +226,39 @@ This blog has a consistent visual identity across all hero images. Every hero im
   - "CDN / edge / global" → cyan + magenta edges + green hit-cache + amber miss
 - Without 3+ visible colors the image looks weak and "AI-generated flat." Pick the palette first, then weave each color into specific elements before describing geometry.
 
-**Common Elements (use as appropriate):**
-- Server racks rendered as cube clusters, database cylinders, laptop screens showing code or dashboards
-- Cloud icons, shield/lock icons, gear/cog icons, satellite/antenna shapes
+**Common Elements (use sparingly — pick only what the narrative needs):**
+- Server racks rendered as cube clusters, database cylinders
+- Cloud icons, shield/lock icons, gear/cog icons
 - Arrows and flow lines showing data movement (glowing, directional, with traveling motion particles)
-- Many small spheres or cubes representing data, users, or requests — scatter liberally for ambient richness
-- Floating platforms at varying heights and sizes (multiple, not just one large central one)
-- Holographic decorative elements (faint UI charts, network maps, world maps in background consoles)
-- Side consoles or terminal monitors at the lower corners (NOC / command center feel)
+- A few small spheres or cubes scattered as ambient depth (sparse, not a swarm)
+- Floating platforms at varying heights (not too many — usually 1 central + 3-5 supporting)
+- Avoid: console monitors at corners, decorative world maps, multiple top-of-frame holograms, foreground laptop/mobile/satellite piles — these clutter without earning their narrative slot.
 
 **Composition:**
 - Centered main subject with supporting elements arranged around it
-- Clear visual hierarchy — one dominant element, 3-5 supporting elements, plus 5+ ambient/background elements for richness
-- <strong>Use the full canvas — corner-to-corner detail.</strong> Save breathing room for between objects, not for empty void areas of the canvas.
+- Clear visual hierarchy — one dominant element, 3-5 supporting elements
+- <strong>Empty navy corners with grid lines and particles are fine.</strong> Don't pile elements in corners; let the focal breathe.
 - Professional and polished, suitable for a senior backend engineering blog
 
 **Strict Rules:**
 - NEVER use white or light backgrounds
 - NEVER include text, labels, or watermarks in the image
 - NEVER use flat/minimal style or cartoon style
-- NEVER leave any quadrant of the image visually empty
 - ALWAYS maintain the dark navy isometric aesthetic
 - ALWAYS include at least one secondary accent color besides cyan/blue
 - ALWAYS render server-rack-like elements as cube clusters, not single boxes
+- LIMIT total distinct element types — pile-ups become clutter, not richness
 
 ### Hero Image Prompt Requirements
 
 When writing a hero image prompt for a blog post:
-- The prompt must be at least <strong>8 lines (sentences) long</strong> to ensure all layers AND the color palette are described.
-- <strong>Before writing the prompt, decide the color palette AND its semantics</strong> — pick 3 or 4 colors and assign each one a specific narrative role from the post (selected/rejected/baseline/destination/warning/etc.). If you can't articulate what each color MEANS in one sentence, the palette isn't ready. Then weave each color into specific elements as you describe geometry.
-- Line 1: Overall scene and background atmosphere — set the dark navy stage with depth, ambient particles, faint grids
-- Line 2: <strong>Background layer</strong> — distant clouds, faint grids, far-away platforms, particle fields, holographic UI panels, side consoles (with at least one secondary color in this layer)
-- Line 3-4: <strong>Midground main subject</strong> — central platform/hub/hex slab and its visual treatment (glow, edge neon, glass transparency, surrounding multi-colored cube cluster — mix green, orange, yellow with cyan)
-- Line 5: <strong>Supporting elements at midground</strong> — 3-5 secondary objects, each given its OWN distinctive accent color where the topic allows differentiation (e.g., one element amber, another magenta, another green)
-- Line 6: <strong>Foreground layer</strong> — small auxiliary objects close to camera (laptops, mobile devices, small node cubes, satellites, towers, drifting spheres) with status-light accents in mixed colors
-- Line 7: <strong>Motion and connections</strong> — flow arrows with motion particles, with active path glowing in one accent color (amber or gold) and rejected/inactive paths in another (coral or muted blue)
-- Line 8: <strong>Color palette summary line</strong> — explicitly name the 3-4 colors and where they appear, e.g., "primary cyan glow on the central VPC, amber/orange highlights on the active path and on-prem rack, green status lights on the AWS service cluster, and warm yellow accents in cube clusters"
-- Always end with: "Isometric 2.5D style, dark navy background, vibrant multi-color glow palette (cyan + [secondary] + [tertiary]), no text. Aspect ratio 3:2 (1536x1024)."
-- Reference specific existing blog images if helpful — e.g., "similar density and color richness to the EKS Production Setup hero image, with multi-colored cube-cluster server racks"
+- The prompt should be <strong>5-6 lines (sentences) long</strong> — long enough to describe the focal, the supporting cast, and the color semantics; short enough that the AI doesn't pile on extra elements.
+- <strong>Before writing the prompt, decide the color palette AND its narrative semantics</strong> — pick 3 or 4 colors and assign each one a specific narrative role from the post (selected/rejected/baseline/destination/warning/etc.). If you can't articulate what each color MEANS in one sentence, the palette isn't ready.
+- Line 1: Scene atmosphere — dark navy gradient, subtle grid, sparse ambient particles. Keep the background simple and uncluttered.
+- Line 2: <strong>The dominant focal element</strong> — what the eye lands on first, with its visual treatment (glow, edge neon, glass transparency, surrounding multi-colored cube cluster of cyan + green + yellow + orange to add richness).
+- Line 3: <strong>3-5 supporting elements</strong> arranged around the focal — each rendered cleanly, not cluttered. Where the topic allows differentiation, give each a distinct accent color tied to its narrative role.
+- Line 4: <strong>Motion and connections</strong> — flow arrows with motion particles, with active/successful paths glowing in one accent color (amber or gold) and rejected/blocked paths in another (coral with X-marks).
+- Line 5: <strong>Color palette summary</strong> — explicitly name the 3-4 colors and the narrative role of each, e.g., "cyan = baseline candidates, amber = the selected path, coral with X-marks = rejected anti-patterns, gold = destination reached."
+- Optional Line 6: a single small foreground or background grounding detail IF it adds narrative (e.g., "a small floating tile in the lower foreground with a debugger's highlight beam"). Skip this if not needed.
+- Always end with: "Isometric 2.5D style, dark navy background, multi-color narrative palette (cyan + [secondary] + [tertiary]), no text. Aspect ratio 3:2 (1536x1024)."
+- Reference benchmarks for clarity — e.g., "similar focal clarity to the DB Deadlock hero image where every color tells a specific part of the story, with empty navy corners and depth from particles rather than corner clutter."
