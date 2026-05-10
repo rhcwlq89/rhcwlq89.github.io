@@ -207,6 +207,35 @@ Then verify the executor's output yourself before reporting back to the user.
 
 If the user's `command-args` includes a stack/version hint (e.g. "Spring Boot 4", "Kotlin only", "Spring Security 7", "Spring Security 7 버전 기준", "JJWT → oauth2-resource-server", "Java 21"), the renewal is more than a structural pass — it must also migrate the code to that stack's standard patterns. Treat the hint as a hard requirement, not a suggestion.
 
+#### 11.0 Default verified-compatible versions
+
+When the user is silent about specific versions, use these defaults. They are mutually verified-compatible (tested together on this blog's series renewals) and form the baseline stack the canonical reference posts are written against.
+
+| Stack | Default version | Notes |
+|-------|----------------|-------|
+| <strong>Spring Boot</strong> | <strong>4</strong> | Java 21 recommended; Spring Framework 7 base; Jakarta EE 11 |
+| <strong>Spring Security</strong> | <strong>7</strong> | Pairs with Spring Boot 4; `spring-boot-starter-oauth2-resource-server` is the standard JWT path (no JJWT direct implementation) |
+| <strong>Spring Batch</strong> | <strong>6</strong> | Pairs with Spring Boot 4 / Framework 7; `JobBuilder`/`StepBuilder` style |
+| <strong>Kotlin</strong> | <strong>2.3</strong> | K2 compiler stable; binary-compatible across the 2.x line; Spring Boot 4 + Kotlin 2.3 is a verified pair |
+
+**Plugin pin standard** — every `build.gradle.kts` snippet that touches Kotlin plugins should pin to `2.3`:
+
+```kotlin
+plugins {
+    kotlin("plugin.spring") version "2.3"
+    kotlin("plugin.jpa") version "2.3"
+}
+```
+
+Never write `version "2.x"` as a placeholder. If the user explicitly names a different minor (2.0/2.1/2.2/2.4+) or a different Spring Boot/Security/Batch major, follow the hint — but the table above is the answer when the user is silent.
+
+**Frontmatter title consistency** — when a renewal touches code with these stacks, surface the version in the em-dash subtitle:
+
+- KO: `"... — Spring Boot 4 · Kotlin 2.3 ..."` / `"... — Spring Security 7 ..."` etc.
+- EN: same numbers, English subtitle
+
+The version numbers become part of the post's identity and let readers gauge currency at a glance.
+
 **Workflow when a stack hint is present:**
 
 1. **Detect** — read the args carefully. Stack hints commonly look like "Spring Boot N", "Spring Security N", "Kotlin only / Kotlin으로만", "Java N", or library swaps like "X로 교체" / "X → Y".
