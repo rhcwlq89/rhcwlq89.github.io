@@ -110,7 +110,7 @@ flowchart TB
 ```
 
 - <strong>Region</strong>: a geographically separate cluster of datacenters. About 30 worldwide (Seoul, Tokyo, Virginia, Frankfurt, etc.).
-- <strong>AZ (Availability Zone)</strong>: a physically isolated datacenter unit within one region. Seoul has ap-northeast-2a/b/c/d.
+- <strong>AZ (Availability Zone)</strong>: a physically isolated datacenter unit within one region. Seoul has <strong>4 physical AZs</strong> — the console shows them as `ap-northeast-2a/b/c/d`, but those names are <strong>mapped to different physical AZs per account</strong>; some accounts won't see `b` and only show `a, c, d`. The global identifier is `apne2-az1~az4`; run `aws ec2 describe-availability-zones` to see your account's mapping.
 - <strong>Multi-AZ</strong>: distributing across multiple AZs so a single AZ failure doesn't take you down — the foundation of HA (High Availability).
 
 ### 2.2 CIDR — the notation for IP ranges
@@ -138,6 +138,8 @@ Key intuitions:
 - <strong>Smaller prefix = bigger range</strong> (so `/16` is 256× bigger than `/24`)
 - <strong>`0.0.0.0/0` means "every IP"</strong> — appears constantly in default routes
 - <strong>Longest-prefix match</strong>: when a packet matches multiple routes, the more specific (longer prefix) wins
+
+> <strong>Note — CIDR vs netmask</strong>: CIDR and netmask are <strong>two notations for the same information</strong>. Both describe the network/host bit split of an IP — `/16` (CIDR) = `255.255.0.0` (netmask), `/24` = `255.255.255.0`. The conversion rule is "count the consecutive 1 bits in the netmask binary form to get the CIDR prefix length" (`255.255.0.0` = `11111111.11111111.00000000.00000000` = sixteen 1s → `/16`). Before CIDR was introduced (RFC 1518/1519, 1993), IP was <strong>classful</strong> with fixed sizes (A=`/8`, B=`/16`, C=`/24` only) — a 1,000-person company found C (256) too small and B (65K) wasteful, which forced the move to arbitrary prefix lengths under CIDR. Modern AWS and Linux tooling default to CIDR; netmask still shows up in older Windows configs and home-router admin pages — this series uses CIDR exclusively.
 
 ### 2.3 Subnet — VPC slice + a single AZ
 

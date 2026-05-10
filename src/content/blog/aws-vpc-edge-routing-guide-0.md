@@ -117,7 +117,7 @@ flowchart TB
 ```
 
 - <strong>리전(Region)</strong>: 지리적으로 분리된 데이터센터 군집. 전 세계 ~30개 (서울·도쿄·버지니아·프랑크푸르트 등).
-- <strong>AZ(Availability Zone)</strong>: 한 리전 안의 물리적으로 분리된 데이터센터 단위. 서울 리전엔 ap-northeast-2a/b/c/d 4개 AZ가 있다.
+- <strong>AZ(Availability Zone)</strong>: 한 리전 안의 물리적으로 분리된 데이터센터 단위. 서울 리전엔 <strong>4개의 물리적 AZ</strong>가 있다 — 콘솔에는 `ap-northeast-2a/b/c/d`로 보이지만 이 이름은 <strong>계정마다 다른 물리 AZ에 매핑</strong>되어 일부 계정엔 `b`가 안 보이고 `a, c, d`만 보일 수도 있다. 전역 식별자는 `apne2-az1~az4`이고 `aws ec2 describe-availability-zones`로 자기 계정 매핑을 확인할 수 있다.
 - <strong>Multi-AZ</strong>: 한 AZ가 장애나도 다른 AZ가 처리하도록 분산 배치. HA(High Availability)의 기본.
 
 ### 2.2 CIDR — IP 대역을 표기하는 방식
@@ -145,6 +145,8 @@ flowchart TB
 - <strong>prefix 숫자가 작을수록 큰 범위</strong> (즉 `/16`은 `/24`보다 256배 큼)
 - <strong>`0.0.0.0/0`은 "모든 IP"</strong>를 의미 — Route Table에 default 경로 설정 시 자주 등장
 - <strong>"longest-prefix match"</strong> = 더 긴 prefix(더 구체적인 CIDR)가 라우팅 결정에서 이긴다
+
+> <strong>참고 — CIDR과 넷마스크(netmask)의 관계</strong>: CIDR과 넷마스크는 <strong>같은 정보의 두 가지 표기법</strong>이다. 둘 다 IP의 어디까지가 네트워크 부분이고 어디부터가 호스트 부분인지를 표현 — `/16` (CIDR) = `255.255.0.0` (넷마스크), `/24` = `255.255.255.0`. 변환 규칙은 "넷마스크 이진수의 연속된 1의 개수 = CIDR prefix 길이"(`255.255.0.0` = `11111111.11111111.00000000.00000000` = 1이 16개 → `/16`). 1993년 CIDR 도입(RFC 1518/1519) 전에는 IP가 <strong>클래스풀(A=`/8`, B=`/16`, C=`/24` 고정)</strong>이었는데, "1,000명 회사는 C(256개)는 모자라고 B(65K)는 과도"한 자원 낭비 문제로 임의 prefix를 허용하는 CIDR이 등장. 모던 AWS·Linux 도구는 CIDR이 표준이고 넷마스크는 구 Windows·가정용 공유기 설정 화면에서 주로 본다 — 본 시리즈는 모든 IP 대역을 CIDR로 표기.
 
 ### 2.3 Subnet — VPC 내부 IP 대역 + AZ 1개
 
