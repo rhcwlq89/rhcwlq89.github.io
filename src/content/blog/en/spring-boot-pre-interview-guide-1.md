@@ -20,10 +20,10 @@ The target reader is a junior backend engineer who knows Spring but isn't sure w
 - <strong>Part 1 — Core Application Layer (this post)</strong>
 - Part 2 — [Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2)
 - Part 3 — [Documentation &amp; AOP](/en/blog/spring-boot-pre-interview-guide-3)
-- Part 4 — [Logging](/en/blog/spring-boot-pre-interview-guide-4)
-- Part 5 — [Authentication &amp; Validation](/en/blog/spring-boot-pre-interview-guide-5)
-- Part 6 — [Performance](/en/blog/spring-boot-pre-interview-guide-6)
-- Part 7 — [Production Readiness](/en/blog/spring-boot-pre-interview-guide-7)
+- Part 4 — [Performance &amp; Optimization](/en/blog/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security &amp; Authentication](/en/blog/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps &amp; Deployment](/en/blog/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 

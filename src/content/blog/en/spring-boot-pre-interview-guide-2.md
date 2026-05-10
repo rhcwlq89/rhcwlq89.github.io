@@ -20,10 +20,10 @@ Read [the previous post](/blog/en/spring-boot-pre-interview-guide-1) first if yo
 - Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
 - <strong>Part 2 — Database & Testing (this post)</strong>
 - Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
-- Part 4 — [Logging](/blog/en/spring-boot-pre-interview-guide-4)
-- Part 5 — [Authentication & Validation](/blog/en/spring-boot-pre-interview-guide-5)
-- Part 6 — [Performance](/blog/en/spring-boot-pre-interview-guide-6)
-- Part 7 — [Production Readiness](/blog/en/spring-boot-pre-interview-guide-7)
+- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
 
 ---
 

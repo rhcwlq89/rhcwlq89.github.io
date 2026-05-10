@@ -30,10 +30,10 @@ heroImage: "../../assets/SpringBootPreInterviewGuide2.png"
 - 1편 — [Core Application Layer](/blog/spring-boot-pre-interview-guide-1)
 - <strong>2편 — Database & Testing (이 글)</strong>
 - 3편 — [Documentation & AOP](/blog/spring-boot-pre-interview-guide-3)
-- 4편 — [Logging](/blog/spring-boot-pre-interview-guide-4)
-- 5편 — [Authentication & Validation](/blog/spring-boot-pre-interview-guide-5)
-- 6편 — [Performance](/blog/spring-boot-pre-interview-guide-6)
-- 7편 — [Production Readiness](/blog/spring-boot-pre-interview-guide-7)
+- 4편 — [Performance & Optimization](/blog/spring-boot-pre-interview-guide-4)
+- 5편 — [Security & Authentication](/blog/spring-boot-pre-interview-guide-5)
+- 6편 — [DevOps & Deployment](/blog/spring-boot-pre-interview-guide-6)
+- 7편 — [Advanced Patterns](/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
