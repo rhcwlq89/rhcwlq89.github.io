@@ -43,17 +43,15 @@ AWS 네트워크 글을 처음 펼치면 절반 이상이 약어와 jargon이다
 
 네트워크 통신을 추상화한 모델 중 가장 자주 쓰이는 게 <strong>OSI(Open Systems Interconnection) 7-layer 모델</strong>이다. 1980년대 ISO가 정의한 표준으로, 통신을 7개 계층으로 나눠 각 계층이 자기 책임만 처리하도록 설계됐다.
 
-```mermaid
-flowchart TB
-    L7["L7 — 응용 (Application)<br/>HTTP, gRPC, WebSocket, DNS"]
-    L6["L6 — 표현 (Presentation)<br/>TLS 암호화, 인코딩"]
-    L5["L5 — 세션 (Session)<br/>연결 관리"]
-    L4["L4 — 전송 (Transport)<br/>TCP, UDP — 포트, 신뢰성"]
-    L3["L3 — 네트워크 (Network)<br/>IP — 라우팅, 주소"]
-    L2["L2 — 데이터링크 (Data Link)<br/>MAC, 이더넷"]
-    L1["L1 — 물리 (Physical)<br/>케이블, 신호"]
-    L7 --> L6 --> L5 --> L4 --> L3 --> L2 --> L1
-```
+| 계층 | 이름 | 핵심 책임 | 대표 프로토콜·예시 | 본 시리즈에서 |
+| --- | --- | --- | --- | --- |
+| L7 | 응용 (Application) | 사용자 앱이 직접 다루는 메시지 | HTTP, gRPC, WebSocket, DNS, SMTP | <strong>ALB · API Gateway · CloudFront</strong> |
+| L6 | 표현 (Presentation) | 암호화·인코딩·포맷 변환 | TLS, SSL | TLS 종료 (관련) |
+| L5 | 세션 (Session) | 연결 수립·유지·종료 | NetBIOS, RPC | 거의 안 등장 |
+| L4 | 전송 (Transport) | 포트·신뢰성·흐름 제어 | <strong>TCP, UDP</strong> | <strong>NLB</strong> |
+| L3 | 네트워크 (Network) | IP 주소·라우팅 | <strong>IP, ICMP</strong> | VPC Peering · Route Table |
+| L2 | 데이터링크 (Data Link) | MAC 주소·프레임 | Ethernet, ARP | 거의 안 등장 |
+| L1 | 물리 (Physical) | 케이블·전기 신호 | Ethernet 케이블, Wi-Fi 무선 | — |
 
 이 시리즈에서 알아야 할 건 <strong>L3, L4, L7</strong> 셋. 나머지는 거의 등장하지 않는다.
 

@@ -36,17 +36,15 @@ The target reader is a backend or infrastructure engineer who's clicked through 
 
 The most common abstraction for network communication is the <strong>OSI (Open Systems Interconnection) 7-layer model</strong>, an ISO standard from the 1980s that splits communication into seven layers, each handling its own concern.
 
-```mermaid
-flowchart TB
-    L7["L7 — Application<br/>HTTP, gRPC, WebSocket, DNS"]
-    L6["L6 — Presentation<br/>TLS encryption, encoding"]
-    L5["L5 — Session<br/>connection management"]
-    L4["L4 — Transport<br/>TCP, UDP — ports, reliability"]
-    L3["L3 — Network<br/>IP — routing, addressing"]
-    L2["L2 — Data Link<br/>MAC, Ethernet"]
-    L1["L1 — Physical<br/>cables, signals"]
-    L7 --> L6 --> L5 --> L4 --> L3 --> L2 --> L1
-```
+| Layer | Name | Core responsibility | Representative protocols | In this series |
+| --- | --- | --- | --- | --- |
+| L7 | Application | Messages applications speak directly | HTTP, gRPC, WebSocket, DNS, SMTP | <strong>ALB · API Gateway · CloudFront</strong> |
+| L6 | Presentation | Encryption, encoding, format translation | TLS, SSL | TLS termination (related) |
+| L5 | Session | Connection setup / maintenance / teardown | NetBIOS, RPC | Rarely shows up |
+| L4 | Transport | Ports, reliability, flow control | <strong>TCP, UDP</strong> | <strong>NLB</strong> |
+| L3 | Network | IP addressing and routing | <strong>IP, ICMP</strong> | VPC Peering · Route Table |
+| L2 | Data Link | MAC addresses, frames | Ethernet, ARP | Rarely shows up |
+| L1 | Physical | Cables, electrical signals | Ethernet cabling, Wi-Fi radio | — |
 
 For this series, only <strong>L3, L4, and L7</strong> matter. The rest barely come up.
 
