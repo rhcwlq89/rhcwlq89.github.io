@@ -111,7 +111,7 @@ flowchart LR
 
 ### 2.3 Interface Endpoint — VPC 안에 ENI를 띄우는 모델
 
-Interface Endpoint는 Gateway와 동작 원리가 완전히 다르다. <strong>VPC 안의 Subnet에 ENI를 만들고, 거기에 Private DNS를 붙여서</strong> 서비스의 공식 도메인(예: `kms.ap-northeast-2.amazonaws.com`)이 그 ENI의 사설 IP로 해석되도록 한다. <strong>ENI(Elastic Network Interface)는 VPC에 사설 IP를 갖고 붙는 가상 NIC</strong>로, EC2·RDS·Lambda·ALB 등 VPC에 연결되는 거의 모든 리소스가 최소 1개씩 가진다 — 사설 IP·SG·EIP가 모두 ENI 단위로 결합되는 게 핵심.
+Interface Endpoint는 Gateway와 동작 원리가 완전히 다르다. <strong>VPC 안의 Subnet에 ENI를 만들고, 거기에 Private DNS를 붙여서</strong> 서비스의 공식 도메인(예: `kms.ap-northeast-2.amazonaws.com`)이 그 ENI의 사설 IP로 해석되도록 한다. ENI 자체의 자세한 풀이는 0편 3.1절 참조 — 한 줄 요약은 <strong>VPC에 사설 IP를 갖고 붙는 가상 NIC</strong>로, 사설 IP·SG·EIP가 ENI 단위로 결합된다는 사실만 기억하면 된다.
 
 이게 의미하는 게 두 가지:
 
@@ -180,6 +180,7 @@ flowchart TB
 
 - <strong>전이성 O</strong> — A→B→C 라우팅이 TGW Route Table 설정만으로 가능.
 - <strong>온프레미스·DX·VPN 통합</strong> — TGW에 DX/VPN attachment 하나 붙이면 모든 VPC가 공유.
+- <strong>Multi-AZ HA는 attachment 단위로</strong> — TGW 자체는 region 단위 매니지드라 자동 HA지만, 각 VPC attachment는 AZ별 ENI를 두는 게 권장된다 (한 AZ가 죽으면 그 AZ의 VPC 트래픽만 영향).
 - <strong>요금이 있다</strong> — attachment당 시간당 $0.05 + 데이터당 $0.02. VPC 5개 + DX 1개면 월 $200+.
 
 ### 3.3 결정 분기점
@@ -369,6 +370,8 @@ DX 한 회선만 운영하다가 광케이블 사고로 통신이 끊긴 사례�
 2편의 목표는 <strong>VPC 안의 자원이 외부 무언가와 통신해야 할 때, 6개 후보 중 어떤 게 맞는지 30초 안에 답이 나오는 상태</strong>를 만드는 것이었다. 결정 트리만 따라가면 1단계에서 후보가 1~2개로 좁혀지고, 2~3단계에서 정확히 하나로 정해진다.
 
 다음 편(3편)에서는 <strong>VPC 내부 라우팅</strong>을 다룬다 — IGW와 NAT Gateway는 어떻게 동작하는가, Route Table은 어떤 우선순위로 평가되는가, Security Group과 NACL의 stateful/stateless 차이는 실무에서 어디서 갈리는가. 외부 진입과 외부 연결이 모두 끝난 다음, <strong>VPC 안에서 패킷이 실제로 흐르는 방식</strong>을 풀어낸다.
+
+> <strong>참고 — 시리즈 흐름</strong>: 본 편의 모든 연결 결정도 [4편(DNS·Route 53)](/blog/aws-vpc-edge-routing-guide-4)에서 다루는 DNS layer가 먼저다. 특히 2.3절에서 Interface Endpoint가 "Private DNS"로 동작한다고 했는데, 그 Private DNS가 사실 Route 53 Private Hosted Zone(4편 §2.2)이라는 점을 알면 시리즈 전체가 더 잘 연결된다.
 
 ---
 

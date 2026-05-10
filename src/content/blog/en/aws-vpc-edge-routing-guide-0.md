@@ -609,3 +609,20 @@ Every acronym in the series, organized by category. When something stops making 
 | X-Ray | Distributed tracing |
 | SSM | Systems Manager. Unified EC2 ops |
 | Secrets Manager | Secret management with rotation |
+
+### I. Internet egress cost at a glance
+
+Cost varies dramatically depending on which path a resource inside a VPC takes to talk to the outside world. The recurring NAT GW data-processing charges throughout this series come from exactly this asymmetry.
+
+| Path | Hourly | Data processing | Outbound transfer | Scenario |
+| --- | --- | --- | --- | --- |
+| <strong>Gateway Endpoint</strong> (S3, DynamoDB) | $0 | <strong>$0</strong> | $0 (same region) | Private Subnet → S3 / DynamoDB. The cheapest path |
+| <strong>Interface Endpoint</strong> (KMS, ECR, SSM, etc.) | $0.01 per AZ | $0.01/GB | Standard outbound | Private Subnet → other AWS services |
+| <strong>NAT Gateway</strong> | $0.045 | <strong>$0.045/GB</strong> | Standard outbound | Private Subnet → internet, cross-region AWS services |
+| <strong>IGW</strong> (direct) | $0 | $0 | Standard outbound | Public Subnet → internet |
+| <strong>VPC Peering / TGW</strong> | TGW only: $0.05/hour per attachment | TGW only: $0.02/GB | Small cross-AZ charges | VPC-to-VPC traffic |
+
+Key intuitions:
+- <strong>For S3 and DynamoDB, Gateway Endpoint is always the answer</strong> (free and fast).
+- <strong>NAT GW's $0.045/GB stacks linearly</strong> with traffic volume, so the bill explodes at scale. That's why Part 1 anti-pattern 5.5 and Part 2 anti-pattern 7.1 keep flagging it.
+- <strong>Within a region, avoid going through the public internet at all if possible</strong> — prefer Endpoints, Peering, or PrivateLink.

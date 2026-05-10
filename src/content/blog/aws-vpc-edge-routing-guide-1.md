@@ -83,7 +83,7 @@ L7은 진입점이 HTTP 메시지의 내용(host, path, header, cookie)을 보�
 
 ### 2.1 ALB — 가장 평범한 L7 로드밸런서
 
-ALB(Application Load Balancer)는 AWS 관리형 L7 리버스 프록시다. <strong>VPC 안의 EC2 / ECS / EKS / Lambda 앞에 두는 가장 기본적인 진입점</strong>으로, 호스트·경로·헤더 기반 라우팅과 HTTPS 종료를 맡는다.
+ALB(Application Load Balancer)는 AWS 관리형 L7 리버스 프록시다. <strong>VPC 안의 EC2 / ECS / EKS / Lambda 앞에 두는 가장 기본적인 진입점</strong>으로, 호스트·경로·헤더 기반 라우팅과 HTTPS 종료를 맡는다. ALB는 Public Subnet에 배치된다 — 즉 Route Table에 `0.0.0.0/0 → IGW` 경로가 있는 Subnet (Public/Private의 진짜 차이는 0편 2.3절 참조).
 
 ```mermaid
 flowchart LR
@@ -207,7 +207,8 @@ HTTP API는 regional만 지원하고, edge가 필요하면 사용자가 직접 C
 | gRPC | O | X | X | X |
 | 상시 비용 | $16~20/월 (LB 시간) | $0 | $0 (캐시 사용 시 인스턴스 시간) | $0 |
 | 요청당 비용 | 매우 낮음 (LCU) | $1.00/100만 | $3.50/100만 | 매우 낮음 + 데이터 전송 |
-| 강점 | 컨테이너·EC2 표준 진입점 | 서버리스 API · 인증·쓰로틀 | 요금제·캐시·VTL 변환 | 글로벌 캐시 · 정적 자산 |
+| WAF 통합 | O (native) | X (앞에 CloudFront 필요) | O (native) | O (Shield Standard 자동) |
+| 강점 | 컨테이너·EC2 표준 진입점 | 서버리스 API · 인증·쓰로틀 | 요금제·캐시·VTL 변환 | 글로벌 캐시 · 정적 자산 · DDoS 보호 |
 
 L7 영역에서 가장 흔하게 헷갈리는 두 가지를 정리하면:
 
@@ -329,7 +330,7 @@ flowchart TD
 
 ---
 
-## 5. 흔한 안티패턴 5가지
+## 5. 흔한 안티패턴 6가지
 
 진입점 선택 실수는 보통 정형화된 패턴으로 반복된다. 한 번씩 짚고 가면 비슷한 함정에 안 빠진다.
 
@@ -349,7 +350,11 @@ flowchart TD
 
 EC2 1대뿐인데 ALB를 끼운 구성. <strong>로드밸런싱할 대상이 없으니 ALB는 단순히 비싼 HTTPS 종료기</strong>가 된다. 월 $20을 쓰면서 HA도 늘지 않는다(EC2가 죽으면 ALB는 보낼 곳이 없다). 이 단계에서는 EC2 위에서 직접 Nginx로 HTTPS를 종료하거나, Lightsail/Cloudflare Tunnel 같은 더 싼 옵션을 쓰는 게 합리적이다. ALB는 EC2 2대 이상부터 정당화된다.
 
-### 5.5 WebSocket을 REST API로 받으려는 시도
+### 5.5 NAT Gateway로 S3·DynamoDB 접근
+
+진입점 결정과는 약간 다른 layer지만, 시리즈 전체에서 가장 자주 새는 비용 함정이라 1편에서도 짚는다. Private Subnet의 EC2가 S3·DynamoDB에 호출할 때 default 경로는 NAT Gateway → 인터넷 → S3 — 이러면 <strong>매 GB마다 NAT GW 데이터 처리 요금 $0.045가 발생</strong>한다. 데이터 분석·로그 적재·이미지 업로드 워크로드면 월 수백 GB~TB가 보통이라 그대로 청구서에 누적. <strong>Gateway Endpoint(2편 §2)를 만들면 무료</strong>고 5분 작업으로 해결되는데, 진입점만 결정하고 이 단계를 안 챙기면 그냥 새는 돈. 1편 결정이 끝났으면 곧장 2편 §2의 Endpoint 결정으로 이어가야 하는 이유.
+
+### 5.6 WebSocket을 REST API로 받으려는 시도
 
 "실시간 알림 기능을 만들려고 REST 폴링으로…" — 처음에는 동작하지만 트래픽이 늘면 polling이 비용·서버 부하 양쪽으로 폭발한다. WebSocket이 답인 시나리오는 처음부터 <strong>ALB(WebSocket native)나 API Gateway WebSocket API</strong>로 잡아야 한다. 둘의 구분은 connection state를 어디서 관리하느냐 — 백엔드(ALB) vs AWS(API Gateway WebSocket).
 
@@ -363,11 +368,13 @@ EC2 1대뿐인데 ALB를 끼운 구성. <strong>로드밸런싱할 대상이 없
 2. <strong>L7 영역의 핵심은 "각 후보가 더해주는 처리"</strong>다. ALB는 host/path 라우팅, API Gateway는 인증·쓰로틀, CloudFront는 글로벌 캐시. 같은 L7이라도 역할이 다르다.
 3. <strong>CloudFront는 진입점이 아니라 캐시 레이어</strong>다. 항상 origin이 뒤에 붙고, 단독으로 쓰는 케이스는 거의 없다.
 4. <strong>L4는 NLB(단일 리전 정적 IP·초저지연)와 Global Accelerator(글로벌 멀티 리전)로 갈린다</strong>. GA는 비용이 있어 단일 리전에는 거의 항상 낭비.
-5. <strong>흔한 안티패턴은 다섯 가지</strong>: NLB → ALB 체이닝, API Gateway 정적 자산, CloudFront 없는 글로벌, 단일 EC2 앞 ALB, REST 폴링으로 WebSocket. 결정 트리에서 한 분기만 잘못 넘어가도 이 함정에 빠진다.
+5. <strong>흔한 안티패턴은 여섯 가지</strong>: NLB → ALB 체이닝, API Gateway 정적 자산, CloudFront 없는 글로벌, 단일 EC2 앞 ALB, NAT GW로 S3 접근, REST 폴링으로 WebSocket. 결정 트리에서 한 분기만 잘못 넘어가도 이 함정에 빠진다.
 
 1편의 목표는 <strong>외부 트래픽이 VPC로 들어오는 그 한 단계의 결정을 자동화</strong>하는 것이었다. 새 서비스를 그릴 때 결정 트리만 따라가면 1분 안에 진입점이 잡혀야 한다.
 
 다음 편에서는 <strong>VPC 간·온프레미스 연결</strong>을 다룬다 — VPC Endpoint와 PrivateLink는 무엇이 다른가, Transit Gateway와 VPC Peering은 언제 갈리는가, Direct Connect는 어느 시점부터 정당화되는가. 외부 진입을 끝낸 트래픽이 VPC 안에서 다른 시스템으로 어떻게 이어지는지의 결정 문제다.
+
+> <strong>참고 — 시리즈 흐름</strong>: 위 결정 트리는 "사용자가 ALB의 IP·도메인에 도달한 다음" 이후를 다룬다. 그 앞 단계 — 사용자가 입력한 도메인이 어떻게 IP로 해석되어 어느 진입점에 도달하는지 — 는 [4편(DNS 결정과 Route 53)](/blog/aws-vpc-edge-routing-guide-4)에서 다룬다. 트래픽 흐름의 시간 순서로는 4편이 1편보다 먼저지만, 1편의 진입점 결정이 끝난 뒤에 그 결과를 DNS에 어떻게 등록할지를 4편에서 결정한다.
 
 ---
 

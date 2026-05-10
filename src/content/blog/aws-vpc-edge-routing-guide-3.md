@@ -320,15 +320,17 @@ sequenceDiagram
 
 ### 시리즈 회고
 
-이 시리즈는 AWS 네트워크의 진입과 라우팅을 <strong>"어떤 결정 문제를 푸는가"</strong>의 관점에서 3편에 걸쳐 풀었다.
+이 시리즈는 AWS 네트워크의 진입과 라우팅을 <strong>"어떤 결정 문제를 푸는가"</strong>의 관점에서 5편에 걸쳐 풀었다.
 
-- <strong>1편</strong> — 외부 트래픽이 VPC로 들어오는 진입점 (ALB / NLB / API Gateway / CloudFront / Global Accelerator). 4가지 결정 변수와 결정 트리.
-- <strong>2편</strong> — VPC가 다른 VPC·AWS 서비스·온프레미스와 잇히는 방법 (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). 1단계 분기는 "목적지 종류".
-- <strong>3편</strong> — VPC 안에서 패킷이 흐르는 방식 (IGW / NAT GW / Route Tables / SG vs NACL). 결정이라기보다 메커니즘 이해.
+- <strong>0편</strong> — [사전편: 시리즈를 따라가기 위한 네트워크·AWS 기본 개념 정리](/blog/aws-vpc-edge-routing-guide-0). OSI 모델·VPC·CIDR·ENI·리버스 프록시·AWS 핵심 서비스를 한 페이지에.
+- <strong>1편</strong> — [외부 트래픽이 VPC로 들어오는 진입점](/blog/aws-vpc-edge-routing-guide-1) (ALB / NLB / API Gateway / CloudFront / Global Accelerator). 4가지 결정 변수와 결정 트리.
+- <strong>2편</strong> — [VPC가 다른 VPC·AWS 서비스·온프레미스와 잇히는 방법](/blog/aws-vpc-edge-routing-guide-2) (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). 1단계 분기는 "목적지 종류".
+- <strong>3편</strong> — VPC 안에서 패킷이 흐르는 방식 (IGW / NAT GW / Route Tables / SG vs NACL). 결정이라기보다 메커니즘 이해 (이 글).
+- <strong>4편</strong> — [DNS 결정과 Route 53](/blog/aws-vpc-edge-routing-guide-4) (Hosted Zone / Routing Policy 6종 / Alias vs CNAME / Health Check). <strong>실제 트래픽 흐름에선 1·2·3편 모든 결정보다 먼저</strong> 일어나는 layer.
 
-세 편을 합치면 <strong>"외부 → VPC → 내부 → 다른 시스템"의 전 경로를 결정 트리로 따라갈 수 있는</strong> 상태가 만들어진다. 새 서비스를 그릴 때 이 셋을 머릿속에서 동시에 굴리는 게 인프라 설계의 출발점.
+다섯 편을 합치면 <strong>"DNS → 외부 진입점 → VPC → 내부 → 다른 시스템"의 전 경로를 결정 트리로 따라갈 수 있는</strong> 상태가 만들어진다. 트래픽 흐름의 시간 순서는 4편 → 1편 → 2편 → 3편이지만, 이해 순서로는 0편 → 1편 → 2편 → 3편 → 4편이 자연스럽다. 새 서비스를 그릴 때 이 다섯을 머릿속에서 동시에 굴리는 게 인프라 설계의 출발점.
 
-후속으로 다룰 만한 주제는 — 비용 최적화(VPC 트래픽 비용 패턴), 관찰성(VPC Flow Logs, Reachability Analyzer), 멀티 어카운트(AWS Organizations + Resource Access Manager). 시리즈를 한 번 더 묶을 가치가 있는 영역들.
+후속으로 다룰 만한 주제는 — 비용 최적화(VPC 트래픽 비용 패턴), 관찰성(VPC Flow Logs·Reachability Analyzer·Route 53 Resolver Query Logs), 멀티 어카운트(AWS Organizations + Resource Access Manager + 도메인 위임). 시리즈를 한 번 더 묶을 가치가 있는 영역들.
 
 ---
 

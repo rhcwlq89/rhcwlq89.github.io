@@ -104,7 +104,7 @@ Two pitfalls:
 
 ### 2.3 Interface Endpoint — an ENI inside the VPC
 
-Interface Endpoint works completely differently. <strong>It puts an ENI in a Subnet of your VPC and attaches Private DNS</strong> so that the service's official domain (e.g., `kms.ap-northeast-2.amazonaws.com`) resolves to the ENI's private IP. <strong>ENI (Elastic Network Interface) is a virtual NIC that lives inside a VPC with a private IP</strong> — almost everything in a VPC (EC2, RDS, Lambda, ALB, etc.) has at least one, and the key fact is that private IPs, Security Groups, and EIPs all bind to the ENI rather than to the instance directly.
+Interface Endpoint works completely differently. <strong>It puts an ENI in a Subnet of your VPC and attaches Private DNS</strong> so that the service's official domain (e.g., `kms.ap-northeast-2.amazonaws.com`) resolves to the ENI's private IP. The full ENI primer is in Part 0 §3.1 — the one-line takeaway is that <strong>an ENI is a virtual NIC living in the VPC with a private IP</strong>, and that private IPs, Security Groups, and EIPs all bind to the ENI rather than to the instance directly.
 
 Two implications:
 
@@ -173,6 +173,7 @@ Differences that matter:
 
 - <strong>Transitive</strong> — A→B→C routing is just a TGW Route Table setting away.
 - <strong>On-prem / DX / VPN integration</strong> — attach DX/VPN to TGW once, all VPCs share it.
+- <strong>Multi-AZ HA happens per attachment</strong> — the TGW itself is region-scoped and managed (auto-HA), but each VPC attachment should be configured with ENIs across AZs (a single-AZ failure then only impacts that AZ's VPC traffic).
 - <strong>It costs</strong> — $0.05/hour per attachment + $0.02/GB. Five VPCs + one DX = ~$200+/month.
 
 ### 3.3 Where they split
@@ -362,6 +363,8 @@ What this post covered:
 Part 2's goal was to make <strong>"VPC needs to talk to something outside" a 30-second decision</strong>. The decision tree narrows to one or two candidates in step one, and lands on exactly one by step three.
 
 Part 3 covers <strong>routing inside the VPC</strong> — how IGW and NAT Gateway actually work, the priority order Route Tables evaluate in, and where stateful Security Groups and stateless NACLs split in practice. After ingress and external connectivity are settled, <strong>how packets actually flow inside the VPC</strong> is what's left.
+
+> <strong>Note — series flow</strong>: Every connectivity decision here also runs after a DNS step, which is covered in [Part 4 (DNS and Route 53)](/blog/en/aws-vpc-edge-routing-guide-4). §2.3 mentions that Interface Endpoint relies on "Private DNS" — that Private DNS is in fact a Route 53 Private Hosted Zone (Part 4 §2.2). Pinning that connection makes the whole series fit together.
 
 ---
 

@@ -313,15 +313,17 @@ Part 3's goal was to make <strong>tracing a single packet through the VPC mental
 
 ### Series retrospective
 
-This series unpacked AWS network ingress and routing through the lens of <strong>"what decision problem does this solve?"</strong>, in three parts.
+This series unpacked AWS network ingress and routing through the lens of <strong>"what decision problem does this solve?"</strong>, in five parts.
 
-- <strong>Part 1</strong> — Picking the entry point that fronts a VPC (ALB / NLB / API Gateway / CloudFront / Global Accelerator). Four decision variables and a decision tree.
-- <strong>Part 2</strong> — Connecting a VPC to other VPCs, AWS services, and on-prem (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). The first split is destination type.
-- <strong>Part 3</strong> — How packets actually flow inside (IGW / NAT GW / Route Tables / SG vs NACL). Less about choosing, more about understanding mechanics.
+- <strong>Part 0</strong> — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0). OSI, VPC, CIDR, ENI, reverse proxies, and the core AWS services on one page.
+- <strong>Part 1</strong> — [Picking the entry point that fronts a VPC](/blog/en/aws-vpc-edge-routing-guide-1) (ALB / NLB / API Gateway / CloudFront / Global Accelerator). Four decision variables and a decision tree.
+- <strong>Part 2</strong> — [Connecting a VPC to other VPCs, AWS services, and on-prem](/blog/en/aws-vpc-edge-routing-guide-2) (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). The first split is destination type.
+- <strong>Part 3</strong> — How packets actually flow inside (IGW / NAT GW / Route Tables / SG vs NACL). Less about choosing, more about understanding mechanics (this post).
+- <strong>Part 4</strong> — [DNS decisions and Route 53](/blog/en/aws-vpc-edge-routing-guide-4) (Hosted Zone / six Routing Policies / Alias vs CNAME / Health Check). <strong>Runs before every decision in Parts 1–3 in actual traffic flow</strong>.
 
-Together, the three parts give you <strong>a decision-tree-driven path through "external → VPC → inside → other systems"</strong>. Holding all three in mind simultaneously is the starting point for infrastructure design.
+Together, the five parts give you <strong>a decision-tree-driven path through "DNS → external entry point → VPC → inside → other systems"</strong>. Traffic-flow time order is Part 4 → 1 → 2 → 3, but the natural reading order is Part 0 → 1 → 2 → 3 → 4. Holding all five in mind simultaneously is the starting point for infrastructure design.
 
-Worthwhile follow-ups: cost optimization (VPC traffic-cost patterns), observability (VPC Flow Logs, Reachability Analyzer), multi-account (AWS Organizations + Resource Access Manager). Material for another series.
+Worthwhile follow-ups: cost optimization (VPC traffic-cost patterns), observability (VPC Flow Logs, Reachability Analyzer, Route 53 Resolver Query Logs), multi-account (AWS Organizations + Resource Access Manager + domain delegation). Material for another series.
 
 ---
 

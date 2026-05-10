@@ -618,3 +618,20 @@ AWS 서비스가 200개가 넘지만, 본 시리즈에서 등장하는 건 30개
 | X-Ray | 분산 트레이싱 |
 | SSM | Systems Manager. EC2 통합 관리 |
 | Secrets Manager | 비밀 관리 + 자동 회전 |
+
+### I. 인터넷 Egress 비용 한눈에 비교
+
+VPC 안의 자원이 외부와 통신할 때 어느 경로를 거치느냐에 따라 비용이 크게 다르다. 시리즈 전체에서 NAT GW 데이터 처리 요금이 반복적으로 등장하는 이유가 여기 있다.
+
+| 경로 | 시간당 | 데이터 처리 | 데이터 전송 (outbound) | 적용 시나리오 |
+| --- | --- | --- | --- | --- |
+| <strong>Gateway Endpoint</strong> (S3·DynamoDB) | $0 | <strong>$0</strong> | $0 (같은 리전) | Private Subnet → S3·DynamoDB. 가장 싸다 |
+| <strong>Interface Endpoint</strong> (KMS·ECR·SSM 등) | AZ당 $0.01 | $0.01/GB | 표준 outbound | Private Subnet → 그 외 AWS 서비스 |
+| <strong>NAT Gateway</strong> | $0.045 | <strong>$0.045/GB</strong> | 표준 outbound | Private Subnet → 인터넷·cross-region AWS 서비스 |
+| <strong>IGW</strong> (직접) | $0 | $0 | 표준 outbound | Public Subnet → 인터넷 |
+| <strong>VPC Peering / TGW</strong> | TGW만 attachment 시간당 $0.05 | TGW만 $0.02/GB | cross-AZ 시간당 작은 요금 | VPC 간 통신 |
+
+핵심 직관:
+- <strong>S3·DynamoDB는 Gateway Endpoint가 항상 정답</strong>(무료 + 빠름).
+- <strong>NAT GW는 GB당 $0.045가 곱하기로 누적</strong>되므로 큰 트래픽일수록 청구서가 폭증. 1편 안티패턴 5.5절·2편 안티패턴 7.1절에서 반복적으로 짚는 이유.
+- <strong>같은 리전 안 통신은 가능하면 외부 인터넷을 거치지 않게</strong> — Endpoint·Peering·PrivateLink 우선.

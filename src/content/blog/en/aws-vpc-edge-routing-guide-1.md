@@ -76,7 +76,7 @@ L7 means the entry point can route on the contents of the HTTP message (host, pa
 
 ### 2.1 ALB — the most ordinary L7 load balancer
 
-ALB (Application Load Balancer) is AWS's managed L7 reverse proxy. <strong>It's the default entry point sitting in front of EC2 / ECS / EKS / Lambda inside a VPC</strong>, handling host/path/header-based routing and HTTPS termination.
+ALB (Application Load Balancer) is AWS's managed L7 reverse proxy. <strong>It's the default entry point sitting in front of EC2 / ECS / EKS / Lambda inside a VPC</strong>, handling host/path/header-based routing and HTTPS termination. ALB lives in a Public Subnet — that is, a Subnet whose Route Table has a `0.0.0.0/0 → IGW` route (the real meaning of Public vs Private subnet is unpacked in Part 0 §2.3).
 
 ```mermaid
 flowchart LR
@@ -200,7 +200,8 @@ HTTP API supports only regional; if you want edge, you put CloudFront in front y
 | gRPC | Yes | No | No | No |
 | Idle cost | $16~20/month (LB hour) | $0 | $0 (cache adds hourly instance) | $0 |
 | Per-request cost | Very low (LCU) | $1.00 / million | $3.50 / million | Very low + data transfer |
-| Strength | Containers/EC2 standard | Serverless API + auth/throttle | Usage plans / cache / VTL | Global cache / static assets |
+| WAF integration | Yes (native) | No (CloudFront in front required) | Yes (native) | Yes (Shield Standard auto) |
+| Strength | Containers/EC2 standard | Serverless API + auth/throttle | Usage plans / cache / VTL | Global cache / static assets / DDoS protection |
 
 The two confusions that come up most often:
 
@@ -322,7 +323,7 @@ Each branch in one line:
 
 ---
 
-## 5. Five common anti-patterns
+## 5. Six common anti-patterns
 
 Mistakes here repeat in predictable shapes. Walking through them once is usually enough to dodge the same trap later.
 
@@ -342,7 +343,11 @@ ALB only in Seoul, users in the US and Europe crossing the Pacific or Indian Oce
 
 A single EC2 instance behind an ALB. <strong>There's nothing to load-balance, so the ALB is just an expensive HTTPS terminator</strong> — $20/month with no HA gain (when the EC2 dies, the ALB has nowhere to send traffic). Cheaper alternatives at this stage: terminate HTTPS on the EC2 with Nginx, or use Lightsail / Cloudflare Tunnel. ALB starts paying off from two EC2 instances onward.
 
-### 5.5 Polling REST instead of using WebSocket
+### 5.5 NAT Gateway for S3 and DynamoDB access
+
+Slightly off the entry-point-decision layer, but the most expensive cost trap in the whole series, so it's worth flagging here too. By default a Private Subnet EC2 reaches S3 / DynamoDB through NAT Gateway → internet → S3 — and <strong>every GB triggers $0.045 in NAT GW data-processing charges</strong>. Analytics, log shipping, and image-upload workloads typically run hundreds of GB to TBs per month, all of it stacking onto the bill. <strong>A Gateway Endpoint (Part 2 §2) is free</strong> and a five-minute change to fix this — picking an entry point in Part 1 without then walking through Part 2 §2 leaves money on the table. Once the Part 1 decision is made, the Endpoint decision in Part 2 is the natural next step.
+
+### 5.6 Polling REST instead of using WebSocket
 
 "I need real-time notifications, I'll poll the REST endpoint." It works at first, but as traffic grows, polling explodes both cost and server load. WebSocket scenarios should be drawn from the start with <strong>ALB (native WebSocket) or API Gateway WebSocket API</strong>. The split is about where connection state lives — backend (ALB) vs AWS-managed (API Gateway WebSocket).
 
@@ -356,11 +361,13 @@ What this post covered:
 2. <strong>What separates the L7 candidates is "what processing they add"</strong> — ALB does host/path routing, API Gateway adds auth and throttling, CloudFront caches globally. Same layer, different jobs.
 3. <strong>CloudFront is a caching layer, not an entry point.</strong> There's always an origin behind it; it almost never runs alone.
 4. <strong>L4 splits between NLB (single-region static IP / ultra-low latency) and Global Accelerator (multi-region global)</strong>. GA carries a fixed cost, so it's nearly always wasted in a single-region service.
-5. <strong>Five anti-patterns to dodge</strong>: NLB → ALB chaining, static assets from API Gateway, no CloudFront in front of a global service, ALB on a single EC2, REST polling instead of WebSocket. Each comes from taking one branch wrong on the decision tree.
+5. <strong>Six anti-patterns to dodge</strong>: NLB → ALB chaining, static assets from API Gateway, no CloudFront in front of a global service, ALB on a single EC2, NAT GW for S3 access, REST polling instead of WebSocket. Each comes from taking one branch wrong on the decision tree.
 
 The goal of Part 1 was to make <strong>the decision of "what entry point fronts this VPC" almost automatic</strong>. With the decision tree in hand, picking it should be a sub-minute exercise.
 
 Next up: <strong>VPC-to-VPC and on-prem connectivity</strong>. What's the difference between VPC Endpoint and PrivateLink, when does Transit Gateway win over VPC Peering, and at what scale does Direct Connect start paying for itself? The decision problem after the traffic has entered — how it reaches the next system inside (or outside) the VPC.
+
+> <strong>Note — series flow</strong>: The decision tree above starts after a user has reached an ALB's IP / domain. The step before that — how the user's typed-in domain resolves to an IP and reaches a specific entry point — is covered in [Part 4 (DNS decisions and Route 53)](/blog/en/aws-vpc-edge-routing-guide-4). In actual traffic-flow order Part 4 happens before Part 1, but the entry-point picked here is what you then register in DNS via Part 4.
 
 ---
 
