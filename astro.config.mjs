@@ -49,7 +49,6 @@ export default defineConfig({
 			filter(page) {
 				const { pathname } = new URL(page);
 				if (pathname.startsWith('/blog/tags/') || pathname.startsWith('/en/blog/tags/')) return false;
-				if (pathname === '/novi-note/' || pathname === '/en/novi-note/') return false;
 				return true;
 			},
 			i18n: {
