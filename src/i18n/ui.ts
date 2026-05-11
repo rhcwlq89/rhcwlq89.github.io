@@ -11,7 +11,7 @@ export const ui = {
     'footer.privacy': 'Privacy Policy',
     'footer.terms': 'Terms',
     'footer.support': 'Support',
-    'footer.app_about': '앱 소개',
+    'footer.app_about': 'About',
     'blog.lastUpdated': 'Last updated on',
     'theme.toggle': '테마 전환',
   },
