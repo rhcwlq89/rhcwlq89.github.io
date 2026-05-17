@@ -70,6 +70,46 @@ dependencies {
 
 `spring-boot-starter-batch` is the single entry point for everything Spring Batch 6. The JPA starter is not strictly required for jobs themselves, but it pairs naturally with the domain objects we will manipulate, so we pull it in from Part 1.
 
+> <strong>Note — `libs.x` notation is a Gradle Version Catalog</strong>: dependencies are declared once in `gradle/libs.versions.toml` and referenced from `build.gradle.kts` via a type-safe `libs.x.y.z` accessor (stable since Gradle 7.4, March 2022). If catalogs are unfamiliar, you can read the code as the equivalent string form — `implementation("org.springframework.boot:spring-boot-starter-batch")` works identically. We use catalogs to match the Spring Boot Pre-Interview Guide series convention and to share one catalog across multiple modules in Part 7 (multi-module). The TOML body is in the fold below.
+
+<details>
+<summary><strong>Expand — gradle/libs.versions.toml for the dependencies above</strong></summary>
+
+```toml
+[versions]
+spring-boot = "4.0.0"
+kotlin = "2.3.0"
+postgresql = "42.7.4"
+
+[libraries]
+spring-boot-starter-batch = { module = "org.springframework.boot:spring-boot-starter-batch" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-batch-test = { module = "org.springframework.batch:spring-batch-test" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+```
+
+Two things to remember.
+
+- <strong>Hyphens in the TOML become dots in the Kotlin accessor</strong> — `spring-boot-starter-batch` becomes `libs.spring.boot.starter.batch`, and the IDE auto-completes it.
+- <strong>The Spring Boot BOM manages the transitive versions for batch/jpa/test</strong> — that is why `spring-boot-starter-batch` has no `version.ref`. Only dependencies outside the BOM (the PostgreSQL driver here) carry an explicit version.
+
+To activate the catalog, add one block to `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            from(files("gradle/libs.versions.toml"))
+        }
+    }
+}
+```
+
+The name passed to `create("libs")` becomes the accessor prefix in `build.gradle.kts`. A different name (e.g. `bundles`) yields `bundles.x.y.z`.
+
+</details>
+
 **application.yml**:
 
 ```yaml
@@ -435,20 +475,7 @@ The series default — marketplace data and batch metadata on the same PostgreSQ
 
 ### 5.3 Dependency Versions
 
-You almost never pin batch versions directly in `build.gradle.kts`. The Spring Boot 4 BOM manages the Spring Batch 6 version.
-
-```kotlin
-// version catalog example (gradle/libs.versions.toml)
-[versions]
-spring-boot = "4.0.0"
-kotlin = "2.3.0"
-
-[libraries]
-spring-boot-starter-batch = { module = "org.springframework.boot:spring-boot-starter-batch" }
-spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
-spring-batch-test = { module = "org.springframework.batch:spring-batch-test" }
-postgresql = { module = "org.postgresql:postgresql" }
-```
+You almost never pin the Spring Batch version directly in `build.gradle.kts`. The Spring Boot 4 BOM manages the Spring Batch 6 version. That is exactly why the §1.1 catalog example does not carry a `version.ref` for `spring-boot-starter-batch` — the BOM brings it in transitively.
 
 Spring Boot 4.0 pairs with Spring Batch 6.0. Do not pin them separately — let the BOM raise them together.
 

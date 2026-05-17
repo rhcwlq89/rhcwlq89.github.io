@@ -74,6 +74,46 @@ dependencies {
 
 `spring-boot-starter-batch`가 Spring Batch 6의 모든 진입점이다. JPA starter는 잡 자체에는 필수가 아니지만 도메인 객체를 다룰 때 자연스러워 1편부터 같이 끌어둔다.
 
+> <strong>참고 — `libs.x` 표기는 Gradle Version Catalog</strong>: 의존성을 `gradle/libs.versions.toml` 한 파일에 카탈로그로 선언하고 `build.gradle.kts`에서는 `libs.x.y.z` 타입 안전 accessor로 참조하는 패턴이다(Gradle 7.4+ stable, 2022.03). 카탈로그를 안 쓰고 `implementation("org.springframework.boot:spring-boot-starter-batch")` 같은 문자열을 그대로 써도 동작은 같으니, 카탈로그가 생소하면 문자열 형태로 바꿔 읽어도 무방하다. 본 시리즈가 카탈로그를 쓰는 이유는 사전과제 가이드 시리즈와 같은 컨벤션 유지 + 7편 멀티 모듈에서 여러 모듈이 한 카탈로그를 공유하기 위함이다. TOML 본문은 아래 details 참고.
+
+<details>
+<summary><strong>펼치기 — 위 의존성에 대응하는 gradle/libs.versions.toml</strong></summary>
+
+```toml
+[versions]
+spring-boot = "4.0.0"
+kotlin = "2.3.0"
+postgresql = "42.7.4"
+
+[libraries]
+spring-boot-starter-batch = { module = "org.springframework.boot:spring-boot-starter-batch" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-batch-test = { module = "org.springframework.batch:spring-batch-test" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+```
+
+두 가지만 기억하면 된다.
+
+- <strong>TOML의 하이픈(`-`)이 Kotlin accessor의 점(`.`)으로 매핑된다</strong> — `spring-boot-starter-batch` → `libs.spring.boot.starter.batch`. 자동완성이 IDE에서 그대로 잡힌다.
+- <strong>Spring Boot BOM이 batch/jpa/test의 transitive 버전을 관리한다</strong> — 그래서 카탈로그에서 `spring-boot-starter-batch`에는 `version.ref`를 명시하지 않았다. BOM 외부 의존성(PostgreSQL 드라이버)에만 버전을 박는다.
+
+카탈로그를 활성화하려면 `settings.gradle.kts`에 한 블록을 더 둔다.
+
+```kotlin
+dependencyResolutionManagement {
+    versionCatalogs {
+        create("libs") {
+            from(files("gradle/libs.versions.toml"))
+        }
+    }
+}
+```
+
+`create("libs")`의 이름이 곧 `build.gradle.kts`에서 쓰는 `libs.x` accessor의 prefix가 된다. 다른 이름(예: `bundles`)을 쓰면 `bundles.x.y.z`처럼 된다.
+
+</details>
+
 **application.yml**:
 
 ```yaml
@@ -441,20 +481,7 @@ FROM batch_step_execution;
 
 ### 5.3 의존성 버전 정리
 
-`build.gradle.kts`에서 직접 버전을 박을 일은 거의 없다. Spring Boot 4 BOM이 Spring Batch 6 버전을 관리한다.
-
-```kotlin
-// version catalog 예시 (gradle/libs.versions.toml)
-[versions]
-spring-boot = "4.0.0"
-kotlin = "2.3.0"
-
-[libraries]
-spring-boot-starter-batch = { module = "org.springframework.boot:spring-boot-starter-batch" }
-spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
-spring-batch-test = { module = "org.springframework.batch:spring-batch-test" }
-postgresql = { module = "org.postgresql:postgresql" }
-```
+`build.gradle.kts`에서 Spring Batch 버전을 직접 박을 일은 거의 없다. Spring Boot 4 BOM이 Spring Batch 6 버전을 관리한다. 1.1절의 카탈로그 예시에서도 `spring-boot-starter-batch`에 `version.ref`를 명시하지 않은 이유가 이것이다 — BOM이 transitive로 끌어 준다.
 
 Spring Boot 4.0이 Spring Batch 6.0과 짝이다. 두 버전을 따로 박지 말고 BOM을 통해 같이 올리는 게 안전하다.
 
