@@ -20,7 +20,7 @@ That is where <strong>Spring Batch</strong> belongs. Spring Batch is a framework
 The target reader is a backend engineer who has either followed the Spring Boot Pre-Interview Guide series or has solid Spring Boot fundamentals. No prior Spring Batch 5.x experience is required — we settle into 6.x from scratch.
 
 - <strong>Part 1 — Job · Step · Metadata Identity (this post)</strong>
-- Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer (upcoming)
+- [Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer](/blog/en/spring-batch-6-guide-2)
 - Part 3 — Transactions · Failure Handling — Skip · Retry · Restart (upcoming)
 - Part 4 — Job Launch · Scheduling · Operations (upcoming)
 - Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers (upcoming)

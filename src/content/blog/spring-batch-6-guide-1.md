@@ -24,7 +24,7 @@ heroImage: "../../assets/SpringBatch6Guide1.png"
 대상 독자는 사전과제 가이드 시리즈를 봤거나 Spring Boot 기본기는 있는 백엔드 엔지니어다. Spring Batch 5.x 경험이 없어도 된다 — 6.x를 처음부터 정착시키는 방향으로 쓴다.
 
 - <strong>1편 — Job · Step · 메타데이터의 정체 (이 글)</strong>
-- 2편 — 청크 지향 처리 — Reader · Processor · Writer (예정)
+- [2편 — 청크 지향 처리 — Reader · Processor · Writer](/blog/spring-batch-6-guide-2)
 - 3편 — 트랜잭션 · 실패 처리 — Skip · Retry · 재시작 (예정)
 - 4편 — 잡 실행 · 스케줄링 · 운영 (예정)
 - 5편 — 성능 · 병렬화 — 멀티 스레드 · 파티셔닝 · 원격 워커 (예정)
