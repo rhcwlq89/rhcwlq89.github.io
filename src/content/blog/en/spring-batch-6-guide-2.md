@@ -164,6 +164,8 @@ Most decisions collapse to two:
 
 ### 2.3 JpaPagingItemReader Builder
 
+> <strong>Note — `@StepScope` and late binding</strong>: Spring beans are singletons by default, created once at app startup (job-build time) — but JobParameters like `targetDate` do not exist yet at that point. <strong>`@StepScope` is a Spring Batch scope that defers bean creation until the Step actually starts, building a fresh bean per StepExecution</strong>, which is what lets late-binding expressions like `#{jobParameters['targetDate']}` resolve to the runtime value. If a value spans the whole job, use `@JobScope` (one bean per JobExecution). A new instance per run also keeps state from leaking across restarts and parallel steps.
+
 ```kotlin
 import jakarta.persistence.EntityManagerFactory
 import org.springframework.batch.item.database.JpaPagingItemReader
@@ -194,7 +196,7 @@ class OrderReaderConfig {
 
 Three things matter.
 
-- <strong>`@StepScope` is effectively required</strong> — to use late-binding expressions like `jobParameters['targetDate']` the bean must be created when the Step starts. The value does not exist at job-build time.
+- <strong>`@StepScope` is effectively required</strong> — as the note above explains, late binding (`jobParameters['targetDate']`) needs the bean created when the Step starts. Omit it and injection breaks because the value is missing at build time.
 - <strong>`ORDER BY` must be on a stable key</strong> — paging readers work via OFFSET/LIMIT. An unstable sort key means rows can be read twice or skipped. Prefer immutable columns like the PK.
 - <strong>Why `name()` is required</strong> — it is the key prefix in the Step ExecutionContext. With two readers in the same Step, it prevents context collisions.
 

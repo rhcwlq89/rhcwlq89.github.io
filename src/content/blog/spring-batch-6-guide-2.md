@@ -168,6 +168,8 @@ flowchart TD
 
 ### 2.3 JpaPagingItemReader 빌더
 
+> <strong>참고 — `@StepScope`와 late binding</strong>: 스프링 빈은 기본이 싱글톤이라 앱 시작(잡 빌드) 시점에 한 번 만들어지는데, `targetDate` 같은 JobParameters는 그때 아직 없다. <strong>`@StepScope`는 빈 생성을 Step이 시작되는 시점으로 미뤄 StepExecution마다 새로 만드는 Spring Batch 전용 스코프</strong>다. 덕분에 `#{jobParameters['targetDate']}` 같은 <strong>late binding(지연 바인딩)</strong> 표현식이 실행 시점 값으로 주입된다. 값이 잡 전체에 걸치면 `@JobScope`(JobExecution마다 생성)를 쓴다. 매 실행마다 새 인스턴스라 재시작·병렬에서도 상태가 섞이지 않는다.
+
 ```kotlin
 import jakarta.persistence.EntityManagerFactory
 import org.springframework.batch.item.database.JpaPagingItemReader
@@ -198,7 +200,7 @@ class OrderReaderConfig {
 
 세 가지가 핵심이다.
 
-- <strong>`@StepScope`가 사실상 필수</strong> — `jobParameters['targetDate']` 같은 late-binding 표현식을 쓰려면 Step이 시작될 때 빈을 새로 만들어야 한다. 잡 빌드 시점에는 `targetDate`가 아직 없다.
+- <strong>`@StepScope`가 사실상 필수</strong> — 위 참고처럼 `jobParameters['targetDate']` late binding을 쓰려면 Step 시작 시점에 빈이 생성돼야 한다. 빠뜨리면 빌드 시점에 값이 없어 주입이 깨진다.
 - <strong>`ORDER BY`는 반드시 안정적인 키로</strong> — 페이징 Reader는 OFFSET/LIMIT으로 동작한다. 정렬키가 흔들리면 같은 행을 두 번 읽거나 빠뜨린다. PK처럼 변하지 않는 컬럼을 권장.
 - <strong>`name()`이 필요한 이유</strong> — Step ExecutionContext의 키 prefix로 쓰인다. 같은 Step에 두 Reader가 있을 때 ExecutionContext 충돌을 막는다.
 
