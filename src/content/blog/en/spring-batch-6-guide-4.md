@@ -99,6 +99,8 @@ jobOperator.abandon(stoppedExecutionId)  // abandon a stopped run
 
 Who calls `JobLauncher` — that is, "when does it run" — is the scheduler's job. Part 1 §1.1 said trigger (when) and execution engine (how) are separate axes; Part 4 now picks that trigger layer in earnest.
 
+> <strong>Terms</strong>: a <strong>DAG</strong> (Directed Acyclic Graph) expresses ordering and dependencies between jobs without cycles — "B after A, D after B and C." <strong>Backfill</strong> means re-running past periods retroactively — e.g., fixing aggregation logic and re-running the last month day by day. <strong>HA</strong> (High Availability) is a setup where the job keeps running even if one instance dies.
+
 ### 2.1 Four options compared
 
 | Scheduler | Where it runs | Single execution (HA) | Inter-job dependency (DAG) | Fits |

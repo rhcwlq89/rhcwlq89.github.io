@@ -103,6 +103,8 @@ jobOperator.abandon(stoppedExecutionId)  // 중단된 실행 폐기
 
 `JobLauncher`를 누가 호출하느냐 — 즉 "언제 도느냐"를 정하는 게 스케줄러다. 1편 1.1절에서 trigger(언제)와 실행 엔진(어떻게)이 별개 축이라고 했는데, 4편이 그 trigger 층을 본격적으로 고른다.
 
+> <strong>용어</strong>: <strong>DAG</strong>(Directed Acyclic Graph, 방향성 비순환 그래프)는 "A가 끝나면 B, B·C가 끝나면 D"처럼 잡 사이의 순서·의존 관계를 사이클 없이 표현한 그래프다. <strong>백필(backfill)</strong>은 과거 기간을 소급해 다시 돌리는 것이다 — 예컨대 집계 로직을 고친 뒤 지난 한 달을 날짜별로 재실행하는 것. <strong>HA</strong>(High Availability)는 인스턴스 하나가 죽어도 잡이 계속 도는 고가용 구성이다.
+
 ### 2.1 4종 비교
 
 | 스케줄러 | 실행 위치 | 단일 실행(HA) | 잡 간 의존성(DAG) | 적합 |
