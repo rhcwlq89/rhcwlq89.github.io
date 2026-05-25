@@ -41,7 +41,41 @@ The target reader is a backend engineer who has either followed the Spring Boot 
 
 ## 1. Why Spring Batch
 
-### 1.1 Project Setup — build.gradle.kts + application.yml
+### 1.1 When Do You Reach for Batch — A Decision Guide
+
+Let us clear up a common myth first. <strong>"Batch = large data" is only half true.</strong> Volume is the most common reason to reach for batch, not its definition. A 1,000-row job still belongs in batch if it needs "restart from where it died," "safe re-runs with the same date," or "a record of what ran and when."
+
+The real test is two questions.
+
+- <strong>Is the dataset bounded?</strong> — yesterday's orders, this month's settlement: a dataset with a defined start and end. An endless event stream is not batch territory — that belongs to a message consumer (Kafka and friends).
+- <strong>Do you need reliability?</strong> — restart, idempotency, run history, or large-volume chunking. If the work is small, fast, and a single statement (`DELETE ... WHERE created_at < ...`), bolting on batch is over-engineering.
+
+If both answers are "yes," it is batch.
+
+```mermaid
+flowchart TD
+    A["A recurring job is needed"] --> B{"Is the dataset bounded?<br/>defined start and end"}
+    B -->|"No · endless stream"| C["Message consumer / streaming<br/>(Kafka · event-driven)<br/>not batch"]
+    B -->|"Yes · bounded"| D{"Need restart · idempotency · run<br/>history · large-volume chunking?"}
+    D -->|"No · small & idempotent"| E["A plain scheduler is enough<br/>crontab · CronJob · @Scheduled<br/>+ a plain service"]
+    D -->|"Yes"| F["Spring Batch<br/>trigger: crontab · CronJob · @Scheduled"]
+```
+
+One thing matters here. <strong>"When it runs" and "how it runs safely" are separate axes.</strong> crontab, CronJob, and `@Scheduled` are all triggers (the when); Spring Batch is the execution engine (the how) that the trigger invokes. They do not compete — they compose: crontab launches `java -jar app.jar`, or `@Scheduled` calls `JobLauncher`.
+
+Whether or not you use batch, "when to run it" comes down to one of these three.
+
+| Trigger | Layer | Unit of execution | Direct access to beans/DB | Multi-instance duplication |
+|---------|-------|-------------------|---------------------------|----------------------------|
+| OS `crontab` | Host | New process (`java -jar`) | ✗ (cold JVM start each time) | Per host — manage it yourself |
+| K8s `CronJob` | Cluster | New Pod (container) | ✗ (cold Pod start each time) | Cluster guarantees one run (concurrency policy) |
+| `@Scheduled` | In-app | Method call | ✓ (the live context) | Runs on every instance — needs ShedLock etc. |
+
+The key difference: <strong>crontab and CronJob spin up a fresh process every time (cold start), while `@Scheduled` runs inside the live app.</strong> In a containerized deployment, K8s CronJob is the idiomatic choice over crontab. Either way, if the job body is written with Spring Batch, you can swap the trigger freely.
+
+> <strong>Note</strong>: Even for a small job, `@Scheduled` firing twice across multiple instances is a common incident. Without batch you may still need a distributed lock like ShedLock, or CronJob's single-run guarantee. With batch, the JobInstance lock prevents this duplication automatically (§1.4).
+
+### 1.2 Project Setup — build.gradle.kts + application.yml
 
 The series default stack is <strong>Spring Boot 4 + Kotlin 2.3 + Java 21 + PostgreSQL 16</strong>.
 
@@ -132,7 +166,7 @@ Two keys matter here.
 - `spring.batch.jdbc.initialize-schema: always` — Spring Batch creates the six metadata tables if they are missing. Convenient for local and test; in production, set this to `never` and use Flyway/Liquibase for explicit migrations.
 - `spring.batch.job.enabled: false` — the default (`true`) runs every Job bean in the context once at startup. Jobs should be triggered by a scheduler or external caller, so turn this off (Part 4 will revisit job launching).
 
-### 1.2 The Problems With Starting From `@Scheduled` Alone
+### 1.3 The Problems With Starting From `@Scheduled` Alone
 
 The simplest back-office job looks like this.
 
@@ -162,7 +196,7 @@ It works — until the following questions start showing up.
 
 Solving each issue separately ends with you maintaining a "job-execution metadata table," "checkpoint columns," "batch lock tables," and "restart logic." The result is essentially a reimplementation of Spring Batch.
 
-### 1.3 What Spring Batch Gives You
+### 1.4 What Spring Batch Gives You
 
 Side by side:
 
@@ -475,7 +509,7 @@ The series default — marketplace data and batch metadata on the same PostgreSQ
 
 ### 5.3 Dependency Versions
 
-You almost never pin the Spring Batch version directly in `build.gradle.kts`. The Spring Boot 4 BOM manages the Spring Batch 6 version. That is exactly why the §1.1 catalog example does not carry a `version.ref` for `spring-boot-starter-batch` — the BOM brings it in transitively.
+You almost never pin the Spring Batch version directly in `build.gradle.kts`. The Spring Boot 4 BOM manages the Spring Batch 6 version. That is exactly why the §1.2 catalog example does not carry a `version.ref` for `spring-boot-starter-batch` — the BOM brings it in transitively.
 
 Spring Boot 4.0 pairs with Spring Batch 6.0. Do not pin them separately — let the BOM raise them together.
 

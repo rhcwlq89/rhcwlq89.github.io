@@ -45,7 +45,41 @@ heroImage: "../../assets/SpringBatch6Guide1.png"
 
 ## 1. 왜 Spring Batch인가
 
-### 1.1 프로젝트 셋업 — build.gradle.kts + application.yml
+### 1.1 언제 배치를 꺼내는가 — 판단 기준
+
+먼저 흔한 오해부터 짚자. <strong>"배치 = 대용량"은 절반만 맞다.</strong> 대용량은 배치를 꺼내는 가장 흔한 이유일 뿐, 정의가 아니다. 1,000건짜리 잡도 "중간에 죽으면 이어서 재시작", "같은 날짜로 두 번 돌려도 안전", "언제 무엇이 돌았는지 이력"이 필요하면 배치가 맞다.
+
+진짜 기준은 두 가지 질문이다.
+
+- <strong>대상이 유한한가</strong> — 어제치 주문, 이번 달 정산처럼 시작과 끝이 정해진 데이터셋인가. 끝없이 흘러드는 이벤트 스트림이면 배치가 아니라 메시지 컨슈머(Kafka 등)의 영역이다.
+- <strong>신뢰성이 필요한가</strong> — 재시작·멱등·실행 이력·대용량 청크 중 하나라도 필요한가. 작고 빠르고 한 문장(`DELETE ... WHERE created_at < ...`)으로 끝나면 배치를 얹는 건 과설계다.
+
+두 질문에 모두 "예"라면 배치다.
+
+```mermaid
+flowchart TD
+    A["정기 작업이 필요하다"] --> B{"대상이 유한한가?<br/>시작·끝이 정해진 데이터셋"}
+    B -->|"아니오 · 무한 스트림"| C["메시지 컨슈머 / 스트리밍<br/>(Kafka · 이벤트 기반)<br/>배치 아님"]
+    B -->|"예 · bounded"| D{"재시작 · 멱등 · 실행 이력 ·<br/>대용량 청크 중 하나라도 필요?"}
+    D -->|"아니오 · 작고 멱등"| E["일반 스케줄러로 충분<br/>crontab · CronJob · @Scheduled<br/>+ 일반 서비스"]
+    D -->|"예"| F["Spring Batch<br/>트리거: crontab · CronJob · @Scheduled 중 택1"]
+```
+
+여기서 한 가지가 중요하다. <strong>"언제 도느냐"와 "어떻게 안전하게 도느냐"는 별개의 축이다.</strong> crontab·CronJob·@Scheduled는 전부 트리거(언제)고, Spring Batch는 그 트리거가 호출하는 실행 엔진(어떻게)이다. 둘은 경쟁이 아니라 합성된다 — crontab이 `java -jar app.jar`를 띄우거나, @Scheduled가 `JobLauncher`를 호출하는 식이다.
+
+배치를 쓰든 안 쓰든, "언제 돌릴지"는 아래 셋 중 하나로 정한다.
+
+| 트리거 | 층위 | 실행 단위 | 앱 빈·DB 직접 접근 | 멀티 인스턴스 중복 |
+|--------|------|-----------|-------------------|-------------------|
+| OS `crontab` | 호스트 | 새 프로세스(`java -jar`) | ✗ (매번 JVM 콜드 스타트) | 호스트마다 따로 — 직접 관리 |
+| K8s `CronJob` | 클러스터 | 새 Pod(컨테이너) | ✗ (매번 Pod 콜드 스타트) | 클러스터가 1회 보장(동시성 정책) |
+| `@Scheduled` | 앱 내부 | 메서드 호출 | ✓ (살아 있는 컨텍스트) | 인스턴스마다 실행 — ShedLock 등 필요 |
+
+핵심 차이는 <strong>crontab·CronJob은 매번 새 프로세스를 띄우고(콜드 스타트), @Scheduled는 살아 있는 앱 안에서 돈다</strong>는 점이다. 컨테이너 배포 환경이면 crontab보다 K8s CronJob이 정석이다. 어느 쪽이든 잡 본체를 Spring Batch로 짜 두면, 트리거만 바꿔 끼울 수 있다.
+
+> <strong>참고</strong>: 작은 잡이라도 멀티 인스턴스에서 @Scheduled가 동시에 두 번 도는 사고는 흔하다. 배치를 안 쓰더라도 ShedLock 같은 분산 락이나 CronJob의 단일 실행 보장이 필요할 수 있다. 배치를 쓰면 JobInstance 락이 이 중복을 자동으로 막아 준다(1.4절).
+
+### 1.2 프로젝트 셋업 — build.gradle.kts + application.yml
 
 본 시리즈는 <strong>Spring Boot 4 + Kotlin 2.3 + Java 21 + PostgreSQL 16</strong>이 default다.
 
@@ -136,7 +170,7 @@ spring:
 - `spring.batch.jdbc.initialize-schema: always` — Spring Batch가 메타데이터 6 테이블이 없으면 자동으로 만든다. 로컬·테스트는 `always`가 편하지만 운영에서는 `never`로 두고 Flyway/Liquibase로 명시적 마이그레이션이 권장.
 - `spring.batch.job.enabled: false` — 기본값(`true`)은 애플리케이션 시작 시 컨텍스트의 모든 Job을 한 번 실행한다. 잡은 보통 스케줄러나 외부 트리거로 돌리므로 꺼두는 게 안전하다(4편 잡 실행에서 더 다룬다).
 
-### 1.2 @Scheduled로 시작했을 때의 문제
+### 1.3 @Scheduled로 시작했을 때의 문제
 
 가장 단순한 백오피스 잡은 다음과 같이 짠다.
 
@@ -166,7 +200,7 @@ class DailySalesAggregator(
 
 각 문제를 따로따로 해결하면 결국 직접 "잡 실행 메타데이터 테이블"을 만들고, "체크포인트 컬럼"을 박고, "배치 락 테이블"을 만들고, "재시작 로직"을 짜게 된다. 이 작업의 결과물이 사실상 Spring Batch와 같다.
 
-### 1.3 Spring Batch가 해결해 주는 것
+### 1.4 Spring Batch가 해결해 주는 것
 
 비교 표로 정리하면 다음과 같다.
 
@@ -481,7 +515,7 @@ FROM batch_step_execution;
 
 ### 5.3 의존성 버전 정리
 
-`build.gradle.kts`에서 Spring Batch 버전을 직접 박을 일은 거의 없다. Spring Boot 4 BOM이 Spring Batch 6 버전을 관리한다. 1.1절의 카탈로그 예시에서도 `spring-boot-starter-batch`에 `version.ref`를 명시하지 않은 이유가 이것이다 — BOM이 transitive로 끌어 준다.
+`build.gradle.kts`에서 Spring Batch 버전을 직접 박을 일은 거의 없다. Spring Boot 4 BOM이 Spring Batch 6 버전을 관리한다. 1.2절의 카탈로그 예시에서도 `spring-boot-starter-batch`에 `version.ref`를 명시하지 않은 이유가 이것이다 — BOM이 transitive로 끌어 준다.
 
 Spring Boot 4.0이 Spring Batch 6.0과 짝이다. 두 버전을 따로 박지 말고 BOM을 통해 같이 올리는 게 안전하다.
 
