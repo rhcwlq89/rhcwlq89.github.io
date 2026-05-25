@@ -22,7 +22,7 @@ The target reader is a backend engineer who has built jobs through Parts 1–4. 
 - Part 3 — Transactions · Failure Handling — Skip · Retry · Restart
 - Part 4 — Job Launch · Scheduling · Operations
 - <strong>Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers (this post)</strong>
-- Part 6 — Observability · Testing · Deployment (upcoming)
+- [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
 - Capstone — Marketplace Analytics Pipeline (upcoming)
 
 ---

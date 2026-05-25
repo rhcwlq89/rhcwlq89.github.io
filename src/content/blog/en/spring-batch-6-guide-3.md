@@ -22,7 +22,7 @@ The target reader is a backend engineer who understands Part 2's chunk mechanism
 - <strong>Part 3 — Transactions · Failure Handling — Skip · Retry · Restart (this post)</strong>
 - [Part 4 — Job Launch · Scheduling · Operations](/blog/en/spring-batch-6-guide-4)
 - [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/blog/en/spring-batch-6-guide-5)
-- Part 6 — Observability · Testing · Deployment (upcoming)
+- [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
 - Capstone — Marketplace Analytics Pipeline (upcoming)
 
 ---

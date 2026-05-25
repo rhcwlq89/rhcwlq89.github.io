@@ -26,7 +26,7 @@ heroImage: "../../assets/SpringBatch6Guide5.png"
 - 3편 — 트랜잭션 · 실패 처리 — Skip · Retry · 재시작
 - 4편 — 잡 실행 · 스케줄링 · 운영
 - <strong>5편 — 성능 · 병렬화 — 멀티 스레드 · 파티셔닝 · 원격 워커 (이 글)</strong>
-- 6편 — 관측성 · 테스트 · 배포 (예정)
+- [6편 — 관측성 · 테스트 · 배포](/blog/spring-batch-6-guide-6)
 - 종합 — 마켓플레이스 분석 파이프라인 (예정)
 
 ---
