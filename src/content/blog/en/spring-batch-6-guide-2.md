@@ -20,7 +20,7 @@ The target reader is a backend engineer who has read Part 1 or has internalized 
 - Part 1 — Job · Step · Metadata Identity
 - <strong>Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer (this post)</strong>
 - [Part 3 — Transactions · Failure Handling — Skip · Retry · Restart](/blog/en/spring-batch-6-guide-3)
-- Part 4 — Job Launch · Scheduling · Operations (upcoming)
+- [Part 4 — Job Launch · Scheduling · Operations](/blog/en/spring-batch-6-guide-4)
 - Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers (upcoming)
 - Part 6 — Observability · Testing · Deployment (upcoming)
 - Capstone — Marketplace Analytics Pipeline (upcoming)
