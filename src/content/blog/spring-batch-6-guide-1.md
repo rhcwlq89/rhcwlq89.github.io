@@ -75,7 +75,7 @@ flowchart TD
 | K8s `CronJob` | 클러스터 | 새 Pod(컨테이너) | ✗ (매번 Pod 콜드 스타트) | 클러스터가 1회 보장(동시성 정책) |
 | `@Scheduled` | 앱 내부 | 메서드 호출 | ✓ (살아 있는 컨텍스트) | 인스턴스마다 실행 — ShedLock 등 필요 |
 
-핵심 차이는 <strong>crontab·CronJob은 매번 새 프로세스를 띄우고(콜드 스타트), @Scheduled는 살아 있는 앱 안에서 돈다</strong>는 점이다. 컨테이너 배포 환경이면 crontab보다 K8s CronJob이 정석이다. 어느 쪽이든 잡 본체를 Spring Batch로 짜 두면, 트리거만 바꿔 끼울 수 있다.
+핵심 차이는 <strong>crontab·CronJob은 매번 새 프로세스를 띄우고(콜드 스타트), @Scheduled는 살아 있는 앱 안에서 돈다</strong>는 점이다. crontab은 호스트 1대 범위라 서버를 늘리면 중복 실행을 직접 막아야 하지만, CronJob은 클러스터에 하나만 등록돼 `concurrencyPolicy`로 중복을 선언적으로 막고 컨테이너로 환경까지 격리한다. 그래서 컨테이너 배포 환경이면 crontab보다 K8s CronJob이 정석이다. 어느 쪽이든 잡 본체를 Spring Batch로 짜 두면, 트리거만 바꿔 끼울 수 있다.
 
 > <strong>참고</strong>: 작은 잡이라도 멀티 인스턴스에서 @Scheduled가 동시에 두 번 도는 사고는 흔하다. 배치를 안 쓰더라도 ShedLock 같은 분산 락이나 CronJob의 단일 실행 보장이 필요할 수 있다. 배치를 쓰면 JobInstance 락이 이 중복을 자동으로 막아 준다(1.4절).
 
