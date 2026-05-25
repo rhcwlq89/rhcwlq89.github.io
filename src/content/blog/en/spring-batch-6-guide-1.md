@@ -67,9 +67,9 @@ Whether or not you use batch, "when to run it" comes down to one of these three.
 
 | Trigger | Layer | Unit of execution | Direct access to beans/DB | Multi-instance duplication |
 |---------|-------|-------------------|---------------------------|----------------------------|
-| OS `crontab` | Host | New process (`java -jar`) | ✗ (cold JVM start each time) | Per host — manage it yourself |
-| K8s `CronJob` | Cluster | New Pod (container) | ✗ (cold Pod start each time) | Cluster guarantees one run (concurrency policy) |
-| `@Scheduled` | In-app | Method call | ✓ (the live context) | Runs on every instance — needs ShedLock etc. |
+| OS `crontab` | Host | New process (`java -jar`) | ❌ (cold JVM start each time) | Per host — manage it yourself |
+| K8s `CronJob` | Cluster | New Pod (container) | ❌ (cold Pod start each time) | Cluster guarantees one run (concurrency policy) |
+| `@Scheduled` | In-app | Method call | ✅ (the live context) | Runs on every instance — needs ShedLock etc. |
 
 The key difference: <strong>crontab and CronJob spin up a fresh process every time (cold start), while `@Scheduled` runs inside the live app.</strong> crontab is scoped to a single host, so scaling out means blocking duplicate runs yourself; CronJob registers once in the cluster, blocks duplicates declaratively via `concurrencyPolicy`, and isolates the environment in a container. That is why K8s CronJob is the idiomatic choice over crontab in a containerized deployment. Either way, if the job body is written with Spring Batch, you can swap the trigger freely.
 

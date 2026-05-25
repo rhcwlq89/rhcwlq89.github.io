@@ -103,9 +103,9 @@ Who calls `JobLauncher` — that is, "when does it run" — is the scheduler's j
 
 | Scheduler | Where it runs | Single execution (HA) | Inter-job dependency (DAG) | Fits |
 |-----------|---------------|-----------------------|----------------------------|------|
-| `@Scheduled` | in-app | ✗ (per instance → §7) | ✗ | single instance, simple schedule |
-| Quartz | in-app | ✅ cluster mode | △ limited | HA needed inside the app |
-| K8s CronJob | cluster | ✅ cluster guarantees one | ✗ | containerized deployment |
+| `@Scheduled` | in-app | ❌ (per instance → §7) | ❌ | single instance, simple schedule |
+| Quartz | in-app | ✅ cluster mode | limited | HA needed inside the app |
+| K8s CronJob | cluster | ✅ cluster guarantees one | ❌ | containerized deployment |
 | Argo · Airflow | external orchestrator | ✅ | ✅ DAG, backfill, retries | dependencies across jobs, pipelines |
 
 ### 2.2 Decision tree
