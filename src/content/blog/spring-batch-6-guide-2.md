@@ -23,7 +23,7 @@ heroImage: "../../assets/SpringBatch6Guide2.png"
 
 - 1편 — Job · Step · 메타데이터의 정체
 - <strong>2편 — 청크 지향 처리 — Reader · Processor · Writer (이 글)</strong>
-- 3편 — 트랜잭션 · 실패 처리 — Skip · Retry · 재시작 (예정)
+- [3편 — 트랜잭션 · 실패 처리 — Skip · Retry · 재시작](/blog/spring-batch-6-guide-3)
 - 4편 — 잡 실행 · 스케줄링 · 운영 (예정)
 - 5편 — 성능 · 병렬화 — 멀티 스레드 · 파티셔닝 · 원격 워커 (예정)
 - 6편 — 관측성 · 테스트 · 배포 (예정)

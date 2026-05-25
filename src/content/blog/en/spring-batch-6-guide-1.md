@@ -21,7 +21,7 @@ The target reader is a backend engineer who has either followed the Spring Boot 
 
 - <strong>Part 1 — Job · Step · Metadata Identity (this post)</strong>
 - [Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer](/blog/en/spring-batch-6-guide-2)
-- Part 3 — Transactions · Failure Handling — Skip · Retry · Restart (upcoming)
+- [Part 3 — Transactions · Failure Handling — Skip · Retry · Restart](/blog/en/spring-batch-6-guide-3)
 - Part 4 — Job Launch · Scheduling · Operations (upcoming)
 - Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers (upcoming)
 - Part 6 — Observability · Testing · Deployment (upcoming)
