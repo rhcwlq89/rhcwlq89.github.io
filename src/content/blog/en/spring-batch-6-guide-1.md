@@ -25,7 +25,7 @@ The target reader is a backend engineer who has either followed the Spring Boot 
 - [Part 4 — Job Launch · Scheduling · Operations](/blog/en/spring-batch-6-guide-4)
 - [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/blog/en/spring-batch-6-guide-5)
 - [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
-- Capstone — Marketplace Analytics Pipeline (upcoming)
+- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
 
 ---
 

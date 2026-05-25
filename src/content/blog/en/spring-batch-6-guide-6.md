@@ -23,7 +23,7 @@ The target reader is a backend engineer who has built and run jobs through Parts
 - Part 4 — Job Launch · Scheduling · Operations
 - Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers
 - <strong>Part 6 — Observability · Testing · Deployment (this post)</strong>
-- Capstone — Marketplace Analytics Pipeline (upcoming)
+- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
 
 ---
 

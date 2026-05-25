@@ -27,7 +27,7 @@ heroImage: "../../assets/SpringBatch6Guide4.png"
 - <strong>4편 — 잡 실행 · 스케줄링 · 운영 (이 글)</strong>
 - [5편 — 성능 · 병렬화 — 멀티 스레드 · 파티셔닝 · 원격 워커](/blog/spring-batch-6-guide-5)
 - [6편 — 관측성 · 테스트 · 배포](/blog/spring-batch-6-guide-6)
-- 종합 — 마켓플레이스 분석 파이프라인 (예정)
+- [종합 — 마켓플레이스 분석 파이프라인](/blog/spring-batch-6-guide-capstone)
 
 ---
 
