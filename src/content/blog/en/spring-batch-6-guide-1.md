@@ -23,7 +23,7 @@ The target reader is a backend engineer who has either followed the Spring Boot 
 - [Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer](/blog/en/spring-batch-6-guide-2)
 - [Part 3 — Transactions · Failure Handling — Skip · Retry · Restart](/blog/en/spring-batch-6-guide-3)
 - [Part 4 — Job Launch · Scheduling · Operations](/blog/en/spring-batch-6-guide-4)
-- Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers (upcoming)
+- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/blog/en/spring-batch-6-guide-5)
 - Part 6 — Observability · Testing · Deployment (upcoming)
 - Capstone — Marketplace Analytics Pipeline (upcoming)
 
