@@ -22,6 +22,7 @@ The target reader is a team of an operations/support nature whose sprints keep b
 - <strong>Part 3 — Kanban · Lean · Flow (this post)</strong>
 - [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
 - [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
+- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
 
 ---
 

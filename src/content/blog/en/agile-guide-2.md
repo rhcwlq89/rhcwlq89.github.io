@@ -22,6 +22,7 @@ The target reader runs Scrum but struggles to explain why each event exists, or 
 - [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
 - [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
 - [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
+- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
 
 ---
 

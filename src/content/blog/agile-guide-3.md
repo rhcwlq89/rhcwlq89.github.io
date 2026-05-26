@@ -26,6 +26,7 @@ heroImage: "../../assets/AgileGuide3.png"
 - <strong>3편 — Kanban · Lean · 흐름(Flow) (이 글)</strong>
 - [4편 — 실천과 측정 — XP부터 벨로시티 · DORA까지](/blog/agile-guide-4)
 - [5편 — 스케일링과 가짜 애자일](/blog/agile-guide-5)
+- [6편 — 실전: 유저스토리에서 릴리스까지](/blog/agile-guide-6)
 
 ---
 

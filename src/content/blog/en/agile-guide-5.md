@@ -22,6 +22,7 @@ The target reader is an organization that tried to run Agile across many teams a
 - [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
 - [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
 - <strong>Part 5 — Scaling and Fake Agile (this post)</strong>
+- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
 
 ---
 
@@ -151,7 +152,7 @@ The essentials of Part 5, one line each:
 
 And to tie the whole series into one sentence: <strong>Agile is not a toolset to copy (events, frameworks) but a loop of inspecting and adapting.</strong> Part 1's values gave the why, Parts 2–3's process gave the skeleton, Part 4's practices and measurement gave the muscle and the dashboard — and all of it was, in the end, in service of turning this one loop. When the loop turns, it's Agile; when it stops, whatever you call it, it's fake Agile.
 
-In five parts we've gone once around "what Agile is, why it's done that way, and why it breaks." What's left isn't reading — it's looking at whether that loop is turning in your team right now.
+That's one lap around the concepts of "what Agile is, why it's done that way, and why it breaks." The next post, <strong>Part 6 (hands-on)</strong>, walks how these concepts actually run in order from user story to release — through user stories, acceptance criteria (Given/When/Then), MoSCoW, and MVP, watching the inspect-and-adapt loop make one full turn.
 
 ---
 

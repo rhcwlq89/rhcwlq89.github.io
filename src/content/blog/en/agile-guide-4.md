@@ -24,6 +24,7 @@ The target reader is a team that runs Scrum but is increasingly afraid to touch 
 - [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
 - <strong>Part 4 — Practices and Measurement — From XP to Velocity · DORA (this post)</strong>
 - [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
+- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
 
 ---
 
