@@ -228,8 +228,8 @@ Part 2 is <strong>Scrum</strong>. We'll see how the framework that most widely i
 | DoD | Definition of Done — the shared criteria for what counts as "finished" (Part 2) |
 | Timebox | A rule to spend only a fixed amount of time and then stop — applied to sprints/meetings (Part 2) |
 | Velocity | How much work a team completes per iteration — a planning tool, not a productivity KPI (Part 4) |
-| SAFe · LeSS | Large-scale frameworks for scaling Agile across many teams (Part 5) |
-| DORA | Four metrics — deployment frequency, change lead time, mean time to recovery, change failure rate — measuring delivery performance (Part 4) |
+| SAFe (Scaled Agile Framework) · LeSS (Large-Scale Scrum) | Large-scale frameworks for scaling Agile across many teams (Part 5) |
+| DORA (DevOps Research and Assessment) | Four metrics — deployment frequency, change lead time, mean time to recovery, change failure rate — measuring delivery performance (Part 4) |
 
 ### C. External References
 

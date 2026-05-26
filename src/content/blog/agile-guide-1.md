@@ -232,8 +232,8 @@ flowchart LR
 | DoD | 완료 기준(Definition of Done) — 무엇을 갖춰야 "끝났다"고 할지 정한 공통 기준(2편) |
 | 타임박스(timebox) | 정해진 시간만큼만 쓰고 끝내는 규칙 — 스프린트·회의에 적용(2편) |
 | 벨로시티(velocity) | 팀이 한 반복에서 처리하는 작업량 지표 — 계획 도구이지 생산성 KPI가 아니다(4편) |
-| SAFe · LeSS | 여러 팀으로 애자일을 확장하기 위한 대규모 스케일링 프레임워크(5편) |
-| DORA | 배포 빈도·변경 리드타임·평균 복구 시간·변경 실패율 4가지로 전달 성과를 재는 지표(4편) |
+| SAFe(Scaled Agile Framework) · LeSS(Large-Scale Scrum) | 여러 팀으로 애자일을 확장하기 위한 대규모 스케일링 프레임워크(5편) |
+| DORA(DevOps Research and Assessment) | 배포 빈도·변경 리드타임·평균 복구 시간·변경 실패율 4가지로 전달 성과를 재는 지표(4편) |
 
 ### C. 외부 참조
 

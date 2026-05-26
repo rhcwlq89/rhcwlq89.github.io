@@ -33,7 +33,7 @@ The target reader is a team that runs Scrum but is increasingly afraid to touch 
 - <strong>Adopt the process but skip the practices, and it collapses</strong> — run only Scrum events and skip the practices, and technical debt piles up, change slows, and the short iterative loop itself stalls. The #1 cause of fake Agile.
 - <strong>Story points are relative size, not time</strong> — humans are weak at absolute time estimates but better at relative comparison. You estimate together with planning poker.
 - <strong>Velocity is a planning tool, not a KPI</strong> — use it to compare teams or as a productivity target and, by Goodhart's Law, it breaks through point inflation.
-- <strong>To measure, look at DORA</strong> — deployment frequency, change lead time, change failure rate, time to restore. Measure delivery outcomes, not an internal score (velocity). Velocity ≠ value.
+- <strong>To measure, look at DORA (DevOps Research and Assessment)</strong> — deployment frequency, change lead time, change failure rate, time to restore. Measure delivery outcomes, not an internal score (velocity). Velocity ≠ value.
 
 ---
 
@@ -71,7 +71,7 @@ Here are the six most widely used XP practices today.
 | Continuous Integration (CI) | Integrate small changes into the mainline many times a day | Avoids integration hell, fast feedback |
 | Refactoring | Improve internal structure without changing behavior | Keeps code in a state you can keep changing |
 | Pair programming | Two people write one piece of code together | Continuous review, knowledge sharing, no silos |
-| Simple design (YAGNI) | Build only what's needed now | Prevents complexity from piling up (Part 1 principle 10) |
+| Simple design (YAGNI, You Aren't Gonna Need It) | Build only what's needed now | Prevents complexity from piling up (Part 1 principle 10) |
 | Collective code ownership | Anyone can change any code | Removes bottlenecks and silos |
 
 ### 2.1 TDD — Tests Drive the Design
@@ -146,14 +146,14 @@ Once it's a target, the team assigns more points to the same work (point inflati
 
 ### 4.3 DORA — Four Metrics for Delivery Performance
 
-If velocity is an internal score, the <strong>DORA four metrics</strong> measure delivery outcomes. Distilled in the *Accelerate* research, they represent software delivery performance.
+If velocity is an internal score, the <strong>DORA (DevOps Research and Assessment) four metrics</strong> measure delivery outcomes. Distilled in the *Accelerate* research, they represent software delivery performance.
 
 | Metric | What it measures | Axis |
 |---|---|---|
 | Deployment frequency | How often you deploy to production | Speed |
 | Change lead time | Time from commit to running in production | Speed |
 | Change failure rate | Share of deployments that cause a failure | Stability |
-| Time to restore (MTTR) | Time to recover from a failure | Stability |
+| Time to restore (MTTR, Mean Time To Restore) | Time to recover from a failure | Stability |
 
 The first two are speed, the last two stability. The key finding is that <strong>speed and stability don't trade off</strong> — high performers (elite) do well on both. Deploying often and small makes each change small, so failures are fewer and recovery faster. Section 2's CI and trunk-based development are exactly the practices that lift these four metrics.
 
@@ -193,7 +193,7 @@ Part 5 is the destination of the series — <strong>Scaling and Fake Agile</stro
 | Velocity | The sum of story points completed in a sprint — the team's planning tool, not a productivity KPI |
 | Goodhart's Law | The warning that "when a measure becomes a target, it ceases to be a good measure" |
 | #NoEstimates | A movement that doubts the value of detailed estimates and forecasts from throughput instead |
-| DORA four metrics | Deployment frequency, change lead time, change failure rate, time to restore — software delivery performance |
+| DORA (DevOps Research and Assessment) four metrics | Deployment frequency, change lead time, change failure rate, time to restore — software delivery performance |
 | MTTR | Mean Time To Restore — the time to recover from a failure |
 
 ### B. External References
