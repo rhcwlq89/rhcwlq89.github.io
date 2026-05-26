@@ -169,6 +169,8 @@ Almost every misconception about Agile comes from reading only half the manifest
 
 The last two are especially dangerous. The "no discipline" misconception leads teams to skip engineering practices, and mimicking the events without those practices is what we call <strong>cargo cult Agile</strong> — imitation that believes results will follow if you copy the form. Dissecting and recovering from this fake Agile is the destination of the series, covered in depth in Part 5.
 
+> <strong>Note — Cargo cult</strong>: the term comes from Pacific islanders in WWII who, hoping to summon back the cargo that military planes once delivered, mimicked the soldiers' rituals — lighting the runways, building mock control towers out of wood, fashioning headphones from straw. The cargo never came, because they copied the form while missing the real cause (factories, supply chains). It denotes behavior that believes results will follow from rituals alone; physicist Richard Feynman popularized it to criticize "research that has only the form of science."
+
 ---
 
 ## Recap
