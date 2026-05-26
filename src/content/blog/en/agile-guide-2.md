@@ -156,7 +156,21 @@ An artifact is "what you inspect transparently." The 2020 Scrum Guide attached o
 | Sprint Backlog | Items for this sprint + the plan | <strong>Sprint Goal</strong> — the single purpose of this sprint |
 | Increment | A usable result produced this sprint | <strong>Definition of Done</strong> — the shared standard for "finished" |
 
-### 5.1 Why Definition of Done Is the Crux
+### 5.1 What an Increment Is — Not "Added Functionality"
+
+The word "increment" makes it easy to read as "the functionality added this time = the chunk of new code." Only half right. The crux of an Increment is <strong>not quantity (a delta) but state</strong>.
+
+<strong>An Increment is a usable result that is added to everything before it and works as one whole.</strong> Three things must hold at once for it to be an Increment.
+
+- <strong>Additive (cumulative)</strong> — this Increment is added on top of all prior Increments, verified together so they work together. Add a new feature but break an existing one, and it is not an Increment.
+- <strong>In a usable state</strong> — integrated and tested, ready to use (release) right now (it meets the DoD). Whether to actually release is the PO's separate call, but the state itself must be "usable."
+- <strong>A step toward the goal</strong> — an Increment is a stepping stone toward the Product Goal. Not "code grew" but "usable value grew by one step."
+
+So "the feature is fully coded but not integrated or tested" is not an Increment — it is undone work. Multiple Increments can appear in one sprint, and the Sprint Review presents their sum (the usable whole so far).
+
+> <strong>Key</strong>: an Increment is not the amount of new code, but the state of the product that is "usable as a whole right now" once that code is folded in. The standard that guarantees this "state" is the Definition of Done, which we look at next.
+
+### 5.2 Why Definition of Done Is the Crux
 
 <strong>Definition of Done (DoD) is the shared standard a piece of work must meet to be called "done."</strong> It includes not just writing code but testing, review, documentation, deployable state — whatever quality conditions the team has agreed on.
 
@@ -225,7 +239,7 @@ Part 3 is <strong>Kanban and Flow</strong>. If Scrum makes rhythm with fixed-len
 | Accountability | Not a title but "this person/role is accountable for this outcome" |
 | Scrum Team | One team of PO, Scrum Master, and Developers, with no sub-teams |
 | Timebox | A rule to spend only a fixed amount of time and then stop — structurally prevents dragging meetings |
-| Increment | A usable result produced this sprint (only what meets the DoD) |
+| Increment | A usable, whole state added on top of prior work — a state, not a code delta, and only what meets the DoD |
 | Definition of Done | The team-agreed quality standard a piece of work must meet to be called "done" |
 | Product Goal / Sprint Goal | The Product Backlog's long-term goal / this sprint's single purpose |
 | Undone work | Work that didn't meet the DoD but got classified as "done," piling up hidden |
