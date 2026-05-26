@@ -153,6 +153,8 @@ This table is also a map of the whole series. A few highlights:
 
 > <strong>Note</strong>: principle 8's "sustainable pace" means just that — not grinding people through short sprints, but maintaining the same pace over months and years. It directly refutes the misconception that "Agile = just go faster."
 
+> <strong>Note — "maximizing the work not done" (principle 10)</strong>: this means "don't do work that doesn't need doing," not "do less work." Aim for the most un-built features and un-written code — every line of code carries the debt of maintenance, bugs, and complexity. It is the spirit of <strong>YAGNI (You Aren't Gonna Need It — build it when you actually need it)</strong>: don't build for a hypothetical "we might need it later." It leads into XP's simple design in Part 4, and it differs from laziness (cutting corners on needed work) — it reduces the amount of unnecessary work, not the quality.
+
 ---
 
 ## 5. Five Common Misconceptions
