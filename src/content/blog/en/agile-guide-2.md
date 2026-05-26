@@ -69,7 +69,17 @@ flowchart LR
 
 These don't operate alone. <strong>Without transparency, inspection sees a fiction; without inspection, there's no basis to adapt; without adaptation, inspection is just reporting.</strong> Every event below exists to trigger one or more of the three. Nearly every case of Scrum spinning its wheels is diagnosed by which of the three is missing (Section 6).
 
-> <strong>Note — Scrum's five values</strong>: the Scrum Guide names five values that uphold the three pillars — commitment, focus, openness, respect, courage. <strong>Openness</strong> in particular underpins transparency: without the courage to surface problems honestly, transparency stays a slogan.
+The Scrum Guide names <strong>five values</strong> that uphold the three pillars. If the pillars are "what you do," the five values are the "team attitude" that makes them possible.
+
+| Value | Meaning | Link to the three pillars |
+|---|---|---|
+| Commitment | Commit to the goal and to one another | Inspection/adaptation only matter if there's commitment |
+| Focus | Focus on the Sprint Goal and the work at hand | Keeps what you inspect from blurring |
+| Openness | Surface the work and its problems honestly, as they are | The direct premise of transparency |
+| Respect | Respect one another as capable, independent peers | The foundation a self-managing team runs on |
+| Courage | Face hard problems and do the right thing | Needed to surface problems (openness) and change course (adaptation) |
+
+<strong>Openness and courage</strong> in particular underpin transparency — without the courage to surface problems honestly, transparency stays a slogan, and then inspection sees a fiction and adaptation can't happen.
 
 ---
 
