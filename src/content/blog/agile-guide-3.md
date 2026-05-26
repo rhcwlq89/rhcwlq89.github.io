@@ -34,7 +34,7 @@ heroImage: "../../assets/AgileGuide3.png"
 - <strong>Kanban은 흐름 기반이다</strong> — 고정 반복(스프린트) 없이, 일의 흐름을 시각화하고 진행 중 작업(WIP)을 제한해 관리한다. 인입이 불규칙하고 우선순위가 자주 바뀌는 일에 강하다.
 - <strong>뿌리는 Lean(도요타 생산 방식)이다</strong> — 낭비를 없애고, 밀어내기(push)가 아니라 당겨오기(pull)로 일을 흘린다. 빈 자리가 생겨야 다음 일을 당겨온다.
 - <strong>WIP 제한이 핵심 레버다</strong> — Little's Law(리드타임 = WIP ÷ 처리량)에 따라, 처리량이 같아도 WIP를 줄이면 리드타임이 짧아진다. 멀티태스킹 세금이 줄어 처리량 자체도 보통 올라간다.
-- <strong>흐름은 벨로시티가 아니라 흐름 지표로 본다</strong> — 리드타임 · 사이클타임 · 처리량, 그리고 누적흐름도(CFD)로 병목을 읽는다.
+- <strong>흐름은 벨로시티가 아니라 흐름 지표로 본다</strong> — 리드타임 · 사이클타임 · 처리량, 그리고 누적흐름도(CFD, Cumulative Flow Diagram)로 병목을 읽는다.
 - <strong>Scrum과 Kanban은 양자택일이 아니다</strong> — 계획적 기능 개발은 Scrum, 불규칙 인입(운영·지원)은 Kanban, 둘을 섞으면 Scrumban.
 
 ---
@@ -229,7 +229,7 @@ Scrum이 벨로시티(스프린트당 완료량)를 본다면, Kanban은 <strong
 | Little's Law | 안정 상태에서 평균 리드타임 = 평균 WIP ÷ 평균 처리량이 성립한다는 항등식 |
 | 리드타임 / 사이클타임 | 요청·착수부터 완료까지 / 실제 작업 시작부터 완료까지 |
 | 처리량(throughput) | 단위 시간당 완료한 일의 수 |
-| 누적흐름도(CFD) | 시간에 따라 각 단계에 쌓인 일의 수를 누적 영역으로 그린 흐름 분석 그래프 |
+| 누적흐름도(CFD, Cumulative Flow Diagram) | 시간에 따라 각 단계에 쌓인 일의 수를 누적 영역으로 그린 흐름 분석 그래프 |
 | Scrumban | Scrum의 역할·이벤트에 Kanban의 흐름·WIP 제한을 섞은 하이브리드 |
 
 ### B. 외부 참조
