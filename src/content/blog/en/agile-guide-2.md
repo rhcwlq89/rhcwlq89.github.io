@@ -144,6 +144,10 @@ The essence of each, one line at a time:
 - <strong>Sprint Review</strong> — a <strong>working session</strong> where you examine the Increment with stakeholders and adjust the Product Backlog. Not an approval presentation or a demo show.
 - <strong>Retrospective</strong> — reflect on the way of working (people, relationships, process, tools, DoD) and decide improvements. It is the seat of Part 1's principle 12 (reflect regularly and adjust), and Agile's learning engine.
 
+> <strong>Note — what the daily's "three questions" were</strong>: through the 2017 guide, Scrum recommended a daily format where each person answered three questions — ① what I did yesterday, ② what I'll do today, ③ any blockers. But it ossified into a ritual that turned the daily into a status report to a manager. So the 2020 revision deleted the three questions and kept only the purpose (inspect and adapt against the Sprint Goal) — you may still use them, but they are no longer mandatory.
+
+> <strong>Note — why the Sprint Review isn't a "presentation"</strong>: a common misconception treats the review as a demo show where the team shows what it built and stakeholders approve it. That makes it one-directional (team → stakeholders) and turns inspection into a spectacle. A real review is a <strong>two-way working session</strong>. Together you look at the already-Done (usable) Increment, factor in market and context changes, discuss "what's most valuable next," and revise the Product Backlog right there. So the Increment isn't "approved" at the review — it's already Done, so no stamp is needed, and the review's output is an adjusted Product Backlog. In short, review = inspecting the Increment + adapting the Product Backlog; ossify it into a presentation and you get a decay signal with adaptation missing (Section 6.2).
+
 ---
 
 ## 5. The Three Artifacts and Their Commitments
