@@ -31,7 +31,8 @@ The target reader is someone who has the concepts but is stuck on "so what does 
 - <strong>Every flow starts from a user story</strong> — "As a…, I want…, so that…" in one line. Not a spec but a promise to talk, with INVEST criteria and acceptance criteria attached.
 - <strong>Acceptance criteria are written as Given/When/Then and carry straight into QA</strong> — they are both the Definition of Done and the seed of the acceptance test (ATDD/BDD). That's what "validate via user stories in QA" means.
 - <strong>Prioritize with MoSCoW, size with story points, scope with MVP</strong> — not building everything and shipping at once, but releasing the most valuable minimum first.
-- <strong>Make it concrete via screens, data, and APIs — but fix the spec first</strong> — lo-fi wireframes for screens, an agreed API spec so web and app build in parallel. Event storming only when it pays off.
+- <strong>Fix the spec (screens, data, APIs) first and build in parallel — but parallel isn't siloed</strong> — the API contract, acceptance criteria, and living policy doc bind backend and frontend together. "Throw the spec over the wall and go quiet" is waterfall.
+- <strong>Policy and the data model aren't nailed down all at once</strong> — seeded while writing stories and acceptance criteria, then updated as a living document throughout dev and QA. Fixed, but not frozen.
 - <strong>This whole flow is Parts 1–5 in practice</strong> — story → acceptance criteria → priority → spec → dev → QA → release is, in the end, one lap of Part 5's inspect-and-adapt learning loop.
 
 ---
@@ -133,9 +134,11 @@ First sketch the key screens roughly as <strong>low-fidelity wireframes</strong>
 
 ### 4.2 Spec First — Data and API Specs
 
-Once the screens are set, <strong>fix the entities/fields and agree the API spec first</strong>. Nail down the API contract first and web, app, and server can work <strong>in parallel</strong>. From Part 3's flow perspective, this reduces dependencies and removes bottlenecks — so people don't wait on each other.
+Once the screens are set, <strong>fix the entities/fields and agree the API spec first</strong>. The data model doesn't appear out of nowhere at this step — the user stories and domain concepts already hint at "what entities exist," and for a complex domain Section 4.3's event storming feeds the model. This step is where you <strong>fix that accumulated understanding just enough to start</strong>.
 
-Load the data in a <strong>form that's easy to migrate</strong> from the start. Assuming the schema will change (admitting uncertainty, Part 1), pick a structure that's easy to reverse.
+Nail down the API contract first and web, app, and server can work <strong>in parallel</strong> — from Part 3's flow perspective, reducing dependencies and removing bottlenecks. But don't mistake "parallel" for "everyone goes quiet on their own"; that distinction is covered separately in Section 5.
+
+Load the data in a <strong>form that's easy to migrate</strong> from the start. Assuming the schema will change (admitting uncertainty, Part 1), pick a structure that's easy to reverse — the data model is fixed, not frozen.
 
 ### 4.3 Event Storming — Decide Whether to Use It
 
@@ -145,7 +148,44 @@ But not every project needs it. For a simple domain it's overhead. Treat it as <
 
 ---
 
-## 5. One Lap of Delivery — and the Map to Parts 1–5
+## 5. Policy and Collaboration — When to Decide, and How to Go Parallel
+
+Following the steps so far raises two natural questions. "When do we decide policy?" and "Once the spec is handed off, do backend and frontend just go on their own?" These are the two spots that most often go wrong in practice.
+
+### 5.1 Policy Isn't Decided All at Once
+
+Open policies (expiry times, duplicate handling, permission rules) usually surface first <strong>while writing stories and acceptance criteria</strong> — the moment an acceptance criterion stalls on "what happens in this case?" Deciding it, writing it into the <strong>living policy doc</strong>, and reflecting it into the acceptance criteria is the start.
+
+But policy doesn't end there. New gaps keep surfacing during development and QA — edge cases invisible at first show only once you write the code (admitting uncertainty, Part 1). So the policy doc isn't a spec written once and frozen, but a <strong>living document where decisions keep accumulating</strong> throughout. When a new policy is decided, reflect it into the doc immediately and fix the affected acceptance criteria, code, and tests together.
+
+The data model is the same (Section 4.2). It takes shape from user stories and domain concepts and gets fixed at the spec step, but is kept in a migration-easy form — <strong>fixed, but not frozen.</strong>
+
+> <strong>Key</strong>: treating policy and the data model as "must be fully nailed down up front" is waterfall. Plant the seed while writing stories and acceptance criteria, and keep growing it through release.
+
+### 5.2 After the Spec, Parallel Isn't Siloed
+
+Once the API spec is agreed, backend, frontend (and app) run in parallel. The common misconception here is "the spec's handed off, so it's everyone on their own now." That's not parallel but <strong>siloed</strong>, and the moment you integrate, integration hell (Part 4) breaks out.
+
+What separates parallel from siloed is <strong>three shared anchors</strong>.
+
+| Siloed (waterfall / fake Agile) | Parallel (Agile) |
+|---|---|
+| Nail the whole spec, "throw it over," and go quiet | Agree just enough to start, then go parallel |
+| First meeting is at integration → integration hell | Keep aligning via the API contract + acceptance criteria |
+| Find out about a policy change much later | The living policy doc reflects to both sides at once |
+| Spec is frozen; deviating is wrong | Renegotiate the spec when reality diverges |
+
+The three shared anchors:
+
+- <strong>API contract</strong> — the coordinate that keeps people from waiting on each other (Part 3's flow, reducing dependencies).
+- <strong>Acceptance criteria (Given/When/Then)</strong> — backend and frontend aim at the same "definition of done," and QA validates against the same bar (Section 2).
+- <strong>Living policy doc + the daily</strong> — sync changed decisions to both sides immediately.
+
+The crux is the same as Part 5's scaling lesson. <strong>Not piling on more coordination, but reducing the need to coordinate — via the contract, acceptance criteria, and policy doc — so each team can move independently and fast.</strong> So it looks like "everyone on their own," but in fact the shared anchors stand in for coordination. Throw the spec over the wall and have everyone go quiet, and that's not parallel — it's waterfall, and fake Agile.
+
+---
+
+## 6. One Lap of Delivery — and the Map to Parts 1–5
 
 Now connect the whole into one flow.
 
@@ -188,7 +228,8 @@ The essentials of Part 6, one line each:
 - <strong>The user story is the starting point</strong> — not a spec but a promise to talk (As a/I want/so that), checked with INVEST and given acceptance criteria.
 - <strong>Acceptance criteria (Given/When/Then) are the DoD and the seed of QA</strong> — they become acceptance tests as-is (ATDD/BDD); that's what "validate via user stories in QA" means.
 - <strong>Cut scope with MoSCoW, story points, and MVP</strong> — especially, making "Won't (this time)" explicit is simplicity in action.
-- <strong>Fix the spec first and build in parallel</strong> — wireframes for screens, API spec to reduce dependencies, event storming only when it pays off.
+- <strong>Fix the spec first and build in parallel — but parallel isn't siloed</strong> — the API contract, acceptance criteria, and living policy doc bind backend and frontend. Throw it over the wall and go quiet, and that's waterfall.
+- <strong>Policy and the data model aren't nailed down all at once</strong> — seeded while writing stories and acceptance criteria, updated as a living doc through release (fixed, not frozen).
 - <strong>All of it is one lap of the inspect-and-adapt loop</strong> — the practical flow is just Parts 1–5's concepts working in order.
 
 This closes the <strong>Practical Guide to Agile</strong> series. Starting from Part 1's values, through Parts 2–3's process, Part 4's practices and measurement, and Part 5's scaling and fake Agile, Part 6 showed all of it making one lap from user story to release. One thing remains — look at whether that loop is turning in your team right now, and if it isn't, revive even one step.
