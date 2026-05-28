@@ -29,9 +29,9 @@ The target reader is someone who has the concepts but is stuck on "so what does 
 
 ## TL;DR
 
-- <strong>Every flow starts from a user story</strong> — "As a…, I want…, so that…" in one line. Not a spec but a promise to talk, with INVEST criteria and acceptance criteria attached.
-- <strong>Acceptance criteria are written as Given/When/Then and carry straight into QA</strong> — they are both the Definition of Done and the seed of the acceptance test (ATDD/BDD). That's what "validate via user stories in QA" means.
-- <strong>Prioritize with MoSCoW, size with story points, scope with MVP</strong> — not building everything and shipping at once, but releasing the most valuable minimum first.
+- <strong>Every flow starts from a user story</strong> — "As a…, I want…, so that…" in one line. Not a spec but a promise to talk, with the criteria a good user story should meet and acceptance criteria attached.
+- <strong>Acceptance criteria are written as Given/When/Then and carry straight into QA</strong> — they are both the Definition of Done and the seed of the acceptance test (acceptance test-driven development/behavior-driven development). That's what "validate via user stories in QA" means.
+- <strong>Prioritize with a must/should/could/won't scheme, size with story points, scope with a minimum viable product</strong> — not building everything and shipping at once, but releasing the most valuable minimum first.
 - <strong>Fix the spec (screens, data, APIs) first and build in parallel — but parallel isn't siloed</strong> — the API contract, acceptance criteria, and living policy doc bind backend and frontend together. "Throw the spec over the wall and go quiet" is waterfall.
 - <strong>Policy and the data model aren't nailed down all at once</strong> — seeded while writing stories and acceptance criteria, then updated as a living document throughout dev and QA. Fixed, but not frozen.
 - <strong>This whole flow is Parts 1–5 in practice</strong> — story → acceptance criteria → priority → spec → dev → QA → release is, in the end, one lap of Part 5's inspect-and-adapt learning loop.

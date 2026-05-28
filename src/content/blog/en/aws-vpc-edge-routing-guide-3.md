@@ -26,11 +26,11 @@ Same target reader as before — backend or infrastructure engineers who've buil
 
 ## TL;DR
 
-- <strong>The Public/Private subnet distinction isn't physical isolation</strong> — it's just whether the Route Table has a `0.0.0.0/0 → IGW` route. One line in the same VPC.
-- <strong>There are three exit paths from a VPC</strong>: IGW (Public, bidirectional), NAT GW (Private IPv4 outbound), Egress-only IGW (Private IPv6 outbound).
-- <strong>Route Tables use longest-prefix match</strong> — the more specific CIDR wins. The local route (VPC CIDR) is always present and immutable.
-- <strong>SG is stateful (instance-level, allow-only); NACL is stateless (subnet-level, allow + deny)</strong>. Forgetting NACL's ephemeral port range blocks the response and is the most common debugging trap.
-- <strong>NAT Gateway should be created per AZ</strong>. A single-AZ NAT GW means losing internet access for Private instances in other AZs when that AZ fails.
+- <strong>The Public/Private subnet distinction isn't physical isolation</strong> — it's just whether the Route Table has a `0.0.0.0/0 → internet gateway` route. One line in the same VPC.
+- <strong>There are three exit paths from a VPC</strong>: internet gateway (Public, bidirectional), NAT Gateway (Private IPv4 outbound), Egress-only internet gateway (Private IPv6 outbound).
+- <strong>Route Tables use longest-prefix match</strong> — the more specific IP address range wins. The local route (VPC IP range) is always present and immutable.
+- <strong>Security group is stateful (instance-level, allow-only); network ACL is stateless (subnet-level, allow + deny)</strong>. Forgetting the network ACL's ephemeral port range blocks the response and is the most common debugging trap.
+- <strong>NAT Gateway should be created per Availability Zone</strong>. A single-zone NAT Gateway means losing internet access for Private instances in other Availability Zones when that zone fails.
 
 ---
 

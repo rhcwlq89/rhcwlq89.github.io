@@ -29,10 +29,10 @@ The target reader is a practitioner who adopted Agile but isn't sure why, someon
 
 ## TL;DR
 
-- <strong>Agile is a value system, not a methodology</strong> — Scrum, Kanban, and XP are different ways to implement those values. The manifesto is not a procedure ("do this") but a value statement ("value this more").
+- <strong>Agile is a value system, not a methodology</strong> — Scrum, Kanban, and Extreme Programming are different ways to implement those values. The manifesto is not a procedure ("do this") but a value statement ("value this more").
 - <strong>It emerged as a reaction to waterfall's limits</strong> — feedback arrived only at the very end (late feedback), and the cost of change spiked the further you went. Agile answers this with short iterative loops.
 - <strong>The four values = prefer the left over the right</strong> — "individuals over processes/tools," "working software over documentation," "collaboration over contract negotiation," "responding to change over following a plan." The right side still has value; the left is valued more.
-- <strong>The twelve principles are the values translated into practice</strong> — deliver early and often, welcome change, sustainable pace, self-organizing teams, regular retrospectives. Everything in later parts (Scrum, XP, measurement) derives from these twelve lines.
+- <strong>The twelve principles are the values translated into practice</strong> — deliver early and often, welcome change, sustainable pace, self-organizing teams, regular retrospectives. Everything in later parts (Scrum, Extreme Programming, measurement) derives from these twelve lines.
 - <strong>The five common misconceptions are all wrong</strong> — "no docs / no planning / just go faster / no process / startups only" are the result of reading only half the manifesto.
 
 ---

@@ -31,10 +31,10 @@ heroImage: "../../assets/AwsPrivateEc2Guide2.png"
 
 ## TL;DR
 
-- <strong>설계 확정</strong>: `VPC 10.0.0.0/16` + `/24` 서브넷 4개(Public 2 + Private 2), 2AZ(`ap-northeast-2a`, `2c`), NAT Gateway AZ별 1개.
-- <strong>핵심 패턴</strong>: SG가 <strong>IP가 아니라 다른 SG를 참조</strong>한다. `alb-sg` → `ec2-sg` → `db-sg`로 체인이 이어져야 실무 SG 설계다.
-- <strong>Route Table은 AZ별로 분리</strong>해야 한다. 한 AZ의 NAT Gateway가 죽었을 때 다른 AZ 트래픽까지 말려드는 걸 막기 위해서다.
-- <strong>NACL은 기본값 그대로 둔다</strong>. SG는 stateful(돌아오는 트래픽 자동 허용), NACL은 stateless라 실무 99%는 SG만으로 충분하다.
+- <strong>설계 확정</strong>: `VPC 10.0.0.0/16` + `/24` 서브넷 4개(Public 2 + Private 2), 가용 영역 2개(`ap-northeast-2a`, `2c`), NAT Gateway 가용 영역별 1개.
+- <strong>핵심 패턴</strong>: 보안 그룹이 <strong>IP가 아니라 다른 보안 그룹을 참조</strong>한다. `alb-sg` → `ec2-sg` → `db-sg`로 체인이 이어져야 실무 보안 그룹 설계다.
+- <strong>Route Table은 가용 영역별로 분리</strong>해야 한다. 한 가용 영역의 NAT Gateway가 죽었을 때 다른 가용 영역 트래픽까지 말려드는 걸 막기 위해서다.
+- <strong>네트워크 ACL은 기본값 그대로 둔다</strong>. 보안 그룹은 stateful(돌아오는 트래픽 자동 허용), 네트워크 ACL은 stateless라 실무 99%는 보안 그룹만으로 충분하다.
 - <strong>단일 `main.tf`로 시작한다</strong>. 공식 `terraform-aws-modules/vpc/aws`는 학습 단계에서는 추상화가 과해서 오히려 방해 — 프로덕션으로 가면서 모듈화한다.
 
 ---

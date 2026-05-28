@@ -39,7 +39,7 @@ heroImage: "../../assets/SpringBootPreInterviewGuide7.png"
 - <strong>비동기 처리</strong> — `@Async`는 같은 클래스 내 self-invocation에서 동기로 실행되므로 반드시 별도 Bean에서 호출하고, `AsyncUncaughtExceptionHandler`를 반드시 설정한다.
 - <strong>파일 처리</strong> — 확장자·MIME·크기 검증 후 UUID 기반 파일명으로 저장하고, `normalize()`로 경로 traversal을 방어한다.
 - <strong>API 버저닝</strong> — URI 방식(`/api/v1/...`)이 가장 명확하고 캐싱·테스트·문서화 모두 친화적이다.
-- <strong>멀티 모듈</strong> — Option A(DIP)·Option B(간소화) 중 하나로 일관되게 적용하고, domain → infra 의존은 어떤 옵션을 선택해도 금지다.
+- <strong>멀티 모듈</strong> — Option A(의존 역전 원칙)·Option B(간소화) 중 하나로 일관되게 적용하고, domain → infra 의존은 어떤 옵션을 선택해도 금지다.
 
 ---
 

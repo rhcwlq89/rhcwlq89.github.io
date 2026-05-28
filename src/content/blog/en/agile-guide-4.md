@@ -31,11 +31,11 @@ The target reader is a team that runs Scrum but is increasingly afraid to touch 
 
 ## TL;DR
 
-- <strong>XP is the technical heart of Agile</strong> — engineering practices like TDD, CI, refactoring, and pairing keep code "in a state you can keep changing safely." It's the implementation of Part 1's principle 9 (technical excellence enhances agility).
+- <strong>Extreme Programming is the technical heart of Agile</strong> — engineering practices like TDD, CI, refactoring, and pairing keep code "in a state you can keep changing safely." It's the implementation of Part 1's principle 9 (technical excellence enhances agility).
 - <strong>Adopt the process but skip the practices, and it collapses</strong> — run only Scrum events and skip the practices, and technical debt piles up, change slows, and the short iterative loop itself stalls. The #1 cause of fake Agile.
 - <strong>Story points are relative size, not time</strong> — humans are weak at absolute time estimates but better at relative comparison. You estimate together with planning poker.
-- <strong>Velocity is a planning tool, not a KPI</strong> — use it to compare teams or as a productivity target and, by Goodhart's Law, it breaks through point inflation.
-- <strong>To measure, look at DORA (DevOps Research and Assessment)</strong> — deployment frequency, change lead time, change failure rate, time to restore. Measure delivery outcomes, not an internal score (velocity). Velocity ≠ value.
+- <strong>Velocity is a planning tool, not a performance target</strong> — use it to compare teams or as a productivity target and, by Goodhart's Law, it breaks through point inflation.
+- <strong>To measure, look at DevOps delivery-performance metrics (deploy frequency, change-fail rate, recovery time)</strong> — deployment frequency, change lead time, change failure rate, time to restore. Measure delivery outcomes, not an internal score (velocity). Velocity ≠ value.
 
 ---
 

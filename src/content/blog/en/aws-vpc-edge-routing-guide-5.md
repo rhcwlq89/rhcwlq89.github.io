@@ -30,7 +30,7 @@ Same target reader as the rest of the series — backend or infrastructure engin
 
 - <strong>Decision trees give you candidates, not a starting point, an ordering, or interdependencies</strong>. Running five trees concurrently against a blank canvas is inefficient — real practice is starting from a standard pattern and deforming.
 - <strong>90% of real workloads converge on four standard patterns</strong> — A) Serverless API, B) Container Web, C) Global Latency-sensitive, D) Hybrid Enterprise. Each pattern fills in Parts 0–4's decision-tree branches with a known default.
-- <strong>Pattern selection is a three-layer composition</strong> — Well-Architected's five pillars (operational excellence, security, reliability, performance, cost) + business constraints (budget, regulation, SLO, existing assets) + team capability (familiar tools, operations bandwidth). All three together pick the pattern.
+- <strong>Pattern selection is a three-layer composition</strong> — Well-Architected's five pillars (operational excellence, security, reliability, performance, cost) + business constraints (budget, regulation, service-level objective, existing assets) + team capability (familiar tools, operations bandwidth). All three together pick the pattern.
 - <strong>Five signals tell you when to actually deviate from the standard</strong>. They distinguish a real exception from "we're special, ignore the patterns" rationalization.
 - <strong>Decision trees aren't the starting tool — they're the deviation tool</strong>. Pattern = starting point, tree = deformation tool. The series only fully composes when you hold both.
 

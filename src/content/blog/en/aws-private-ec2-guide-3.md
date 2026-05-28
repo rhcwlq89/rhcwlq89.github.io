@@ -25,9 +25,9 @@ This post targets <strong>juniors who have run a Bastion once or twice and gotte
 
 ## TL;DR
 
-- <strong>SSM is a reverse tunnel.</strong> The SSM Agent on EC2 polls the AWS API <strong>outbound on 443</strong> — that's the actual reason no inbound port 22 is required.
-- <strong>You need three things</strong>: ① the SSM Agent (preinstalled on AL2023) ② an `AmazonSSMManagedInstanceCore` IAM Role (already attached in Part 2) ③ a network path to the SSM endpoints (NAT or VPC Endpoint).
-- <strong>Two network options</strong>: NAT Gateway (free if you already have one) vs three Interface VPC Endpoints (`ssm`, `ssmmessages`, `ec2messages`). Reuse NAT if it exists; switch to Endpoints when you want EC2 truly off the internet.
+- <strong>AWS Systems Manager is a reverse tunnel.</strong> The Systems Manager Agent on EC2 polls the AWS API <strong>outbound on 443</strong> — that's the actual reason no inbound port 22 is required.
+- <strong>You need three things</strong>: ① the Systems Manager Agent (preinstalled on AL2023) ② an `AmazonSSMManagedInstanceCore` IAM Role (already attached in Part 2) ③ a network path to the Systems Manager endpoints (NAT Gateway, or a VPC Endpoint).
+- <strong>Two network options</strong>: the NAT Gateway (free if you already have one) vs three Interface VPC Endpoints (`ssm`, `ssmmessages`, `ec2messages`). Reuse the NAT Gateway if it exists; switch to Endpoints when you want EC2 truly off the internet.
 - <strong>Two flavors of Port Forwarding</strong>: to the instance's own port (`AWS-StartPortForwardingSession`), or beyond it to a remote host (`AWS-StartPortForwardingSessionToRemoteHost`). The latter is the de facto standard for reaching RDS / ElastiCache.
 - <strong>What you gain over Bastion</strong>: SSH keys, port 22, the jump-host EC2 itself, and the key-rotation drudgery all disappear at once — and every session is automatically audited per IAM user.
 

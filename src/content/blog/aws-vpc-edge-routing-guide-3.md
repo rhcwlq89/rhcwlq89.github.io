@@ -33,11 +33,11 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide3.png"
 
 ## TL;DR
 
-- <strong>Public/Private subnet의 차이는 물리적 격리가 아니라 Route Table에 IGW 경로(0.0.0.0/0 → IGW)가 있느냐 없느냐</strong>다. 같은 VPC 안에서 한 줄 차이로 갈린다.
-- <strong>패킷이 VPC를 나가는 길은 셋</strong>: IGW(Public 양방향), NAT GW(Private의 IPv4 outbound 전용), Egress-only IGW(Private의 IPv6 outbound 전용).
-- <strong>Route Table은 longest-prefix match</strong>로 평가된다 — 더 구체적인 CIDR이 이긴다. local 경로(VPC CIDR)는 항상 존재하고 변경 불가.
-- <strong>SG는 stateful(인스턴스 단위, allow-only), NACL은 stateless(서브넷 단위, allow+deny)</strong>. NACL은 응답까지 명시적으로 허용해야 하므로 ephemeral port range를 깜빡하면 outbound가 막힌다.
-- <strong>NAT Gateway는 AZ 단위로 만들어야 한다</strong>. AZ 하나에만 NAT GW를 두면 그 AZ가 죽을 때 다른 AZ의 Private 인스턴스도 인터넷이 끊긴다.
+- <strong>Public/Private subnet의 차이는 물리적 격리가 아니라 Route Table에 인터넷 게이트웨이 경로(0.0.0.0/0 → 인터넷 게이트웨이)가 있느냐 없느냐</strong>다. 같은 VPC 안에서 한 줄 차이로 갈린다.
+- <strong>패킷이 VPC를 나가는 길은 셋</strong>: 인터넷 게이트웨이(Public 양방향), NAT Gateway(Private의 IPv4 outbound 전용), Egress-only 인터넷 게이트웨이(Private의 IPv6 outbound 전용).
+- <strong>Route Table은 longest-prefix match</strong>로 평가된다 — 더 구체적인 IP 대역(주소 범위)이 이긴다. local 경로(VPC IP 대역)는 항상 존재하고 변경 불가.
+- <strong>보안 그룹은 stateful(인스턴스 단위, allow-only), 네트워크 ACL은 stateless(서브넷 단위, allow+deny)</strong>. 네트워크 ACL은 응답까지 명시적으로 허용해야 하므로 ephemeral port range를 깜빡하면 outbound가 막힌다.
+- <strong>NAT Gateway는 가용 영역 단위로 만들어야 한다</strong>. 가용 영역 하나에만 NAT Gateway를 두면 그 가용 영역이 죽을 때 다른 가용 영역의 Private 인스턴스도 인터넷이 끊긴다.
 
 ---
 

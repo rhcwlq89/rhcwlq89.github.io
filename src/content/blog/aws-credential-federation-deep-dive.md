@@ -32,11 +32,11 @@ heroImage: "../../assets/AwsCredentialFederation.png"
 
 ## TL;DR
 
-- <strong>AWS의 모든 자격증명 흐름은 결국 STS로 수렴한다.</strong> STS = Security Token Service, 임시 자격증명을 발급하는 무상태 API. EC2 Role, OIDC, SAML, IAM Identity Center 모두 STS 호출이 끝에 있다.
+- <strong>AWS의 모든 자격증명 흐름은 결국 임시 자격증명 발급 서비스로 수렴한다.</strong> 임시 자격증명을 발급하는 무상태 API 하나가 중심에 있고, EC2 Role, OpenID Connect, 엔터프라이즈 SSO 페더레이션 프로토콜, IAM Identity Center 모두 이 API 호출이 끝에 있다.
 - <strong>장기 키(`AKIA…`) → 임시 키(`ASIA…`) + SessionToken</strong>으로 옮기는 게 자격증명 보안의 큰 방향이다. 임시 키는 시간이 지나면 알아서 죽고, 폭발 반경이 자연 감소한다.
-- <strong>"페더레이션"은 외부 신원의 검증 결과를 AWS가 신뢰해서 임시 자격증명을 내주는 모델</strong>이다. OIDC, SAML, Cognito가 모두 이 패턴의 변종이다.
-- <strong>STS 자체는 설정할 게 없다.</strong> 콘솔에 단독 페이지가 없는 게 정상. 우리가 "STS 설정"이라 부르는 작업은 모두 <strong>IAM 안의 Identity Provider, Role, 신뢰 정책</strong>이다.
-- <strong>신뢰 정책의 `sub` 조건은 페더레이션의 자물쇠다.</strong> 누락하면 같은 Provider를 신뢰하는 모든 외부 신원이 Role을 가져갈 수 있다 — OIDC 사고의 1번 원인이다.
+- <strong>"페더레이션"은 외부 신원의 검증 결과를 AWS가 신뢰해서 임시 자격증명을 내주는 모델</strong>이다. OpenID Connect, 엔터프라이즈 SSO 프로토콜, Cognito가 모두 이 패턴의 변종이다.
+- <strong>임시 자격증명 서비스 자체는 설정할 게 없다.</strong> 콘솔에 단독 페이지가 없는 게 정상. 우리가 "설정"이라 부르는 작업은 모두 <strong>IAM 안의 Identity Provider, Role, 신뢰 정책</strong>이다.
+- <strong>신뢰 정책의 `sub` 조건은 페더레이션의 자물쇠다.</strong> 누락하면 같은 Provider를 신뢰하는 모든 외부 신원이 Role을 가져갈 수 있다 — OpenID Connect 연동 사고의 1번 원인이다.
 
 ---
 

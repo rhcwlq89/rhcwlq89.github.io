@@ -25,10 +25,10 @@ This post targets a <strong>junior who's done `hello_world` in Terraform but has
 
 ## TL;DR
 
-- <strong>Design locked</strong>: `VPC 10.0.0.0/16` + 4 `/24` subnets (2 Public + 2 Private), 2 AZs (`ap-northeast-2a`, `2c`), 1 NAT Gateway per AZ.
-- <strong>Key pattern</strong>: SGs reference <strong>other SGs, not IP CIDRs</strong>. Chain it — `alb-sg` → `ec2-sg` → `db-sg` — and you have real-world SG design.
-- <strong>Private Route Tables must be split per AZ.</strong> A single shared Private RT breaks AZ failure isolation because NAT Gateway is an AZ-scoped resource.
-- <strong>Leave NACL at its defaults.</strong> SG is stateful (return traffic auto-allowed), NACL is stateless — for 99% of workloads, SG-only is the right call.
+- <strong>Design locked</strong>: `VPC 10.0.0.0/16` + 4 `/24` subnets (2 Public + 2 Private), 2 Availability Zones (`ap-northeast-2a`, `2c`), 1 NAT Gateway per Availability Zone.
+- <strong>Key pattern</strong>: security groups reference <strong>other security groups, not IP address ranges</strong>. Chain it — `alb-sg` → `ec2-sg` → `db-sg` — and you have real-world security group design.
+- <strong>Private Route Tables must be split per Availability Zone.</strong> A single shared Private route table breaks Availability Zone failure isolation because the NAT Gateway is an Availability Zone-scoped resource.
+- <strong>Leave network ACL at its defaults.</strong> Security group is stateful (return traffic auto-allowed), network ACL is stateless — for 99% of workloads, security-group-only is the right call.
 - <strong>Start with a single `main.tf`.</strong> The community module `terraform-aws-modules/vpc/aws` is great in production but hides too much for learning — reach for modules after you've typed every resource at least once.
 
 ---

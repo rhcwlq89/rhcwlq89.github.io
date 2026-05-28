@@ -39,7 +39,7 @@ heroImage: "../../assets/SpringBootPreInterviewAssignment.png"
 
 - <strong>7일 안의 마켓플레이스 REST API</strong> — 회원(BUYER·SELLER·ADMIN), 상품 CRUD, 주문 생성/취소, 이미지 업로드, 검색·페이징·캐싱·이벤트 알림까지 한 번에. 1~7편의 모든 영역이 한 프로젝트에 들어간다.
 - <strong>기술 스택은 Spring Boot 4 + Kotlin 2.3 기준</strong> — Java 21 권장, JPA/Hibernate, Gradle, H2(로컬) + MySQL 8(Docker), QueryDSL·Redis는 선택. Lombok은 쓰지 않는다.
-- <strong>구조 선택이 1차 평가 포인트</strong> — 싱글 모듈(권장)과 멀티 모듈(Option A 정석 DIP / Option B 간소화) 중 하나를 골라 일관되게 적용. README에 선택 이유를 명시하지 않으면 그 자체로 감점.
+- <strong>구조 선택이 1차 평가 포인트</strong> — 싱글 모듈(권장)과 멀티 모듈(Option A 정석 의존 역전 원칙 / Option B 간소화) 중 하나를 골라 일관되게 적용. README에 선택 이유를 명시하지 않으면 그 자체로 감점.
 - <strong>기본 70점 + 가산 35점</strong> — 기본은 기능·코드 품질·설계·테스트. 가산은 Docker·Swagger·CI·캐싱·이벤트·QueryDSL·멀티 모듈. 빌드 실패 -20, README 부실 -10, 비밀번호 평문 저장 -10 같은 감점이 더 무겁다.
 - <strong>제출 전 5가지 체크</strong> — `./gradlew build` 통과, `docker-compose up` 작동, Swagger 접근 가능, 시크릿/`.idea` 미포함, README 완성. 이 다섯이 못 박혀 있어야 평가자가 본 코드를 보기 시작한다.
 

@@ -27,11 +27,11 @@ This post targets <strong>juniors who have run GitHub Actions but get stuck on A
 
 ## TL;DR
 
-- <strong>OIDC federation is the de facto standard.</strong> GitHub Actions mints a fresh OIDC token per run, hands it to AWS, and AWS returns short-lived STS credentials — no AWS keys live in GitHub Secrets.
+- <strong>OpenID Connect federation is the de facto standard.</strong> GitHub Actions mints a fresh OpenID Connect token per run, hands it to AWS, and AWS returns short-lived temporary credentials — no AWS keys live in GitHub Secrets.
 - <strong>S3 is the artifact hub.</strong> GitHub Actions uploads jars/zips to S3; EC2 pulls them with an IAM Role. SSH and scp never appear.
-- <strong>SSM Run Command is the right answer for simple deploys.</strong> `aws ssm send-command` pushes a shell script to the instance — the agent picks it up over the existing poll channel, so inbound ports remain at zero.
+- <strong>Systems Manager Run Command is the right answer for simple deploys.</strong> `aws ssm send-command` pushes a shell script to the instance — the agent picks it up over the existing poll channel, so inbound ports remain at zero.
 - <strong>CodeDeploy is the right answer when you need zero-downtime, rollback, or hooks.</strong> Define stages (Stop → Install → Start → Validate) in `appspec.yml` and roll out In-Place or Blue/Green.
-- <strong>One-line decision rule</strong>: a single jar on 1–2 boxes? SSM. ALB drain, health-checked rollback, no user-visible 503s? CodeDeploy.
+- <strong>One-line decision rule</strong>: a single jar on 1–2 boxes? Systems Manager. ALB drain, health-checked rollback, no user-visible 503s? CodeDeploy.
 
 ---
 

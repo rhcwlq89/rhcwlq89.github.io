@@ -34,12 +34,12 @@ heroImage: "../../assets/SpringBatch6Guide4.png"
 ## TL;DR
 
 - <strong>JobLauncher는 코드가 잡을 실행하는 입구, JobOperator는 운영자의 리모컨</strong> — `@Scheduled`가 호출하는 건 `JobLauncher`, 실패 실행을 ID로 재시작·중단하는 건 `JobOperator`.
-- <strong>스케줄러는 4종에서 고른다</strong> — `@Scheduled`(단순·단일 인스턴스), Quartz(앱 내 HA), K8s CronJob(컨테이너), Argo·Airflow(잡 간 의존성 DAG).
+- <strong>스케줄러는 4종에서 고른다</strong> — `@Scheduled`(단순·단일 인스턴스), Quartz(앱 내 고가용성), K8s CronJob(컨테이너), Argo·Airflow(잡 간 의존성 방향성 비순환 그래프).
 - <strong>JobParameters 설계 = 멱등 키냐, 매번 새 인스턴스냐</strong> — 비즈니스 날짜(`targetDate`)를 식별 키로 두면 "하루 1회·재시작 가능", `RunIdIncrementer`를 붙이면 실행마다 새 JobInstance(쓰기 멱등은 따로 필요).
 - <strong>재시작은 같은 식별 파라미터 또는 JobOperator.restart</strong> — `preventRestart` · `startLimit` · `allowStartIfComplete`로 재시작 동작을 제어하고, `ExitStatus`로 흐름을 분기한다.
 - <strong>모니터링: Spring Batch Admin은 없다</strong> — Actuator + Micrometer 메트릭(6편) + `JobExplorer` 질의 + 실패 알림 조합으로 대체한다.
 - <strong>멀티 인스턴스 중복 실행 방지</strong> — 앱을 N개로 띄우면 `@Scheduled`가 N번 트리거된다. JobInstance 락이 같은 파라미터 동시 실행은 막지만 한계가 있어, ShedLock·Quartz 클러스터·CronJob 단일 실행으로 보장한다.
-- <strong>배치는 어디서 데이터를 읽나 — 5 패턴</strong> — A.같은 DB / B.도메인 API / C.Read Replica / D.분석 Warehouse / E.CDC. 보통 A → C → D로 진화하고, B는 거의 안 쓴다.
+- <strong>배치는 어디서 데이터를 읽나 — 5 패턴</strong> — A.같은 DB / B.도메인 API / C.Read Replica / D.분석 Warehouse / E.변경 데이터 캡처. 보통 A → C → D로 진화하고, B는 거의 안 쓴다.
 
 ---
 

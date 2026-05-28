@@ -30,10 +30,10 @@ The target reader is someone who read Part 6 and is stuck on "so where does that
 ## TL;DR
 
 - <strong>A user story is the output of discovery</strong> — it doesn't fall from the sky. It emerges only after problem discovery, research, hypotheses, and opportunities yield something worth writing down.
-- <strong>Start from the problem, not the solution</strong> — "add a social login button" is a solution; "users abandon signup" is the problem. Skip the problem and you just pile up features (JTBD: customers hire a product to get a "job" done).
+- <strong>Start from the problem, not the solution</strong> — "add a social login button" is a solution; "users abandon signup" is the problem. Skip the problem and you just pile up features (the job a customer is actually trying to get done: customers hire a product to get a "job" done).
 - <strong>What you know is a hypothesis, not a fact</strong> — validate with qualitative (interviews) and quantitative (data) research. The Build-Measure-Learn loop is the engine of discovery.
 - <strong>You don't break the big chunks down all at once</strong> — theme/initiative → epic → feature → story, slicing only the near-term work fine and leaving the far-off in chunks (progressive refinement).
-- <strong>Story mapping is the bridge between discovery and delivery</strong> — the horizontal axis is the user journey, the vertical is release slices. The first slice is exactly Part 6's MVP.
+- <strong>Story mapping is the bridge between discovery and delivery</strong> — the horizontal axis is the user journey, the vertical is release slices. The first slice is exactly Part 6's minimum viable product.
 - <strong>Discovery and delivery aren't sequential — they run as dual tracks at the same time</strong> — discovery isn't done once; what's learned at release returns as the next problem.
 
 ---

@@ -33,11 +33,11 @@ heroImage: "../../assets/AwsPrivateEc2Guide4.png"
 
 ## TL;DR
 
-- <strong>OIDC 페더레이션이 사실상의 표준이다.</strong> GitHub Actions는 매 실행마다 OIDC 토큰을 발급받아 AWS에 제출하고, AWS는 STS로 임시 자격증명을 돌려준다 — GitHub 시크릿에 AWS 키를 보관하지 않는다.
+- <strong>OpenID Connect 페더레이션이 사실상의 표준이다.</strong> GitHub Actions는 매 실행마다 OpenID Connect 토큰을 발급받아 AWS에 제출하고, AWS는 임시 자격증명을 돌려준다 — GitHub 시크릿에 AWS 키를 보관하지 않는다.
 - <strong>산출물 허브는 S3다.</strong> GitHub Actions는 S3에 jar/zip을 올리고, EC2는 IAM Role로 그걸 받아간다. SSH/scp는 등장하지 않는다.
-- <strong>SSM Run Command는 단순 배포의 정답.</strong> `aws ssm send-command`로 인스턴스에 셸 스크립트를 푸시한다 — Agent가 폴링으로 받아와 실행하므로 인바운드 포트는 여전히 0개.
+- <strong>Systems Manager Run Command는 단순 배포의 정답.</strong> `aws ssm send-command`로 인스턴스에 셸 스크립트를 푸시한다 — Agent가 폴링으로 받아와 실행하므로 인바운드 포트는 여전히 0개.
 - <strong>CodeDeploy는 무중단·롤백·Hook이 필요할 때.</strong> `appspec.yml`로 단계(Stop → Install → Start → Validate)를 정의하면 In-Place 또는 Blue/Green으로 롤링한다.
-- <strong>선택 기준 한 줄</strong>: 단일 jar를 1~2대에 갈아끼우는 수준이면 SSM, 트래픽 차단·헬스체크·롤백이 필수면 CodeDeploy.
+- <strong>선택 기준 한 줄</strong>: 단일 jar를 1~2대에 갈아끼우는 수준이면 Systems Manager, 트래픽 차단·헬스체크·롤백이 필수면 CodeDeploy.
 
 ---
 

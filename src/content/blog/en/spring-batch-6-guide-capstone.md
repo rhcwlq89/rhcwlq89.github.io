@@ -31,9 +31,9 @@ The target reader is a backend engineer who has read Parts 1–6 or has built an
 
 - <strong>The capstone gathers Parts 1–6 into one pipeline</strong> — chunks, idempotency, partitioning, observability, and CronJob meet in one project. Each section marks its source part.
 - <strong>Domain — operational schema → analytics schema</strong> — move orders from the operational `marketplace` schema to the analytics `analytics` schema. It's the <strong>simplified variant of Part 4 §6's D (analytics Warehouse) pattern</strong> — schemas split inside one PostgreSQL 16 instance instead of a separate engine.
-- <strong>Three jobs, a time-gap DAG</strong> — `daily-etl` (01:00) → `daily-kpi` (02:00) → `monthly-kpi` (1st of month, 03:00). Three CronJobs with simple time-based dependency.
+- <strong>Three jobs, a time-gap directed acyclic graph</strong> — `daily-etl` (01:00) → `daily-kpi` (02:00) → `monthly-kpi` (1st of month, 03:00). Three CronJobs with simple time-based dependency.
 - <strong>Two datasources split transaction boundaries per schema</strong> — `operationalDataSource` (read-only) and `analyticsDataSource` (write). The same instance, split by `currentSchema` and role.
-- <strong>Technique roundup</strong> — ETL uses JDBC + partitioning (Part 5), KPIs use SQL aggregation (window functions, Part 6), all with idempotent upsert (Part 3), observability (Part 6), and single-execution CronJob (Part 4 §7).
+- <strong>Technique roundup</strong> — extract-transform-load uses JDBC + partitioning (Part 5), key performance indicators use SQL aggregation (window functions, Part 6), all with idempotent upsert (Part 3), observability (Part 6), and single-execution CronJob (Part 4 §7).
 
 ---
 

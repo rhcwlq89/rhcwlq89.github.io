@@ -30,12 +30,12 @@ The target reader is a backend engineer who has built jobs through Parts 1–3. 
 ## TL;DR
 
 - <strong>JobLauncher is the entry point where code starts a job; JobOperator is the operator's remote control</strong> — `@Scheduled` calls `JobLauncher`; restarting or stopping a failed execution by ID is `JobOperator`.
-- <strong>Pick the scheduler from four options</strong> — `@Scheduled` (simple, single-instance), Quartz (in-app HA), K8s CronJob (containers), Argo/Airflow (inter-job dependency DAGs).
+- <strong>Pick the scheduler from four options</strong> — `@Scheduled` (simple, single-instance), Quartz (in-app high availability), K8s CronJob (containers), Argo/Airflow (inter-job dependency directed acyclic graphs).
 - <strong>JobParameters design = idempotency key vs new instance every run</strong> — make the business date (`targetDate`) the identifying key for "once a day, restartable," or add a `RunIdIncrementer` for a new JobInstance each run (write idempotency then required).
 - <strong>Restart via the same identifying parameters or JobOperator.restart</strong> — control restart behavior with `preventRestart` · `startLimit` · `allowStartIfComplete`, and branch flow on `ExitStatus`.
 - <strong>Monitoring: Spring Batch Admin is gone</strong> — replace it with Actuator + Micrometer metrics (Part 6) + `JobExplorer` queries + failure alerts.
 - <strong>Preventing duplicate execution across instances</strong> — N app instances make `@Scheduled` fire N times. The JobInstance lock blocks concurrent runs with the same parameters, but with limits — guarantee single execution with ShedLock, a Quartz cluster, or CronJob.
-- <strong>Where does a batch read its data — five patterns</strong> — A. same DB / B. domain API / C. Read Replica / D. analytics Warehouse / E. CDC. The usual evolution is A → C → D, and B is rarely used.
+- <strong>Where does a batch read its data — five patterns</strong> — A. same DB / B. domain API / C. Read Replica / D. analytics Warehouse / E. change data capture. The usual evolution is A → C → D, and B is rarely used.
 
 ---
 

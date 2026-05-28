@@ -33,7 +33,7 @@ The target reader is a backend engineer who has built and run jobs through Parts
 - <strong>MDC stamps job coordinates onto every log line</strong> — put `jobName` · `jobExecutionId` · `stepName` · `chunkIndex` in MDC and Part 3's failure logs become instantly traceable to "which job · which execution · which chunk."
 - <strong>Testing is self-contained</strong> — the pyramid (unit/slice/integration), four annotations (`@ExtendWith(MockitoExtension)` · `@DataJpaTest` · `@SpringBatchTest` · `@SpringBootTest`), and five doubles (Dummy · Stub · Spy · Mock · Fake), all in batch examples.
 - <strong>`@SpringBatchTest` injects batch test tooling</strong> — use `JobLauncherTestUtils` to verify Step slices, full-job integration, and restart, while `StepScopeTestExecutionListener` resolves `@StepScope` beans without a real job (Part 2 §2.3).
-- <strong>Testcontainers PostgreSQL 16, not H2</strong> — window functions, CTEs, and `ON CONFLICT` upsert are things H2 can't mimic. Test against a real PostgreSQL container to validate the same queries you run in production.
+- <strong>Testcontainers PostgreSQL 16, not H2</strong> — window functions, common table expressions, and `ON CONFLICT` upsert are things H2 can't mimic. Test against a real PostgreSQL container to validate the same queries you run in production.
 - <strong>Java 21 multi-stage + K8s CronJob</strong> — a Dockerfile with separate build/runtime stages, and `concurrencyPolicy: Forbid` · `backoffLimit` · `activeDeadlineSeconds` to declare single execution and failure handling.
 
 ---

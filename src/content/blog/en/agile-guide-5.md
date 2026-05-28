@@ -30,7 +30,7 @@ The target reader is an organization that tried to run Agile across many teams a
 ## TL;DR
 
 - <strong>Beyond one team, dependencies, alignment, and integration become the problem</strong> — what worked for one team collapses under cross-team coordination cost. And by Conway's Law, the system mirrors the org structure.
-- <strong>Three scaling frameworks dominate</strong> — SAFe (Scaled Agile Framework, prescriptive and hierarchical), LeSS (Large-Scale Scrum, minimal scaling), and the Spotify model (autonomous culture). But "even Spotify doesn't use the Spotify model."
+- <strong>Three scaling frameworks dominate</strong> — the Scaled Agile Framework (enterprise agile scaling, prescriptive and hierarchical), Large-Scale Scrum (scaling Scrum across many teams, minimal scaling), and the Spotify model (autonomous culture). But "even Spotify doesn't use the Spotify model."
 - <strong>The scaling paradox</strong> — pile on coordination to scale Agile, and it turns heavy like waterfall again. Real scaling isn't adding coordination but reducing dependencies.
 - <strong>Fake Agile = the form exists but inspection and adaptation are gone</strong> — daily-as-report, sprint-as-mini-waterfall, retro-as-formality, velocity pressure, skipped practices. The decay signals from Parts 1–4, all going off in one team at once.
 - <strong>Recovery isn't doing more events</strong> — restore engineering practices first, shrink the learning loop, return measurement to a signal, and re-anchor on the values.

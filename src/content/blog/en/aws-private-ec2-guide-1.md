@@ -25,11 +25,11 @@ The target reader is a junior engineer who has "followed a tutorial to launch an
 
 ## TL;DR
 
-- <strong>Standard architecture</strong>: `Internet → ALB (Public) → EC2 (Private) → NAT (Public) → Internet`. All inside one VPC. Public/Private is not physical isolation — just a <strong>route table</strong> difference (whether the subnet has a route to the Internet Gateway).
-- <strong>Multi-AZ</strong>: a single ALB spans multiple AZs. Subnets must be created per AZ, but <strong>never create an ALB per AZ</strong>.
-- <strong>This setup is not always required</strong>: for side projects, a ~$40/month Public Subnet + SG is plenty. A full Private Subnet architecture runs $100~320/month.
-- <strong>When it becomes mandatory</strong>: 2+ EC2s with HA / PII / payment / compliance (ISMS, PCI DSS, etc.) / 99.9% SLA — any one of these and you need to move.
-- <strong>Putting PII on Public Subnet = three real risks</strong>: direct attack exposure, compliance violations, broader liability after incidents. Past that line, Private Subnet is "insurance, not cost."
+- <strong>Standard architecture</strong>: `Internet → ALB (Public) → EC2 (Private) → NAT Gateway (Public) → Internet`. All inside one VPC. Public/Private is not physical isolation — just a <strong>route table</strong> difference (whether the subnet has a route to the internet gateway).
+- <strong>Multi-Availability Zone</strong>: a single ALB spans multiple Availability Zones. Subnets must be created per Availability Zone, but <strong>never create an ALB per Availability Zone</strong>.
+- <strong>This setup is not always required</strong>: for side projects, a ~$40/month Public Subnet + security group is plenty. A full Private Subnet architecture runs $100~320/month.
+- <strong>When it becomes mandatory</strong>: 2+ EC2s with high availability / personally identifiable information / payment / compliance (information security management system, payment-card data security standard, etc.) / 99.9% service-level agreement — any one of these and you need to move.
+- <strong>Putting personally identifiable information on Public Subnet = three real risks</strong>: direct attack exposure, compliance violations, broader liability after incidents. Past that line, Private Subnet is "insurance, not cost."
 
 ---
 

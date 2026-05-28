@@ -37,7 +37,7 @@ heroImage: "../../assets/SpringBatch6Guide6.png"
 - <strong>MDC로 모든 로그에 잡 좌표를 박는다</strong> — `jobName` · `jobExecutionId` · `stepName` · `chunkIndex`를 MDC에 넣으면, 3편의 실패 로그가 "어느 잡 · 어느 실행 · 어느 청크"인지 즉시 추적된다.
 - <strong>테스트는 자체완결</strong> — 피라미드(단위·슬라이스·통합), 어노테이션 4종(`@ExtendWith(MockitoExtension)`·`@DataJpaTest`·`@SpringBatchTest`·`@SpringBootTest`), 대역 5종(Dummy·Stub·Spy·Mock·Fake)을 배치 예시로 정리한다.
 - <strong>`@SpringBatchTest`가 배치 테스트 도구를 주입한다</strong> — `JobLauncherTestUtils`로 Step 슬라이스·Job 통합·재시작을 검증하고, `StepScopeTestExecutionListener`가 `@StepScope` 빈을 실제 잡 없이 풀어 준다(2편 2.3절).
-- <strong>H2 말고 Testcontainers PostgreSQL 16</strong> — window 함수·CTE·`ON CONFLICT` upsert는 H2가 흉내 못 낸다. 실제 PostgreSQL 컨테이너로 테스트해야 운영과 같은 쿼리를 검증한다.
+- <strong>H2 말고 Testcontainers PostgreSQL 16</strong> — window 함수·공통 테이블 표현식·`ON CONFLICT` upsert는 H2가 흉내 못 낸다. 실제 PostgreSQL 컨테이너로 테스트해야 운영과 같은 쿼리를 검증한다.
 - <strong>Java 21 멀티 스테이지 + K8s CronJob</strong> — 빌드/런타임 스테이지를 분리한 Dockerfile, `concurrencyPolicy: Forbid` · `backoffLimit` · `activeDeadlineSeconds`로 단일 실행·실패 처리를 선언한다.
 
 ---

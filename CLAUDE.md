@@ -29,6 +29,8 @@ frontmatter
 ## TL;DR
   - 3–5 bullets, each 1–2 short lines.
   - Captures the whole post's thesis. A reader who reads only this and stops should walk away with the gist.
+  - **No undefined acronyms or jargon here.** The TL;DR is the post's front door — a reader hits it before any definition exists. Write it in plain language: spell the concept out instead of using the acronym (e.g. "방향성 비순환 그래프" not "DAG"), or rephrase to avoid the term entirely. Introduce the acronym later, in the body, with its one-line definition on first use.
+    - **Exception — proper-noun brand/product/service names stay as-is.** Names whose expansion nobody actually uses function as proper nouns, not "decode-me" acronyms: AWS service brands (S3, EC2, RDS, EKS, ECS, SQS, SNS, KMS, IAM, ALB, NLB, NAT Gateway, CloudFront, DynamoDB, Transit Gateway), protocol/model names with obscure expansions (OSI, SAML), and code identifiers/class names. Keep these. The rule targets *descriptive* acronyms whose plain form aids comprehension (DAG, NAT-the-concept aside, AZ → 가용 영역, SG → 보안 그룹, IGW → 인터넷 게이트웨이, ENI, NACL, CIDR, HA, SLA, SLO, ISMS, PCI-DSS, DIP, CDC, CTE, ETL, DORA, JTBD, …) and generic acronyms a junior won't recognize. When unsure: if the expansion is the name people actually say, keep the acronym; if the expansion explains what the thing *does*, spell it out.
 
 ---
 
@@ -68,6 +70,7 @@ The most common readability failure is wall-of-text prose. Enforce the following
 - **Comparisons of 3+ items always use a table.** Never render a comparison as a sequence of `<strong>Label</strong>: description` paragraphs.
 - **Bullet format**: prefer `- <strong>Core phrase</strong> — one-line elaboration.` over multi-sentence bullets. Each bullet should be scannable in about 2 seconds.
 - **Lead with the definition.** When introducing a term or acronym, open with a one-sentence definition (`**X = Y**` or `<strong>X는 …</strong>이다`) before elaborating. Do not bury the definition at the end of a paragraph.
+- **TL;DR stays acronym-free.** Acronyms and jargon must not appear in the TL;DR, because it precedes every definition in the post. Spell the concept out in plain words or rephrase around it; reserve the acronym (and its first-use definition) for the body. See the TL;DR note in the skeleton above.
 - **No `<strong>Label</strong>:` walls.** If you find yourself writing 4+ back-to-back `<strong>Label</strong>: body.` paragraphs, that's a signal — convert the block into a table or a tight bullet list instead.
 
 ### Bold Formatting

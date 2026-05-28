@@ -31,8 +31,8 @@ heroImage: "../../assets/AwsPrivateEc2Guide5.png"
 
 ## TL;DR
 
-- <strong>NAT Gateway가 비용의 절반</strong>이다. 1~4편 환경의 baseline은 월 ~$110, 그중 ~$65이 NAT — 가장 먼저 손볼 곳.
-- <strong>가장 빠른 무료 한 줄: S3 Gateway Endpoint.</strong> EC2의 S3 트래픽이 NAT을 거치지 않게 만든다 — 시간당 0원, 한 달 $5~$30 즉시 절감.
+- <strong>NAT Gateway가 비용의 절반</strong>이다. 1~4편 환경의 baseline은 월 ~$110, 그중 ~$65이 NAT Gateway — 가장 먼저 손볼 곳.
+- <strong>가장 빠른 무료 한 줄: S3 Gateway Endpoint.</strong> EC2의 S3 트래픽이 NAT Gateway를 거치지 않게 만든다 — 시간당 0원, 한 달 $5~$30 즉시 절감.
 - <strong>EC2는 Right-sizing → Graviton → Savings Plans 순.</strong> 코드 변경 거의 없이 30~50% 절감이 정상이다. 1년 No-Upfront Compute Savings Plans가 균형점.
 - <strong>ALB는 통합이 답.</strong> 5개 서비스에 5개 ALB는 월 $80 누수다. Listener Rule로 묶어 1개로 → 월 $25.
 - <strong>예산은 시나리오로 기억한다.</strong> 사이드 ~$40, 스타트업 ~$110, 엔터프라이즈 $300+ — 자기 환경이 어디에 있는지 알면 다음 결정이 쉬워진다.

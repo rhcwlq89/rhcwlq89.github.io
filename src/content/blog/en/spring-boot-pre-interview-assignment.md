@@ -34,7 +34,7 @@ The target reader is a junior backend engineer who has skimmed Parts 1–7 once.
 
 - <strong>A seven-day marketplace REST API</strong> — members (BUYER/SELLER/ADMIN), product CRUD, order create/cancel, image upload, search with pagination, caching, and async notifications. Every area Parts 1–7 covered lands in one project.
 - <strong>Stack is Spring Boot 4 + Kotlin 2.3</strong> — Java 21 recommended, JPA/Hibernate, Gradle, H2 (local) + MySQL 8 (Docker), QueryDSL and Redis optional. No Lombok.
-- <strong>Structure choice is the first scoring signal</strong> — pick single-module (recommended) or multi-module (Option A strict DIP / Option B simplified) and apply it consistently. Not stating *why* in the README is itself a deduction.
+- <strong>Structure choice is the first scoring signal</strong> — pick single-module (recommended) or multi-module (Option A strict Dependency Inversion Principle / Option B simplified) and apply it consistently. Not stating *why* in the README is itself a deduction.
 - <strong>70 base + 35 bonus points</strong> — base covers features, code quality, design, tests. Bonus covers Docker, Swagger, CI, caching, events, QueryDSL, multi-module. Deductions hit harder: build failure -20, missing README -10, plain-text passwords -10.
 - <strong>Five checks before you submit</strong> — `./gradlew build` passes, `docker-compose up` works, Swagger reachable, no secrets or `.idea` committed, README complete. Reviewers only start reading your real code once these five hold.
 

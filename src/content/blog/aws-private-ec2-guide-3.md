@@ -31,9 +31,9 @@ heroImage: "../../assets/AwsPrivateEc2Guide3.png"
 
 ## TL;DR
 
-- <strong>SSM은 reverse-tunnel이다.</strong> EC2의 SSM Agent가 AWS API에 <strong>아웃바운드 443</strong>으로 폴링한다 — 인바운드 22번을 열 필요가 없는 진짜 이유.
-- <strong>필요한 건 3가지</strong>: ① SSM Agent(AL2023은 기본 탑재) ② `AmazonSSMManagedInstanceCore` IAM Role(2편에서 미리 붙임) ③ SSM 엔드포인트로 가는 네트워크 경로(NAT 또는 VPC Endpoint).
-- <strong>네트워크 경로는 둘 중 하나</strong>: NAT Gateway 경유(이미 있으면 추가 비용 0) vs Interface VPC Endpoint 3개(`ssm`, `ssmmessages`, `ec2messages`). NAT 있으면 NAT, 인터넷을 끊고 싶으면 Endpoint.
+- <strong>AWS Systems Manager는 reverse-tunnel이다.</strong> EC2의 Systems Manager Agent가 AWS API에 <strong>아웃바운드 443</strong>으로 폴링한다 — 인바운드 22번을 열 필요가 없는 진짜 이유.
+- <strong>필요한 건 3가지</strong>: ① Systems Manager Agent(AL2023은 기본 탑재) ② `AmazonSSMManagedInstanceCore` IAM Role(2편에서 미리 붙임) ③ Systems Manager 엔드포인트로 가는 네트워크 경로(NAT Gateway 또는 VPC Endpoint).
+- <strong>네트워크 경로는 둘 중 하나</strong>: NAT Gateway 경유(이미 있으면 추가 비용 0) vs Interface VPC Endpoint 3개(`ssm`, `ssmmessages`, `ec2messages`). NAT Gateway가 있으면 그걸 쓰고, 인터넷을 끊고 싶으면 Endpoint.
 - <strong>Port Forwarding 두 종류</strong>: 인스턴스 자기 포트(`AWS-StartPortForwardingSession`), 인스턴스 너머 원격 호스트(`AWS-StartPortForwardingSessionToRemoteHost`). 후자가 RDS·ElastiCache 운영의 사실상 표준.
 - <strong>Bastion 대비 이득</strong>: SSH 키·22번 포트·점프 호스트 EC2 비용·키 회전 운영이 한꺼번에 사라지고, 모든 세션이 IAM 사용자 단위로 자동 감사된다.
 

@@ -31,10 +31,10 @@ heroImage: "../../assets/AwsPrivateEc2Guide1.png"
 
 ## TL;DR
 
-- <strong>표준 아키텍처</strong>: `Internet → ALB(Public) → EC2(Private) → NAT(Public) → Internet`. 모두 같은 VPC 안. Public/Private 차이는 물리적 격리가 아닌 <strong>라우트 테이블</strong>(IGW 경로 유무)뿐.
-- <strong>Multi-AZ</strong>: ALB 하나가 여러 AZ를 커버한다. Subnet은 AZ마다 만들어야 하지만, <strong>ALB를 AZ마다 만들면 안 된다</strong>.
-- <strong>이 구성이 항상 필수는 아니다</strong>: 사이드 프로젝트는 월 $40짜리 Public Subnet + SG로 충분. Private Subnet 풀 구성은 월 $100~320.
-- <strong>언제 필수가 되나</strong>: EC2 2대+ HA / 개인정보·결제 / 컴플라이언스(ISMS, PCI DSS 등) / 99.9% SLA — 하나라도 해당하면 넘어갈 때.
+- <strong>표준 아키텍처</strong>: `Internet → ALB(Public) → EC2(Private) → NAT Gateway(Public) → Internet`. 모두 같은 VPC 안. Public/Private 차이는 물리적 격리가 아닌 <strong>라우트 테이블</strong>(인터넷 게이트웨이 경로 유무)뿐.
+- <strong>다중 가용 영역</strong>: ALB 하나가 여러 가용 영역을 커버한다. Subnet은 가용 영역마다 만들어야 하지만, <strong>ALB를 가용 영역마다 만들면 안 된다</strong>.
+- <strong>이 구성이 항상 필수는 아니다</strong>: 사이드 프로젝트는 월 $40짜리 Public Subnet + 보안 그룹으로 충분. Private Subnet 풀 구성은 월 $100~320.
+- <strong>언제 필수가 되나</strong>: EC2 2대+ 고가용성 / 개인정보·결제 / 컴플라이언스(정보보호 관리체계·카드 결제 데이터 보안 표준 등) / 99.9% 서비스 수준 협약 — 하나라도 해당하면 넘어갈 때.
 - <strong>개인정보 서버를 Public Subnet에 두면 3가지 리스크</strong>: 직접 공격 노출, 컴플라이언스 위반, 사고 시 책임 확대. 이 순간부터 Private Subnet은 "비용이 아니라 보험".
 
 ---

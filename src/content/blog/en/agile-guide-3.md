@@ -29,10 +29,10 @@ The target reader is a team of an operations/support nature whose sprints keep b
 
 ## TL;DR
 
-- <strong>Kanban is flow-based</strong> — no fixed iterations (sprints); it visualizes the flow of work and limits work in progress (WIP) to manage it. Strong for work that arrives irregularly with shifting priorities.
+- <strong>Kanban is flow-based</strong> — no fixed iterations (sprints); it visualizes the flow of work and limits work in progress to manage it. Strong for work that arrives irregularly with shifting priorities.
 - <strong>Its root is Lean (the Toyota Production System)</strong> — eliminate waste and let work flow by pull, not push. You pull the next item only when a slot frees up.
-- <strong>WIP limit is the key lever</strong> — by Little's Law (lead time = WIP ÷ throughput), lowering WIP shortens lead time even at the same throughput. Reducing the multitasking tax usually raises throughput too.
-- <strong>You watch flow metrics, not velocity</strong> — lead time, cycle time, throughput, and the cumulative flow diagram (CFD) to read bottlenecks.
+- <strong>Limiting work in progress is the key lever</strong> — by Little's Law (lead time = work in progress ÷ throughput), lowering work in progress shortens lead time even at the same throughput. Reducing the multitasking tax usually raises throughput too.
+- <strong>You watch flow metrics, not velocity</strong> — lead time, cycle time, throughput, and the cumulative flow diagram to read bottlenecks.
 - <strong>Scrum and Kanban aren't either/or</strong> — Scrum for planned feature work, Kanban for irregular intake (ops/support), and Scrumban when you mix the two.
 
 ---

@@ -28,9 +28,9 @@ Same target reader as Part 1 — backend or infrastructure engineers who've buil
 
 - <strong>The first split is "where does the destination live"</strong> — AWS managed service / another VPC / a different organization's service / on-prem. The candidate set barely overlaps across these four.
 - <strong>For S3 and DynamoDB, Gateway Endpoint (free)</strong> is almost always the answer. Routing S3 traffic through NAT Gateway charges per-GB data processing.
-- <strong>VPC Peering is 1:1, Transit Gateway is N:N.</strong> Past three or four VPCs, a Peering mesh stops being operationally feasible — switch to TGW.
+- <strong>VPC Peering is 1:1, Transit Gateway is N:N.</strong> Past three or four VPCs, a Peering mesh stops being operationally feasible — switch to Transit Gateway.
 - <strong>To privately expose a service from another organization (or VPC), use PrivateLink.</strong> It sidesteps IP-overlap problems and exposes only one service in one direction.
-- <strong>On-prem starts with VPN and graduates to Direct Connect.</strong> The two aren't competitors — production patterns usually run DX as primary with a VPN backup.
+- <strong>On-prem starts with VPN and graduates to Direct Connect (dedicated link).</strong> The two aren't competitors — production patterns usually run Direct Connect as primary with a VPN backup.
 
 ---
 

@@ -35,9 +35,9 @@ heroImage: "../../assets/SpringBatch6GuideCapstone.png"
 
 - <strong>종합편은 1~6편을 한 파이프라인에 모은다</strong> — 청크·멱등·파티셔닝·관측성·CronJob이 한 프로젝트에서 만난다. 각 절에 출처 편을 표시한다.
 - <strong>도메인 — 운영 schema → 분석 schema</strong> — 운영 `marketplace` schema의 주문을 분석 `analytics` schema로 옮긴다. 4편 6절의 <strong>D(분석 Warehouse) 패턴의 단순화 변형</strong>으로, 별도 인스턴스 대신 같은 PostgreSQL 16 인스턴스 안에서 schema만 나눈다.
-- <strong>3 Job 시간차 DAG</strong> — `daily-etl`(01:00) → `daily-kpi`(02:00) → `monthly-kpi`(매월 1일 03:00). CronJob 3개를 시간 차로 단순 의존시킨다.
+- <strong>3 Job 시간차 방향성 비순환 그래프</strong> — `daily-etl`(01:00) → `daily-kpi`(02:00) → `monthly-kpi`(매월 1일 03:00). CronJob 3개를 시간 차로 단순 의존시킨다.
 - <strong>두 datasource로 schema별 트랜잭션 경계 분리</strong> — `operationalDataSource`(읽기 전용)와 `analyticsDataSource`(쓰기). 같은 인스턴스를 `currentSchema`와 role로 가른다.
-- <strong>기법 종합</strong> — ETL은 JDBC + 파티셔닝(5편), KPI는 SQL 집계(window 함수, 6편), 전부 멱등 upsert(3편)·관측성(6편)·CronJob 단일 실행(4편 7절).
+- <strong>기법 종합</strong> — 추출·변환·적재는 JDBC + 파티셔닝(5편), 핵심 성과 지표는 SQL 집계(window 함수, 6편), 전부 멱등 upsert(3편)·관측성(6편)·CronJob 단일 실행(4편 7절).
 
 ---
 

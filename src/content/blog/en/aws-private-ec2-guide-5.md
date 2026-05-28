@@ -25,8 +25,8 @@ This post targets <strong>juniors who got their first surprising AWS bill</stron
 
 ## TL;DR
 
-- <strong>NAT Gateway is half the bill.</strong> The Parts 1–4 baseline is ~$110/month and ~$65 of that is NAT — the first place to look.
-- <strong>The fastest free win: an S3 Gateway Endpoint.</strong> Keep EC2's S3 traffic off NAT — $0/hour, $5–$30/month off instantly.
+- <strong>NAT Gateway is half the bill.</strong> The Parts 1–4 baseline is ~$110/month and ~$65 of that is the NAT Gateway — the first place to look.
+- <strong>The fastest free win: an S3 Gateway Endpoint.</strong> Keep EC2's S3 traffic off the NAT Gateway — $0/hour, $5–$30/month off instantly.
 - <strong>For EC2, go Right-size → Graviton → Savings Plans, in that order.</strong> 30–50% off with little to no code change. The 1-year No-Upfront Compute Savings Plan is the sweet spot.
 - <strong>ALB is about consolidation.</strong> Five services × five ALBs is $80/month leaking. Combine into one with Listener Rules → ~$25.
 - <strong>Memorize budgets by scenario</strong>: side-project ~$40, startup ~$110, enterprise $300+. Knowing which tier you're in makes every next decision easier.

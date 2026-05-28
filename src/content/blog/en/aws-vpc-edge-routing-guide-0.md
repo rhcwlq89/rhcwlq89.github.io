@@ -26,9 +26,9 @@ The target reader is a backend or infrastructure engineer who's clicked through 
 
 ## TL;DR
 
-- <strong>The OSI 7-layer model — specifically L4 (transport — TCP/UDP) vs L7 (application — HTTP) — is the first split in the series</strong>. NLB is L4; ALB, API Gateway, CloudFront are all L7.
-- <strong>VPC = a virtual network you build inside AWS</strong>. CIDR notation expresses IP ranges, Subnets are sliced per AZ, and <strong>the difference between Public and Private subnets is just whether the Route Table has a `0.0.0.0/0 → IGW` entry</strong>.
-- <strong>An ENI (Elastic Network Interface) is a virtual NIC attached inside a VPC with a private IP</strong>. EC2, RDS, Lambda, ALB — anything in a VPC has at least one. Private IPs, Security Groups, and EIPs all bind to the ENI.
+- <strong>The OSI layer model — specifically L4 (transport — TCP/UDP) vs L7 (application — HTTP) — is the first split in the series</strong>. NLB is L4; ALB, API Gateway, and CloudFront are all L7.
+- <strong>VPC = a virtual network you build inside AWS</strong>. IP address ranges are written as `startIP/prefix-length`, Subnets are sliced per Availability Zone, and <strong>the difference between Public and Private subnets is just whether the Route Table has a `0.0.0.0/0 → internet gateway` entry</strong>.
+- <strong>An elastic network interface is a virtual network interface card attached inside a VPC with a private IP</strong>. EC2, RDS, Lambda, ALB — anything in a VPC has at least one. Private IPs, Security Groups, and EIPs all bind to the elastic network interface.
 - <strong>A reverse proxy is the intermediary that takes incoming client requests and dispatches them to the right backend</strong>. ALB, API Gateway, and CloudFront are all "AWS-managed reverse proxies + extras."
 - <strong>Core AWS services fall into roughly compute (EC2/ECS/EKS/Lambda), storage/DB (S3/EBS/RDS/DynamoDB), messaging (SQS/SNS), load balancers (ALB/NLB), CDN (CloudFront), and auth (IAM/Cognito/KMS)</strong>.
 

@@ -26,11 +26,11 @@ The target reader is <strong>someone who has used AWS for a while but never buil
 
 ## TL;DR
 
-- <strong>Every AWS credential flow ultimately funnels into STS.</strong> STS = Security Token Service, a stateless API that issues temporary credentials. EC2 instance profiles, OIDC, SAML, IAM Identity Center — all of them end with an STS call.
+- <strong>Every AWS credential flow ultimately funnels into the temporary-credential issuance service.</strong> A single stateless API for issuing temporary credentials sits at the center, and EC2 instance profiles, OpenID Connect, the enterprise SSO federation protocol, IAM Identity Center — all of them end with a call to it.
 - <strong>Long-lived keys (`AKIA…`) → short-lived keys (`ASIA…`) + SessionToken</strong> is the major direction in AWS credential security. Temporary keys expire on their own, and incident blast radius decays naturally with time.
-- <strong>"Federation" means AWS trusts the identity verification done by an external provider</strong> and issues temporary credentials based on that trust. OIDC, SAML, and Cognito are all variants of this pattern.
-- <strong>STS itself has nothing to configure.</strong> The lack of a standalone console page is not a bug — it's by design. What people call "STS configuration" is entirely IAM work: identity providers, roles, and trust policies.
-- <strong>The `sub` condition in the trust policy is the lock on federation.</strong> Drop it and any external identity trusted by the same provider can assume your role — the number-one cause of OIDC incidents.
+- <strong>"Federation" means AWS trusts the identity verification done by an external provider</strong> and issues temporary credentials based on that trust. OpenID Connect, enterprise SSO federation, and Cognito are all variants of this pattern.
+- <strong>The temporary-credential service itself has nothing to configure.</strong> The lack of a standalone console page is not a bug — it's by design. What people call "credential service configuration" is entirely IAM work: identity providers, roles, and trust policies.
+- <strong>The `sub` condition in the trust policy is the lock on federation.</strong> Drop it and any external identity trusted by the same provider can assume your role — the number-one cause of OpenID Connect incidents.
 
 ---
 

@@ -33,7 +33,7 @@ See the [previous post](/en/blog/spring-boot-pre-interview-guide-6) for DevOps &
 - <strong>Async processing</strong> — `@Async` is proxy-based, so self-invocation always runs synchronously; always call from a different bean. `AsyncUncaughtExceptionHandler` is mandatory to catch silent failures.
 - <strong>File handling</strong> — Validate extension, MIME type, and size before saving. Use UUID-based filenames and `normalize()` to defend against path traversal.
 - <strong>API versioning</strong> — URI versioning (`/api/v1/...`) is the clearest choice and the most cache-friendly, test-friendly, and documentation-friendly.
-- <strong>Multi-module</strong> — Pick Option A (DIP) or Option B (pragmatic) and stay consistent. Mixing them breaks dependency direction. In either option, domain → infra dependency is always forbidden.
+- <strong>Multi-module</strong> — Pick Option A (Dependency Inversion Principle) or Option B (pragmatic) and stay consistent. Mixing them breaks dependency direction. In either option, domain → infra dependency is always forbidden.
 
 ---
 

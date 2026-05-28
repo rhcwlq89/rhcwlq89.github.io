@@ -35,9 +35,9 @@ heroImage: "../../assets/AwsVpcEdgeRoutingGuide2.png"
 
 - <strong>목적지가 무엇이냐</strong>로 첫 분기점이 갈린다 — AWS 관리 서비스 / 다른 VPC / 다른 조직의 서비스 / 온프레미스. 같은 "연결"이라도 결정 후보가 완전히 다르다.
 - <strong>S3·DynamoDB는 Gateway Endpoint(무료)</strong>가 거의 항상 정답이다. NAT Gateway로 S3 접근하면 매 GB마다 데이터 처리 요금이 나간다.
-- <strong>VPC Peering은 1:1, Transit Gateway는 N:N</strong>. VPC 3~4개 넘어가면 Peering 메시 대신 TGW로 가야 운영이 살아남는다.
-- <strong>다른 조직(또는 VPC) 서비스를 비공개로 노출하려면 PrivateLink</strong>다. Peering·TGW와 달리 IP 충돌 걱정이 없고, "서비스 1개만 단방향 노출" 모델.
-- <strong>온프레미스는 VPN으로 시작해서 Direct Connect로 졸업</strong>한다. 둘은 경쟁이 아니라 보완 관계 — 프로덕션은 보통 DX + VPN backup.
+- <strong>VPC Peering은 1:1, Transit Gateway는 N:N</strong>. VPC 3~4개 넘어가면 Peering 메시 대신 Transit Gateway로 가야 운영이 살아남는다.
+- <strong>다른 조직(또는 VPC) 서비스를 비공개로 노출하려면 PrivateLink</strong>다. Peering·Transit Gateway와 달리 IP 충돌 걱정이 없고, "서비스 1개만 단방향 노출" 모델.
+- <strong>온프레미스는 VPN으로 시작해서 Direct Connect로 졸업</strong>한다. 둘은 경쟁이 아니라 보완 관계 — 프로덕션은 보통 Direct Connect(전용선) + VPN backup.
 
 ---
 

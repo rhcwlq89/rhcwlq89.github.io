@@ -34,8 +34,8 @@ AWS 네트워크 글을 처음 펼치면 절반 이상이 약어와 jargon이다
 ## TL;DR
 
 - <strong>OSI 7-layer 중 L4(전송 — TCP/UDP)와 L7(응용 — HTTP)이 시리즈 첫 분기점</strong>이다. NLB는 L4, ALB·API Gateway·CloudFront는 L7.
-- <strong>VPC = AWS 안에 만드는 가상 네트워크</strong>. CIDR로 IP 대역을 표기하고, Subnet은 AZ 단위로 쪼개 쓴다. <strong>Public/Private subnet의 차이는 단지 Route Table에 IGW 경로가 있느냐 없느냐</strong>다.
-- <strong>ENI(Elastic Network Interface)는 VPC에 사설 IP를 갖고 붙는 가상 NIC</strong>다. EC2·RDS·Lambda·ALB 등 VPC에 연결되는 모든 리소스가 최소 1개 가진다 — 사설 IP·SG·EIP가 모두 ENI 단위로 결합.
+- <strong>VPC = AWS 안에 만드는 가상 네트워크</strong>. IP 대역(주소 범위)은 `시작IP/prefix길이` 표기로 지정하고, Subnet은 가용 영역 단위로 쪼개 쓴다. <strong>Public/Private subnet의 차이는 단지 Route Table에 인터넷 게이트웨이 경로가 있느냐 없느냐</strong>다.
+- <strong>탄력적 네트워크 인터페이스는 VPC에 사설 IP를 갖고 붙는 가상 네트워크 인터페이스 카드</strong>다. EC2·RDS·Lambda·ALB 등 VPC에 연결되는 모든 리소스가 최소 1개 가진다 — 사설 IP·보안 그룹·EIP가 모두 탄력적 네트워크 인터페이스 단위로 결합.
 - <strong>리버스 프록시는 클라이언트 요청을 백엔드 대신 받아 분배하는 중계자</strong>다. ALB·API Gateway·CloudFront는 모두 "AWS 매니지드 리버스 프록시 + 부가 기능"으로 볼 수 있다.
 - <strong>AWS 핵심 서비스는 컴퓨트(EC2/ECS/EKS/Lambda) · 스토리지/DB(S3/EBS/RDS/DynamoDB) · 메시징(SQS/SNS) · 로드밸런서(ALB/NLB) · CDN(CloudFront) · 인증(IAM/Cognito/KMS)</strong> 정도로 분류된다.
 
