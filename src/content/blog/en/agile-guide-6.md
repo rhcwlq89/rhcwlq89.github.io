@@ -4,7 +4,7 @@ description: "If Parts 1–5 were the concepts (the why and what), Part 6 shows 
 pubDate: "2026-05-26T15:00:00+09:00"
 lang: en
 tags: ["Agile", "User Story", "Delivery", "Agile Process", "Software Methodology"]
-heroImage: "../../../assets/AgileGuide4.png"
+heroImage: "../../../assets/AgileGuide6.png"
 ---
 
 ## Introduction
@@ -23,6 +23,7 @@ The target reader is someone who has the concepts but is stuck on "so what does 
 - [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
 - [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
 - <strong>Part 6 — Hands-On: From User Story to Release (this post)</strong>
+- [Part 7 — Discovery: Where Do User Stories Come From](/en/blog/agile-guide-7)
 
 ---
 
@@ -232,7 +233,9 @@ The essentials of Part 6, one line each:
 - <strong>Policy and the data model aren't nailed down all at once</strong> — seeded while writing stories and acceptance criteria, updated as a living doc through release (fixed, not frozen).
 - <strong>All of it is one lap of the inspect-and-adapt loop</strong> — the practical flow is just Parts 1–5's concepts working in order.
 
-This closes the <strong>Practical Guide to Agile</strong> series. Starting from Part 1's values, through Parts 2–3's process, Part 4's practices and measurement, and Part 5's scaling and fake Agile, Part 6 showed all of it making one lap from user story to release. One thing remains — look at whether that loop is turning in your team right now, and if it isn't, revive even one step.
+Part 6 wrapped Part 1's values through Part 5's scaling into one flow, from user story to release. The first step is to look at whether that loop is turning in your team right now, and if it isn't, revive even one step.
+
+But one thing remains — where does that starting point, the user story, even come from? The next post, [Part 7 (Discovery)](/en/blog/agile-guide-7), covers the stretch right before Part 6: the upstream work from problem discovery through research, hypotheses, and opportunities until a user story is born. Joined with Part 6's delivery, it forms one picture — <strong>dual-track Agile</strong> — and that's what closes the series.
 
 ---
 

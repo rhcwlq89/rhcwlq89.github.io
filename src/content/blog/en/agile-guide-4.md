@@ -25,6 +25,7 @@ The target reader is a team that runs Scrum but is increasingly afraid to touch 
 - <strong>Part 4 — Practices and Measurement — From XP to Velocity · DORA (this post)</strong>
 - [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
 - [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
+- [Part 7 — Discovery: Where Do User Stories Come From](/en/blog/agile-guide-7)
 
 ---
 

@@ -23,6 +23,7 @@ The target reader is a practitioner who adopted Agile but isn't sure why, someon
 - [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
 - [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
 - [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
+- [Part 7 — Discovery: Where Do User Stories Come From](/en/blog/agile-guide-7)
 
 ---
 

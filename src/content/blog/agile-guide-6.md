@@ -8,7 +8,7 @@ tags:
   - 유저스토리
   - 딜리버리
   - 애자일 프로세스
-heroImage: "../../assets/AgileGuide4.png"
+heroImage: "../../assets/AgileGuide6.png"
 ---
 
 ## 서론
@@ -27,6 +27,7 @@ heroImage: "../../assets/AgileGuide4.png"
 - [4편 — 실천과 측정 — XP부터 벨로시티 · DORA까지](/blog/agile-guide-4)
 - [5편 — 스케일링과 가짜 애자일](/blog/agile-guide-5)
 - <strong>6편 — 실전: 유저스토리에서 릴리스까지 (이 글)</strong>
+- [7편 — 디스커버리: 유저스토리는 어디서 오는가](/blog/agile-guide-7)
 
 ---
 
@@ -236,7 +237,9 @@ flowchart TD
 - <strong>정책·데이터 모델은 한 번에 못 박지 않는다</strong> — 스토리·인수조건 단계에서 씨앗을 심고 릴리스까지 리빙 문서로 갱신한다(확정하되 동결 않음).
 - <strong>이 전체가 결국 검사-적응 학습 루프 한 바퀴</strong> — 실전 플로우는 1–5편 개념이 순서대로 작동하는 모습일 뿐이다.
 
-이것으로 <strong>애자일 제대로 알기</strong> 시리즈를 마친다. 1편의 가치에서 출발해 2–3편의 프로세스, 4편의 실천과 측정, 5편의 스케일링·가짜 애자일을 거쳐, 6편에서 그 전부가 유저스토리에서 릴리스까지 한 바퀴 도는 것을 봤다. 남은 일은 하나다 — 당신의 팀에서 이 루프가 지금 돌고 있는지 들여다보고, 안 돌면 한 단계라도 되살리는 것.
+6편은 1편의 가치에서 5편의 스케일링까지를 유저스토리에서 릴리스까지 한 흐름으로 묶어 봤다. 먼저 당신의 팀에서 이 루프가 지금 돌고 있는지 들여다보고, 안 돌면 한 단계라도 되살리는 게 첫걸음이다.
+
+다만 한 가지가 남는다 — 그 출발점인 유저스토리는 대체 어디서 오는가? 다음 [7편(디스커버리)](/blog/agile-guide-7)은 6편의 바로 앞 구간을 다룬다. 문제 발견에서 리서치·가설·기회를 거쳐 유저스토리가 만들어지기까지의 사전 작업이다. 6편의 딜리버리와 합치면 <strong>듀얼 트랙 애자일</strong>이라는 한 그림이 되고, 그것으로 시리즈를 닫는다.
 
 ---
 
@@ -264,12 +267,3 @@ flowchart TD
 - [Mike Cohn, User Stories Applied](https://www.mountaingoatsoftware.com/books/user-stories-applied) — 유저스토리 실무
 - [Dan North, Introducing BDD](https://dannorth.net/introducing-bdd/) — Given/When/Then과 BDD의 출발
 - [Alberto Brandolini, EventStorming](https://www.eventstorming.com/) — 이벤트 스토밍
-
-<details>
-<summary><strong>6편 hero 이미지 프롬프트 (현재 임시로 4편 이미지 사용 중 — 실제 이미지 생성용 보관)</strong></summary>
-
-```text
-A dark navy gradient scene (#0a1628 edges → #1a2744 center) with a faint hexagonal grid floor receding into the distance and a few sparse glowing ambient particles, corners kept calm. The dominant focal element is a horizontal isometric delivery pipeline of glowing stations flowing left-to-right — a gold user-story card → acceptance-criteria (Given/When/Then) tile → MoSCoW/MVP scope gate → lo-fi wireframe frame → API-spec tile → build → QA check → a green released increment — connected by a bright cyan flow that curves back from release to the story card, closing into a loop (tying to the series' inspect-adapt motif). A glowing gold "living policy doc" tablet hovers to one side, feeding dotted amber decision-lines into the acceptance-criteria and build stations. At the scope gate, a few cards glow green ("Must") while one is dimmed coral and set aside ("Won't this time"). Color palette and narrative roles: cyan/blue = the flowing delivery pipeline, the loop turning (~55%); gold = the user-story origin and the living policy anchor, the "why/decisions" (~20%); green = released, done, the Must scope (~15%); coral = the deferred "Won't this time" card, set aside not failed (~10%); no server racks, no cube clusters, no console monitors — depth from glow, haze, and sparse particles, focal clarity like the DB Deadlock hero where every color tells one part of the story. Isometric 2.5D style, dark navy background, multi-color narrative palette (cyan + gold + green + coral), no text. Aspect ratio 3:2 (1536x1024).
-```
-
-</details>

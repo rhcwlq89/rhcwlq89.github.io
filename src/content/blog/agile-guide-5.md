@@ -8,7 +8,7 @@ tags:
   - 스케일링
   - 가짜 애자일
   - 애자일 프로세스
-heroImage: "../../assets/AgileGuide4.png"
+heroImage: "../../assets/AgileGuide5.png"
 ---
 
 ## 서론
@@ -27,6 +27,7 @@ heroImage: "../../assets/AgileGuide4.png"
 - [4편 — 실천과 측정 — XP부터 벨로시티 · DORA까지](/blog/agile-guide-4)
 - <strong>5편 — 스케일링과 가짜 애자일 (이 글)</strong>
 - [6편 — 실전: 유저스토리에서 릴리스까지](/blog/agile-guide-6)
+- [7편 — 디스커버리: 유저스토리는 어디서 오는가](/blog/agile-guide-7)
 
 ---
 
@@ -181,12 +182,3 @@ flowchart LR
 - [Team Topologies (Skelton & Pais)](https://teamtopologies.com/) — 역콘웨이 전략과 팀 유형 설계
 - [Martin Fowler, "The State of Agile Software in 2018"](https://martinfowler.com/articles/agile-aus-2018.html) — 애자일 산업 복합체 비판
 - [Manifesto for Agile Software Development](https://agilemanifesto.org/) — 시리즈의 출발점, 애자일 선언문
-
-<details>
-<summary><strong>5편 hero 이미지 프롬프트 (현재 임시로 4편 이미지 사용 중 — 실제 이미지 생성용 보관)</strong></summary>
-
-```text
-A dark navy gradient scene (#0a1628 edges → #1a2744 center) with a faint hexagonal grid floor receding into the distance and a few sparse glowing ambient particles, corners kept calm and atmospheric. The dominant focal element is one large central inspect-and-adapt learning loop — a glowing cyan ring of four arc nodes (values → process → practices → measurement, curving back) with a warm gold core glowing at its hub as the "values / why" anchor, wrapped in a soft halo with a floor reflection. Around it, several smaller team-loops orbit like satellites, thin connecting lines linking them (multi-team scaling) and faintly echoing an org-chart silhouette above them (Conway's Law); a couple of those links are tangled and tinged coral-red, signaling dependency overload. One orbiting loop is frozen and cracked in coral — its ceremony shapes intact but not turning (fake Agile) — while a gold beam from the central core re-ignites it, its arc shifting back to flowing cyan-green (recovery). Color palette and narrative roles: cyan/blue = the turning learning loop, healthy Agile (~55%); gold = the values/why core that anchors and re-ignites (~15%); coral-red = fake Agile (the stalled, cracked loop) and the tangled over-coordination links (~20%); green = the recovered loop turning again (~10%); no server racks, no cube clusters, no console monitors — depth from glow, haze, and sparse particles, with focal clarity like the DB Deadlock hero where every color tells one part of the story. Isometric 2.5D style, dark navy background, multi-color narrative palette (cyan + gold + coral + green), no text. Aspect ratio 3:2 (1536x1024).
-```
-
-</details>

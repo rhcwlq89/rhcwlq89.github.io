@@ -4,7 +4,7 @@ description: "The destination of the series. What gets hard when you scale beyon
 pubDate: "2026-05-26T14:00:00+09:00"
 lang: en
 tags: ["Agile", "Scaling", "Fake Agile", "Agile Process", "Software Methodology"]
-heroImage: "../../../assets/AgileGuide4.png"
+heroImage: "../../../assets/AgileGuide5.png"
 ---
 
 ## Introduction
@@ -23,6 +23,7 @@ The target reader is an organization that tried to run Agile across many teams a
 - [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
 - <strong>Part 5 — Scaling and Fake Agile (this post)</strong>
 - [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
+- [Part 7 — Discovery: Where Do User Stories Come From](/en/blog/agile-guide-7)
 
 ---
 
