@@ -18,12 +18,12 @@ Part 1 starts where it should: the <strong>Controller · Service · Repository �
 The target reader is a junior backend engineer who knows Spring but isn't sure where evaluators are looking. After reading, you should no longer hesitate about what belongs in which layer.
 
 - <strong>Part 1 — Core Application Layer (this post)</strong>
-- Part 2 — [Database &amp; Testing](/blog/en/spring-boot-pre-interview-guide-2)
-- Part 3 — [Documentation &amp; AOP](/blog/en/spring-boot-pre-interview-guide-3)
-- Part 4 — [Performance &amp; Optimization](/blog/en/spring-boot-pre-interview-guide-4)
-- Part 5 — [Security &amp; Authentication](/blog/en/spring-boot-pre-interview-guide-5)
-- Part 6 — [DevOps &amp; Deployment](/blog/en/spring-boot-pre-interview-guide-6)
-- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
+- Part 2 — [Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation &amp; AOP](/en/blog/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance &amp; Optimization](/en/blog/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security &amp; Authentication](/en/blog/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps &amp; Deployment](/en/blog/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
@@ -944,7 +944,7 @@ class ProductRepositoryImpl(
 }
 ```
 
-> <strong>Note</strong>: Pagination depth (Page vs Slice, cursor-based pagination) is covered in [Part 4 — Performance](/blog/en/spring-boot-pre-interview-guide-4); Querydsl dependencies and setup live in [Part 2 — Database &amp; Testing](/blog/en/spring-boot-pre-interview-guide-2).
+> <strong>Note</strong>: Pagination depth (Page vs Slice, cursor-based pagination) is covered in [Part 4 — Performance](/en/blog/spring-boot-pre-interview-guide-4); Querydsl dependencies and setup live in [Part 2 — Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2).
 
 ---
 
@@ -1182,7 +1182,7 @@ In a bidirectional mapping, one side is the <strong>"owner of the relationship"<
 
 </details>
 
-> <strong>Note</strong>: N+1 problems caused by associations, fetch joins, and `@EntityGraph` are covered in [Part 4 — Performance](/blog/en/spring-boot-pre-interview-guide-4).
+> <strong>Note</strong>: N+1 problems caused by associations, fetch joins, and `@EntityGraph` are covered in [Part 4 — Performance](/en/blog/spring-boot-pre-interview-guide-4).
 
 ---
 
@@ -1266,7 +1266,7 @@ class GlobalExceptionHandler {
 }
 ```
 
-> <strong>Note</strong>: How to integrate Spring Security's authentication/authorization exceptions (`AuthenticationException`, `AccessDeniedException`) into the same handler shape is covered in [Part 5 — Security](/blog/en/spring-boot-pre-interview-guide-5).
+> <strong>Note</strong>: How to integrate Spring Security's authentication/authorization exceptions (`AuthenticationException`, `AccessDeniedException`) into the same handler shape is covered in [Part 5 — Security](/en/blog/spring-boot-pre-interview-guide-5).
 
 ---
 
@@ -1307,4 +1307,4 @@ class GlobalExceptionHandler {
 
 The next part is <strong>Database &amp; Testing</strong>. With the four layers drawn in code, we now look at the database those layers live on and how that code gets verified. Profile-based H2/MySQL separation, JPA mapping pitfalls, and how to split unit, slice, and integration tests so the evaluator walks away thinking, "this person actually writes tests."
 
-[Next: Part 2 — Database &amp; Testing](/blog/en/spring-boot-pre-interview-guide-2)
+[Next: Part 2 — Database &amp; Testing](/en/blog/spring-boot-pre-interview-guide-2)

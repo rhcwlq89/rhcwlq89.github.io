@@ -20,12 +20,12 @@ That is where <strong>Spring Batch</strong> belongs. Spring Batch is a framework
 The target reader is a backend engineer who has either followed the Spring Boot Pre-Interview Guide series or has solid Spring Boot fundamentals. No prior Spring Batch 5.x experience is required — we settle into 6.x from scratch.
 
 - <strong>Part 1 — Job · Step · Metadata Identity (this post)</strong>
-- [Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer](/blog/en/spring-batch-6-guide-2)
-- [Part 3 — Transactions · Failure Handling — Skip · Retry · Restart](/blog/en/spring-batch-6-guide-3)
-- [Part 4 — Job Launch · Scheduling · Operations](/blog/en/spring-batch-6-guide-4)
-- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/blog/en/spring-batch-6-guide-5)
-- [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
-- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
+- [Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer](/en/blog/spring-batch-6-guide-2)
+- [Part 3 — Transactions · Failure Handling — Skip · Retry · Restart](/en/blog/spring-batch-6-guide-3)
+- [Part 4 — Job Launch · Scheduling · Operations](/en/blog/spring-batch-6-guide-4)
+- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/en/blog/spring-batch-6-guide-5)
+- [Part 6 — Observability · Testing · Deployment](/en/blog/spring-batch-6-guide-6)
+- [Capstone — Marketplace Analytics Pipeline](/en/blog/spring-batch-6-guide-capstone)
 
 ---
 
@@ -79,7 +79,7 @@ The key difference: <strong>crontab and CronJob spin up a fresh process every ti
 
 The series default stack is <strong>Spring Boot 4 + Kotlin 2.3 + Java 21 + PostgreSQL 16</strong>.
 
-> <strong>Note — Spring Boot 4 + Kotlin 2.3 project setup</strong>: The baseline Spring Boot 4 setup (`kotlin-spring` / `kotlin-jpa` plugins, the `build.gradle.kts` skeleton, profile-based `application.yml`) is covered in [Spring Boot Pre-Interview Guide Part 1, §1.1](/blog/en/spring-boot-pre-interview-guide-1). This post stacks Spring Batch 6 dependencies and metadata datasource configuration on top of that. The Kotlin 2.x line is backward compatible, so the same code works on 2.0 through 2.3.
+> <strong>Note — Spring Boot 4 + Kotlin 2.3 project setup</strong>: The baseline Spring Boot 4 setup (`kotlin-spring` / `kotlin-jpa` plugins, the `build.gradle.kts` skeleton, profile-based `application.yml`) is covered in [Spring Boot Pre-Interview Guide Part 1, §1.1](/en/blog/spring-boot-pre-interview-guide-1). This post stacks Spring Batch 6 dependencies and metadata datasource configuration on top of that. The Kotlin 2.x line is backward compatible, so the same code works on 2.0 through 2.3.
 
 **build.gradle.kts** (batch-relevant parts only):
 

@@ -9,7 +9,7 @@ heroImage: "../../../assets/ClaudeCodeAdvancedGuide.png"
 
 ## Introduction
 
-In [Part 1](/blog/en/claude-code-advanced-guide-1), we covered memory, skills, and hooks. In [Part 2](/blog/en/claude-code-advanced-guide-2), we covered plugins, MCP, and IDE integration.
+In [Part 1](/en/blog/claude-code-advanced-guide-1), we covered memory, skills, and hooks. In [Part 2](/en/blog/claude-code-advanced-guide-2), we covered plugins, MCP, and IDE integration.
 
 In this final Part 3, we cover Claude Code's **most powerful features**:
 

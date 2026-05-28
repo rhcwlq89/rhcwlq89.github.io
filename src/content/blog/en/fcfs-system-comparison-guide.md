@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/db-deadlock-and-lock-strategy-guide), we covered the limits of FOR UPDATE. When 100 users hit simultaneously, 99 wait in line, the connection pool gets exhausted, and deadlock risk follows. **DB locks alone can't handle a high-traffic first-come-first-served system.**
+In the [previous post](/en/blog/db-deadlock-and-lock-strategy-guide), we covered the limits of FOR UPDATE. When 100 users hit simultaneously, 99 wait in line, the connection pool gets exhausted, and deadlock risk follows. **DB locks alone can't handle a high-traffic first-come-first-served system.**
 
 This post steps back to see the big picture — **what problems does a FCFS system need to solve, what options exist, and when should you use each one?**
 

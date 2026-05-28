@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-[AWS Private EC2 Operations Guide Part 4](/blog/en/aws-private-ec2-guide-4) introduces OIDC federation as the way to permanently delete AWS access keys from GitHub Actions. The recipe works if you follow it — but surprisingly few engineers can draw what's actually happening underneath.
+[AWS Private EC2 Operations Guide Part 4](/en/blog/aws-private-ec2-guide-4) introduces OIDC federation as the way to permanently delete AWS access keys from GitHub Actions. The recipe works if you follow it — but surprisingly few engineers can draw what's actually happening underneath.
 
 The four most common questions:
 
@@ -357,7 +357,7 @@ The JWT spec includes an `alg: none` option (no signature). Some older libraries
 The deepest layer. For signature verification to be meaningful, <strong>AWS must hold the genuine GitHub public key</strong>. If an attacker could intercept the connection and inject a fake public key, they could mint their own valid signatures freely. Two safeguards prevent this:
 
 - <strong>HTTPS / TLS certificates</strong>: AWS validates the standard TLS chain when fetching JWKS, blocking man-in-the-middle attacks.
-- <strong>OIDC Provider thumbprint</strong>: registering the provider in IAM pins GitHub's certificate thumbprint (the `thumbprint_list` field in [Part 4](/blog/en/aws-private-ec2-guide-4)'s Terraform). If the cert changes unexpectedly, the call is rejected. AWS now auto-validates this so it's largely vestigial, but the original intent was this layer of defense.
+- <strong>OIDC Provider thumbprint</strong>: registering the provider in IAM pins GitHub's certificate thumbprint (the `thumbprint_list` field in [Part 4](/en/blog/aws-private-ec2-guide-4)'s Terraform). If the cert changes unexpectedly, the call is rejected. AWS now auto-validates this so it's largely vestigial, but the original intent was this layer of defense.
 
 <strong>Summary — JWT security is a five-piece set</strong>
 
@@ -369,7 +369,7 @@ Signature verification is sufficient and powerful for tampering. But it doesn't 
 - <strong>`sub` condition</strong> — blocks other identities sharing the same IdP
 - <strong>Algorithm allowlist + JWKS HTTPS trust</strong> — prevents bypass and forgery
 
-All five together. Drop any one and the whole posture weakens — which is why [Part 4](/blog/en/aws-private-ec2-guide-4) emphasized the missing-`sub` case so heavily.
+All five together. Drop any one and the whole posture weakens — which is why [Part 4](/en/blog/aws-private-ec2-guide-4) emphasized the missing-`sub` case so heavily.
 
 ---
 
@@ -548,7 +548,7 @@ What to take away:
 5. <strong>The trust policy's `sub` / `aud` conditions are the lock on federation.</strong> Drop them and any external identity trusted by the same provider can take your role — the number-one cause of OIDC incidents.
 6. <strong>OIDC is one of five patterns sharing the same skeleton — alongside SAML, IAM Identity Center, EKS IRSA, and Cognito.</strong> Internalize the pattern once and reuse it in five places.
 
-If [AWS Private EC2 Operations Guide Part 4](/blog/en/aws-private-ec2-guide-4) was the code that applies this pattern in our environment, this post is the look at what parts fit together underneath. The next time you encounter EKS IRSA, corporate SSO, or cross-account AssumeRole, the same mental model applies.
+If [AWS Private EC2 Operations Guide Part 4](/en/blog/aws-private-ec2-guide-4) was the code that applies this pattern in our environment, this post is the look at what parts fit together underneath. The next time you encounter EKS IRSA, corporate SSO, or cross-account AssumeRole, the same mental model applies.
 
 ---
 
@@ -579,4 +579,4 @@ If [AWS Private EC2 Operations Guide Part 4](/blog/en/aws-private-ec2-guide-4) w
 
 ### C. Sister post
 
-- [AWS Private EC2 Operations Guide Part 4 — Applying GitHub Actions OIDC in production](/blog/en/aws-private-ec2-guide-4)
+- [AWS Private EC2 Operations Guide Part 4 — Applying GitHub Actions OIDC in production](/en/blog/aws-private-ec2-guide-4)

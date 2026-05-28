@@ -9,7 +9,7 @@ heroImage: "../../../assets/AgileGuide4.png"
 
 ## Introduction
 
-If everything through the [previous post](/blog/en/agile-guide-3) was "what frame do you work in" (Scrum, Kanban), Part 4 takes on two questions that play out inside that frame.
+If everything through the [previous post](/en/blog/agile-guide-3) was "what frame do you work in" (Scrum, Kanban), Part 4 takes on two questions that play out inside that frame.
 
 First, <strong>how do you actually build the code in there?</strong> Run every Scrum event you like — if you can't change the code safely and fast, the short iterative loop itself stalls. What owns this "how you build" is XP's engineering practices.
 
@@ -19,12 +19,12 @@ Two warnings run through both questions. <strong>Adopt the process but skip the 
 
 The target reader is a team that runs Scrum but is increasingly afraid to touch the code, or someone pressured to use velocity as a productivity metric.
 
-- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/blog/en/agile-guide-1)
-- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/blog/en/agile-guide-2)
-- [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
+- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/en/blog/agile-guide-1)
+- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/en/blog/agile-guide-2)
+- [Part 3 — Kanban · Lean · Flow](/en/blog/agile-guide-3)
 - <strong>Part 4 — Practices and Measurement — From XP to Velocity · DORA (this post)</strong>
-- [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
-- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
+- [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
+- [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
 
 ---
 

@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/fcfs-redis-implementation), we handled tens of thousands of stock deductions per second with Redis. Fast and accurate — but one fundamental problem remains: **everyone hits the system at once.**
+In the [previous post](/en/blog/fcfs-redis-implementation), we handled tens of thousands of stock deductions per second with Redis. Fast and accurate — but one fundamental problem remains: **everyone hits the system at once.**
 
 With 100 items and 10,000 concurrent requests, 9,900 people get an **instant "sold out."** It's over in 0.01 seconds. From the user's perspective, they click the button and it's immediately gone. That doesn't feel fair.
 

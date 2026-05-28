@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/rdb-index-join-strategy-guide), we covered index design and JOIN strategies. At this point, you have the tools for "how to design well" — naming, normalization, constraints, relationship patterns, and indexes.
+In the [previous post](/en/blog/rdb-index-join-strategy-guide), we covered index design and JOIN strategies. At this point, you have the tools for "how to design well" — naming, normalization, constraints, relationship patterns, and indexes.
 
 But knowing good design isn't enough. **Without the ability to recognize bad design**, you can't flag problems in code reviews, and you have no criteria for refactoring legacy schemas.
 
@@ -252,7 +252,7 @@ CREATE TABLE orders (
 );
 ```
 
-Domain-specific tables allow **proper NOT NULL, CHECK, UNIQUE, FK** constraints. Constraints are documentation — see [Part 3](/blog/en/rdb-constraints-integrity-guide).
+Domain-specific tables allow **proper NOT NULL, CHECK, UNIQUE, FK** constraints. Constraints are documentation — see [Part 3](/en/blog/rdb-constraints-integrity-guide).
 
 ---
 
@@ -541,7 +541,7 @@ UPDATE products SET price = 39900 WHERE id = 1;
 -- → Impossible. No price history exists.
 ```
 
-In [Part 5](/blog/en/rdb-domain-schema-design-guide), we covered the **snapshot pattern** for storing prices at order time. Temporal Data is a more **general approach** — embedding data validity periods directly into the schema.
+In [Part 5](/en/blog/rdb-domain-schema-design-guide), we covered the **snapshot pattern** for storing prices at order time. Temporal Data is a more **general approach** — embedding data validity periods directly into the schema.
 
 ### 5.2 Validity Period Pattern (valid_from / valid_to)
 

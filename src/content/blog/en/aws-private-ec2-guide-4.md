@@ -9,15 +9,15 @@ lang: en
 
 ## Introduction
 
-In [Part 3](/blog/en/aws-private-ec2-guide-3) we closed port 22 forever. Operators get a shell via SSM. But <strong>deployment is a different problem</strong>. How does GitHub Actions propagate code to the EC2 on every push?
+In [Part 3](/en/blog/aws-private-ec2-guide-3) we closed port 22 forever. Operators get a shell via SSM. But <strong>deployment is a different problem</strong>. How does GitHub Actions propagate code to the EC2 on every push?
 
 The traditional answers were two. One: store an AWS Access Key as a GitHub Secret and `ssh`/`scp` a jar to the EC2. Two: stand up Jenkins inside the EC2 and have it do the same. Both <strong>park long-lived credentials somewhere</strong>, which is why key leaks have been the most common pipeline-security failure.
 
 This post drops both. <strong>OIDC federation</strong> removes the key from GitHub, and <strong>S3 + SSM/CodeDeploy</strong> removes the open port — a deployment pipeline that needs neither.
 
-- [Part 1 — Why Private Subnet?](/blog/en/aws-private-ec2-guide-1)
-- [Part 2 — Building VPC infrastructure with Terraform](/blog/en/aws-private-ec2-guide-2)
-- [Part 3 — Connecting without Bastion via SSM Session Manager](/blog/en/aws-private-ec2-guide-3)
+- [Part 1 — Why Private Subnet?](/en/blog/aws-private-ec2-guide-1)
+- [Part 2 — Building VPC infrastructure with Terraform](/en/blog/aws-private-ec2-guide-2)
+- [Part 3 — Connecting without Bastion via SSM Session Manager](/en/blog/aws-private-ec2-guide-3)
 - <strong>Part 4 — CI/CD pipeline with GitHub Actions + SSM/CodeDeploy (this post)</strong>
 - Part 5 — Cost analysis and optimization strategies
 
@@ -101,7 +101,7 @@ sequenceDiagram
 - Claims include `repo:my-org/my-repo:ref:refs/heads/main`, so the IAM trust policy can <strong>narrow access to a specific repo and branch</strong>.
 - CloudTrail records the OIDC `sub` claim, so you know which workflow run made the call.
 
-> <strong>Going deeper</strong>: A separate post unpacks STS internals, the federation skeleton, and how SAML / IAM Identity Center / EKS IRSA are variants of the same pattern — [Understanding AWS Credential Federation](/blog/en/aws-credential-federation-deep-dive). Pair it with this section if you want to step beyond the recipe and build the foundation.
+> <strong>Going deeper</strong>: A separate post unpacks STS internals, the federation skeleton, and how SAML / IAM Identity Center / EKS IRSA are variants of the same pattern — [Understanding AWS Credential Federation](/en/blog/aws-credential-federation-deep-dive). Pair it with this section if you want to step beyond the recipe and build the foundation.
 
 ### 2.3 Register the OIDC Provider in IAM
 

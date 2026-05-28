@@ -825,7 +825,7 @@ Access-Control-Expose-Headers: X-RateLimit-Remaining, X-Request-ID
 
 Without this, `response.headers.get('X-RateLimit-Remaining')` returns `null`.
 
-> **Full CORS guide**: [Understanding CORS: From Browser Security Policy to Spring Boot Configuration](/blog/en/cors-understanding-guide)
+> **Full CORS guide**: [Understanding CORS: From Browser Security Policy to Spring Boot Configuration](/en/blog/cors-understanding-guide)
 
 ---
 

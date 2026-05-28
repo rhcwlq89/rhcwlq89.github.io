@@ -9,7 +9,7 @@ heroImage: "../../../assets/ClaudeCodeAdvancedGuide.png"
 
 ## Introduction
 
-In [Part 1](/blog/en/claude-code-advanced-guide-1), we covered memory, skills, and hooks — ways to make Claude remember you and automate repetitive work.
+In [Part 1](/en/blog/claude-code-advanced-guide-1), we covered memory, skills, and hooks — ways to make Claude remember you and automate repetitive work.
 
 In Part 2, we expand Claude Code's reach **outward**:
 

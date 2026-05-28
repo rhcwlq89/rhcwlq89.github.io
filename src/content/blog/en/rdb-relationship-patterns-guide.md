@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/rdb-constraints-integrity-guide), we covered how constraints act as the last line of defense against bad data. You now know how to create tables, choose data types, normalize schemas, and enforce integrity rules.
+In the [previous post](/en/blog/rdb-constraints-integrity-guide), we covered how constraints act as the last line of defense against bad data. You now know how to create tables, choose data types, normalize schemas, and enforce integrity rules.
 
 But there's a question constraints alone can't answer: **"How do you design the *relationships* between tables?"**
 
@@ -1243,7 +1243,7 @@ CREATE TABLE appointments (
 | **WITH RECURSIVE** | 8.0+ (2018) | Supported since 8.4 (2005) |
 | **JSON support** | JSON type (5.7+), multi-valued index (8.0.17+) | JSONB with GIN index, `@>`, `?` operators — significantly richer |
 | **Table inheritance** | Not supported | `INHERITS` keyword — real table inheritance |
-| **EXCLUDE constraints** | Not supported | Range/overlap prevention (covered in [Part 3](/blog/en/rdb-constraints-integrity-guide)) |
+| **EXCLUDE constraints** | Not supported | Range/overlap prevention (covered in [Part 3](/en/blog/rdb-constraints-integrity-guide)) |
 | **Partial indexes** | Not supported | `CREATE INDEX ... WHERE condition` — crucial for soft-delete scenarios |
 | **Array columns** | Not supported | `INT[]`, `TEXT[]` with GIN index — can replace simple junction tables |
 | **FK on partitioned tables** | Not supported | Supported (12+) |

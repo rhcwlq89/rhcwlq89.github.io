@@ -15,11 +15,11 @@ That's the structural limit of the trees. <strong>A decision tree gives you cand
 
 This post closes the series by doing that synthesis. It nails down the four standard patterns that 90% of real-world AWS designs converge on, builds a table that shows how each pattern fills in the decision-tree branches from Parts 0–4 by default, and lays out the signals for "we're a real exception" versus "we're rationalizing." When you finish reading, the flow that should be in your head is: <strong>pick a standard pattern in five minutes, sketch the first version, then reach for the decision trees only when you need to deform a specific branch.</strong>
 
-- Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
-- Part 1 — [Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator](/blog/en/aws-vpc-edge-routing-guide-1)
-- Part 2 — [VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect](/blog/en/aws-vpc-edge-routing-guide-2)
-- Part 3 — [Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL](/blog/en/aws-vpc-edge-routing-guide-3)
-- Part 4 — [DNS decisions and Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check](/blog/en/aws-vpc-edge-routing-guide-4)
+- Part 0 — [Primer: network and AWS fundamentals](/en/blog/aws-vpc-edge-routing-guide-0)
+- Part 1 — [Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator](/en/blog/aws-vpc-edge-routing-guide-1)
+- Part 2 — [VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect](/en/blog/aws-vpc-edge-routing-guide-2)
+- Part 3 — [Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL](/en/blog/aws-vpc-edge-routing-guide-3)
+- Part 4 — [DNS decisions and Route 53: Hosted Zone / Routing Policy / Alias vs CNAME / Health Check](/en/blog/aws-vpc-edge-routing-guide-4)
 - <strong>Part 5 — Four standard patterns: from decision tree to first sketch (this post)</strong>
 
 Same target reader as the rest of the series — backend or infrastructure engineers who've walked through all five decision trees. After this post, the goal is that <strong>"this company, this workload → start from pattern X, deform branch Y"</strong> happens automatically when you sit down to design.

@@ -13,10 +13,10 @@ Throughout this series, we've implemented four FCFS approaches.
 
 | Part | Approach | Core Technology |
 |------|----------|----------------|
-| [Part 4](/blog/en/fcfs-db-lock-implementation) | DB Lock | SELECT FOR UPDATE |
-| [Part 5](/blog/en/fcfs-redis-implementation) | Redis | DECR, Lua Script |
-| [Part 6](/blog/en/fcfs-queue-implementation) | Queue | Redis Sorted Set + Kafka |
-| [Part 7](/blog/en/fcfs-token-implementation) | Token | JWT + Redis |
+| [Part 4](/en/blog/fcfs-db-lock-implementation) | DB Lock | SELECT FOR UPDATE |
+| [Part 5](/en/blog/fcfs-redis-implementation) | Redis | DECR, Lua Script |
+| [Part 6](/en/blog/fcfs-queue-implementation) | Queue | Redis Sorted Set + Kafka |
+| [Part 7](/en/blog/fcfs-token-implementation) | Token | JWT + Redis |
 
 We've said "fast" and "slow" in each post, but **never compared them under identical conditions.** This post runs k6 load tests on all four approaches with the same environment, same scenarios, and lets the numbers speak.
 
@@ -447,7 +447,7 @@ At 1,000 users, DB lock P99 reaches 1.7 seconds. Redis and token both hit ~2,200
 
 At 2,000 users, every approach's P99 exceeds 3 seconds. DB lock (3,393ms) and token (3,240ms) land at similar levels, with Redis (2,874ms) lowest. The standout finding is **token TPS collapsing to 1,137**. It matched Redis at 1,000 users (2,230 vs 2,224), but drops to just 60% of Redis (1,918) at 2,000. JWT signing/verification is CPU-bound, and it becomes a bottleneck as concurrency climbs.
 
-> \* The queue success count exceeding 100 is caused by the Kafka consumer's COMPLETED marking logic. Actual stock deduction is precisely capped at 100. See [Part 9](/blog/en/fcfs-load-test-behind-the-scenes) for a detailed analysis.
+> \* The queue success count exceeding 100 is caused by the Kafka consumer's COMPLETED marking logic. Actual stock deduction is precisely capped at 100. See [Part 9](/en/blog/fcfs-load-test-behind-the-scenes) for a detailed analysis.
 
 ### 3.5 Reference: Same Test with PostgreSQL (DB Lock)
 
@@ -668,7 +668,7 @@ k6 run --out json=result.json test-db-lock.js
 - **JVM warmup**: First run may be slow due to JIT compilation. Use results from runs 2-3
 - **Network**: Place k6 and server on the same network to avoid network latency skewing results
 
-For a walkthrough of how this test environment was built, see [Part 9](/blog/en/fcfs-load-test-behind-the-scenes).
+For a walkthrough of how this test environment was built, see [Part 9](/en/blog/fcfs-load-test-behind-the-scenes).
 
 ---
 

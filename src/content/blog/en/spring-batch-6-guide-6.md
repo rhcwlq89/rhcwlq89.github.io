@@ -9,7 +9,7 @@ heroImage: "../../../assets/SpringBatch6Guide6.png"
 
 ## Introduction
 
-Through [Part 5](/blog/en/spring-batch-6-guide-5) we built jobs (Parts 2–3), ran them (Part 4), and made them fast (Part 5). One last question remains — <strong>how do you know it's actually running well? How do you catch regressions? How do you deploy safely?</strong>
+Through [Part 5](/en/blog/spring-batch-6-guide-5) we built jobs (Parts 2–3), ran them (Part 4), and made them fast (Part 5). One last question remains — <strong>how do you know it's actually running well? How do you catch regressions? How do you deploy safely?</strong>
 
 Part 6 covers the final three operational pieces: <strong>observability</strong> that turns job state into numbers (Micrometer metrics + MDC logs), <strong>testing</strong> that catches regressions (from pyramid/double basics to `@SpringBatchTest`/Testcontainers specifics), and <strong>deployment</strong> that packages it into a container on a schedule (Java 21 multi-stage + K8s CronJob).
 
@@ -23,7 +23,7 @@ The target reader is a backend engineer who has built and run jobs through Parts
 - Part 4 — Job Launch · Scheduling · Operations
 - Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers
 - <strong>Part 6 — Observability · Testing · Deployment (this post)</strong>
-- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
+- [Capstone — Marketplace Analytics Pipeline](/en/blog/spring-batch-6-guide-capstone)
 
 ---
 

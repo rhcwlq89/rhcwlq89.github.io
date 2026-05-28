@@ -9,7 +9,7 @@ heroImage: "../../../assets/AgileGuide4.png"
 
 ## Introduction
 
-Through the [previous post](/blog/en/agile-guide-5), five parts went once around "what Agile is, why it's done that way, and why it breaks." All of it was <strong>concept</strong>.
+Through the [previous post](/en/blog/agile-guide-5), five parts went once around "what Agile is, why it's done that way, and why it breaks." All of it was <strong>concept</strong>.
 
 But sit down with your team on a Monday morning and the questions get more concrete. "How do I write a story?", "How does an acceptance criterion become a QA test?", "Where does the MVP stop?", "Do we need event storming?" Even knowing the concepts, <strong>the order they run in — from user story to release — has to be drawn out separately</strong> to stick.
 
@@ -17,11 +17,11 @@ Part 6 walks that practical flow once around. It's not a specific business but a
 
 The target reader is someone who has the concepts but is stuck on "so what does our team do first tomorrow."
 
-- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/blog/en/agile-guide-1)
-- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/blog/en/agile-guide-2)
-- [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
-- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
-- [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
+- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/en/blog/agile-guide-1)
+- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/en/blog/agile-guide-2)
+- [Part 3 — Kanban · Lean · Flow](/en/blog/agile-guide-3)
+- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
+- [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
 - <strong>Part 6 — Hands-On: From User Story to Release (this post)</strong>
 
 ---

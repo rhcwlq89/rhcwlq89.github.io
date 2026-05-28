@@ -9,7 +9,7 @@ heroImage: "../../../assets/SpringBatch6Guide4.png"
 
 ## Introduction
 
-Through [Part 3](/blog/en/spring-batch-6-guide-3) we focused on how to *write* a job — read and transform and write in chunks, handle failure with Skip and Retry, resume on death. Part 4 is about how to *run* it.
+Through [Part 3](/en/blog/spring-batch-6-guide-3) we focused on how to *write* a job — read and transform and write in chunks, handle failure with Skip and Retry, resume on death. Part 4 is about how to *run* it.
 
 The questions cascade. Who launches the job, and when? Is one `@Scheduled` line enough, or is cron or K8s better? You scaled out to several servers — now the same job runs twice? Can the aggregation job hit the operational DB directly, or should it read from somewhere else?
 
@@ -21,9 +21,9 @@ The target reader is a backend engineer who has built jobs through Parts 1–3. 
 - Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer
 - Part 3 — Transactions · Failure Handling — Skip · Retry · Restart
 - <strong>Part 4 — Job Launch · Scheduling · Operations (this post)</strong>
-- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/blog/en/spring-batch-6-guide-5)
-- [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
-- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
+- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/en/blog/spring-batch-6-guide-5)
+- [Part 6 — Observability · Testing · Deployment](/en/blog/spring-batch-6-guide-6)
+- [Capstone — Marketplace Analytics Pipeline](/en/blog/spring-batch-6-guide-capstone)
 
 ---
 

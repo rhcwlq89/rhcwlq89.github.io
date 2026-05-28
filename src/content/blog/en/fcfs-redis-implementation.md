@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/fcfs-db-lock-implementation), we implemented an FCFS system with DB pessimistic locks. Data consistency was perfect with 100 concurrent requests, but we hit **serialization bottlenecks, connection pool exhaustion, and deadlock risks**.
+In the [previous post](/en/blog/fcfs-db-lock-implementation), we implemented an FCFS system with DB pessimistic locks. Data consistency was perfect with 100 concurrent requests, but we hit **serialization bottlenecks, connection pool exhaustion, and deadlock risks**.
 
 This post goes beyond DB limits to cover **handling tens of thousands of requests per second with Redis**. We start with DECR atomic operations, bundle validation + deduction + duplicate checking into a single atomic Lua script, and directly compare performance against DB locks under identical conditions.
 
@@ -556,7 +556,7 @@ HALF_OPEN (trial) → sends a few requests to Redis to check recovery
   ↓ success → CLOSED / failure → OPEN
 ```
 
-> Resilience4j provides more than just circuit breakers — it also offers `@Bulkhead` (concurrency limiting) as covered in [j.u.c Practical Patterns](/blog/en/java-concurrent-practical-patterns/) Section 6. One library gives you circuit breakers, bulkheads, retries, and rate limiters that compose together.
+> Resilience4j provides more than just circuit breakers — it also offers `@Bulkhead` (concurrency limiting) as covered in [j.u.c Practical Patterns](/en/blog/java-concurrent-practical-patterns/) Section 6. One library gives you circuit breakers, bulkheads, retries, and rate limiters that compose together.
 
 ---
 

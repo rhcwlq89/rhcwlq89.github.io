@@ -9,11 +9,11 @@ lang: en
 
 ## Introduction
 
-If [Part 1](/blog/en/aws-private-ec2-guide-1) convinced you of <strong>why</strong> Private Subnet, Part 2 is where we <strong>actually stand it up</strong>. This isn't a read-and-move-on post — paste the code in this article into a `main.tf`, run `terraform apply`, and the diagram from Part 1 materializes in your AWS account.
+If [Part 1](/en/blog/aws-private-ec2-guide-1) convinced you of <strong>why</strong> Private Subnet, Part 2 is where we <strong>actually stand it up</strong>. This isn't a read-and-move-on post — paste the code in this article into a `main.tf`, run `terraform apply`, and the diagram from Part 1 materializes in your AWS account.
 
 The approach is deliberate — <strong>a single `main.tf`</strong>. Telling a junior "split it into files first" burns mental energy tracking which variable lives where. Reading the file top-to-bottom should expose the dependency chain; we only divide regions with comment blocks (`# ===== VPC =====`). Production-grade module splitting comes in the final section.
 
-- [Part 1 — Why Private Subnet?](/blog/en/aws-private-ec2-guide-1)
+- [Part 1 — Why Private Subnet?](/en/blog/aws-private-ec2-guide-1)
 - <strong>Part 2 — Building VPC infrastructure with Terraform (this post)</strong>
 - Part 3 — Connecting without Bastion using SSM Session Manager
 - Part 4 — CI/CD pipeline with GitHub Actions + SSM/CodeDeploy

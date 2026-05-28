@@ -9,7 +9,7 @@ heroImage: "../../../assets/AgileGuide4.png"
 
 ## Introduction
 
-Through the [previous post](/blog/en/agile-guide-4) we covered values (Part 1), Scrum (Part 2), Kanban (Part 3), and practices and measurement (Part 4). All of it assumed <strong>one team</strong>.
+Through the [previous post](/en/blog/agile-guide-4) we covered values (Part 1), Scrum (Part 2), Kanban (Part 3), and practices and measurement (Part 4). All of it assumed <strong>one team</strong>.
 
 In reality two things remain. First, what gets hard when a team grows beyond one into <strong>many teams</strong>. Second, why the Agile you've built so often decays into <strong>"fake Agile,"</strong> and how to climb back out.
 
@@ -17,12 +17,12 @@ Part 5, the destination of the series, synthesizes both. We look at scaling fram
 
 The target reader is an organization that tried to run Agile across many teams and only got heavier, or someone wondering "is what we do even real Agile?"
 
-- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/blog/en/agile-guide-1)
-- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/blog/en/agile-guide-2)
-- [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
-- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
+- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/en/blog/agile-guide-1)
+- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/en/blog/agile-guide-2)
+- [Part 3 — Kanban · Lean · Flow](/en/blog/agile-guide-3)
+- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
 - <strong>Part 5 — Scaling and Fake Agile (this post)</strong>
-- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
+- [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
 
 ---
 

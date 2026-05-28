@@ -13,10 +13,10 @@ Part 1 picked the entry point that fronts a VPC (ALB, NLB, API Gateway, CloudFro
 
 The layer that handles that decision is **Route 53**. Part 4 unpacks Route 53's core decisions — Hosted Zone selection, record types, Routing Policies, Health Checks. (The series synthesis and standard patterns close in Part 5.)
 
-- Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
-- Part 1 — [Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator](/blog/en/aws-vpc-edge-routing-guide-1)
-- Part 2 — [VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect](/blog/en/aws-vpc-edge-routing-guide-2)
-- Part 3 — [Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL](/blog/en/aws-vpc-edge-routing-guide-3)
+- Part 0 — [Primer: network and AWS fundamentals](/en/blog/aws-vpc-edge-routing-guide-0)
+- Part 1 — [Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator](/en/blog/aws-vpc-edge-routing-guide-1)
+- Part 2 — [VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect](/en/blog/aws-vpc-edge-routing-guide-2)
+- Part 3 — [Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL](/en/blog/aws-vpc-edge-routing-guide-3)
 - <strong>Part 4 — DNS decisions and Route 53 (this post)</strong>
 - Part 5 — Four standard patterns: from decision tree to first sketch
 

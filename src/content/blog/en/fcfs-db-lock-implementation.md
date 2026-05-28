@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/fcfs-system-comparison-guide), we compared 6 implementation strategies for FCFS systems. This post implements the **simplest one — DB pessimistic locks (SELECT FOR UPDATE)**.
+In the [previous post](/en/blog/fcfs-system-comparison-guide), we compared 6 implementation strategies for FCFS systems. This post implements the **simplest one — DB pessimistic locks (SELECT FOR UPDATE)**.
 
 We'll build it in code, test with 100 concurrent buyers, and see exactly where the limits are.
 
@@ -284,7 +284,7 @@ If a single order deducts stock for multiple products:
 | 3 | Waiting for product B ⏳ | | |
 | 4 | | Waiting for product A ⏳ | 💀 Deadlock! |
 
-> Deadlock prevention (consistent lock ordering, timeouts) was covered in [Part 2](/blog/en/db-deadlock-and-lock-strategy-guide).
+> Deadlock prevention (consistent lock ordering, timeouts) was covered in [Part 2](/en/blog/db-deadlock-and-lock-strategy-guide).
 
 ### 6.4 Realistic Thresholds
 

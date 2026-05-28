@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/rdb-relationship-patterns-guide), we covered every relationship pattern: 1:1, 1:N, N:M, self-referencing, and polymorphic associations. The theory toolkit is complete.
+In the [previous post](/en/blog/rdb-relationship-patterns-guide), we covered every relationship pattern: 1:1, 1:N, N:M, self-referencing, and polymorphic associations. The theory toolkit is complete.
 
 The problem is: **"I understand the patterns, but how do I apply them to a real domain?"**
 
@@ -239,7 +239,7 @@ If you FK-reference a user's address book (`user_addresses`), this bug is waitin
 4. Dispute.
 ```
 
-**The shipping address at order time must be frozen at that moment.** The [snapshot pattern from Part 2](/blog/en/rdb-normalization-guide) applies not just to product prices but to shipping addresses too.
+**The shipping address at order time must be frozen at that moment.** The [snapshot pattern from Part 2](/en/blog/rdb-normalization-guide) applies not just to product prices but to shipping addresses too.
 
 It's redundant from a normalization standpoint, but essential from a business standpoint. This is one of those mistakes that hurt when you catch it in production.
 
@@ -284,7 +284,7 @@ This aggregation is **computed at application level**, or the order status is **
 - Status timestamps are **snapshots of the current state**
 - Detailed history (who changed what, when, why) lives in `order_status_histories`
 
-This is **intentional denormalization** from [Part 2](/blog/en/rdb-normalization-guide).
+This is **intentional denormalization** from [Part 2](/en/blog/rdb-normalization-guide).
 
 Notice `shipped_at` and `delivered_at` are **not** on orders. When there are multiple deliveries, "the order's shipment time" becomes ambiguous (first? last?). So those live on `order_deliveries`.
 
@@ -450,7 +450,7 @@ This trade-off shows up constantly in practice — "duplicate a derivable column
 
 Product prices change. Product names change. Option combinations (S/M/L, colors) get added or removed.
 
-**The price, name, and option at order time must stay frozen at that moment.** This is the snapshot pattern from [Part 2](/blog/en/rdb-normalization-guide).
+**The price, name, and option at order time must stay frozen at that moment.** This is the snapshot pattern from [Part 2](/en/blog/rdb-normalization-guide).
 
 ```sql
 -- ❌ Uses current price (past orders' amounts drift)
@@ -608,7 +608,7 @@ Over-tracking bloats the history table and makes debugging harder (which table d
 
 ### 6.2 `entity_type + entity_id` Is Polymorphic
 
-This is the **polymorphic association** pattern from [Part 4](/blog/en/rdb-relationship-patterns-guide). You lose FK enforcement, but for history tables — where "many types, same shape" is the norm — it's an acceptable trade-off.
+This is the **polymorphic association** pattern from [Part 4](/en/blog/rdb-relationship-patterns-guide). You lose FK enforcement, but for history tables — where "many types, same shape" is the norm — it's an acceptable trade-off.
 
 If that offends you, split into `order_status_histories` and `delivery_status_histories`. Pick based on query patterns:
 
@@ -797,7 +797,7 @@ SELECT
     AS refundable_amount;
 ```
 
-Acquire an exclusive lock (`SELECT ... FOR UPDATE`) on the order row before computing and inserting, and concurrency is safe. This is a practical application of the pessimistic locking covered in the [FCFS Part 4](/blog/en/fcfs-db-lock-implementation).
+Acquire an exclusive lock (`SELECT ... FOR UPDATE`) on the order row before computing and inserting, and concurrency is safe. This is a practical application of the pessimistic locking covered in the [FCFS Part 4](/en/blog/fcfs-db-lock-implementation).
 
 ### 8.3 Item-Level vs Order-Level Refunds
 
@@ -845,27 +845,27 @@ Part 4 Relationships → orders-deliveries-items 1:N chain,
 
 Use this when reviewing migration files in a PR.
 
-### 10.1 Naming ([Part 1](/blog/en/rdb-schema-basics-guide))
+### 10.1 Naming ([Part 1](/en/blog/rdb-schema-basics-guide))
 
 - [ ] Tables named in snake_case plural?
 - [ ] Columns in snake_case with clear meaning?
 - [ ] Boolean columns prefixed with `is_` or `has_`?
 - [ ] FK columns named `<table>_id` (e.g., `user_id`, `order_id`)?
 
-### 10.2 Data Types ([Part 1](/blog/en/rdb-schema-basics-guide))
+### 10.2 Data Types ([Part 1](/en/blog/rdb-schema-basics-guide))
 
 - [ ] VARCHAR lengths have a reason (not reflexively 255)?
 - [ ] Money uses DECIMAL (not FLOAT/DOUBLE)?
 - [ ] PKs are BIGINT (considering the 2.1B INT limit)?
 - [ ] TIMESTAMP vs DATETIME chosen deliberately?
 
-### 10.3 Normalization/Denormalization ([Part 2](/blog/en/rdb-normalization-guide))
+### 10.3 Normalization/Denormalization ([Part 2](/en/blog/rdb-normalization-guide))
 
 - [ ] Is any duplicated data intentional denormalization or a mistake?
 - [ ] Is there a sync strategy for denormalized values?
 - [ ] Snapshots applied where needed (prices, addresses, options)?
 
-### 10.4 Constraints ([Part 3](/blog/en/rdb-constraints-integrity-guide))
+### 10.4 Constraints ([Part 3](/en/blog/rdb-constraints-integrity-guide))
 
 - [ ] Columns that should be NOT NULL actually declared NOT NULL?
 - [ ] Business rules expressible via CHECK (e.g., `cancelled + refunded <= quantity`)?
@@ -873,7 +873,7 @@ Use this when reviewing migration files in a PR.
 - [ ] FKs where they belong?
 - [ ] ON DELETE strategy is appropriate?
 
-### 10.5 Relationships ([Part 4](/blog/en/rdb-relationship-patterns-guide))
+### 10.5 Relationships ([Part 4](/en/blog/rdb-relationship-patterns-guide))
 
 - [ ] Is the chosen order structure (2-level / 3-level / sibling) justified?
 - [ ] Are the boundaries between order (purchase contract) and fulfillment (delivery) clear?

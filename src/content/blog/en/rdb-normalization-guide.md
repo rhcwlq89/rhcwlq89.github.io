@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/rdb-schema-basics-guide), we covered the fundamentals you need to decide before creating a table (naming, data types, PK, NULL). This post goes one level deeper — **"How should you split and group columns?"**
+In the [previous post](/en/blog/rdb-schema-basics-guide), we covered the fundamentals you need to decide before creating a table (naming, data types, PK, NULL). This post goes one level deeper — **"How should you split and group columns?"**
 
 When you hear "normalization," textbooks come to mind. 1NF, 2NF, 3NF... But in practice, normalization boils down to one simple question: **"If I put this data here, will it cause problems later?"**
 

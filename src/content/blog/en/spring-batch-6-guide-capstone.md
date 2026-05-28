@@ -9,7 +9,7 @@ heroImage: "../../../assets/SpringBatch6GuideCapstone.png"
 
 ## Introduction
 
-Through [Part 6](/blog/en/spring-batch-6-guide-6) we learned chunks, transactions, scheduling, parallelism, observability, and testing — each separately. The capstone gathers those pieces into <strong>one project.</strong>
+Through [Part 6](/en/blog/spring-batch-6-guide-6) we learned chunks, transactions, scheduling, parallelism, observability, and testing — each separately. The capstone gathers those pieces into <strong>one project.</strong>
 
 What we build is a marketplace analytics pipeline. Every dawn it moves orders piled up in the operational DB into an analytics store (ETL), then aggregates daily and monthly KPIs on top (total revenue, order count, revenue by category, top-10 products) into tables a dashboard reads. Three jobs run in sequence with time gaps, all idempotent, observable, and run as single executions by K8s CronJob.
 

@@ -9,7 +9,7 @@ heroImage: "../../../assets/AgileGuide2.png"
 
 ## Introduction
 
-In the [previous post](/blog/en/agile-guide-1) we said the sentiment running through Agile's four values is that it <strong>admits uncertainty</strong>: you can't know everything to build up front, so rather than getting it all right in one pass, confirm often and correct often.
+In the [previous post](/en/blog/agile-guide-1) we said the sentiment running through Agile's four values is that it <strong>admits uncertainty</strong>: you can't know everything to build up front, so rather than getting it all right in one pass, confirm often and correct often.
 
 Scrum turns that attitude into the most widely used concrete skeleton. Yet in practice Scrum is often misread as <strong>"a process that's just a lot of meetings."</strong> The *why* of the daily, planning, review, and retro drops out, and the events run on autopilot because "that's how it's done."
 
@@ -17,12 +17,12 @@ Part 2 nails down that <strong>why</strong> first. There is a single key: every 
 
 The target reader runs Scrum but struggles to explain why each event exists, or whose daily has become a reporting session. You don't need Part 1, but it helps.
 
-- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/blog/en/agile-guide-1)
+- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/en/blog/agile-guide-1)
 - <strong>Part 2 — Scrum — Empirical Process Control and the 3-5-3 (this post)</strong>
-- [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
-- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
-- [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
-- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
+- [Part 3 — Kanban · Lean · Flow](/en/blog/agile-guide-3)
+- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
+- [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
+- [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
 
 ---
 

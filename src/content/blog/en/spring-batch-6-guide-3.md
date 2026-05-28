@@ -9,7 +9,7 @@ heroImage: "../../../assets/SpringBatch6Guide3.png"
 
 ## Introduction
 
-In [Part 2](/blog/en/spring-batch-6-guide-2) we saw the chunk cycle — read N → process N → write N → commit — and that its boundary is the transaction boundary. But what happens when one item inside a chunk breaks?
+In [Part 2](/en/blog/spring-batch-6-guide-2) we saw the chunk cycle — read N → process N → write N → commit — and that its boundary is the transaction boundary. But what happens when one item inside a chunk breaks?
 
 Real-world batches are dirty. Three of a million orders are malformed, the database occasionally throws a deadlock, and the external notification API times out now and then. At that moment you have three choices — <strong>throw the whole thing away</strong>, <strong>skip the dirty one</strong>, or <strong>retry shortly after</strong>. And if a job dies midway, it must be able to <strong>resume from where it stopped</strong> instead of starting over.
 
@@ -20,10 +20,10 @@ The target reader is a backend engineer who understands Part 2's chunk mechanism
 - Part 1 — Job · Step · Metadata Identity
 - Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer
 - <strong>Part 3 — Transactions · Failure Handling — Skip · Retry · Restart (this post)</strong>
-- [Part 4 — Job Launch · Scheduling · Operations](/blog/en/spring-batch-6-guide-4)
-- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/blog/en/spring-batch-6-guide-5)
-- [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
-- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
+- [Part 4 — Job Launch · Scheduling · Operations](/en/blog/spring-batch-6-guide-4)
+- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/en/blog/spring-batch-6-guide-5)
+- [Part 6 — Observability · Testing · Deployment](/en/blog/spring-batch-6-guide-6)
+- [Capstone — Marketplace Analytics Pipeline](/en/blog/spring-batch-6-guide-capstone)
 
 ---
 

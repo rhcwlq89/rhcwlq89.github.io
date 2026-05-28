@@ -9,7 +9,7 @@ heroImage: "../../../assets/KindLokiGrafanaMonitoring.png"
 
 ## Introduction
 
-In [Part 2](/blog/en/kind-argocd-gitops-pipeline), we built a GitOps pipeline with ArgoCD.
+In [Part 2](/en/blog/kind-argocd-gitops-pipeline), we built a GitOps pipeline with ArgoCD.
 A single Git push now triggers an automatic deployment.
 
 But there is one piece still missing.
@@ -27,8 +27,8 @@ This post installs the **Loki + Promtail + Grafana** stack
 to build a log monitoring environment for a kind cluster.
 
 > This is the third and final post in the **Local K8s Practice** series.
-> - **Part 1**: [Setting Up a Local K8s Cluster with kind](/blog/en/kind-local-k8s-cluster-setup)
-> - **Part 2**: [Building a Local GitOps Pipeline with ArgoCD on kind](/blog/en/kind-argocd-gitops-pipeline)
+> - **Part 1**: [Setting Up a Local K8s Cluster with kind](/en/blog/kind-local-k8s-cluster-setup)
+> - **Part 2**: [Building a Local GitOps Pipeline with ArgoCD on kind](/en/blog/kind-argocd-gitops-pipeline)
 > - **This post**: K8s Log Monitoring with Loki + Grafana
 
 ---

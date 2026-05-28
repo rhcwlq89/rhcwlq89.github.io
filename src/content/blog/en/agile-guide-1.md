@@ -18,11 +18,11 @@ This series fills in that <strong>why</strong>. It is not a textbook for memoriz
 The target reader is a practitioner who adopted Agile but isn't sure why, someone worn out by fake Agile, or anyone who wants to once and for all sort out the philosophy behind the process. No prior knowledge required.
 
 - <strong>Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles (this post)</strong>
-- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/blog/en/agile-guide-2)
-- [Part 3 — Kanban · Lean · Flow](/blog/en/agile-guide-3)
-- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
-- [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
-- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
+- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/en/blog/agile-guide-2)
+- [Part 3 — Kanban · Lean · Flow](/en/blog/agile-guide-3)
+- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
+- [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
+- [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
 
 ---
 

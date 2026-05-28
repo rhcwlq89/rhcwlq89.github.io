@@ -9,7 +9,7 @@ heroImage: "../../../assets/SpringBatch6Guide5.png"
 
 ## Introduction
 
-Through [Part 4](/blog/en/spring-batch-6-guide-4) we built jobs, handled failures, and ran them safely. All good — except it's <strong>slow.</strong> Reading a million of yesterday's orders one at a time on a single thread, the overnight aggregation isn't done by the time people arrive at work.
+Through [Part 4](/en/blog/spring-batch-6-guide-4) we built jobs, handled failures, and ran them safely. All good — except it's <strong>slow.</strong> Reading a million of yesterday's orders one at a time on a single thread, the overnight aggregation isn't done by the time people arrive at work.
 
 Part 5 covers four weapons for running the same job faster: the one-line <strong>multi-threaded Step</strong>, <strong>partitioning</strong> that splits data into ranges to run in parallel, <strong>remote partitioning/chunking</strong> that moves workers to separate processes, and JDK 21 <strong>virtual threads</strong>. Each gains and loses something different (restart and concurrency safety above all), so at the end we compare them side by side over a million rows.
 
@@ -22,8 +22,8 @@ The target reader is a backend engineer who has built jobs through Parts 1–4. 
 - Part 3 — Transactions · Failure Handling — Skip · Retry · Restart
 - Part 4 — Job Launch · Scheduling · Operations
 - <strong>Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers (this post)</strong>
-- [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
-- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
+- [Part 6 — Observability · Testing · Deployment](/en/blog/spring-batch-6-guide-6)
+- [Capstone — Marketplace Analytics Pipeline](/en/blog/spring-batch-6-guide-capstone)
 
 ---
 

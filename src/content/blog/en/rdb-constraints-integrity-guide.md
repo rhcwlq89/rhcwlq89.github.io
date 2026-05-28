@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/rdb-normalization-guide), we covered how to split and group tables — the judgment calls behind normalization and denormalization. This post goes one level deeper — **"How do you prevent bad data from entering in the first place?"**
+In the [previous post](/en/blog/rdb-normalization-guide), we covered how to split and group tables — the judgment calls behind normalization and denormalization. This post goes one level deeper — **"How do you prevent bad data from entering in the first place?"**
 
 Many developers only validate data in **application code**. A `if (age < 0) throw ...` in the service layer. App-level validation is essential, of course. But **if you only rely on the app, it will eventually be bypassed.**
 
@@ -163,7 +163,7 @@ DB CHECK:       "Block bad data regardless of entry path" → Integrity
 
 ### 1.4 CHECK with ENUM Values vs Lookup Tables
 
-In [Part 1](/blog/en/rdb-schema-basics-guide), we covered ENUM vs lookup tables. Here's how CHECK fits in:
+In [Part 1](/en/blog/rdb-schema-basics-guide), we covered ENUM vs lookup tables. Here's how CHECK fits in:
 
 | Approach | When adding values | Best when |
 |----------|-------------------|-----------|
@@ -252,7 +252,7 @@ ALTER TABLE users ADD CONSTRAINT uq_users_email_active UNIQUE (email_unique_key)
 
 ### 2.4 UNIQUE and NULL
 
-As covered in [Part 1](/blog/en/rdb-schema-basics-guide), NULL behavior with UNIQUE varies by database.
+As covered in [Part 1](/en/blog/rdb-schema-basics-guide), NULL behavior with UNIQUE varies by database.
 
 | DB | Allows multiple NULLs |
 |----|:---:|
@@ -602,7 +602,7 @@ CREATE TRIGGER trg_orders_updated_at
 
 ### 4.2 Generated Columns — Auto-Computed from Other Columns
 
-We briefly introduced these in [Part 2](/blog/en/rdb-normalization-guide)'s denormalization section. Here's a deeper look.
+We briefly introduced these in [Part 2](/en/blog/rdb-normalization-guide)'s denormalization section. Here's a deeper look.
 
 ```sql
 -- Auto-calculate order item subtotal

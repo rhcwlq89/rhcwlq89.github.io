@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/rdb-antipattern-temporal-design-guide), we covered anti-patterns and temporal data design. Through seven parts, we covered "how to design well and what to avoid."
+In the [previous post](/en/blog/rdb-antipattern-temporal-design-guide), we covered anti-patterns and temporal data design. Through seven parts, we covered "how to design well and what to avoid."
 
 But in reality, **no one creates a perfect schema from the start.** Requirements change, domains expand, and performance bottlenecks surface. Schemas will inevitably change.
 

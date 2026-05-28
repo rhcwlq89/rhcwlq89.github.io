@@ -324,7 +324,7 @@ Think of `` !`command` `` as a **template variable**. Since you can't hardcode d
 
 Without `context: fork`, the skill runs directly in the main conversation. For cases like PR diffs where output can be large, forking isolates the work and saves your main conversation's context window.
 
-> **What are agent types?** Claude Code has built-in agent types specialized for different purposes. `Explore` is for codebase search (read-only, uses the Haiku model), `Plan` is for planning, and `general-purpose` is for any task (all tools available). You can also create custom agents. See [Part 3](/blog/en/claude-code-advanced-guide-3) for details.
+> **What are agent types?** Claude Code has built-in agent types specialized for different purposes. `Explore` is for codebase search (read-only, uses the Haiku model), `Plan` is for planning, and `general-purpose` is for any task (all tools available). You can also create custom agents. See [Part 3](/en/blog/claude-code-advanced-guide-3) for details.
 
 ---
 

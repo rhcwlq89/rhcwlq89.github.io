@@ -21,7 +21,8 @@ frontmatter
 ## 서론 / Introduction
   - 3–5 short paragraphs: hook, context, target reader.
   - Series posts: include the full series nav as a bullet list with the current part bolded.
-  - Part 2+ of a series: link to the previous post — `[이전 글](/blog/…)` / `[previous post](/blog/en/…)`.
+  - Part 2+ of a series: link to the previous post — `[이전 글](/blog/…)` / `[previous post](/en/blog/…)`.
+  - **Internal link URLs are NOT the source path.** EN posts live at `src/content/blog/en/<slug>.md` but are served at **`/en/blog/<slug>/`** (the `en` and `blog` segments swap). Always link EN posts as `/en/blog/<slug>` — never `/blog/en/<slug>`, which 404s. KO posts link as `/blog/<slug>`. Run `npm run check:links` to catch broken internal links.
 
 ---
 
@@ -114,7 +115,7 @@ Use `<details><summary>…</summary>…</details>` to keep the main flow short w
 
 ### Pre-publish Self-check
 
-Run these before committing a new or edited post. Expect all five to come back clean (or the TL;DR to be present) before pushing.
+Run these before committing a new or edited post. Expect all of these to come back clean (or the TL;DR to be present) before pushing.
 
 ```bash
 FILE=src/content/blog/<slug>.md
@@ -165,6 +166,10 @@ if missing:
 else:
     print("Glossary coverage: OK")
 PY
+
+# 8. Internal links resolve to real routes (repo-wide, not per-FILE).
+#    Catches the EN /blog/en/ vs /en/blog/ path-swap bug and typo'd slugs.
+npm run check:links
 ```
 
 Also run the same checks on the EN counterpart under `src/content/blog/en/<slug>.md` (checks 1, 4, and 6 mostly don't apply to English, but 2, 3, 5, and 7 do).

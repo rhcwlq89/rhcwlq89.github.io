@@ -45,7 +45,7 @@ This guide uses ArgoCD. Here is why:
 - **Abundant learning resources**: Well-documented with extensive community materials
 
 > This post is **Part 2** of the series.
-> It assumes you already have an EKS cluster built by following [Part 1 (Production-Level EKS Cluster Setup Guide)](/blog/en/eks-production-setup-guide).
+> It assumes you already have an EKS cluster built by following [Part 1 (Production-Level EKS Cluster Setup Guide)](/en/blog/eks-production-setup-guide).
 > In particular, the AWS Load Balancer Controller must be installed for exposing the ArgoCD dashboard externally.
 
 ### Helm vs Argo CD -- How Do Their Roles Differ?
@@ -1258,6 +1258,6 @@ The greatest advantage of GitOps is that **deployments are possible without dire
 Developers just push code to Git,
 and operators can determine the exact current state of the cluster by looking at the Git history alone.
 
-If you built your EKS cluster in [Part 1 (Production-Level EKS Cluster Setup Guide)](/blog/en/eks-production-setup-guide)
+If you built your EKS cluster in [Part 1 (Production-Level EKS Cluster Setup Guide)](/en/blog/eks-production-setup-guide)
 and set up the ArgoCD-based GitOps pipeline in this Part 2,
 you now have a production-grade Kubernetes operational environment.

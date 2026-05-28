@@ -21,15 +21,15 @@ Parts 1–3 covered the four-layer architecture, Database & Testing, and Documen
 
 The target reader is a junior backend engineer who has the feature working but isn't sure how to handle the performance side. After reading, you'll have a clear decision framework for each tool.
 
-See [the previous post](/blog/en/spring-boot-pre-interview-guide-3) for Documentation & AOP.
+See [the previous post](/en/blog/spring-boot-pre-interview-guide-3) for Documentation & AOP.
 
-- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
-- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
-- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
+- Part 1 — [Core Application Layer](/en/blog/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/en/blog/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3)
 - <strong>Part 4 — Performance & Optimization (this post)</strong>
-- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
-- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
-- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
+- Part 5 — [Security & Authentication](/en/blog/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps & Deployment](/en/blog/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
@@ -47,7 +47,7 @@ See [the previous post](/blog/en/spring-boot-pre-interview-guide-3) for Document
 
 ### 1.1 How N+1 Happens
 
-> <strong>Note</strong>: The Spring Boot 4 + Kotlin 2.3 project setup itself (kotlin-spring / kotlin-jpa plugins) was covered in [Part 1 §1.1](/blog/en/spring-boot-pre-interview-guide-1). Part 4 focuses on the Performance layer that runs on top of that setup. Kotlin 2.x is backward-compatible, so the same code works on 2.0–2.3.
+> <strong>Note</strong>: The Spring Boot 4 + Kotlin 2.3 project setup itself (kotlin-spring / kotlin-jpa plugins) was covered in [Part 1 §1.1](/en/blog/spring-boot-pre-interview-guide-1). Part 4 focuses on the Performance layer that runs on top of that setup. Kotlin 2.x is backward-compatible, so the same code works on 2.0–2.3.
 
 <strong>The N+1 problem occurs when 1 query fetches N records, and then N additional queries fire to load each record's associated data.</strong>
 

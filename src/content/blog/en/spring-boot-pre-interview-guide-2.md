@@ -15,15 +15,15 @@ Part 2 covers that second axis. Which DB to use per environment, how to set `ddl
 
 The target reader is a junior backend developer who already knows Part 1 or has a working grasp of the four-layer structure. After reading this, you should not hesitate on environment DB configuration or test layer selection.
 
-Read [the previous post](/blog/en/spring-boot-pre-interview-guide-1) first if you haven't covered the four-layer foundation yet.
+Read [the previous post](/en/blog/spring-boot-pre-interview-guide-1) first if you haven't covered the four-layer foundation yet.
 
-- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
+- Part 1 — [Core Application Layer](/en/blog/spring-boot-pre-interview-guide-1)
 - <strong>Part 2 — Database & Testing (this post)</strong>
-- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
-- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
-- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
-- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
-- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
+- Part 3 — [Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance & Optimization](/en/blog/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security & Authentication](/en/blog/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps & Deployment](/en/blog/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 
@@ -772,7 +772,7 @@ Testcontainers is much slower than slice tests due to container startup time. Us
 
 Part 3 covers API documentation (Swagger/OpenAPI), cross-cutting concern handling with AOP, and logging infrastructure. You'll see why Swagger is more than just annotating endpoints, and how `@Around` AOP cleanly separates logging and performance measurement from business logic.
 
-[Previous: Part 1 - Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1) | [Next: Part 3 - Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
+[Previous: Part 1 - Core Application Layer](/en/blog/spring-boot-pre-interview-guide-1) | [Next: Part 3 - Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3)
 
 ---
 

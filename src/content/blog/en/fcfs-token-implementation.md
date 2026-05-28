@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/fcfs-queue-implementation), we used queues to absorb traffic in order. Queues greatly improve UX, but they assume **every user eventually reaches the purchase page**.
+In the [previous post](/en/blog/fcfs-queue-implementation), we used queues to absorb traffic in order. Queues greatly improve UX, but they assume **every user eventually reaches the purchase page**.
 
 Tokens work differently. **Issue entry tokens first — only token holders can purchase.** This is the pattern behind concert ticketing, limited-edition sneaker drops, and flash sale events.
 

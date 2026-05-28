@@ -9,7 +9,7 @@ heroImage: "../../../assets/SpringBatch6Guide2.png"
 
 ## Introduction
 
-In [Part 1](/blog/en/spring-batch-6-guide-1) we finished "running a Hello Tasklet end to end." But 99% of real batch jobs are not a single line — they are a cycle that reads 100,000 orders in chunks, transforms them, and writes them back.
+In [Part 1](/en/blog/spring-batch-6-guide-1) we finished "running a Hello Tasklet end to end." But 99% of real batch jobs are not a single line — they are a cycle that reads 100,000 orders in chunks, transforms them, and writes them back.
 
 That cycle is <strong>chunk-oriented processing</strong>. This is where Spring Batch diverges from any other scheduler framework. "Read N → process N → write N → commit" is wrapped in a single transaction, and that boundary becomes the metadata checkpoint (which Part 3 on restart will rely on).
 
@@ -19,11 +19,11 @@ The target reader is a backend engineer who has read Part 1 or has internalized 
 
 - Part 1 — Job · Step · Metadata Identity
 - <strong>Part 2 — Chunk-Oriented Processing — Reader · Processor · Writer (this post)</strong>
-- [Part 3 — Transactions · Failure Handling — Skip · Retry · Restart](/blog/en/spring-batch-6-guide-3)
-- [Part 4 — Job Launch · Scheduling · Operations](/blog/en/spring-batch-6-guide-4)
-- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/blog/en/spring-batch-6-guide-5)
-- [Part 6 — Observability · Testing · Deployment](/blog/en/spring-batch-6-guide-6)
-- [Capstone — Marketplace Analytics Pipeline](/blog/en/spring-batch-6-guide-capstone)
+- [Part 3 — Transactions · Failure Handling — Skip · Retry · Restart](/en/blog/spring-batch-6-guide-3)
+- [Part 4 — Job Launch · Scheduling · Operations](/en/blog/spring-batch-6-guide-4)
+- [Part 5 — Performance · Parallelism — Multi-thread · Partitioning · Remote Workers](/en/blog/spring-batch-6-guide-5)
+- [Part 6 — Observability · Testing · Deployment](/en/blog/spring-batch-6-guide-6)
+- [Capstone — Marketplace Analytics Pipeline](/en/blog/spring-batch-6-guide-capstone)
 
 ---
 

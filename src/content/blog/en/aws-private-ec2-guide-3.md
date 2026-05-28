@@ -9,12 +9,12 @@ lang: en
 
 ## Introduction
 
-The Private EC2 we built in [Part 2](/blog/en/aws-private-ec2-guide-2) has no public IP. That means you cannot SSH into it directly. The traditional answer is a <strong>Bastion (jump host)</strong> — drop one EC2 into a Public Subnet, open port 22, and SSH from there to the Private EC2.
+The Private EC2 we built in [Part 2](/en/blog/aws-private-ec2-guide-2) has no public IP. That means you cannot SSH into it directly. The traditional answer is a <strong>Bastion (jump host)</strong> — drop one EC2 into a Public Subnet, open port 22, and SSH from there to the Private EC2.
 
 This series rejects that answer. We will land a shell, run commands, and even port-forward to RDS — <strong>without ever opening port 22</strong>. The answer is SSM Session Manager.
 
-- [Part 1 — Why Private Subnet?](/blog/en/aws-private-ec2-guide-1)
-- [Part 2 — Building VPC infrastructure with Terraform](/blog/en/aws-private-ec2-guide-2)
+- [Part 1 — Why Private Subnet?](/en/blog/aws-private-ec2-guide-1)
+- [Part 2 — Building VPC infrastructure with Terraform](/en/blog/aws-private-ec2-guide-2)
 - <strong>Part 3 — Connecting without Bastion via SSM Session Manager (this post)</strong>
 - Part 4 — CI/CD pipeline with GitHub Actions + SSM/CodeDeploy
 - Part 5 — Cost analysis and optimization strategies

@@ -15,15 +15,15 @@ Parts 1 and 2 covered the four-layer architecture and database/testing strategy.
 
 Target reader: a junior backend developer who knows Spring but isn't sure how evaluators read this area.
 
-See the [previous post](/blog/en/spring-boot-pre-interview-guide-2) for Database & Testing.
+See the [previous post](/en/blog/spring-boot-pre-interview-guide-2) for Database & Testing.
 
-- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
-- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
+- Part 1 — [Core Application Layer](/en/blog/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/en/blog/spring-boot-pre-interview-guide-2)
 - <strong>Part 3 — Documentation & AOP (this post)</strong>
-- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
-- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
-- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
-- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
+- Part 4 — [Performance & Optimization](/en/blog/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security & Authentication](/en/blog/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps & Deployment](/en/blog/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 

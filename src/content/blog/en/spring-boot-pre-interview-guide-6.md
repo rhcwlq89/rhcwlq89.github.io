@@ -15,15 +15,15 @@ Part 5 covered Security & Authentication. Part 6 focuses on the deployment layer
 
 The target reader is a junior backend developer who knows the basics of Docker and GitHub Actions but isn't sure which configuration choices are actually evaluated in a pre-interview assignment.
 
-See the [previous post](/blog/en/spring-boot-pre-interview-guide-5) for Security & Authentication.
+See the [previous post](/en/blog/spring-boot-pre-interview-guide-5) for Security & Authentication.
 
-- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
-- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
-- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
-- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
-- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
+- Part 1 — [Core Application Layer](/en/blog/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/en/blog/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance & Optimization](/en/blog/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security & Authentication](/en/blog/spring-boot-pre-interview-guide-5)
 - <strong>Part 6 — DevOps & Deployment (this post)</strong>
-- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
+- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 

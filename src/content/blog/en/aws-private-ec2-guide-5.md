@@ -9,14 +9,14 @@ lang: en
 
 ## Introduction
 
-By the end of [Part 1](/blog/en/aws-private-ec2-guide-1) through [Part 4](/blog/en/aws-private-ec2-guide-4) you have a full set of infrastructure. A month later the bill arrives, and the first reaction is almost always the same — <strong>"why is NAT Gateway so high?"</strong>
+By the end of [Part 1](/en/blog/aws-private-ec2-guide-1) through [Part 4](/en/blog/aws-private-ec2-guide-4) you have a full set of infrastructure. A month later the bill arrives, and the first reaction is almost always the same — <strong>"why is NAT Gateway so high?"</strong>
 
 This final post tears that bill apart. What costs what, where it leaks, and the levers that cut a month's spend roughly in half without giving up security or availability.
 
-- [Part 1 — Why Private Subnet?](/blog/en/aws-private-ec2-guide-1)
-- [Part 2 — Building VPC infrastructure with Terraform](/blog/en/aws-private-ec2-guide-2)
-- [Part 3 — Connecting without Bastion via SSM Session Manager](/blog/en/aws-private-ec2-guide-3)
-- [Part 4 — CI/CD pipeline with GitHub Actions + SSM/CodeDeploy](/blog/en/aws-private-ec2-guide-4)
+- [Part 1 — Why Private Subnet?](/en/blog/aws-private-ec2-guide-1)
+- [Part 2 — Building VPC infrastructure with Terraform](/en/blog/aws-private-ec2-guide-2)
+- [Part 3 — Connecting without Bastion via SSM Session Manager](/en/blog/aws-private-ec2-guide-3)
+- [Part 4 — CI/CD pipeline with GitHub Actions + SSM/CodeDeploy](/en/blog/aws-private-ec2-guide-4)
 - <strong>Part 5 — Cost analysis and optimization strategies (this post)</strong>
 
 This post targets <strong>juniors who got their first surprising AWS bill</strong>. After reading you should know where each dollar went, which one-line change sweeps $5–$30 off this month immediately, and which scenario your environment fits into.

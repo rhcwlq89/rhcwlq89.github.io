@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In the [previous post](/blog/en/rdb-domain-schema-design-guide), we designed the order/payment domain at production quality. Table structures, relationships, constraints — the schema's "shape" is complete.
+In the [previous post](/en/blog/rdb-domain-schema-design-guide), we designed the order/payment domain at production quality. Table structures, relationships, constraints — the schema's "shape" is complete.
 
 But does a well-designed schema automatically mean fast queries? **No.**
 
@@ -911,7 +911,7 @@ This is the **most common mistake PostgreSQL beginners make.** Build the habit o
 
 ## 7. Index Design Checklist
 
-A practical checklist for reviewing indexes during schema review. Use alongside the [design review checklist from Part 5](/blog/en/rdb-domain-schema-design-guide).
+A practical checklist for reviewing indexes during schema review. Use alongside the [design review checklist from Part 5](/en/blog/rdb-domain-schema-design-guide).
 
 ### 7.1 Basics
 

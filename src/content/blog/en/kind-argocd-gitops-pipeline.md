@@ -9,7 +9,7 @@ heroImage: "../../../assets/KindArgoCdGitops.png"
 
 ## Introduction
 
-In [Part 1](/blog/en/kind-local-k8s-cluster-setup), we set up a multi-node cluster with kind
+In [Part 1](/en/blog/kind-local-k8s-cluster-setup), we set up a multi-node cluster with kind
 and manually deployed a Spring Boot app (marketplace).
 The process involved building an image, loading it with `kind load`, writing Deployment YAML, and running `kubectl apply`.
 
@@ -22,7 +22,7 @@ Deployment configurations are managed declaratively in a Git repository,
 and ArgoCD watches that repository and automatically applies changes to the cluster.
 
 > This is the second post in the **Local K8s Practice** series.
-> - **Part 1**: [Setting Up a Local K8s Cluster with kind](/blog/en/kind-local-k8s-cluster-setup)
+> - **Part 1**: [Setting Up a Local K8s Cluster with kind](/en/blog/kind-local-k8s-cluster-setup)
 > - **This post**: Building a Local GitOps Pipeline with ArgoCD on kind
 > - **Part 3**: K8s Log Monitoring with Loki + Grafana
 

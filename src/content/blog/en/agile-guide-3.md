@@ -9,7 +9,7 @@ heroImage: "../../../assets/AgileGuide3.png"
 
 ## Introduction
 
-In the [previous post](/blog/en/agile-guide-2) we said Scrum is an approach that makes rhythm with fixed-length sprints. But not all work fits that rhythm.
+In the [previous post](/en/blog/agile-guide-2) we said Scrum is an approach that makes rhythm with fixed-length sprints. But not all work fits that rhythm.
 
 Think of operations, incident response, customer support, infrastructure work. Work arrives irregularly, priorities shift constantly, and an urgent item that didn't exist yesterday becomes today's top priority. Cram that into a two-week sprint and every interruption breaks the Sprint Goal.
 
@@ -17,12 +17,12 @@ Think of operations, incident response, customer support, infrastructure work. W
 
 The target reader is a team of an operations/support nature whose sprints keep breaking, or anyone who wants an option besides Scrum. You don't need Parts 1–2, but they make the connection ("flow is also inspect-and-adapt") clearer.
 
-- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/blog/en/agile-guide-1)
-- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/blog/en/agile-guide-2)
+- [Part 1 — Why Agile Emerged — Manifesto · 4 Values · 12 Principles](/en/blog/agile-guide-1)
+- [Part 2 — Scrum — Empirical Process Control and the 3-5-3](/en/blog/agile-guide-2)
 - <strong>Part 3 — Kanban · Lean · Flow (this post)</strong>
-- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/blog/en/agile-guide-4)
-- [Part 5 — Scaling and Fake Agile](/blog/en/agile-guide-5)
-- [Part 6 — Hands-On: From User Story to Release](/blog/en/agile-guide-6)
+- [Part 4 — Practices and Measurement — From XP to Velocity · DORA](/en/blog/agile-guide-4)
+- [Part 5 — Scaling and Fake Agile](/en/blog/agile-guide-5)
+- [Part 6 — Hands-On: From User Story to Release](/en/blog/agile-guide-6)
 
 ---
 

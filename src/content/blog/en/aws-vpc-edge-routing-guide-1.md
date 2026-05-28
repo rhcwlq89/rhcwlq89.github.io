@@ -13,7 +13,7 @@ lang: en
 
 This series starts there. We walk through AWS network service blocks framed as <strong>"what decision problem does this solve?"</strong>, in three parts. Part 1 covers the most frequent decision — <strong>picking an entry point that fronts your VPC</strong>.
 
-- Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
+- Part 0 — [Primer: network and AWS fundamentals](/en/blog/aws-vpc-edge-routing-guide-0)
 - <strong>Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator (this post)</strong>
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Transit Gateway / Peering / Direct Connect
 - Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL
@@ -370,7 +370,7 @@ The goal of Part 1 was to make <strong>the decision of "what entry point fronts 
 
 Next up: <strong>VPC-to-VPC and on-prem connectivity</strong>. What's the difference between VPC Endpoint and PrivateLink, when does Transit Gateway win over VPC Peering, and at what scale does Direct Connect start paying for itself? The decision problem after the traffic has entered — how it reaches the next system inside (or outside) the VPC.
 
-> <strong>Note — series flow</strong>: The decision tree above starts after a user has reached an ALB's IP / domain. The step before that — how the user's typed-in domain resolves to an IP and reaches a specific entry point — is covered in [Part 4 (DNS decisions and Route 53)](/blog/en/aws-vpc-edge-routing-guide-4). In actual traffic-flow order Part 4 happens before Part 1, but the entry-point picked here is what you then register in DNS via Part 4.
+> <strong>Note — series flow</strong>: The decision tree above starts after a user has reached an ALB's IP / domain. The step before that — how the user's typed-in domain resolves to an IP and reaches a specific entry point — is covered in [Part 4 (DNS decisions and Route 53)](/en/blog/aws-vpc-edge-routing-guide-4). In actual traffic-flow order Part 4 happens before Part 1, but the entry-point picked here is what you then register in DNS via Part 4.
 
 ---
 

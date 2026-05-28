@@ -15,14 +15,14 @@ Event-driven architecture, async processing, and file handling come up in most a
 
 The target reader is a junior backend developer who has a working Spring Boot assignment and wants to raise the quality bar on design and code structure.
 
-See the [previous post](/blog/en/spring-boot-pre-interview-guide-6) for DevOps & Deployment.
+See the [previous post](/en/blog/spring-boot-pre-interview-guide-6) for DevOps & Deployment.
 
-- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
-- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
-- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
-- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
-- Part 5 — [Security & Authentication](/blog/en/spring-boot-pre-interview-guide-5)
-- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
+- Part 1 — [Core Application Layer](/en/blog/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/en/blog/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance & Optimization](/en/blog/spring-boot-pre-interview-guide-4)
+- Part 5 — [Security & Authentication](/en/blog/spring-boot-pre-interview-guide-5)
+- Part 6 — [DevOps & Deployment](/en/blog/spring-boot-pre-interview-guide-6)
 - <strong>Part 7 — Advanced Patterns (this post)</strong>
 
 ---

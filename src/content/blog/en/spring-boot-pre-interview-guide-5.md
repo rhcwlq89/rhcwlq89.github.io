@@ -21,15 +21,15 @@ Part 4 covered N+1, caching, and pagination. Part 5 builds the authentication an
 
 The target reader is a junior backend developer who knows Spring Security but is unsure where evaluators actually look.
 
-See the [previous post](/blog/en/spring-boot-pre-interview-guide-4) for Performance & Optimization.
+See the [previous post](/en/blog/spring-boot-pre-interview-guide-4) for Performance & Optimization.
 
-- Part 1 — [Core Application Layer](/blog/en/spring-boot-pre-interview-guide-1)
-- Part 2 — [Database & Testing](/blog/en/spring-boot-pre-interview-guide-2)
-- Part 3 — [Documentation & AOP](/blog/en/spring-boot-pre-interview-guide-3)
-- Part 4 — [Performance & Optimization](/blog/en/spring-boot-pre-interview-guide-4)
+- Part 1 — [Core Application Layer](/en/blog/spring-boot-pre-interview-guide-1)
+- Part 2 — [Database & Testing](/en/blog/spring-boot-pre-interview-guide-2)
+- Part 3 — [Documentation & AOP](/en/blog/spring-boot-pre-interview-guide-3)
+- Part 4 — [Performance & Optimization](/en/blog/spring-boot-pre-interview-guide-4)
 - <strong>Part 5 — Security & Authentication (this post)</strong>
-- Part 6 — [DevOps & Deployment](/blog/en/spring-boot-pre-interview-guide-6)
-- Part 7 — [Advanced Patterns](/blog/en/spring-boot-pre-interview-guide-7)
+- Part 6 — [DevOps & Deployment](/en/blog/spring-boot-pre-interview-guide-6)
+- Part 7 — [Advanced Patterns](/en/blog/spring-boot-pre-interview-guide-7)
 
 ---
 

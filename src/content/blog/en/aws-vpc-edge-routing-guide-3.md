@@ -9,11 +9,11 @@ lang: en
 
 ## Introduction
 
-[Part 1](/blog/en/aws-vpc-edge-routing-guide-1) picked the entry point that fronts a VPC. [Part 2](/blog/en/aws-vpc-edge-routing-guide-2) handled how that traffic reaches other VPCs, AWS services, and on-prem. The final post covers what happens between — <strong>how packets actually flow inside the VPC and where they get blocked</strong>.
+[Part 1](/en/blog/aws-vpc-edge-routing-guide-1) picked the entry point that fronts a VPC. [Part 2](/en/blog/aws-vpc-edge-routing-guide-2) handled how that traffic reaches other VPCs, AWS services, and on-prem. The final post covers what happens between — <strong>how packets actually flow inside the VPC and where they get blocked</strong>.
 
 This area trips people up more than Parts 1 and 2 combined. It isn't a "pick A or B" decision; it's <strong>four components cooperating to determine the packet's path</strong>, so most engineers first run into it during debugging — "why isn't this working?" Open Security Groups but no response, Route Table edits with no effect, NACL rules that look right but outbound is blocked — every one of those traps comes from the way these four interact.
 
-- Part 0 — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0)
+- Part 0 — [Primer: network and AWS fundamentals](/en/blog/aws-vpc-edge-routing-guide-0)
 - Part 1 — Picking the entry point: ALB / NLB / API Gateway / CloudFront / Global Accelerator
 - Part 2 — VPC-to-VPC and on-prem connectivity: VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect
 - <strong>Part 3 — Inside the VPC: IGW / NAT GW / Route Tables / Security Group vs NACL (this post)</strong>
@@ -316,11 +316,11 @@ Part 3's goal was to make <strong>tracing a single packet through the VPC mental
 
 This series unpacked AWS network ingress and routing through the lens of <strong>"what decision problem does this solve?"</strong>, in five parts.
 
-- <strong>Part 0</strong> — [Primer: network and AWS fundamentals](/blog/en/aws-vpc-edge-routing-guide-0). OSI, VPC, CIDR, ENI, reverse proxies, and the core AWS services on one page.
-- <strong>Part 1</strong> — [Picking the entry point that fronts a VPC](/blog/en/aws-vpc-edge-routing-guide-1) (ALB / NLB / API Gateway / CloudFront / Global Accelerator). Four decision variables and a decision tree.
-- <strong>Part 2</strong> — [Connecting a VPC to other VPCs, AWS services, and on-prem](/blog/en/aws-vpc-edge-routing-guide-2) (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). The first split is destination type.
+- <strong>Part 0</strong> — [Primer: network and AWS fundamentals](/en/blog/aws-vpc-edge-routing-guide-0). OSI, VPC, CIDR, ENI, reverse proxies, and the core AWS services on one page.
+- <strong>Part 1</strong> — [Picking the entry point that fronts a VPC](/en/blog/aws-vpc-edge-routing-guide-1) (ALB / NLB / API Gateway / CloudFront / Global Accelerator). Four decision variables and a decision tree.
+- <strong>Part 2</strong> — [Connecting a VPC to other VPCs, AWS services, and on-prem](/en/blog/aws-vpc-edge-routing-guide-2) (VPC Endpoint / PrivateLink / Peering / Transit Gateway / VPN / Direct Connect). The first split is destination type.
 - <strong>Part 3</strong> — How packets actually flow inside (IGW / NAT GW / Route Tables / SG vs NACL). Less about choosing, more about understanding mechanics (this post).
-- <strong>Part 4</strong> — [DNS decisions and Route 53](/blog/en/aws-vpc-edge-routing-guide-4) (Hosted Zone / six Routing Policies / Alias vs CNAME / Health Check). <strong>Runs before every decision in Parts 1–3 in actual traffic flow</strong>.
+- <strong>Part 4</strong> — [DNS decisions and Route 53](/en/blog/aws-vpc-edge-routing-guide-4) (Hosted Zone / six Routing Policies / Alias vs CNAME / Health Check). <strong>Runs before every decision in Parts 1–3 in actual traffic flow</strong>.
 
 Together, the five parts give you <strong>a decision-tree-driven path through "DNS → external entry point → VPC → inside → other systems"</strong>. Traffic-flow time order is Part 4 → 1 → 2 → 3, but the natural reading order is Part 0 → 1 → 2 → 3 → 4. Holding all five in mind simultaneously is the starting point for infrastructure design.
 

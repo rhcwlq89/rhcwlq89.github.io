@@ -9,7 +9,7 @@ lang: en
 
 ## Introduction
 
-In [Part 8](/blog/en/fcfs-load-test-comparison), we load-tested all four FCFS approaches with k6 and compared their performance. This post covers **what we built to make those tests work, what problems we ran into, and how production environments should handle things differently.**
+In [Part 8](/en/blog/fcfs-load-test-comparison), we load-tested all four FCFS approaches with k6 and compared their performance. This post covers **what we built to make those tests work, what problems we ran into, and how production environments should handle things differently.**
 
 ---
 
@@ -259,5 +259,5 @@ Key takeaways:
 
 4. **Acknowledge the limits of local testing.** All numbers are relative comparisons on the same machine. No network latency, no connection pool sharing, no competing APIs. DB lock performance would be significantly worse in production.
 
-- Previous: [Part 8 — FCFS System Showdown: Load Testing All Approaches](/blog/en/fcfs-load-test-comparison)
-- Next: [7 Practical Patterns for java.util.concurrent](/blog/en/java-concurrent-practical-patterns)
+- Previous: [Part 8 — FCFS System Showdown: Load Testing All Approaches](/en/blog/fcfs-load-test-comparison)
+- Next: [7 Practical Patterns for java.util.concurrent](/en/blog/java-concurrent-practical-patterns)
