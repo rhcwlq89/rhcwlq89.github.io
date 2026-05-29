@@ -71,7 +71,36 @@ The checklist for whether a story is good is <strong>INVEST</strong>.
 | Small | Small | Finishable within one sprint (or shorter) |
 | Testable | Testable | Completion can be verified objectively (→ acceptance criteria) |
 
-The last one, <strong>Testable</strong>, leads into the next section. Being testable means there are acceptance criteria to judge "done."
+Two letters lead straight into what's next. <strong>Independent and Small</strong> breaking is the signal to split a story (Section 1.3); <strong>Testable</strong> leads to the acceptance criteria that judge "done" (Section 2).
+
+### 1.3 Story Splitting — Breaking Up a Compound Story
+
+A story that breaks INVEST's <strong>I (Independent) or S (Small)</strong> — one that won't fit in a sprint, or mixes two kinds of value — gets <strong>split</strong> (story splitting). The moment you think "wait, this user story is really two stories" is exactly that signal.
+
+First, distinguish two kinds of large story (Mike Cohn).
+
+| Kind | Definition | How to split |
+|---|---|---|
+| <strong>Compound story</strong> | Really several small stories bundled into one | Decompose into the stories inside it |
+| <strong>Complex story</strong> | No sub-stories to extract; inherently large (uncertain) on its own | Remove the uncertainty with a spike first, then split |
+
+The common "one story has two stories in it" is exactly a <strong>compound story</strong> (when both are big enough, the umbrella term is an <strong>epic</strong>).
+
+The practical signal is simple: if the story sentence or an acceptance criterion contains <strong>"and,"</strong> it's almost certainly compound. "A user can search <strong>and</strong> save results to favorites" is two stories — search / favorites.
+
+When splitting feels hard, use the <strong>SPIDR</strong> patterns (Richard Lawrence). Pick whichever axis fits.
+
+| Axis | Basis | Example |
+|---|---|---|
+| <strong>S</strong>pike | Investigate first when uncertain | "Research whether the payment provider integrates" |
+| <strong>P</strong>ath | By workflow path | Happy path first, exception flows later |
+| <strong>I</strong>nterface | By UI / input method | Web first, mobile and API later |
+| <strong>D</strong>ata | By data type / range | Domestic cards first, foreign cards later |
+| <strong>R</strong>ules | By business rule | Base discount first, coupon-stacking rules later |
+
+One trap: each split piece must still satisfy INVEST — especially <strong>Valuable</strong>. So <strong>don't split by technical layer</strong> ("frontend / backend / DB"): such a slice delivers no user value on its own. Cut along a <strong>value unit (vertical slice)</strong> that runs from screen to data, so that releasing even one piece lets the user do something.
+
+> <strong>Note</strong>: splitting pairs with prioritization (Section 3). Only after a compound story is broken up can you sort it with MoSCoW — "this piece is a Must, that one a Won't." You can't prioritize one big lump.
 
 ---
 
@@ -247,6 +276,11 @@ But one thing remains — where does that starting point, the user story, even c
 |---|---|
 | User story | A feature written from the user's perspective as "As a…, I want…, so that…" — a promise to talk, not a spec |
 | INVEST | Criteria for a good story — Independent, Negotiable, Valuable, Estimable, Small, Testable |
+| Compound story | Several small stories bundled into one — split by decomposing into the stories inside |
+| Complex story | Inherently large and uncertain with no sub-stories — remove uncertainty with a spike first |
+| Epic | Umbrella term for a story too big to fit in one sprint (covers both compound and complex) |
+| Story splitting | Breaking a large story into small value units that each satisfy INVEST |
+| SPIDR | Story-splitting patterns — Spike, Path, Interface, Data, Rules |
 | Acceptance criteria | The list of conditions a story must meet to be accepted |
 | Given/When/Then | A form for writing acceptance criteria as context, action, result (from BDD) |
 | BDD (Behavior-Driven Development) | Developing and validating around behavior (scenarios) |
@@ -260,6 +294,7 @@ But one thing remains — where does that starting point, the user story, even c
 ### B. External References
 
 - [Bill Wake, INVEST in Good Stories](https://xp123.com/articles/invest-in-good-stories-and-smart-tasks/) — the source of the INVEST criteria
-- [Mike Cohn, User Stories Applied](https://www.mountaingoatsoftware.com/books/user-stories-applied) — user stories in practice
+- [Mike Cohn, User Stories Applied](https://www.mountaingoatsoftware.com/books/user-stories-applied) — user stories in practice, compound vs complex stories
+- [Richard Lawrence, Patterns for Splitting User Stories](https://www.richardlawrence.info/2009/10/28/patterns-for-splitting-user-stories/) — story-splitting patterns including SPIDR
 - [Dan North, Introducing BDD](https://dannorth.net/introducing-bdd/) — the origin of Given/When/Then and BDD
 - [Alberto Brandolini, EventStorming](https://www.eventstorming.com/) — event storming

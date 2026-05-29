@@ -75,7 +75,36 @@ heroImage: "../../assets/AgileGuide6.png"
 | Small | 작은 | 한 스프린트(또는 더 짧게) 안에 끝낼 수 있다 |
 | Testable | 테스트 가능 | 완료를 객관적으로 검증할 수 있다(→ 인수조건) |
 
-특히 마지막 <strong>Testable</strong>이 다음 절로 이어진다. 테스트 가능하다는 건 "끝났다"를 판별할 인수조건이 있다는 뜻이다.
+특히 두 글자가 곧장 다음 이야기로 이어진다. <strong>Independent·Small</strong>이 깨지면 스토리를 쪼개야 한다는 신호이고(1.3절), <strong>Testable</strong>은 "끝났다"를 판별할 인수조건으로 이어진다(2절).
+
+### 1.3 스토리 쪼개기 — 복합 스토리 나누기
+
+INVEST의 <strong>I(독립)·S(작게)</strong>가 깨진 스토리, 즉 한 스프린트에 안 들어오거나 두 가지 가치가 섞인 스토리는 <strong>쪼갠다(story splitting)</strong>. "이 유저스토리에 사실 두 개가 섞여 있는데?" 싶은 순간이 바로 그 신호다.
+
+먼저 큰 스토리를 두 종류로 구분한다(Mike Cohn).
+
+| 구분 | 정의 | 쪼개는 법 |
+|---|---|---|
+| <strong>복합 스토리(compound story)</strong> | 사실은 여러 작은 스토리가 하나로 뭉쳐 있는 스토리 | 안에 든 스토리들로 분해 |
+| <strong>복잡한 스토리(complex story)</strong> | 쪼갤 하위 스토리가 없고 그 자체로 본질적으로 큰(불확실한) 스토리 | 스파이크로 불확실성부터 제거한 뒤 분할 |
+
+질문에서 흔히 나오는 "한 스토리에 두 스토리가 섞여 있다"가 바로 <strong>복합 스토리</strong>다(둘 다 충분히 크면 통칭 <strong>에픽(epic)</strong>이라 부른다).
+
+실무 신호는 단순하다. 스토리 문장이나 인수조건에 <strong>"그리고(and)"</strong>가 들어가면 십중팔구 복합 스토리다. "사용자는 검색을 하고 <strong>그리고</strong> 결과를 즐겨찾기에 저장할 수 있다"는 검색 / 즐겨찾기 두 스토리다.
+
+쪼갤 때 막막하면 <strong>SPIDR</strong> 패턴을 쓴다(Richard Lawrence). 다섯 가지 축 중 맞는 걸 고른다.
+
+| 축 | 기준 | 예 |
+|---|---|---|
+| <strong>S</strong>pike | 불확실하면 조사부터 | "결제사 연동 가능 여부 조사" |
+| <strong>P</strong>ath | 워크플로 경로별 | 해피패스 먼저, 예외 흐름은 나중 |
+| <strong>I</strong>nterface | UI·입력 방식별 | 웹 먼저, 모바일·API는 나중 |
+| <strong>D</strong>ata | 데이터 종류·범위별 | 국내 카드 먼저, 해외 카드 나중 |
+| <strong>R</strong>ules | 비즈니스 규칙별 | 기본 할인 먼저, 쿠폰 중복 규칙 나중 |
+
+한 가지 함정이 있다. 쪼갠 조각도 <strong>각각 INVEST를 만족</strong>해야 한다 — 특히 <strong>Valuable</strong>. 그래서 "프론트엔드 / 백엔드 / DB"처럼 <strong>기술 레이어로 자르면 안 된다</strong>. 그렇게 자른 조각은 혼자서는 사용자에게 아무 가치를 못 주기 때문이다. 화면부터 데이터까지 관통하는 <strong>가치 단위(수직 슬라이스)</strong>로 잘라, 조각 하나만 릴리스해도 사용자가 뭔가를 할 수 있게 한다.
+
+> <strong>참고</strong>: 쪼개기는 우선순위(3절)와 짝을 이룬다. 복합 스토리를 조각내야 비로소 "이 조각은 Must, 저 조각은 Won't"처럼 MoSCoW로 가를 수 있다. 큰 덩어리째로는 우선순위를 매길 수 없다.
 
 ---
 
@@ -251,6 +280,11 @@ flowchart TD
 |---|---|
 | 유저스토리(user story) | 기능을 사용자 관점에서 "~로서, ~하고 싶다, ~하기 위해"로 적은 한 줄. 명세가 아니라 대화의 약속 |
 | INVEST | 좋은 스토리의 조건 — Independent·Negotiable·Valuable·Estimable·Small·Testable |
+| 복합 스토리(compound story) | 여러 작은 스토리가 하나로 뭉친 스토리 — 안에 든 스토리들로 분해해 쪼갠다 |
+| 복잡한 스토리(complex story) | 하위 스토리 없이 그 자체로 크고 불확실한 스토리 — 스파이크로 불확실성부터 제거 |
+| 에픽(epic) | 한 스프린트에 안 들어올 만큼 큰 스토리의 통칭(복합·복잡 모두 포함) |
+| 스토리 쪼개기(story splitting) | 큰 스토리를 INVEST를 만족하는 작은 가치 단위로 나누는 작업 |
+| SPIDR | 스토리 쪼개기 패턴 — Spike·Path·Interface·Data·Rules |
 | 인수조건(acceptance criteria) | 스토리가 받아들여지기 위해 만족해야 할 조건 목록 |
 | Given/When/Then | 상황·행위·결과로 인수조건을 적는 형식(BDD에서 유래) |
 | BDD(Behavior-Driven Development) | 행위(시나리오) 중심으로 개발·검증하는 방식 |
@@ -264,6 +298,7 @@ flowchart TD
 ### B. 외부 참조
 
 - [Bill Wake, INVEST in Good Stories](https://xp123.com/articles/invest-in-good-stories-and-smart-tasks/) — INVEST 기준의 출처
-- [Mike Cohn, User Stories Applied](https://www.mountaingoatsoftware.com/books/user-stories-applied) — 유저스토리 실무
+- [Mike Cohn, User Stories Applied](https://www.mountaingoatsoftware.com/books/user-stories-applied) — 유저스토리 실무, 복합·복잡 스토리 구분
+- [Richard Lawrence, Patterns for Splitting User Stories](https://www.richardlawrence.info/2009/10/28/patterns-for-splitting-user-stories/) — SPIDR 등 스토리 쪼개기 패턴
 - [Dan North, Introducing BDD](https://dannorth.net/introducing-bdd/) — Given/When/Then과 BDD의 출발
 - [Alberto Brandolini, EventStorming](https://www.eventstorming.com/) — 이벤트 스토밍
