@@ -137,6 +137,39 @@ class EtagConfig {
 
 > <strong>Caution</strong>: `ETag` (revalidation) and `no-store` (forbid storing at all) serve different purposes. An ETag is meaningless on a `no-store` response. ETags fit `no-cache`/short-`max-age` responses where you "cache but want to confirm it changed."
 
+### 2.4 Several Ways to Set Cache-Control (+ a Spring Security gotcha)
+
+The `ResponseEntity.cacheControl()` from §2.2 is the <strong>per-response, explicit</strong> way. It's the clearest but repeats per endpoint. Spring has no `@CacheControl` annotation, so to group policies use the approaches below.
+
+| Method | Scope | When |
+|------|------|------|
+| `ResponseEntity.cacheControl()` | One endpoint | Per-response, explicit |
+| `WebContentInterceptor` | Per path pattern | A rule like "`/api/**` is no-store" in one place |
+| `Filter` (`OncePerRequestFilter`) | Per path/condition | Lower-level, fine-grained control |
+| Resource handler (`WebMvcConfigurer`) | Static resources | The §2.1 approach |
+
+`WebContentInterceptor`, which applies by path rule in one place, is the cleanest.
+
+```kotlin
+@Configuration
+class CacheConfig : WebMvcConfigurer {
+    override fun addInterceptors(registry: InterceptorRegistry) {
+        val interceptor = WebContentInterceptor().apply {
+            addCacheMapping(CacheControl.noStore(), "/api/**")                       // default: no cache
+            addCacheMapping(
+                CacheControl.maxAge(60, TimeUnit.SECONDS).cachePublic(),
+                "/api/products",                                                     // exception: public list, short
+            )
+        }
+        registry.addInterceptor(interceptor)
+    }
+}
+```
+
+A more specific pattern (`/api/products`) overrides the general one (`/api/**`). Controllers keep only business logic.
+
+> <strong>Caution — Spring Security's default cache headers</strong>: With Spring Security, <strong>every response gets `Cache-Control: no-cache, no-store, max-age=0, must-revalidate` by default</strong> (to prevent caching of secured pages). This blocks caching even on static/public responses — a common cause of "why isn't CloudFront caching?" Split static/public paths into a separate `SecurityFilterChain`, or relax the cache headers on those paths.
+
 ---
 
 ## 3. Designing CloudFront Behaviors

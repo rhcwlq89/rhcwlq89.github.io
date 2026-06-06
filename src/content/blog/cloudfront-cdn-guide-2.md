@@ -144,6 +144,39 @@ class EtagConfig {
 
 > <strong>주의</strong>: `ETag`(재검증)는 `no-store`(저장 자체 금지)와 목적이 다르다. `no-store` 응답엔 ETag가 의미 없다. ETag는 "캐시는 하되 바뀌었는지 확인하고 싶은" `no-cache`/짧은 `max-age` 응답에 어울린다.
 
+### 2.4 Cache-Control을 거는 여러 방법 (+ Spring Security 함정)
+
+2.2절의 `ResponseEntity.cacheControl()`은 <strong>응답별 명시 방식</strong>이다. 가장 명확하지만 엔드포인트마다 반복된다. 스프링엔 `@CacheControl` 같은 어노테이션이 없으므로, 정책을 묶고 싶을 땐 아래 방식을 쓴다.
+
+| 방법 | 범위 | 언제 |
+|------|------|------|
+| `ResponseEntity.cacheControl()` | 엔드포인트 1개 | 응답마다 다르게, 명시적으로 |
+| `WebContentInterceptor` | 경로 패턴별 일괄 | "`/api/**`는 no-store" 같은 규칙을 한 곳에서 |
+| `Filter`(`OncePerRequestFilter`) | 경로·조건별 일괄 | 더 저수준의 세밀한 제어 |
+| 리소스 핸들러(`WebMvcConfigurer`) | 정적 리소스 | 2.1절 방식 |
+
+경로 규칙으로 한 번에 거는 `WebContentInterceptor`가 가장 깔끔하다.
+
+```kotlin
+@Configuration
+class CacheConfig : WebMvcConfigurer {
+    override fun addInterceptors(registry: InterceptorRegistry) {
+        val interceptor = WebContentInterceptor().apply {
+            addCacheMapping(CacheControl.noStore(), "/api/**")                       // 기본: 캐시 금지
+            addCacheMapping(
+                CacheControl.maxAge(60, TimeUnit.SECONDS).cachePublic(),
+                "/api/products",                                                     // 예외: 공개 목록은 짧게
+            )
+        }
+        registry.addInterceptor(interceptor)
+    }
+}
+```
+
+더 구체적인 패턴(`/api/products`)이 일반 패턴(`/api/**`)을 덮어쓴다. 컨트롤러는 비즈니스 로직만 남는다.
+
+> <strong>주의 — Spring Security의 기본 캐시 헤더</strong>: Spring Security를 쓰면 <strong>기본적으로 모든 응답에 `Cache-Control: no-cache, no-store, max-age=0, must-revalidate`를 강제로 붙인다</strong>(보안 페이지 캐시 방지용 기본 동작). 그래서 정적·공개 응답까지 캐시가 막혀 "왜 CloudFront가 캐시를 안 하지?"의 흔한 원인이 된다. 정적·공개 경로는 별도 `SecurityFilterChain`으로 분리하거나 해당 경로의 캐시 헤더를 풀어줘야 한다.
+
 ---
 
 ## 3. CloudFront Behavior 설계
