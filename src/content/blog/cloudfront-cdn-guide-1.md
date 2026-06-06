@@ -25,6 +25,7 @@ API 서버 하나로 잘 돌아가던 서비스가, 사용자가 전 세계로 �
 - <strong>1편 — CDN과 CloudFront 동작 원리 (이 글)</strong>
 - 2편 — [Spring Boot + Kotlin 오리진을 CloudFront로 (Terraform 실습)](/blog/cloudfront-cdn-guide-2)
 - 3편 — [사설 콘텐츠·엣지 로직·보안·모니터링](/blog/cloudfront-cdn-guide-3)
+- 4편 — [이미지 리사이징과 영상 트랜스코딩](/blog/cloudfront-cdn-guide-4)
 
 이 글은 2편 실습에 들어가기 전에 반드시 알아야 할 개념을 정리한다. 캐시가 왜 맞고 왜 틀리는지를 모르면, 실습에서 "왜 캐시가 안 되지", "왜 옛날 응답이 계속 나오지"에 부딪힌다.
 

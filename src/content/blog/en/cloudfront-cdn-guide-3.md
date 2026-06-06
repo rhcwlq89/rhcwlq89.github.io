@@ -14,6 +14,7 @@ heroImage: "../../../assets/CloudfrontCdnGuide.png"
 - Part 1 — [How a CDN and CloudFront work](/en/blog/cloudfront-cdn-guide-1)
 - Part 2 — [Putting a Spring Boot + Kotlin origin behind CloudFront](/en/blog/cloudfront-cdn-guide-2)
 - <strong>Part 3 — Private content, edge logic, security, monitoring (this post)</strong>
+- Part 4 — [Image resizing and video transcoding](/en/blog/cloudfront-cdn-guide-4)
 
 Topics: <strong>① private content (Signed URLs/cookies), ② edge logic (Functions vs Lambda@Edge), ③ security (custom domain, OAC, WAF), ④ monitoring & cost.</strong>
 
@@ -222,9 +223,9 @@ CloudFront cost is mainly <strong>data transfer + request count + (invalidations
 
 ---
 
-## Recap — Wrapping Up the Series
+## Recap
 
-Across three parts, we covered CloudFront from concepts to operations.
+So far we've covered CloudFront from concepts to operations.
 
 | Part | Topic | Core |
 |------|------|------|
@@ -233,6 +234,8 @@ Across three parts, we covered CloudFront from concepts to operations.
 | <strong>Part 3</strong> | Operations | Private content, edge logic, security (domain/OAC/WAF), monitoring |
 
 The essence of CDN design is one sentence: <strong>split "what to cache, for whom, and for how long" by path, and stamp that intent consistently into the origin headers and CloudFront behaviors.</strong> Add signing, edge logic, security, and monitoring on top, and you have a production CDN.
+
+The final [Part 4](/en/blog/cloudfront-cdn-guide-4) covers <strong>media</strong>: resize user-uploaded images on demand and cache them (Lambda@Edge), and transcode video with MediaConvert to deliver HLS/DASH via CloudFront — media serving beyond static and dynamic.
 
 ---
 

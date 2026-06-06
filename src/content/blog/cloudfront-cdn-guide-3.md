@@ -21,6 +21,7 @@ heroImage: "../../assets/CloudfrontCdnGuide.png"
 - 1편 — [CDN과 CloudFront 동작 원리](/blog/cloudfront-cdn-guide-1)
 - 2편 — [Spring Boot + Kotlin 오리진을 CloudFront로](/blog/cloudfront-cdn-guide-2)
 - <strong>3편 — 사설 콘텐츠·엣지 로직·보안·모니터링 (이 글)</strong>
+- 4편 — [이미지 리사이징과 영상 트랜스코딩](/blog/cloudfront-cdn-guide-4)
 
 다룰 주제: <strong>① 사설 콘텐츠(Signed URL/쿠키), ② 엣지 로직(Functions vs Lambda@Edge), ③ 보안(커스텀 도메인·OAC·WAF), ④ 모니터링·비용.</strong>
 
@@ -228,9 +229,9 @@ CloudFront 비용은 크게 <strong>전송량 + 요청 수 + (무효화·Lambda@
 
 ---
 
-## 정리 — 시리즈를 마치며
+## 정리
 
-3편에 걸쳐 CloudFront를 개념부터 운영까지 다뤘다.
+여기까지 CloudFront를 개념부터 운영까지 다뤘다.
 
 | Part | 주제 | 핵심 |
 |------|------|------|
@@ -239,6 +240,8 @@ CloudFront 비용은 크게 <strong>전송량 + 요청 수 + (무효화·Lambda@
 | <strong>3편</strong> | 운영 | 사설 콘텐츠·엣지 로직·보안(도메인·OAC·WAF)·모니터링 |
 
 CDN 설계의 본질은 한 문장이다 — <strong>"무엇을, 누구에게, 얼마나 오래 캐시할지"를 경로별로 분리하고, 그 의도를 오리진 헤더와 CloudFront Behavior에 일관되게 박는 것.</strong> 여기에 서명·엣지 로직·보안·모니터링을 얹으면 프로덕션 CDN이 완성된다.
+
+마지막 [4편](/blog/cloudfront-cdn-guide-4)에서는 <strong>미디어</strong>를 다룬다. 사용자가 올린 이미지를 온디맨드로 리사이징해 캐싱하고(Lambda@Edge), 영상은 MediaConvert로 트랜스코딩해 HLS/DASH로 CloudFront에서 전송하는 — 정적·동적을 넘어선 미디어 서빙을 정리한다.
 
 ---
 

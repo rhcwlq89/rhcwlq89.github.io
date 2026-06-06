@@ -19,6 +19,7 @@ The goal is to <strong>put a Spring Boot + Kotlin app as the origin and CloudFro
 - Part 1 — [How a CDN and CloudFront work](/en/blog/cloudfront-cdn-guide-1)
 - <strong>Part 2 — Putting a Spring Boot + Kotlin origin behind CloudFront (this post)</strong>
 - Part 3 — [Private content, edge logic, security, monitoring](/en/blog/cloudfront-cdn-guide-3)
+- Part 4 — [Image resizing and video transcoding](/en/blog/cloudfront-cdn-guide-4)
 
 ---
 

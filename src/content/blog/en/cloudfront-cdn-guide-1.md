@@ -18,6 +18,7 @@ This series covers CloudFront from concepts to hands-on. The hands-on uses an ex
 - <strong>Part 1 — How a CDN and CloudFront work (this post)</strong>
 - Part 2 — [Putting a Spring Boot + Kotlin origin behind CloudFront (Terraform)](/en/blog/cloudfront-cdn-guide-2)
 - Part 3 — [Private content, edge logic, security, monitoring](/en/blog/cloudfront-cdn-guide-3)
+- Part 4 — [Image resizing and video transcoding](/en/blog/cloudfront-cdn-guide-4)
 
 This post covers the concepts you must understand before the Part 2 hands-on. If you don't know why a cache hits or misses, you'll hit "why isn't it caching?" and "why does the old response keep showing?" in the lab.
 
