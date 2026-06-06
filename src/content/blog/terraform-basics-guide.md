@@ -193,6 +193,8 @@ resource "<리소스_타입>" "<로컬_이름>" {
 
 다른 리소스에서 이 리소스를 참조할 때는 `aws_instance.web.id` 같은 형태로 사용한다. 이 참조가 곧 의존성을 만든다(7절에서 자세히).
 
+> <strong>참고 — Terraform 이름 ≠ 콘솔 서비스명</strong>: `aws_instance`는 AWS 콘솔의 "EC2"를 가리킨다. 이름이 `aws_ec2`가 아닌 이유는, Terraform 리소스 이름이 콘솔 브랜드명이 아니라 <strong>AWS API의 객체명</strong>을 따르기 때문이다(EC2 API가 가상 서버를 `Instance`라 부른다). `aws_db_instance`(RDS)처럼 어긋나는 경우도, `aws_s3_bucket`(S3)·`aws_eks_cluster`(EKS)처럼 그대로인 경우도 있다. 이름을 추측하지 말고 [Terraform Registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)에서 검색해 확인하자.
+
 ### 4.3 Data Source
 
 Data Source는 이미 존재하는 리소스의 정보를 조회한다. 새로 만드는 게 아니라, 기존에 있는 것의 데이터를 가져오는 것이다.

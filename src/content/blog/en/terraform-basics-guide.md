@@ -187,6 +187,8 @@ resource "<resource_type>" "<local_name>" {
 
 To reference this resource from another resource, use `aws_instance.web.id`. That reference is what creates a dependency (more in §7).
 
+> <strong>Note -- Terraform names ≠ console service names</strong>: `aws_instance` refers to what the AWS Console calls "EC2." It's not named `aws_ec2` because Terraform resource names follow the <strong>AWS API object name</strong>, not the console brand name (the EC2 API calls a virtual server an `Instance`). Some names diverge like this (`aws_db_instance` for RDS), while others match the service exactly (`aws_s3_bucket` for S3, `aws_eks_cluster` for EKS). Don't guess the name -- look it up in the [Terraform Registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs).
+
 ### 4.3 Data Source
 
 A Data Source queries information about resources that already exist. It does not create anything new -- it fetches data from existing resources.
