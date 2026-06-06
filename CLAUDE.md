@@ -181,9 +181,54 @@ The glossary check above is a heuristic — it flags candidates, but you should 
 
 ## Hero Image Style Guide
 
-This blog has a consistent visual identity across all hero images. Every hero image prompt MUST follow these specifications exactly.
+Hero images use a rich, detailed <strong>tech-infographic poster</strong> style — the polished "developer-guide cover" look of the reference images `AwsEc2Guide.png` (AWS EC2 Guide) and `PracticalGuideSeries.png` (Spring Boot Practical Guide Series). The goal is an image that feels effortful and informative at a glance: a bold title, a central hero element, labeled topic tiles, recognizable real logos, and real depth. <strong>This is the DEFAULT for every post.</strong> (An older dark-navy isometric style is kept further below as an optional alternative.)
 
-### Dominant Visual Style (based on existing images: Docker Compose, Kubernetes, SAML, EKS, Terraform, TSDB, HTTP Headers guides)
+### The Default Style — Tech-Infographic Poster
+
+<strong>Format & feel:</strong>
+- A polished, richly detailed infographic poster with depth, soft glows, and layered elements — a professional developer-guide cover. NOT minimal/flat, NOT a sparse abstract scene.
+- Semi-realistic, glossy 3D-ish icons; a gradient background with a subtle circuit/tech (or sky/landscape) texture and faint particles for depth.
+
+<strong>Title (text IS expected here):</strong>
+- A bold UPPERCASE title across the top-center, with ONE keyword highlighted in an accent color or block (e.g., AWS "<strong>EC2</strong>" in orange; Spring Boot's green highlight box).
+- Keep title words short and correctly spelled — AI models misspell long/rare words, so prefer common words and be ready to regenerate. A short subtitle line is fine.
+
+<strong>Central hero element:</strong>
+- One clear focal in the middle — typically a glowing monitor/dashboard, a central device, or the core technology — that the eye lands on first.
+- Place the post's core technology as its <strong>official, recognizable logo/symbol</strong> on or near the focal (AWS smile, Kafka, Spring leaf, Claude sunburst, etc.), drawn accurately in real brand colors — not an abstract reinterpretation.
+
+<strong>Labeled topic tiles (the infographic part):</strong>
+- 4–8 supporting tiles around the focal, each a clean icon + a SHORT label (one or two words) naming a subtopic of the post (e.g., "VPC", "Security Groups", "Caching", "DB Optimization", "Memory", "Hooks").
+- Connect them to the focal with thin glowing flow lines/arrows so they read as parts of one system.
+- Use recognizable real logos on tiles where relevant (GitHub, VS Code, Kafka, Redis, a database cylinder, etc.).
+
+<strong>Color & richness:</strong>
+- Rich and multi-colored — at least 3–4 distinct colors visible across tiles and accents, not monochrome. A title-keyword highlight color plus varied tile accents (teal, gold, green, coral, blue) keep it lively.
+- When the post has a strong brand, base the palette on it (AWS → blue/orange; Claude/Anthropic → warm clay-coral #D97757; Spring → green); otherwise use a balanced tech palette.
+
+<strong>Focal clarity, depth ≠ clutter (still applies):</strong>
+- ONE dominant focal; tiles are clearly secondary. Every tile must name a real subtopic — if it can't earn a label, drop it.
+- Depth comes from gradients, glows, soft shadows, particles, and layered platforms — NOT from cramming unrelated objects.
+
+### Hero Image Prompt Requirements (default poster style)
+
+When writing a hero image prompt:
+- <strong>5–6 lines</strong>, concrete. Decide the title wording and the 4–8 tile labels FIRST — pull them straight from the post's section headings.
+- Line 1: "A polished, richly detailed tech-infographic hero poster with depth, soft glows, and floating particles — a professional developer-guide cover look."
+- Line 2: the bold uppercase title with ONE highlighted keyword, plus the background (gradient + subtle circuit/landscape texture).
+- Line 3: the central hero element (monitor/dashboard or core device) + the post's official technology logo, drawn accurately.
+- Line 4: the 4–8 labeled topic tiles (name them explicitly) connected by thin glowing flow lines, with recognizable real logos where relevant.
+- Line 5: rich multi-color palette summary (name the base + accent colors).
+- Always end with: "detailed infographic-poster style with depth, recognizable [Tech] logo, short clean labels, no misspelled words. Aspect ratio 3:2 (1536x1024)."
+- Quality benchmark: "similar richness and clarity to the AWS EC2 Guide and Spring Boot Practical Guide Series hero images — a titled, labeled, logo-rich developer-guide cover with depth."
+
+---
+
+<strong>Everything below is the OPTIONAL alternative (dark-navy isometric), no longer the default.</strong> Use it only when a post wants a clean, abstract, text-free cover instead of the infographic poster above. Its still-useful craft notes (focal clarity, depth ≠ clutter, color diversity) apply to both styles.
+
+### Alternative Style — Dark Navy Isometric (optional / legacy)
+
+This was the previous default (Docker Compose, Kubernetes, SAML, EKS, Terraform, TSDB, HTTP Headers guides). Keep it on file as an alternative; it is no longer the default.
 
 **Background & Atmosphere:**
 - Dark navy gradient background (#0a1628 at edges → #1a2744 at center)
@@ -200,6 +245,8 @@ This blog has a consistent visual identity across all hero images. Every hero im
 
 **Focal Hierarchy & Depth (CRITICAL):**
 - ONE dominant focal element that the eye lands on first — an unmistakable visual anchor.
+- <strong>The focal IS the post's core technology drawn as its official, instantly recognizable SYMBOL mark</strong> (Terraform triangle, Docker whale, Kubernetes helm, the specific AWS service icon, Spring leaf, etc.) — accurate brand shape and brand colors, just elevated into the isometric world as a polished glossy / glass 3D object with edge glow and a halo. It must read "this is &lt;Tech&gt;" at a glance. Do NOT abstract it into a "monolith," generic motif, or derivative reinterpretation. Prefer the lettering-free symbol (no wordmark/text) so the AI doesn't misspell it.
+- <strong>Concept posts without a single brand</strong> (deadlocks, agile, algorithms, networking concepts): there's no logo to anchor on, so fall back to a clear conceptual focal as usual.
 - 3-5 supporting elements with clear visual hierarchy (smaller / less saturated than the focal).
 - Foreground should be MINIMAL — at most 1-2 small grounding objects, or none. Avoid stuffing laptops + mobiles + satellites + dishes + drifting cubes; that pile becomes clutter without narrative.
 - Detail comes from <strong>cluster density within elements</strong> (multi-colored cube clusters per element) and color semantics, NOT from adding more distinct element types.
@@ -281,23 +328,24 @@ This blog has a consistent visual identity across all hero images. Every hero im
 
 **Strict Rules:**
 - NEVER use white or light backgrounds
-- NEVER include text, labels, or watermarks in the image
+- NEVER include descriptive text, captions, labels, or watermarks. (A brand SYMBOL mark / product icon AS THE FOCAL is allowed and encouraged — but avoid logos that contain lettering or wordmarks, since the AI renders the text misspelled. Use the icon-only mark.)
+- ALWAYS make the focal a directly recognizable official logo/icon of the post's core technology (when one exists), NOT an abstract reinterpretation of it
 - NEVER use flat/minimal style or cartoon style
 - ALWAYS maintain the dark navy isometric aesthetic
 - ALWAYS include at least one secondary accent color besides cyan/blue
 - ALWAYS render server-rack-like elements as cube clusters, not single boxes
 - LIMIT total distinct element types — pile-ups become clutter, not richness
 
-### Hero Image Prompt Requirements
+### Prompt Requirements — Alternative Isometric Style (only when using the dark-navy alternative above)
 
-When writing a hero image prompt for a blog post:
+When writing a hero image prompt for the dark-navy isometric alternative:
 - The prompt should be <strong>5-6 lines (sentences) long</strong> — long enough to describe the focal, the supporting cast, and the color semantics; short enough that the AI doesn't pile on extra elements.
 - <strong>Before writing the prompt, decide the color palette AND its narrative semantics</strong> — pick 3 or 4 colors and assign each one a specific narrative role from the post (selected/rejected/baseline/destination/warning/etc.). If you can't articulate what each color MEANS in one sentence, the palette isn't ready.
 - Line 1: Scene atmosphere — dark navy gradient, subtle grid, sparse ambient particles. Keep the background simple and uncluttered.
-- Line 2: <strong>The dominant focal element</strong> — what the eye lands on first, with its visual treatment (glow, edge neon, glass transparency, surrounding multi-colored cube cluster of cyan + green + yellow + orange to add richness).
+- Line 2: <strong>The dominant focal element is the post's core technology rendered as its official, instantly recognizable SYMBOL mark</strong> — accurate brand shape and real brand colors, elevated into the scene as a polished glossy / glass 3D object on a platform, with edge glow and a halo. Recognizable as that brand at a glance; NOT an abstract reinterpretation or "monolith." Use the lettering-free icon (no wordmark). Surround it with a multi-colored cube cluster (cyan + green + yellow + orange) for richness. (Concept posts with no single brand: use a clear conceptual focal instead.)
 - Line 3: <strong>3-5 supporting elements</strong> arranged around the focal — each rendered cleanly, not cluttered. Where the topic allows differentiation, give each a distinct accent color tied to its narrative role.
 - Line 4: <strong>Motion and connections</strong> — flow arrows with motion particles, with active/successful paths glowing in one accent color (amber or gold) and rejected/blocked paths in another (coral with X-marks).
 - Line 5: <strong>Color palette summary</strong> — explicitly name the 3-4 colors and the narrative role of each, e.g., "cyan = baseline candidates, amber = the selected path, coral with X-marks = rejected anti-patterns, gold = destination reached."
 - Optional Line 6: a single small foreground or background grounding detail IF it adds narrative (e.g., "a small floating tile in the lower foreground with a debugger's highlight beam"). Skip this if not needed.
-- Always end with: "Isometric 2.5D style, dark navy background, multi-color narrative palette (cyan + [secondary] + [tertiary]), no text. Aspect ratio 3:2 (1536x1024)."
+- Always end with: "Isometric 2.5D style, dark navy background, multi-color narrative palette (cyan + [secondary] + [tertiary]), the official &lt;Tech&gt; symbol logo as the focal, no lettering or text. Aspect ratio 3:2 (1536x1024)."
 - Reference benchmarks for clarity — e.g., "similar focal clarity to the DB Deadlock hero image where every color tells a specific part of the story, with empty navy corners and depth from particles rather than corner clutter."
