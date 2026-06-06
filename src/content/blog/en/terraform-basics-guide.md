@@ -1117,7 +1117,67 @@ resource "aws_db_instance" "main" {
 
 > <strong>Caution</strong>: Declaring `sensitive = true` displays `(sensitive value)` in plan/apply output. However, the value is still stored in plaintext in the State file, so State encryption (S3 encrypt) is essential.
 
-### 10.6 terraform fmt and validate
+### 10.6 tfvars Management Strategy
+
+`*.tfvars` files are where you fill in actual values for variables. Three things trip people up in practice -- loading rules, per-environment separation, and the sensitive/non-sensitive split.
+
+<strong>(1) Loading rules</strong> -- The sources Terraform reads variable values from, and their precedence (stronger toward the bottom; for the same variable, later overrides earlier):
+
+| Precedence | Source | Auto-loaded |
+|------------|--------|:-----------:|
+| Weakest | `TF_VAR_xxx` environment variable | - |
+| ↓ | `terraform.tfvars` / `.json` | ✅ |
+| ↓ | `*.auto.tfvars` (alphabetical order) | ✅ |
+| ↓ | `-var-file=prod.tfvars` | ❌ (explicit) |
+| Strongest | `-var="key=value"` (CLI) | ❌ (explicit) |
+
+The key point: only `terraform.tfvars` and `*.auto.tfvars` are auto-loaded. An arbitrary name like `prod.tfvars` must be specified explicitly with `-var-file`.
+
+<strong>(2) Per-environment separation</strong> -- Two standard patterns:
+
+```text
+# Pattern A -- Directory separation (recommended at scale, §10.1)
+environments/dev/terraform.tfvars      # auto-loaded in each directory
+environments/prod/terraform.tfvars
+
+# Pattern B -- Single directory + var-file (small scale)
+terraform apply -var-file="prod.tfvars"
+```
+
+Pattern B is simple, but forgetting `-var-file` can apply to the wrong environment, so enforce the file in CI to stay safe.
+
+<strong>(3) Sensitive / non-sensitive split</strong> -- The most important part. Gitignoring all `*.tfvars` is safe but blocks non-sensitive config from being committed, hurting reproducibility. Split the two.
+
+| Kind | Example | Handling |
+|------|---------|----------|
+| Non-sensitive config | `instance_type`, `azs`, `environment` | <strong>Commit</strong> as `dev.tfvars` (better reproducibility) |
+| Sensitive info | DB password, API keys, tokens | <strong>Never commit</strong> -- use methods below |
+
+Three ways to inject sensitive values safely:
+
+- <strong>`TF_VAR_` environment variables</strong> -- Store in CI/CD secrets (GitHub Actions Secrets, etc.) and inject. Most common.
+- <strong>AWS Secrets Manager / SSM Parameter Store</strong> -- Query at runtime via a `data` source (§10.5, Option 2).
+- <strong>SOPS + KMS</strong> -- Commit an encrypted secret file and decrypt at apply time. Clean when State is split per stack.
+
+For `.gitignore`, blocking only sensitive files (rather than all `*.tfvars`) is better for reproducibility.
+
+```gitignore
+# Block only files that hold sensitive values
+secrets.auto.tfvars
+*.secret.tfvars
+# Non-sensitive env config (dev.tfvars, etc.) stays committed
+```
+
+Committing a `terraform.tfvars.example` for onboarding lets new teammates just copy and fill it in.
+
+```text
+# terraform.tfvars.example
+environment   = "dev"
+instance_type = "t3.micro"
+db_password   = "CHANGEME"   # inject the real value via TF_VAR_db_password
+```
+
+### 10.7 terraform fmt and validate
 
 Make it a habit to run these before every commit:
 

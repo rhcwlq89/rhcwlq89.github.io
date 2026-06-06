@@ -1123,7 +1123,67 @@ resource "aws_db_instance" "main" {
 
 > <strong>주의</strong>: `sensitive = true`로 선언하면 plan/apply 출력에서 `(sensitive value)`로 표시된다. 하지만 State 파일에는 여전히 평문으로 저장되므로, State 암호화(S3 encrypt)는 필수다.
 
-### 10.6 terraform fmt와 validate
+### 10.6 tfvars 관리 전략
+
+`*.tfvars` 파일은 변수에 실제 값을 채워 넣는 곳이다. 실무에서 자주 꼬이는 세 가지 — 로딩 규칙, 환경별 분리, 민감/비민감 분리 — 를 정리한다.
+
+<strong>① 로딩 규칙</strong> — Terraform이 변수 값을 읽는 소스와 우선순위는 다음과 같다(아래로 갈수록 강하며, 같은 변수면 덮어쓴다).
+
+| 순위 | 소스 | 자동 로드 |
+|------|------|:--------:|
+| 약함 | 환경변수 `TF_VAR_xxx` | - |
+| ↓ | `terraform.tfvars` / `.json` | ✅ |
+| ↓ | `*.auto.tfvars` (알파벳 순) | ✅ |
+| ↓ | `-var-file=prod.tfvars` | ❌ (명시 필요) |
+| 강함 | `-var="key=value"` (CLI) | ❌ (명시 필요) |
+
+핵심은 `terraform.tfvars`와 `*.auto.tfvars`만 자동 로드된다는 점이다. `prod.tfvars` 같은 임의 이름은 `-var-file`로 직접 지정해야 한다.
+
+<strong>② 환경별 분리</strong> — 두 가지 표준 패턴이 있다.
+
+```text
+# 패턴 A — 디렉토리 분리 (규모 클 때 권장, 10.1절)
+environments/dev/terraform.tfvars      # 각 디렉토리에서 자동 로드
+environments/prod/terraform.tfvars
+
+# 패턴 B — 단일 디렉토리 + var-file (규모 작을 때)
+terraform apply -var-file="prod.tfvars"
+```
+
+패턴 B는 간단하지만 `-var-file`을 빼먹으면 엉뚱한 환경에 적용될 수 있으므로, CI에서 파일 지정을 강제해야 안전하다.
+
+<strong>③ 민감/비민감 분리</strong> — 가장 중요하다. `*.tfvars`를 통째로 `.gitignore`하면 안전하지만 비민감 설정까지 커밋이 안 돼 재현성이 떨어진다. 둘을 나눈다.
+
+| 종류 | 예시 | 처리 |
+|------|------|------|
+| 비민감 설정 | `instance_type`, `azs`, `environment` | `dev.tfvars`로 <strong>커밋</strong> (재현성↑) |
+| 민감 정보 | DB 비밀번호, API 키, 토큰 | <strong>커밋 금지</strong> — 아래 방법 |
+
+민감값을 안전하게 주입하는 세 가지 방법:
+
+- <strong>`TF_VAR_` 환경변수</strong> — CI/CD 시크릿(GitHub Actions Secrets 등)에 넣고 주입. 가장 흔하다.
+- <strong>AWS Secrets Manager / SSM Parameter Store</strong> — `data` source로 런타임 조회 (10.5절 방법 2).
+- <strong>SOPS + KMS</strong> — 암호화한 secret 파일을 커밋하고 apply 시 복호화. State를 스택별로 나눈 환경에서 깔끔하다.
+
+`.gitignore`는 통짜 `*.tfvars` 차단 대신, 민감 파일만 골라 막는 형태가 재현성에 유리하다.
+
+```gitignore
+# 민감값이 들어가는 파일만 차단
+secrets.auto.tfvars
+*.secret.tfvars
+# 비민감 환경 설정(dev.tfvars 등)은 커밋 허용
+```
+
+팀원 온보딩용으로 `terraform.tfvars.example`을 커밋해두면, 새 팀원이 복사해서 채우기만 하면 된다.
+
+```text
+# terraform.tfvars.example
+environment   = "dev"
+instance_type = "t3.micro"
+db_password   = "CHANGEME"   # 실제 값은 TF_VAR_db_password로 주입
+```
+
+### 10.7 terraform fmt와 validate
 
 코드를 커밋하기 전에 항상 실행하는 습관을 들이자:
 
