@@ -141,6 +141,8 @@ CloudFront는 캐시 키가 같으면 "같은 요청"으로 보고 같은 사본
 
 사본을 얼마나 오래 보관할지는 <strong>TTL(보관 시간, Time To Live)</strong>로 정한다. TTL은 주로 오리진이 보내는 `Cache-Control` 응답 헤더로 결정된다.
 
+> <strong>참고 — Cache-Control은 양방향 헤더</strong>: `Cache-Control`은 요청·응답 모두에 실릴 수 있지만, "얼마나 캐시할지(수명)"를 정하는 건 <strong>응답(서버/오리진)</strong>이다. 요청 측 `Cache-Control`(예: 브라우저 강력 새로고침의 `no-cache`)은 "이번엔 새로 받아달라"는 신호일 뿐이다. 그래서 CDN 캐싱 수명은 2편에서 오리진(Spring Boot) 응답에 헤더를 붙여 결정한다.
+
 ```text
 Cache-Control: public, max-age=31536000, immutable   # 1년 캐시 (정적 자산)
 Cache-Control: no-store                              # 캐시 금지 (개인 API)

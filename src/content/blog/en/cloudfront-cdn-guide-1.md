@@ -134,6 +134,8 @@ CloudFront treats requests with the same cache key as "the same request" and ser
 
 How long to keep a copy is set by <strong>TTL (Time To Live)</strong>. TTL is mainly determined by the `Cache-Control` response header from the origin.
 
+> <strong>Note — Cache-Control is a two-way header</strong>: `Cache-Control` can appear on both requests and responses, but what decides "how long to cache" (the lifetime) is the <strong>response (server/origin)</strong>. A request-side `Cache-Control` (e.g. a browser hard-refresh's `no-cache`) is just a signal like "fetch fresh this time." So CDN cache lifetime is decided in Part 2 by attaching headers to the origin (Spring Boot) response.
+
 ```text
 Cache-Control: public, max-age=31536000, immutable   # cache 1 year (static assets)
 Cache-Control: no-store                              # never cache (private API)
