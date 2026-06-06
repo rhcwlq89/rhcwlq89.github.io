@@ -251,6 +251,35 @@ ordered_cache_behavior {
 
 ---
 
+## 5. 실무에서는 — 직접 구축 vs 관리형·사전 생성
+
+지금까지 본 Lambda@Edge·MediaConvert는 <strong>"AWS로 직접 만드는"</strong> 방식이다. 하지만 실무에서 더 흔한 선택은 팀 규모·스택에 따라 다르며, <strong>4편 방식이 유일한 정답은 아니다.</strong>
+
+<strong>이미지</strong>
+
+| 접근 | 실무 빈도 | 적합한 경우 |
+|------|------|------|
+| 업로드 시 <strong>사전 생성</strong>(썸네일/중/대 고정 사이즈) | 매우 흔함 | 사이즈가 정해진 상품·아바타 |
+| <strong>관리형</strong>(Cloudinary·imgix) | 흔함 | 직접 안 만들고 비용으로 해결 |
+| <strong>프론트 내장</strong>(Next.js Image 등) | 요즘 흔함 | 프론트가 Next/Vercel |
+| <strong>온디맨드 Lambda@Edge</strong>(2절) | 보통 | 동적 사이즈가 많고 AWS 직접 구축 |
+
+사이즈가 몇 개로 고정이라면 온디맨드보다 <strong>사전 생성이 더 단순하고 흔하다</strong>.
+
+<strong>영상</strong>
+
+| 접근 | 실무 빈도 | 적합한 경우 |
+|------|------|------|
+| <strong>관리형 플랫폼</strong>(Mux·Cloudflare Stream·api.video) | 흔함 | 작은~중간 팀, 빠른 도입 |
+| <strong>MediaConvert+S3+CloudFront 직접</strong>(3절) | 규모 크거나 AWS 올인 | 통제·비용·트래픽 규모가 큼 |
+| <strong>YouTube/Vimeo 임베드</strong> | 비핵심 영상이면 흔함 | 영상이 제품 핵심이 아닐 때 |
+
+영상은 직접 파이프라인이 손이 많이 가서, 작은 팀은 <strong>관리형(Mux·Cloudflare Stream)으로 시작</strong>하는 경우가 많다. MediaConvert 직접 구축은 규모·통제가 필요할 때의 선택이다.
+
+> <strong>결론</strong>: parts 1~3(정적·동적 캐싱)은 거의 모든 서비스의 기본기지만, 미디어 변환은 <strong>"직접 만들기 vs 관리형·사전 생성"의 트레이드오프</strong>다. 작은 팀일수록 관리형(이미지=Cloudinary, 영상=Mux/Cloudflare Stream)으로 시작하고, 규모·통제·비용이 커질 때 직접 파이프라인으로 내재화하는 흐름이 흔하다. "무조건 Lambda@Edge/MediaConvert를 직접 짜야 한다"는 오해는 버리자.
+
+---
+
 ## 정리 — 시리즈를 마치며
 
 4편에 걸쳐 CloudFront를 개념부터 미디어 서빙까지 다뤘다.

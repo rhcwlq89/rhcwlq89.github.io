@@ -244,6 +244,35 @@ Protect paid/member video with the <strong>Signed URL/cookies</strong> from Part
 
 ---
 
+## 5. In Practice — Build-It-Yourself vs Managed/Pre-generated
+
+The Lambda@Edge and MediaConvert approaches above are the <strong>"build it yourself on AWS"</strong> way. But what teams more commonly pick depends on size and stack, and <strong>the Part 4 approach is not the only right answer.</strong>
+
+<strong>Images</strong>
+
+| Approach | Frequency in practice | Best for |
+|------|------|------|
+| <strong>Pre-generate</strong> on upload (fixed thumbnail/medium/large sizes) | Very common | Fixed-size product images, avatars |
+| <strong>Managed</strong> (Cloudinary, imgix) | Common | Pay instead of building |
+| <strong>Frontend built-in</strong> (Next.js Image, etc.) | Common nowadays | When the frontend is Next/Vercel |
+| <strong>On-demand Lambda@Edge</strong> (§2) | Moderate | Many dynamic sizes, building on AWS |
+
+If you only have a few fixed sizes, <strong>pre-generation is simpler and more common</strong> than on-demand.
+
+<strong>Video</strong>
+
+| Approach | Frequency in practice | Best for |
+|------|------|------|
+| <strong>Managed platform</strong> (Mux, Cloudflare Stream, api.video) | Common | Small/mid teams, fast adoption |
+| <strong>MediaConvert+S3+CloudFront yourself</strong> (§3) | At scale or AWS-all-in | Big control/cost/traffic needs |
+| <strong>YouTube/Vimeo embed</strong> | Common for non-core video | When video isn't the core product |
+
+Building a video pipeline is a lot of work, so small teams often <strong>start with a managed platform (Mux, Cloudflare Stream)</strong>. Rolling your own MediaConvert is the choice when you need scale and control.
+
+> <strong>Bottom line</strong>: Parts 1–3 (static/dynamic caching) are the fundamentals of nearly every service, but media transformation is a <strong>"build vs managed/pre-generate" trade-off</strong>. The smaller the team, the more common it is to start managed (images = Cloudinary, video = Mux/Cloudflare Stream) and bring the pipeline in-house as scale, control, and cost grow. Drop the misconception that you "must" hand-write Lambda@Edge/MediaConvert.
+
+---
+
 ## Recap — Wrapping Up the Series
 
 Across four parts, we covered CloudFront from concepts to media serving.
