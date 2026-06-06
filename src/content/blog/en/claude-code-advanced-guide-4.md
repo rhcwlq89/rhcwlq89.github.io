@@ -1,7 +1,7 @@
 ---
 title: "Getting More Out of Claude Code (4) — Workflows, Ultrareview, and Remote Agents"
 description: "Workflows (ultracode) where Claude writes its own orchestration scripts, cloud multi-agent code review with Ultrareview, scheduled/remote agents that run with your laptop closed, plus Fast Mode and the model lineup — the latest 2026 automation features"
-pubDate: "2026-06-06T18:00:00+09:00"
+pubDate: "2026-03-14T21:00:00+09:00"
 tags: ["Claude Code", "AI", "Coding Agent", "Workflow", "Automation", "Code Review", "DevOps"]
 lang: en
 heroImage: "../../../assets/ClaudeCodeAdvancedGuide.png"

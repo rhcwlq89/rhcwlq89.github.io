@@ -1,7 +1,7 @@
 ---
 title: "Claude Code 200% 활용하기 (4) — 워크플로, Ultrareview, 원격 에이전트"
 description: "Claude가 직접 오케스트레이션 스크립트를 짜는 워크플로(ultracode), 클라우드 멀티에이전트 코드 리뷰 Ultrareview, 노트북을 꺼도 도는 예약·원격 에이전트, Fast Mode와 모델 라인업까지 — 2026년 최신 자동화 기능 총정리"
-pubDate: 2026-06-06T18:00:00+09:00
+pubDate: 2026-03-14T21:00:00+09:00
 tags:
   [
     "Claude Code",
