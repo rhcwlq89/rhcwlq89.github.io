@@ -1,6 +1,6 @@
 ---
 title: "Terraform Fundamentals: A Complete Guide"
-description: "A comprehensive guide covering IaC fundamentals, Terraform core concepts, workflow, state management, and modules for developers getting started with infrastructure as code"
+description: "A comprehensive guide covering IaC fundamentals, Terraform core concepts, workflow, count/for_each, dependencies and lifecycle, dynamic blocks, state management (import, moved, remote_state), and modules -- everything in one post for developers getting started with infrastructure as code"
 pubDate: "2026-03-08T14:00:00+09:00"
 lang: en
 tags: ["Terraform", "IaC", "DevOps", "AWS", "Infrastructure"]
@@ -21,16 +21,25 @@ But over time, problems emerge:
 
 One or two resources? The console is fine. But once you combine VPC + subnets + security groups + EC2 + RDS + S3 + IAM roles, managing everything through console clicks becomes impossible.
 
-**Terraform** solves this problem. You declare infrastructure as code, run the code to create infrastructure, and manage change history with Git.
+<strong>Terraform</strong> solves this problem. You declare infrastructure as code, run the code to create infrastructure, and manage change history with Git.
 
-> This post is a fundamentals guide for developers learning Terraform for the first time.
-> Examples use AWS, but the core concepts apply to any cloud provider.
+This post is a guide for developers learning Terraform for the first time. It starts with the basics (Provider, Resource, State, Module) and goes all the way to the advanced topics you hit on day one of real work (`count`/`for_each`, dependencies and `lifecycle`, `import`/`moved` blocks) -- all in a single post. Examples use AWS, but the core concepts apply to any cloud provider.
 
 ---
 
-## What Is IaC (Infrastructure as Code)?
+## TL;DR
 
-IaC is the practice of declaring infrastructure in code files and version-controlling them with Git.
+- <strong>You declare infrastructure as code.</strong> Instead of clicking through a console, you write "this infrastructure should exist" in a code file, and Terraform reconciles the real infrastructure to that state. The code is both documentation and change history.
+- <strong>The workflow has four stages.</strong> Initialize → preview changes → apply for real → destroy. Always review the preview before applying to see exactly what will change.
+- <strong>The state file is the heart of it.</strong> Terraform stores the current shape of managed infrastructure in a state file and applies only the diff against your code. On a team, you keep this file remote (S3) and use locking to prevent concurrent edits.
+- <strong>You create many resources like a loop.</strong> To make N of the same resource, use two meta-arguments: one count-based, one set-based. The set-based one is safe even when a middle item changes.
+- <strong>You reuse with modules.</strong> A module is a package that bundles related resources, takes inputs, and emits outputs. Like a function, it stamps out the same infrastructure by changing only the values per environment.
+
+---
+
+## 1. What Is IaC (Infrastructure as Code)?
+
+<strong>IaC = declaring infrastructure in code files and version-controlling it with Git.</strong>
 
 Instead of clicking through a console, you write "this infrastructure should exist" in a code file, and the tool provisions it for you. The code itself becomes both documentation and history.
 
@@ -38,15 +47,15 @@ Key benefits:
 
 | Benefit | Description |
 |---------|-------------|
-| **Reproducibility** | Running the same code always produces the same infrastructure |
-| **Version control** | Git tracks change history. You can see who changed what, when, and why |
-| **Code review** | Infrastructure changes go through PRs and team review |
-| **Automation** | Integrate with CI/CD pipelines to automate infrastructure deployment |
-| **Environment cloning** | Copy dev environment code to easily create staging and prod |
+| <strong>Reproducibility</strong> | Running the same code always produces the same infrastructure |
+| <strong>Version control</strong> | Git tracks change history. You can see who changed what, when, and why |
+| <strong>Code review</strong> | Infrastructure changes go through PRs and team review |
+| <strong>Automation</strong> | Integrate with CI/CD pipelines to automate infrastructure deployment |
+| <strong>Environment cloning</strong> | Copy dev environment code to easily create staging and prod |
 
 Comparing the console approach to the IaC approach:
 
-```
+```text
 # Console approach
 1. Log into the AWS Console
 2. Navigate to EC2 -> Launch Instance
@@ -63,13 +72,13 @@ Comparing the console approach to the IaC approach:
 
 ---
 
-## Introducing Terraform
+## 2. Introducing Terraform
 
 [Terraform](https://www.terraform.io/) is an open-source IaC tool created by HashiCorp. It is currently the most widely used infrastructure provisioning tool.
 
-### Key Characteristics
+### 2.1 Key Characteristics
 
-**Declarative**: You declare "this state should exist," and Terraform compares it to the current state and performs the necessary actions.
+<strong>Declarative</strong>: You declare "this state should exist," and Terraform compares it to the current state and performs the necessary actions.
 
 ```hcl
 # Declare "a t3.micro EC2 instance should exist"
@@ -87,44 +96,42 @@ The difference from the imperative approach is clear:
 
 | Approach | Example | Characteristics |
 |----------|---------|-----------------|
-| **Imperative** | "Create a server, attach a security group, assign an IP" | Executes step by step. Unaware of current state |
-| **Declarative** | "This server should exist" | Defines only the final state. Terraform figures out the rest |
+| <strong>Imperative</strong> | "Create a server, attach a security group, assign an IP" | Executes step by step. Unaware of current state |
+| <strong>Declarative</strong> | "This server should exist" | Defines only the final state. Terraform figures out the rest |
 
-**Multi-cloud**: Supports thousands of providers including AWS, GCP, Azure, Kubernetes, GitHub, and Datadog. A single tool can manage infrastructure across multiple clouds.
+<strong>Multi-cloud</strong>: Supports thousands of providers including AWS, GCP, Azure, Kubernetes, GitHub, and Datadog. A single tool can manage infrastructure across multiple clouds.
 
-**HCL (HashiCorp Configuration Language)**: Terraform uses its own configuration language. It is more readable than JSON and simpler than a general-purpose programming language.
+<strong>HCL (HashiCorp Configuration Language)</strong>: Terraform uses its own configuration language. It is more readable than JSON and simpler than a general-purpose programming language.
 
-### OpenTofu
+### 2.2 OpenTofu
 
 In 2023, HashiCorp changed Terraform's license to BSL (Business Source License). In response, the community forked it as [OpenTofu](https://opentofu.org/), an open-source project under the Linux Foundation. It provides nearly identical syntax and features. Organizations where licensing matters may consider OpenTofu as an alternative.
 
 ---
 
-## Comparison with Other Tools
+## 3. Comparison with Other Tools
 
 Several IaC tools exist. Here is a quick comparison:
 
 | Tool | Provider | Language | Multi-cloud | Characteristics |
 |------|----------|----------|:-----------:|-----------------|
-| **Terraform** | HashiCorp | HCL | O | Most popular, largest ecosystem |
-| **CloudFormation** | AWS | JSON/YAML | X (AWS only) | AWS-native, no separate installation |
-| **Pulumi** | Pulumi | Python/TS/Go, etc. | O | Uses general-purpose programming languages |
-| **Ansible** | Red Hat | YAML | O | Configuration management focused, can also provision infrastructure |
-| **CDK** | AWS | TS/Python/Java, etc. | X (AWS only) | Generates CloudFormation using programming languages |
+| <strong>Terraform</strong> | HashiCorp | HCL | O | Most popular, largest ecosystem |
+| <strong>CloudFormation</strong> | AWS | JSON/YAML | X (AWS only) | AWS-native, no separate installation |
+| <strong>Pulumi</strong> | Pulumi | Python/TS/Go, etc. | O | Uses general-purpose programming languages |
+| <strong>Ansible</strong> | Red Hat | YAML | O | Configuration management focused, can also provision infrastructure |
+| <strong>CDK</strong> | AWS | TS/Python/Java, etc. | X (AWS only) | Generates CloudFormation using programming languages |
 
 The reason to learn Terraform first is simple: it has overwhelmingly more references, and most companies use it. Whether you search Stack Overflow, blogs, courses, or official docs, Terraform resources are the most abundant.
 
-> Ansible excels at server-internal configuration (installing packages, deploying files, etc.).
-> Terraform excels at creating infrastructure itself (servers, networks, databases, etc.).
-> They serve different purposes, so they are often used together.
+> <strong>Note</strong>: Ansible excels at server-internal configuration (installing packages, deploying files, etc.). Terraform excels at creating infrastructure itself (servers, networks, databases, etc.). They serve different purposes, so they are often used together.
 
 ---
 
-## Core Concepts
+## 4. Core Concepts
 
 Here are the essential concepts in Terraform, explained one by one. All examples use AWS.
 
-### Provider
+### 4.1 Provider
 
 A Provider is a plugin that defines which cloud or service Terraform communicates with. Terraform itself does not know about any cloud. The Provider handles the connection to the AWS API, GCP API, and so on.
 
@@ -149,7 +156,7 @@ provider "aws" {
 
 Providers are automatically downloaded when you run `terraform init`. You can browse available Providers at the [Terraform Registry](https://registry.terraform.io/browse/providers).
 
-### Resource
+### 4.2 Resource
 
 A Resource defines the actual infrastructure resource to create. It is the core of Terraform code.
 
@@ -166,7 +173,7 @@ resource "aws_instance" "web" {
 
 Breaking down the syntax:
 
-```
+```text
 resource "<resource_type>" "<local_name>" {
   <attribute> = <value>
 }
@@ -178,9 +185,9 @@ resource "<resource_type>" "<local_name>" {
 | Local name | `web` | The name used to reference this resource within the code |
 | Attributes | `ami`, `instance_type` | Configuration values for the resource |
 
-To reference this resource from another resource, use `aws_instance.web.id`.
+To reference this resource from another resource, use `aws_instance.web.id`. That reference is what creates a dependency (more in §7).
 
-### Data Source
+### 4.3 Data Source
 
 A Data Source queries information about resources that already exist. It does not create anything new -- it fetches data from existing resources.
 
@@ -222,7 +229,7 @@ data "aws_vpc" "main" {
 }
 ```
 
-### Variable
+### 4.4 Variable
 
 A Variable is a reusable input value. It avoids hardcoding and allows injecting different values per environment.
 
@@ -285,7 +292,7 @@ Variable types:
 | `map(type)` | `{ Name = "web", Env = "prod" }` |
 | `object({...})` | `{ name = string, port = number }` |
 
-### Local
+### 4.5 Local
 
 A Local is a local variable that stores repeated values or computed results within the code. Unlike Variables, Locals cannot receive values from outside.
 
@@ -310,10 +317,9 @@ resource "aws_instance" "web" {
 }
 ```
 
-> Variables are for external input. Locals are for internal computation.
-> Locals are commonly used to apply the same tags across multiple resources or to standardize naming conventions.
+> <strong>Key</strong>: Variables are for external input. Locals are for internal computation. Locals are commonly used to apply the same tags across multiple resources or to standardize naming conventions.
 
-### Output
+### 4.6 Output
 
 An Output exposes execution results or passes values to other modules.
 
@@ -331,7 +337,7 @@ output "instance_id" {
 
 After running `terraform apply`, Outputs are printed to the terminal:
 
-```
+```text
 Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
 
 Outputs:
@@ -340,45 +346,45 @@ instance_id = "i-0abc123def456789"
 instance_ip = "54.180.xxx.xxx"
 ```
 
-Outputs are also used for passing data between modules. For example, a VPC module exports the VPC ID as an output, and an EKS module receives that value.
+Outputs are also used for passing data between modules. For example, a VPC module exports the VPC ID as an output, and an EKS module receives that value. For passing data between separate stacks, see §8.6.
 
-### State
+### 4.7 State
 
 State is the file where Terraform stores the current state of all managed infrastructure. By default, it is saved locally as a JSON file named `terraform.tfstate`.
 
-```
-Code (desired state) <--compare--> State (current state) -> Calculate changes
+```mermaid
+flowchart LR
+    A["Code<br/>desired state"] -->|compare| B["State<br/>current state"]
+    B -->|compute diff| C["Actions to apply"]
 ```
 
 - `terraform plan` compares the code with the State to calculate changes
 - `terraform apply` updates the State after applying changes
 - Without the State, Terraform does not know about existing resources (and will try to create them again)
 
-State is fundamental to Terraform. The "State Management" section below covers it in detail.
+State is fundamental to Terraform. §8 "State Management" covers it in detail.
 
-### Module
+### 4.8 Module
 
-A Module bundles multiple resources into a reusable package. It is similar to Helm Charts in Kubernetes or functions/libraries in programming.
-
-The "Modules" section below covers this in detail.
+A Module bundles multiple resources into a reusable package. It is similar to Helm Charts in Kubernetes or functions/libraries in programming. §9 "Modules" covers this in detail.
 
 ---
 
-## Workflow
+## 5. Workflow
 
 Terraform's basic workflow has four stages.
 
-```
-terraform init    ->  Download Providers, initialize backend
-     |
-terraform plan    ->  Preview changes (nothing is actually applied)
-     |
-terraform apply   ->  Apply changes to real infrastructure
-     |
-terraform destroy ->  Delete all resources (use with caution!)
+```mermaid
+flowchart TB
+    init["terraform init<br/>Download Providers, init backend"]
+    plan["terraform plan<br/>Preview changes (nothing applied)"]
+    apply["terraform apply<br/>Apply to real infrastructure"]
+    destroy["terraform destroy<br/>Delete all resources (caution)"]
+
+    init --> plan --> apply --> destroy
 ```
 
-### terraform init
+### 5.1 terraform init
 
 Run this when starting a new project or when Providers/modules change. It downloads the required plugins into the `.terraform/` directory.
 
@@ -394,9 +400,9 @@ Initializing provider plugins...
 Terraform has been successfully initialized!
 ```
 
-### terraform plan
+### 5.2 terraform plan
 
-Compares the code with the current State and shows what changes will occur. **It does not actually modify infrastructure.**
+Compares the code with the current State and shows what changes will occur. <strong>It does not actually modify infrastructure.</strong>
 
 ```bash
 $ terraform plan
@@ -426,9 +432,9 @@ What the symbols mean:
 | `~` | Update (in-place modification) |
 | `-/+` | Delete and recreate (replacement) |
 
-> **Why plan matters**: Always review the plan before applying. In particular, if `-/+` (replacement) appears, the resource will be destroyed and recreated, which can cause downtime. Many teams attach plan output to PRs for review.
+> <strong>Why plan matters</strong>: Always review the plan before applying. In particular, if `-/+` (replacement) appears, the resource will be destroyed and recreated, which can cause downtime. Many teams attach plan output to PRs for review.
 
-### terraform apply
+### 5.3 terraform apply
 
 Applies the plan to real infrastructure. A confirmation prompt appears before execution.
 
@@ -456,7 +462,7 @@ instance_ip = "54.180.xxx.xxx"
 
 Adding the `-auto-approve` flag skips the confirmation. This is used in CI/CD pipelines, but it is safer to omit it when running manually.
 
-### terraform destroy
+### 5.4 terraform destroy
 
 Deletes all resources managed by Terraform. Use this for cleaning up learning and test environments.
 
@@ -476,20 +482,9 @@ aws_instance.web: Destruction complete after 30s
 Destroy complete! Resources: 1 destroyed.
 ```
 
-> **Caution**: Running `terraform destroy` in production is extremely dangerous.
-> Use the `prevent_destroy` lifecycle option to prevent accidental deletion.
+> <strong>Caution</strong>: Running `terraform destroy` in production is extremely dangerous. Use the `prevent_destroy` lifecycle option to prevent accidental deletion (§7.3).
 
-```hcl
-resource "aws_db_instance" "main" {
-  # ... configuration ...
-
-  lifecycle {
-    prevent_destroy = true  # Raises an error if destroy is attempted
-  }
-}
-```
-
-### Other Useful Commands
+### 5.5 Other Useful Commands
 
 ```bash
 # Format code
@@ -510,39 +505,228 @@ terraform output
 
 ---
 
-## State Management
+## 6. Creating Multiple Resources -- count vs for_each
+
+You often need to create several of the same resource: three subnets, five EC2 instances. Copy-pasting blocks makes the code long and error-prone. Terraform provides two <strong>meta-arguments</strong> for this. A meta-argument is a special argument that works on any resource regardless of its type.
+
+### 6.1 count -- Create by Number
+
+Give `count` a number and that many resources are created. Each instance is distinguished by `count.index` (starting at 0).
+
+```hcl
+resource "aws_instance" "web" {
+  count         = 3
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t3.micro"
+
+  tags = {
+    Name = "web-${count.index}"   # web-0, web-1, web-2
+  }
+}
+```
+
+Reference them with an index. To point at all of them at once, use `[*]` (the splat expression).
+
+```hcl
+aws_instance.web[0].id          # the first instance
+aws_instance.web[*].id          # all IDs as a list
+```
+
+### 6.2 for_each -- Create by Set
+
+Give `for_each` a map or set, and one resource is created per key. Each instance is distinguished by `each.key` and `each.value`.
+
+```hcl
+resource "aws_instance" "web" {
+  for_each = {
+    seoul = "ap-northeast-2a"
+    busan = "ap-northeast-2c"
+  }
+
+  ami               = data.aws_ami.ubuntu.id
+  instance_type     = "t3.micro"
+  availability_zone = each.value
+
+  tags = {
+    Name = "web-${each.key}"   # web-seoul, web-busan
+  }
+}
+```
+
+Reference them by key instead of index.
+
+```hcl
+aws_instance.web["seoul"].id
+values(aws_instance.web)[*].id   # all IDs
+```
+
+### 6.3 Which to Use -- the count Index Trap
+
+Both create multiple resources, but <strong>they behave decisively differently when an item is added or removed in the middle.</strong>
+
+`count` tracks resources by their <strong>position in a list</strong>. Delete one item in the middle and the positions of all following items shift down by one. Terraform reads this as "the resource at that position changed" and <strong>replaces them in a cascade (destroy and recreate)</strong>.
+
+```text
+count = 3, Name = ["a", "b", "c"]  ->  web[0]=a, web[1]=b, web[2]=c
+
+Remove "b" -> ["a", "c"]
+  web[0]=a  (unchanged)
+  web[1]=b -> c   <- replaced!
+  web[2]=c -> deleted
+
+Intent: delete only b / Reality: b changed + c deleted = a healthy c gets recreated
+```
+
+`for_each` tracks resources by <strong>key</strong>. Delete the `"b"` key and only `web["b"]` disappears; `web["a"]` and `web["c"]` stay untouched.
+
+| Criterion | `count` | `for_each` |
+|-----------|---------|-----------|
+| Input | Number | map or set |
+| Identifier | Index (`count.index`) | Key (`each.key`) |
+| Removing a middle item | Cascading replacement ⚠️ | Only that item is removed ✅ |
+| Best for | Truly identical N copies | Resources distinguished by name/key |
+
+> <strong>Bottom line</strong>: If each item has a meaningful name, `for_each` is the default. Reserve `count` for "N truly identical copies" or conditional creation (`count = var.enabled ? 1 : 0`).
+
+---
+
+## 7. Dependencies and lifecycle
+
+Terraform does not create resources in the order written in your code. <strong>It analyzes the dependencies between resources and decides the order itself.</strong> Understanding this is essential to reading plan output correctly.
+
+### 7.1 The Dependency Graph -- Who Decides the Order?
+
+When one resource references another's attribute, Terraform creates an <strong>implicit dependency</strong>. For example, if a subnet references `aws_vpc.this.id`, Terraform automatically knows the VPC must be created first.
+
+It assembles all these dependencies into a <strong>DAG (Directed Acyclic Graph)</strong> -- a structure of nodes and arrows expressing order, with no cycles (A→B→A). Terraform topologically sorts this graph and creates resources that don't depend on each other <strong>in parallel</strong>.
+
+```mermaid
+flowchart TB
+    vpc["aws_vpc.this"]
+    igw["aws_internet_gateway.this"]
+    subnet["aws_subnet.public"]
+    rt["aws_route_table.public"]
+    instance["aws_instance.web"]
+
+    vpc --> igw
+    vpc --> subnet
+    vpc --> rt
+    igw --> rt
+    subnet --> instance
+```
+
+In the graph above, `igw` and `subnet` don't depend on each other, so they are created simultaneously. `instance` only starts after `subnet` finishes.
+
+### 7.2 depends_on -- Explicit Dependencies
+
+Sometimes order matters even without an attribute reference. A classic case: an IAM policy must be attached before an EC2 instance can call a certain API. In code, the EC2 instance doesn't reference the policy directly, so Terraform can't infer the order. Here you declare an <strong>explicit dependency</strong> with `depends_on`.
+
+```hcl
+resource "aws_iam_role_policy" "s3_access" {
+  # ... S3 access permissions ...
+}
+
+resource "aws_instance" "app" {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t3.micro"
+
+  # Force the policy to be created first
+  depends_on = [aws_iam_role_policy.s3_access]
+}
+```
+
+> <strong>Caution</strong>: `depends_on` is a last resort. Prefer solving ordering with attribute references (implicit dependencies) when possible, since references show up naturally in the graph. Overusing `depends_on` serializes unnecessarily and slows down applies.
+
+### 7.3 lifecycle -- Controlling Create, Destroy, and Update
+
+The `lifecycle` block finely controls how a resource is created, destroyed, and updated. Three options are commonly used.
+
+| Option | Behavior | When to use |
+|--------|----------|-------------|
+| `create_before_destroy` | On replacement, create the new resource before destroying the old | Avoid downtime |
+| `prevent_destroy` | Raise an error if destroy is attempted | Production DBs and other no-delete resources |
+| `ignore_changes` | Ignore external changes to specified attributes | Values changed by autoscaling, etc. |
+
+```hcl
+resource "aws_instance" "web" {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t3.micro"
+
+  lifecycle {
+    create_before_destroy = true            # Zero-downtime replacement
+    prevent_destroy       = false           # true blocks destroy
+    ignore_changes        = [tags["LastSeen"]]  # Ignore external changes to this tag
+  }
+}
+```
+
+`ignore_changes` is especially useful. For example, an Auto Scaling group's `desired_capacity` is changed at runtime by AWS itself. Without ignoring it, every `terraform apply` would try to "revert it to the code value," causing conflicts.
+
+> <strong>Note -- drift</strong>: When the code (desired state) and the real infrastructure diverge, that's called drift. It happens when someone changes things manually in the console. `ignore_changes` declares "drift on this attribute is intentional -- don't revert it."
+
+### 7.4 dynamic Blocks -- Repeating Nested Blocks
+
+Sometimes you need to repeat a <strong>nested block inside a resource</strong>, like a security group's `ingress`. Instead of copy-pasting an `ingress` block per port, generate them with a `dynamic` block.
+
+```hcl
+variable "ingress_ports" {
+  type    = list(number)
+  default = [80, 443, 8080]
+}
+
+resource "aws_security_group" "web" {
+  name = "web-sg"
+
+  dynamic "ingress" {
+    for_each = var.ingress_ports
+    content {
+      from_port   = ingress.value
+      to_port     = ingress.value
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+}
+```
+
+`dynamic "ingress"` declares "I'll generate ingress blocks repeatedly," and you put each block's body inside `content`. `ingress.value` references the value currently being iterated. The code above creates three ingress rules: 80, 443, and 8080.
+
+> <strong>Caution</strong>: `dynamic` is powerful but hurts readability. If the block count is fixed at two or three, writing them out is easier to read. Use `dynamic` only when the count is variable or controlled by a variable.
+
+---
+
+## 8. State Management
 
 State is one of the most important concepts in Terraform. Failing to understand it properly can lead to infrastructure disasters.
 
-### What Is State?
+### 8.1 What Is State?
 
 The `terraform.tfstate` file stores the current state of all resources managed by Terraform in JSON format.
 
 ```mermaid
 flowchart LR
-    A["Code (.tf)\ndesired state"] <--> B["State (.tfstate)\nknown state"] <--> C["Real Infra (AWS, etc.)\nactual state"]
+    A["Code (.tf)<br/>desired state"] <--> B["State (.tfstate)<br/>known state"]
+    B <--> C["Real Infra (AWS, etc.)<br/>actual state"]
 ```
 
-- **terraform plan**: Compares code with State to calculate changes
-- **terraform apply**: Applies changes to real infrastructure and updates State
-- **terraform refresh**: Syncs real infrastructure state back to State (reflects manual console changes)
+- <strong>terraform plan</strong>: Compares code with State to calculate changes
+- <strong>terraform apply</strong>: Applies changes to real infrastructure and updates State
+- <strong>terraform refresh</strong>: Syncs real infrastructure state back to State (reflects manual console changes)
 
-### Limitations of Local State
+### 8.2 Limitations of Local State
 
-By default, State is stored as a local file (`terraform.tfstate`).
-
-This works fine for solo work, but causes several issues in a team setting:
+By default, State is stored as a local file (`terraform.tfstate`). This works fine for solo work, but causes several issues in a team setting:
 
 | Problem | Description |
 |---------|-------------|
-| **Conflicts** | Two people applying simultaneously corrupts the State |
-| **Loss** | Accidentally deleting the file means Terraform loses track of existing resources |
-| **No sharing** | Team members need to manually copy the State file |
-| **Security** | State files can contain passwords, keys, and other sensitive data in plaintext |
+| <strong>Conflicts</strong> | Two people applying simultaneously corrupts the State |
+| <strong>Loss</strong> | Accidentally deleting the file means Terraform loses track of existing resources |
+| <strong>No sharing</strong> | Team members need to manually copy the State file |
+| <strong>Security</strong> | State files can contain passwords, keys, and other sensitive data in plaintext |
 
-### Remote State (Remote Backend)
+### 8.3 Remote State (Remote Backend)
 
-The standard for team workflows is the **S3 + DynamoDB** combination.
+The standard for team workflows is the <strong>S3 + DynamoDB</strong> combination.
 
 ```hcl
 terraform {
@@ -558,25 +742,27 @@ terraform {
 
 | Component | Role |
 |-----------|------|
-| **S3 bucket** | Stores the State file. Enable versioning to allow rollback to previous State |
-| **DynamoDB table** | Manages locks. If one person is applying, others must wait |
-| **encrypt** | Stores State encrypted. Protects sensitive information |
+| <strong>S3 bucket</strong> | Stores the State file. Enable versioning to allow rollback to previous State |
+| <strong>DynamoDB table</strong> | Manages locks. If one person is applying, others must wait |
+| <strong>encrypt</strong> | Stores State encrypted. Protects sensitive information |
 
 How it works:
 
-```
-1. Run terraform plan/apply
-2. Download State file from S3
-3. Acquire lock in DynamoDB (block other users)
-4. Perform the operation
-5. Upload new State to S3
-6. Release DynamoDB lock
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant S3 as S3 (State)
+    participant DDB as DynamoDB (Lock)
+    U->>S3: 1. Download State file
+    U->>DDB: 2. Acquire lock (block others)
+    U->>U: 3. Run plan / apply
+    U->>S3: 4. Upload new State
+    U->>DDB: 5. Release lock
 ```
 
-> **Note**: The S3 bucket and DynamoDB table specified in `backend "s3"` must exist before Terraform can use them.
-> This is the classic "chicken-and-egg" problem. Typically, these resources are created separately beforehand.
+> <strong>Note</strong>: The S3 bucket and DynamoDB table specified in `backend "s3"` must exist before Terraform can use them. This is the classic "chicken-and-egg" problem. Typically, these resources are created separately beforehand.
 
-### When You Need to Manually Modify State
+### 8.4 When You Need to Manually Modify State
 
 Occasionally, you need to manipulate State manually:
 
@@ -592,19 +778,80 @@ terraform state rm aws_instance.web
 
 # Rename a resource (when you changed the name in code)
 terraform state mv aws_instance.web aws_instance.web_server
-
-# Import an existing resource into Terraform management
-terraform import aws_instance.web i-0abc123def456789
 ```
 
-> `terraform import` is used when you want to bring a resource created manually via the console under Terraform management.
-> It adds the resource information to State so it can be managed through code going forward.
+These commands are powerful but dangerous. They are nerve-wracking to run, and the execution leaves no trace in your code. So modern Terraform offers a way to do the same things <strong>in code</strong> (§8.5).
+
+### 8.5 import / moved Blocks -- Managing State in Code
+
+A CLI command runs once and is gone, making it hard to review in a PR or reproduce. Terraform 1.1+'s `moved` block and 1.5+'s `import` block <strong>declare</strong> the same operations in code, so they can be committed, reviewed, and reproduced.
+
+<strong>moved block</strong> -- When you rename a resource, declare that State should follow. The code version of `terraform state mv`.
+
+```hcl
+# Renamed aws_instance.web -> aws_instance.web_server
+moved {
+  from = aws_instance.web
+  to   = aws_instance.web_server
+}
+
+resource "aws_instance" "web_server" {
+  # ...
+}
+```
+
+On apply, it moves the name inside State without destroying/recreating the resource. After applying, you can delete the `moved` block.
+
+<strong>import block</strong> -- Bring a resource created manually in the console under Terraform management. The code version of the `terraform import` command.
+
+```hcl
+# Bring a console-created EC2 into code
+import {
+  to = aws_instance.web
+  id = "i-0abc123def456789"
+}
+
+resource "aws_instance" "web" {
+  # Fill in the actual settings that plan reports
+}
+```
+
+Running `terraform plan -generate-config-out=generated.tf` auto-generates a config skeleton for the imported resource, saving you from filling an empty `resource` block by hand.
+
+| Operation | CLI command (runs immediately) | Code block (declarable, reviewable) |
+|-----------|-------------------------------|-------------------------------------|
+| Rename | `terraform state mv` | `moved` block (1.1+) |
+| Import existing resource | `terraform import` | `import` block (1.5+) |
+
+### 8.6 terraform_remote_state -- Cross-Stack References
+
+As things grow, you split infrastructure into multiple stacks (network / database / application). Each stack has its own State. To read one stack's output from another, use the `terraform_remote_state` data source.
+
+```hcl
+# Read the network stack's outputs from the app stack
+data "terraform_remote_state" "network" {
+  backend = "s3"
+  config = {
+    bucket = "my-terraform-state"
+    key    = "network/terraform.tfstate"
+    region = "ap-northeast-2"
+  }
+}
+
+resource "aws_instance" "web" {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t3.micro"
+  subnet_id     = data.terraform_remote_state.network.outputs.public_subnet_ids[0]
+}
+```
+
+The network stack just needs to export `public_subnet_ids` as an output. The app stack reads that value and places the instance in the subnet. The stacks are loosely coupled, so network and app can be deployed and managed separately.
 
 ---
 
-## Modules
+## 9. Modules
 
-### What Is a Module?
+### 9.1 What Is a Module?
 
 A Module packages related resources into a single unit. It takes inputs (Variables) and returns results (Outputs), just like a function.
 
@@ -622,9 +869,9 @@ An analogy:
 | Configuration | Variable | values.yaml | Parameters |
 | Result | Output | - | Return value |
 
-### Creating Your Own Module
+### 9.2 Creating Your Own Module
 
-```
+```text
 modules/
 └── vpc/
     ├── main.tf         # Resource definitions
@@ -705,7 +952,7 @@ resource "aws_instance" "web" {
 }
 ```
 
-### Public Registry Modules
+### 9.3 Public Registry Modules
 
 You can use verified modules from the [Terraform Registry](https://registry.terraform.io/). No need to reinvent the wheel.
 
@@ -742,19 +989,17 @@ Commonly used public modules:
 | `terraform-aws-modules/s3-bucket/aws` | S3 buckets |
 | `terraform-aws-modules/iam/aws` | IAM roles and policies |
 
-> Always pin the `version` when using public modules.
-> Without a version, `terraform init` pulls the latest version,
-> which may include unexpected breaking changes.
+> <strong>Caution</strong>: Always pin the `version` when using public modules. Without a version, `terraform init` pulls the latest version, which may include unexpected breaking changes.
 
 ---
 
-## Practical Tips
+## 10. Practical Tips
 
-### Directory Structure
+### 10.1 Directory Structure
 
 This varies by project size, but separating by environment is the most common pattern.
 
-```
+```text
 infrastructure/
 ├── environments/
 │   ├── dev/
@@ -783,7 +1028,19 @@ infrastructure/
 
 Each environment directory is an independent Terraform project. You run `terraform init` and `terraform apply` separately per environment. This ensures that applying changes in dev does not affect prod.
 
-### .gitignore
+### 10.2 Don't Use Workspaces for Environment Separation
+
+`terraform workspace` lets you keep multiple States from the same code and the same backend. The name makes it look perfect for dev/prod separation, but it's not recommended in practice.
+
+| Problem | Description |
+|---------|-------------|
+| Same code | Nothing stops you from accidentally applying to the dev workspace from prod |
+| Conditional hell | Environment differences end up handled with `${terraform.workspace}` conditionals, making the code messy |
+| Poor visibility | You can't tell which workspace you're in just by reading the code |
+
+Environment separation is <strong>standardly done by directory</strong>, as in §10.1. Reserve workspaces for short experiments or one-off clones (spinning up a temporary extra environment from the same code).
+
+### 10.3 .gitignore
 
 Files that must be in `.gitignore` for any Terraform project:
 
@@ -807,7 +1064,7 @@ override.tf
 override.tf.json
 ```
 
-### Version Pinning
+### 10.4 Version Pinning
 
 Pin the versions of both Providers and Terraform itself. This prevents issues caused by version differences between team members.
 
@@ -832,7 +1089,7 @@ terraform {
 | `~> 5.0` | Within the 5.x range | `5.0.0` to `5.99.99` (not 6.0) |
 | `>= 5.0, < 6.0` | Explicit range | Same as `~> 5.0` |
 
-### Managing Sensitive Information
+### 10.5 Managing Sensitive Information
 
 Do not put passwords or API keys directly in `terraform.tfvars`. Instead:
 
@@ -856,10 +1113,9 @@ resource "aws_db_instance" "main" {
 }
 ```
 
-> Declaring `sensitive = true` displays `(sensitive value)` in plan/apply output.
-> However, the value is still stored in plaintext in the State file, so State encryption (S3 encrypt) is essential.
+> <strong>Caution</strong>: Declaring `sensitive = true` displays `(sensitive value)` in plan/apply output. However, the value is still stored in plaintext in the State file, so State encryption (S3 encrypt) is essential.
 
-### terraform fmt and validate
+### 10.6 terraform fmt and validate
 
 Make it a habit to run these before every commit:
 
@@ -881,27 +1137,90 @@ Here is a recap of the core concepts covered in this post:
 
 | Concept | One-line Description |
 |---------|---------------------|
-| **IaC** | Declare infrastructure as code and manage it with Git |
-| **Provider** | Plugin that connects Terraform to a cloud |
-| **Resource** | Definition of an infrastructure resource to create |
-| **Data Source** | Query information about existing resources |
-| **Variable** | Reusable input value |
-| **Local** | Local variable for internal computation |
-| **Output** | Expose execution results or pass data between modules |
-| **State** | File that stores the current state of infrastructure |
-| **Module** | Reusable package that bundles resources |
-| **Workflow** | init -> plan -> apply -> destroy |
+| <strong>IaC</strong> | Declare infrastructure as code and manage it with Git |
+| <strong>Provider</strong> | Plugin that connects Terraform to a cloud |
+| <strong>Resource</strong> | Definition of an infrastructure resource to create |
+| <strong>Data Source</strong> | Query information about existing resources |
+| <strong>Variable / Local</strong> | External input value / local variable for internal computation |
+| <strong>Output</strong> | Expose results or pass data between modules and stacks |
+| <strong>count / for_each</strong> | Create multiple resources by number/set |
+| <strong>Dependency graph</strong> | Auto-determines creation order from references (DAG) |
+| <strong>lifecycle</strong> | Control create/destroy/update (zero-downtime replace, prevent destroy, ignore changes) |
+| <strong>State</strong> | File that stores the current state of infrastructure |
+| <strong>Module</strong> | Reusable package that bundles resources |
+| <strong>Workflow</strong> | init -> plan -> apply -> destroy |
 
 Connecting the big picture:
 
-```
-Terraform       ->  EKS           ->  ArgoCD        ->  Loki/Grafana
-(Build infra)       (K8s cluster)     (GitOps deploy)   (Monitoring)
+```mermaid
+flowchart LR
+    tf["Terraform<br/>Build infra<br/>VPC, subnets, IAM"]
+    eks["EKS<br/>K8s cluster<br/>node groups, networking"]
+    argo["ArgoCD<br/>GitOps deploy<br/>Helm Chart management"]
+    obs["Loki/Grafana<br/>Monitoring<br/>logs, dashboards"]
 
-Define infra        K8s runtime       Git-based auto    Log collection/
-as code             environment       deployment        visualization
-VPC, subnets, IAM   Node groups,      Helm Chart        Dashboard
-                    networking        management        configuration
+    tf --> eks --> argo --> obs
 ```
 
-Now that you have learned Terraform's fundamental concepts, the next post will put them into practice by building an actual AWS EKS cluster with Terraform. We will walk through VPC, subnets, IAM roles, the EKS cluster, and node groups line by line, building production-grade infrastructure from the ground up.
+Now that you have learned Terraform's concepts, the next post will put them into practice by building an actual AWS EKS cluster with Terraform. We will walk through VPC, subnets, IAM roles, the EKS cluster, and node groups line by line, building production-grade infrastructure from the ground up.
+
+---
+
+## Appendix
+
+### A. Glossary
+
+| Term | Description |
+|------|-------------|
+| HCL | HashiCorp Configuration Language. Terraform's dedicated config language |
+| Provider | Plugin that communicates with a specific cloud/service API |
+| Resource | An infrastructure object actually created and managed |
+| Data Source | A read-only block that retrieves info about an existing resource |
+| State | File storing the current state of managed infrastructure (`.tfstate`) |
+| Backend | Defines where State is stored (local, S3, etc.) |
+| Module | A reusable package bundling multiple resources |
+| Meta-argument | A special argument common to all resources (`count`, `for_each`, `depends_on`, `lifecycle`) |
+| DAG | Directed Acyclic Graph. A cycle-free structure expressing dependency order |
+| Drift | When code and real infrastructure diverge |
+| Splat expression | `[*]`. Syntax that collects an attribute from many resources into a list |
+
+### B. Common Functions and Expressions
+
+| Function/Expression | Purpose | Example |
+|---------------------|---------|---------|
+| `merge(a, b)` | Merge maps | `merge(local.common_tags, { Name = "web" })` |
+| `cidrsubnet(prefix, n, i)` | Compute a subnet CIDR | `cidrsubnet("10.0.0.0/16", 8, 0)` -> `10.0.0.0/24` |
+| `lookup(map, key, default)` | Look up a key in a map | `lookup(var.amis, "seoul", "ami-xxx")` |
+| `coalesce(a, b, ...)` | First non-null value | `coalesce(var.name, "default")` |
+| `length(list)` | Length | `count = length(var.azs)` |
+| for expression | Transform a list/map | `[for s in var.names : upper(s)]` |
+| Conditional expression | Ternary | `var.env == "prod" ? "t3.large" : "t3.micro"` |
+| `jsonencode(obj)` | Object to JSON string | When writing IAM policies |
+| `templatefile(path, vars)` | Render a template file | Generate user_data scripts |
+
+### C. Command Cheat Sheet
+
+```bash
+# Init / validate
+terraform init                 # Initialize providers & backend
+terraform fmt -recursive       # Format code (auto-fix)
+terraform validate             # Validate syntax
+
+# Plan / apply
+terraform plan                 # Preview changes
+terraform plan -out=tfplan     # Save the plan to a file
+terraform apply tfplan         # Apply the saved plan
+terraform apply -auto-approve  # Apply without confirmation (for CI)
+terraform destroy              # Delete everything
+
+# State inspect / manipulate
+terraform state list           # List managed resources
+terraform state show <addr>    # Show a specific resource
+terraform state rm <addr>      # Remove from State (keeps real infra)
+terraform state mv <a> <b>     # Change a resource's address
+terraform output               # View output values
+
+# Debugging
+terraform graph                # Output the dependency graph (DOT format)
+TF_LOG=DEBUG terraform plan     # Verbose logs
+```
