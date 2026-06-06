@@ -1,6 +1,6 @@
 ---
 title: "Getting More Out of Claude Code (2) — Plugins, MCP, and IDE Integration"
-description: "A practical guide to extending Claude Code with plugins, connecting external tools via MCP, and using Claude natively in VS Code"
+description: "A practical guide to extending Claude Code with plugins, connecting external tools via MCP, and using Claude natively in VS Code and JetBrains — verified against the latest 2026 version"
 pubDate: "2026-03-14T19:00:00+09:00"
 tags: ["Claude Code", "AI", "Coding Agent", "Plugin", "MCP", "IDE", "VS Code", "Automation"]
 lang: en
@@ -9,34 +9,53 @@ heroImage: "../../../assets/ClaudeCodeAdvancedGuide.png"
 
 ## Introduction
 
-In [Part 1](/en/blog/claude-code-advanced-guide-1), we covered memory, skills, and hooks — ways to make Claude remember you and automate repetitive work.
+In [Part 1](/en/blog/claude-code-advanced-guide-1), we covered memory, skills, and hooks -- ways to make Claude remember you and automate repetitive work.
 
-In Part 2, we expand Claude Code's reach **outward**:
+In Part 2, we expand Claude Code's reach <strong>outward</strong>:
 
-- **Plugins**: Bundle skills, agents, hooks, and MCP servers into shareable packages
-- **MCP**: Connect external tools like GitHub, Sentry, and databases to Claude
-- **IDE Integration**: Use Claude Code natively inside VS Code
+- Part 1 — [Memory + Skills + Hooks](/en/blog/claude-code-advanced-guide-1)
+- <strong>Part 2 — Plugins + MCP + IDE integration (this post)</strong>
+- Part 3 — [Sub-agents + Agent Teams](/en/blog/claude-code-advanced-guide-3)
+- Part 4 — [Workflows + Ultrareview + Remote Agents](/en/blog/claude-code-advanced-guide-4)
+
+What we'll cover:
+
+- <strong>Plugins</strong>: bundle skills, agents, hooks, and MCP servers into shareable packages
+- <strong>MCP</strong>: connect external tools like GitHub, Sentry, and databases to Claude
+- <strong>IDE integration</strong>: use Claude Code natively inside VS Code and JetBrains
+
+> <strong>Note</strong>: This post was checked against the latest version as of June 2026. Commands, flags, and MCP server endpoints change often, so always confirm install commands against each service's official docs or `claude mcp --help`.
+
+---
+
+## TL;DR
+
+- <strong>Plugins are feature bundles.</strong> Package skills, agents, hooks, and external-tool config into one unit to share with your team or community. For solo use, just drop things in `.claude/`.
+- <strong>MCP connects external tools.</strong> Attach hundreds of tools -- GitHub, Sentry, databases, Slack -- via a standard protocol. Most install in one command.
+- <strong>There are two connection styles.</strong> Cloud services connect remotely (HTTP); local tools run as a process on your machine. Remote servers usually authenticate via browser login (OAuth).
+- <strong>When tools pile up, they're loaded on demand.</strong> Instead of loading every tool definition upfront, Claude searches and loads them as needed -- on by default -- to save context.
+- <strong>Use it right inside your editor.</strong> VS Code has a dedicated side panel; JetBrains integrates via a plugin. There's also a cloud version that runs in the browser with no install.
 
 ---
 
 ## 1. Plugins — Bundle and Share Functionality
 
-Plugins package skills, agents, hooks, and MCP servers into **a single distributable unit**. You can create your own or install from a marketplace.
+A plugin packages skills, agents, hooks, and MCP servers into <strong>a single unit</strong>. You can build your own, or install one someone else made from a marketplace.
 
-### 1.1 Plugins vs standalone configuration
+### 1.1 Plugins vs Standalone Config
 
-| Approach | Skill names | Best for |
+| Approach | Skill name | Best for |
 |---|---|---|
-| **Standalone** (`.claude/` directory) | `/hello` | Personal workflows, project-specific customization |
-| **Plugins** (`.claude-plugin/plugin.json`) | `/plugin-name:hello` | Team sharing, community distribution, versioned releases |
+| <strong>Standalone config</strong> (`.claude/` dir) | `/hello` | Personal workflow, per-project customization |
+| <strong>Plugin</strong> (`.claude-plugin/plugin.json`) | `/plugin-name:hello` | Team sharing, community distribution, versioning |
 
-> Use standalone config for personal use. Use plugins when sharing with teams or the community.
+> For solo use, put things directly in `.claude/`; to share with a team or community, make a plugin.
 
-### 1.2 Creating a plugin
+### 1.2 Building a Plugin
 
 #### Directory structure
 
-```
+```text
 my-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # Manifest (required)
@@ -46,7 +65,7 @@ my-plugin/
 │       └── SKILL.md
 ├── agents/                  # Custom agents
 ├── hooks/
-│   └── hooks.json           # Hook configuration
+│   └── hooks.json           # Hook config
 ├── .mcp.json                # MCP server config
 └── settings.json            # Default settings
 ```
@@ -56,7 +75,7 @@ my-plugin/
 ```json
 {
   "name": "my-plugin",
-  "description": "Automated code review plugin",
+  "description": "Code review automation plugin",
   "version": "1.0.0",
   "author": {
     "name": "Your Name"
@@ -64,7 +83,7 @@ my-plugin/
 }
 ```
 
-The `name` becomes the skill namespace. Skills in this plugin are invoked as `/my-plugin:code-review`.
+Only `name` is required; `version` is optional (if omitted, the git commit SHA is used). `author` is an object holding `name`/`email`/`url`, not a string. The `name` becomes the skill namespace, so this plugin's skill is called as `/my-plugin:code-review`.
 
 #### Adding a skill
 
@@ -73,10 +92,10 @@ The `name` becomes the skill namespace. Skills in this plugin are invoked as `/m
 ```markdown
 ---
 name: code-review
-description: Reviews code for quality and security issues
+description: Check code quality and security
 ---
 
-When reviewing code, check for:
+When reviewing code, check:
 1. Code structure and readability
 2. Error handling
 3. Security vulnerabilities
@@ -85,51 +104,56 @@ When reviewing code, check for:
 
 #### Local testing
 
-Before publishing to a marketplace or installing with `claude plugin install`, you can test by pointing directly at a local directory:
+Before publishing to a marketplace, point at a local directory (or `.zip`) to test:
 
 ```bash
-# Start Claude Code with ./my-plugin loaded as a temporary plugin
+# Start Claude Code loading ./my-plugin as a temporary plugin
 claude --plugin-dir ./my-plugin
 
 # Test multiple plugins at once
 claude --plugin-dir ./plugin-one --plugin-dir ./plugin-two
+
+# Load from a remote .zip URL for this session only
+claude --plugin-url https://example.com/my-plugin.zip
 ```
 
-This **starts a new Claude Code session** with the directory recognized as a plugin. It's only active for that session — once the session ends, the plugin is unloaded.
+This <strong>starts a fresh Claude Code</strong> recognizing that folder as a plugin. It's valid only for that session and disappears when it ends.
 
-What to test:
+Things to test:
 
-- Skills appear in the `/` command list (e.g., `/my-plugin:code-review`)
+- The skill appears in the `/` command list (`/my-plugin:code-review`)
 - Agents show up in `/agents`
-- Hooks trigger on the correct events
-- MCP servers connect and appear in `/mcp`
+- Hooks trigger on events
+- MCP servers connect in `/mcp`
 
-When you modify plugin files during development, run `/reload-plugins` to apply changes without restarting. Note: LSP server configuration changes require a full restart.
+While developing, edit a file and apply it without restarting via `/reload-plugins`.
 
-### 1.3 Installing plugins & marketplaces
+### 1.3 Installing Plugins & Marketplaces
 
 ```bash
 # Inside Claude Code
-/plugins  # Opens plugin management UI
+/plugin  # Open the plugin manager (Discover / Installed / Marketplaces / Errors tabs)
 ```
 
-Installation scope options:
+> <strong>Note</strong>: The canonical command is `/plugin` (singular). `/plugins` may work in some environments, but the documented form is `/plugin`.
+
+Choose an install scope:
 
 | Scope | Description |
 |---|---|
-| **Install for you** | Available in all your projects (user) |
-| **Install for this project** | Shared with project collaborators (project) |
-| **Install locally** | Only for you, only in this repo (local) |
+| <strong>Install for you</strong> | Use across all projects (user) |
+| <strong>Install for this project</strong> | This project only, shared with team (project) |
+| <strong>Install locally</strong> | This project only, just you (local) |
 
-Marketplaces can be added via GitHub repos, URLs, or local paths. There's an official marketplace, and you can create team-specific ones.
+Marketplaces can be added from a GitHub repo (`owner/repo`), a Git URL, a local path, or a `marketplace.json` URL. There's an official marketplace, and you can also build a team-only one.
 
-### 1.4 Converting existing config to a plugin
+### 1.4 Converting Existing Config to a Plugin
 
-If you already have skills or hooks in `.claude/`, simply move them to a plugin structure:
+If you already have skills or hooks in `.claude/`, move them into the plugin structure:
 
 ```bash
 mkdir -p my-plugin/.claude-plugin
-# Create plugin.json, then:
+# After creating plugin.json
 cp -r .claude/commands my-plugin/
 cp -r .claude/skills my-plugin/
 cp -r .claude/agents my-plugin/
@@ -139,97 +163,101 @@ cp -r .claude/agents my-plugin/
 
 ## 2. MCP — Connecting External Tools
 
-MCP (Model Context Protocol) is an **open-source standard protocol** for connecting Claude Code to external tools. You can connect hundreds of tools including GitHub, Sentry, databases, Slack, and more.
+MCP (Model Context Protocol) is an <strong>open standard protocol</strong> for connecting Claude Code to external tools. You can connect hundreds of tools: GitHub, Sentry, databases, Slack, and more.
 
-### 2.1 What you can do with MCP
+```mermaid
+flowchart LR
+    cc["Claude Code"]
+    subgraph servers["MCP servers"]
+      gh["GitHub"]
+      sentry["Sentry"]
+      db["DB (DBHub)"]
+    end
+    ext["External service APIs"]
 
-With MCP servers connected, you can do things like:
-
-```
-Implement the feature described in JIRA ENG-4521 and create a PR on GitHub.
-```
-
-```
-Check Sentry for errors in the last 24 hours and find which deployment caused them.
-```
-
-```
-Query our PostgreSQL database for this month's revenue data.
+    cc <-->|MCP protocol| servers
+    servers <-->|each service API| ext
 ```
 
-### 2.2 Recommended MCP servers
+### 2.1 What You Can Do with MCP
 
-Here are useful MCP servers organized by category. Most can be installed with a single command.
+With an MCP server connected, you can do things like:
 
-#### Development & Code Management
+```text
+Implement the feature described in JIRA ENG-4521 and open a GitHub PR
+```
 
-| Server | Description | Install command |
+```text
+Check Sentry errors from the last 24 hours and analyze which deploy started them
+```
+
+```text
+Query this month's revenue data from PostgreSQL
+```
+
+### 2.2 Recommended MCP Servers
+
+Useful MCP servers by category. Most install in one command. Endpoints can change, so verify against each service's official docs before installing.
+
+#### Development & code management
+
+| Server | Transport | Install command |
 |---|---|---|
-| **GitHub** | PR reviews, issue management, code search | `claude mcp add --transport http github https://api.githubcopilot.com/mcp/` |
-| **Sentry** | Error monitoring, stack trace analysis | `claude mcp add --transport http sentry https://mcp.sentry.dev/mcp` |
-| **Vercel** | Deployment management, project analytics | `claude mcp add --transport http vercel https://mcp.vercel.com` |
-| **Context7** | Up-to-date library documentation | `claude mcp add --transport http context7 https://mcp.context7.com/mcp` |
-| **Stripe** | Payment and financial infrastructure | `claude mcp add --transport http stripe https://mcp.stripe.com` |
-| **Datadog** | Logs, metrics, traces, incident monitoring | `claude mcp add --transport http datadog https://mcp.datadoghq.com/mcp` |
+| <strong>GitHub</strong> | HTTP | `claude mcp add --transport http github https://api.githubcopilot.com/mcp/` |
+| <strong>Sentry</strong> | HTTP | `claude mcp add --transport http sentry https://mcp.sentry.dev/mcp` |
+| <strong>Context7</strong> | stdio | `claude mcp add --transport stdio context7 -- npx -y @upstash/context7-mcp` |
+| <strong>Stripe</strong> | HTTP | `claude mcp add --transport http stripe https://mcp.stripe.com` |
 
 #### Databases
 
-| Server | Description | Install command |
+| Server | Transport | Install command |
 |---|---|---|
-| **Supabase** | PostgreSQL + auth + storage | `claude mcp add --transport http supabase https://mcp.supabase.com/mcp` |
-| **DBHub** | Universal PostgreSQL/MySQL/MariaDB/SQL Server/SQLite access | `claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "connection-string"` |
+| <strong>Supabase</strong> | HTTP | `claude mcp add --transport http supabase https://mcp.supabase.com/mcp` |
+| <strong>DBHub</strong> | stdio | `claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "connection-string"` |
 
-> DBHub connects to PostgreSQL, MySQL, MariaDB, **SQL Server**, and SQLite via a single DSN string. Using a read-only database account is strongly recommended.
+> DBHub connects PostgreSQL, MySQL, MariaDB, <strong>SQL Server</strong>, and SQLite with a single DSN string. Use a read-only account.
 >
-> **DSN examples:**
+> <strong>DSN examples:</strong>
 > - PostgreSQL: `postgresql://user:pass@host:5432/db`
 > - MySQL: `mysql://user:pass@host:3306/db`
 > - SQL Server: `sqlserver://user:pass@host:1433/db`
 > - SQLite: `sqlite:///path/to/db.sqlite`
 
-#### Project Management
+#### Project management & communication
 
-| Server | Description | Install command |
+| Server | Transport | Install command |
 |---|---|---|
-| **Atlassian** | Jira issues + Confluence docs | `claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp` |
-| **Linear** | Issues, projects, workflow management | `claude mcp add --transport http linear https://mcp.linear.app/mcp` |
-| **Notion** | Create, edit, search documents | `claude mcp add --transport http notion https://mcp.notion.com/mcp` |
-| **Asana** | Tasks, projects, goals management | `claude mcp add --transport http asana https://mcp.asana.com/v2/mcp` |
+| <strong>Notion</strong> | HTTP | `claude mcp add --transport http notion https://mcp.notion.com/mcp` |
+| <strong>Linear</strong> | HTTP | `claude mcp add --transport http linear https://mcp.linear.app/mcp` |
+| <strong>Atlassian</strong> | HTTP | `claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp` |
+| <strong>Asana</strong> | SSE | `claude mcp add --transport sse asana https://mcp.asana.com/sse` |
+| <strong>Slack</strong> | HTTP | `claude mcp add --transport http slack https://mcp.slack.com/mcp` |
 
-#### Communication & Design
+> <strong>Caution — transport</strong>: Asana currently uses an SSE endpoint. But <strong>SSE transport is deprecated</strong>, so prefer HTTP when a service offers it. Slack doesn't support dynamic client registration and needs pre-issued OAuth credentials.
+>
+> The full list is in the [MCP server registry](https://github.com/modelcontextprotocol/servers). Third-party MCP servers aren't vetted by Anthropic, so install only trusted ones.
 
-| Server | Description | Install command |
-|---|---|---|
-| **Slack** | Send messages, fetch data | `claude mcp add --transport http slack https://mcp.slack.com/mcp` |
-| **Figma** | Generate code from design context | `claude mcp add --transport http figma https://mcp.figma.com/mcp` |
-| **Excalidraw** | Create hand-drawn style diagrams | `claude mcp add --transport http excalidraw https://mcp.excalidraw.com/mcp` |
-
-> Browse the full list at the [MCP server registry](https://github.com/modelcontextprotocol/servers). Third-party MCP servers are not verified by Anthropic — only install servers you trust.
-
-### 2.3 Installing MCP servers
+### 2.3 Installing MCP Servers
 
 #### HTTP servers (recommended)
 
 ```bash
-# Connect to GitHub
+# Connect GitHub
 claude mcp add --transport http github https://api.githubcopilot.com/mcp/
 
-# Connect to Notion
-claude mcp add --transport http notion https://mcp.notion.com/mcp
-
-# With authentication header
+# With an auth header
 claude mcp add --transport http secure-api https://api.example.com/mcp \
   --header "Authorization: Bearer your-token"
 ```
 
-#### stdio servers (local processes)
+#### stdio servers (local process)
 
 ```bash
-# Connect to PostgreSQL
+# Connect PostgreSQL
 claude mcp add --transport stdio db -- npx -y @bytebase/dbhub \
   --dsn "postgresql://readonly:pass@prod.db.com:5432/analytics"
 
-# Connect to Airtable
+# Connect Airtable (inject env var)
 claude mcp add --transport stdio --env AIRTABLE_API_KEY=YOUR_KEY airtable \
   -- npx -y airtable-mcp-server
 ```
@@ -237,19 +265,19 @@ claude mcp add --transport stdio --env AIRTABLE_API_KEY=YOUR_KEY airtable \
 #### Managing servers
 
 ```bash
-claude mcp list              # List all servers
-claude mcp get github        # View details
-claude mcp remove github     # Remove a server
-/mcp                         # Check status inside Claude Code
+claude mcp list              # List
+claude mcp get github        # Details
+claude mcp remove github     # Remove
+/mcp                         # Status / auth inside Claude Code
 ```
 
-### 2.4 MCP installation scopes
+### 2.4 MCP Install Scopes
 
-| Scope | Storage location | Use case |
+| Scope | Storage | Use for |
 |---|---|---|
-| **local** (default) | `~/.claude.json` | This project, personal only |
-| **project** | `.mcp.json` | Shared with team (Git commit) |
-| **user** | `~/.claude.json` | Available across all projects |
+| <strong>local</strong> (default) | `~/.claude.json` | This project, just you |
+| <strong>project</strong> | `.mcp.json` | Shared with team (Git) |
+| <strong>user</strong> | `~/.claude.json` | All projects |
 
 ```bash
 # Install for team sharing
@@ -257,11 +285,13 @@ claude mcp add --transport http github --scope project \
   https://api.githubcopilot.com/mcp/
 ```
 
-Project scope creates a `.mcp.json` file — commit it to Git so your whole team gets the same MCP servers.
+Installing with `--scope project` creates a `.mcp.json`; commit it to Git and the whole team gets the same MCP servers. The default is `local` (just you, current project).
 
-### 2.5 OAuth authentication
+> <strong>Note</strong>: MCP's `local` scope storage (`~/.claude.json`) and Claude Code's general local settings file (`.claude/settings.local.json`) are different files. Don't conflate them.
 
-Many cloud MCP servers require OAuth authentication:
+### 2.5 OAuth Authentication
+
+Many cloud MCP servers require OAuth:
 
 ```bash
 # Add the server
@@ -269,14 +299,14 @@ claude mcp add --transport http sentry https://mcp.sentry.dev/mcp
 
 # Authenticate inside Claude Code
 /mcp
-# Follow the browser login flow
+# Log in via the browser; it connects automatically
 ```
 
 Tokens are stored securely and refreshed automatically.
 
-### 2.6 Sharing team config with .mcp.json
+### 2.6 Sharing Team Config via .mcp.json
 
-Create `.mcp.json` at your project root and commit to Git. Environment variable expansion is supported:
+Create `.mcp.json` at the project root and commit it to Git so the whole team shares the same MCP config. It supports env var substitution:
 
 ```json
 {
@@ -292,17 +322,17 @@ Create `.mcp.json` at your project root and commit to Git. Environment variable 
 }
 ```
 
-Use `${VAR:-default}` syntax for defaults. Keep sensitive values like API keys in environment variables.
+Use `${VAR:-default}` for defaults, and keep sensitive values like API keys in environment variables.
 
-### 2.7 Using Claude Code as an MCP server
+### 2.7 Using Claude Code as an MCP Server
 
-You can expose Claude Code itself as an MCP server:
+You can turn Claude Code itself into an MCP server:
 
 ```bash
 claude mcp serve
 ```
 
-Connect from Claude Desktop to use Claude Code's tools (file reading, editing, etc.):
+Connect it to Claude Desktop to use Claude Code's tools (file read, edit, etc.) from Claude Desktop:
 
 ```json
 {
@@ -316,128 +346,164 @@ Connect from Claude Desktop to use Claude Code's tools (file reading, editing, e
 }
 ```
 
-### 2.8 MCP Tool Search
+### 2.8 MCP Tool Search — Loading Tools On Demand
 
-When you have many MCP servers, tool definitions can overwhelm the context window. **Tool Search** dynamically loads tools on demand instead of preloading them all.
+When you have many MCP servers, the tool definitions crowd the context window. <strong>Tool Search</strong> doesn't load every tool upfront; it searches and loads them dynamically as needed, saving context and prompt cache.
 
-It auto-activates when MCP tool descriptions exceed 10% of the context window. Adjust the threshold:
+On supported models (Sonnet 4+/Opus 4+), it's <strong>on by default</strong> (all MCP tools loaded on demand). Tune behavior with the `ENABLE_TOOL_SEARCH` environment variable:
 
 ```bash
-# Lower to 5%
+# Threshold mode: load upfront if tool descriptions fit within 10% of context, defer the overflow
+ENABLE_TOOL_SEARCH=auto claude
+
+# Set the threshold to 5%
 ENABLE_TOOL_SEARCH=auto:5 claude
 
-# Disable entirely
+# Off (load all tools upfront)
 ENABLE_TOOL_SEARCH=false claude
 ```
 
+> <strong>Caution — changed from before</strong>: It used to default to "auto-activate when tool descriptions exceed 10%," but now the default is <strong>always-deferred</strong>. `auto` is an opt-in that re-enables the old threshold mode. You can mark specific servers `alwaysLoad` to always load them upfront.
+
 ---
 
-## 3. IDE Integration — Using Claude in Your Editor
+## 3. IDE Integration — Working Inside Your Editor
 
-Claude Code isn't just a terminal tool — it runs **natively inside VS Code and JetBrains IDEs**. Work with Claude without leaving your editor.
+Claude Code runs not only in the terminal but <strong>natively inside VS Code and JetBrains IDEs</strong>. You can talk to Claude without leaving your editor.
 
 ### 3.1 VS Code
 
-#### Installation
+#### Install
 
-Requires VS Code 1.98.0 or higher.
+Requires VS Code 1.98.0+.
 
-1. Press `Cmd+Shift+X` to open Extensions
-2. Search for "Claude Code" and click **Install**
-3. The Spark icon (✱) appears in the editor toolbar
+1. `Cmd+Shift+X` to search extensions
+2. Search "Claude Code" and <strong>Install</strong>
+3. Success when the Spark icon (✱) appears top-right in the editor
 
-Or click the [direct install link](vscode:extension/anthropic.claude-code).
+#### The dedicated panel (key change)
 
-#### Key features
+VS Code integration is no longer just a terminal launch -- a <strong>dedicated graphical side panel</strong> is now the primary interface. Inside the panel:
 
-- **Code selection → Ask questions**: Select code and Claude automatically sees it. Press `Option+K` (Mac) / `Alt+K` (Windows/Linux) to insert an `@file.ts#5-10` reference.
-- **Review changes**: Claude shows side-by-side diffs. Accept, reject, or ask for modifications.
-- **@-mentions for context**: `@auth.js Explain the authentication logic` — fuzzy matching, no full paths needed.
-- **Permission modes**: Normal (asks each time), Plan (shows plan, waits for approval), Auto-accept (applies without asking).
+- <strong>Session history</strong>: search/resume past conversations, and pick up claude.ai web sessions locally (Remote tab)
+- <strong>Inline diff review</strong>: view changes side-by-side and accept/reject/request edits
+- <strong>Plan mode</strong>: review the plan as a markdown document
+- <strong>Checkpoint rewind</strong>: rewind / fork to a specific point
 
-#### Conversation history & multiple tabs
+#### Core actions
 
-- Use the **top dropdown** to search and resume past conversations
-- Press `Cmd+Shift+Esc` to open a **new conversation tab**
-- Work on different tasks in parallel across multiple tabs/windows
-
-#### Chrome integration
-
-Install the Chrome extension to automate browser tasks:
-
-```
-@browser go to localhost:3000 and check the console for errors
-```
+- <strong>Select code → ask</strong>: select code and Claude recognizes it automatically. `Option+K` (Mac) / `Alt+K` inserts a `@file.ts#5-10` reference.
+- <strong>@-mention</strong>: `@auth.js explain this file's auth logic`. Fuzzy matching, no full path needed. Use `@terminal` to reference terminal output.
+- <strong>Permission modes</strong>: `default` (ask each time) / `plan` (after approval) / `acceptEdits` (auto-accept) / `bypassPermissions`.
+- <strong>Chrome integration</strong>: with the extension installed, `@browser go to localhost:3000 and check console errors` for browser automation.
 
 #### Shortcuts
 
 | Command | Shortcut (Mac) | Description |
 |---|---|---|
-| Focus Input | `Cmd+Esc` | Toggle between editor and Claude |
-| New Tab | `Cmd+Shift+Esc` | Open new conversation tab |
-| New Conversation | `Cmd+N` | Start new conversation (Claude focused) |
-| @-Mention | `Option+K` | Insert current file/selection reference |
+| Focus Input | `Cmd+Esc` | Toggle editor ↔ Claude |
+| New Tab | `Cmd+Shift+Esc` | New conversation tab |
+| Reopen Tab | `Cmd+Shift+T` | Reopen a closed session tab |
+| @-Mention | `Option+K` | Insert a reference to the current file/selection |
 
-### 3.2 JetBrains IDE
+> <strong>Caution (macOS Tahoe and later)</strong>: `Cmd+Esc` may conflict with the system Game Overlay shortcut and not work. Disable it in System Settings → Keyboard → Game Controllers.
 
-Claude Code works with most JetBrains IDEs: IntelliJ IDEA, PyCharm, WebStorm, GoLand, PhpStorm, and Android Studio.
+### 3.2 JetBrains IDEs
 
-#### Installation
+Works in most JetBrains IDEs: IntelliJ IDEA, PyCharm, WebStorm, GoLand, PhpStorm, Android Studio, etc.
 
-1. Install the [Claude Code plugin](https://plugins.jetbrains.com/plugin/27310-claude-code-beta-) from the JetBrains Marketplace
+#### Install
+
+1. Install the [Claude Code plugin](https://plugins.jetbrains.com/plugin/27310-claude-code-beta-) from the JetBrains Marketplace (currently Beta)
 2. Restart the IDE
 
 #### Usage
 
-**From the IDE's integrated terminal:**
-
 ```bash
+# In the IDE's built-in terminal
+claude          # Auto-connects to the IDE
+
+# In an external terminal
 claude
-```
-
-Running `claude` from the integrated terminal automatically connects to the IDE.
-
-**From an external terminal:**
-
-```bash
-claude
-/ide   # Connect to the IDE
+/ide            # Connect to the IDE
 ```
 
 #### Key features
 
 | Feature | Description |
 |---|---|
-| **Diff viewer** | Code changes displayed directly in the IDE's diff viewer |
-| **Selection context** | Selected code in the editor is automatically shared with Claude |
-| **File references** | `Cmd+Option+K` (Mac) / `Alt+Ctrl+K` (Windows/Linux) inserts `@File#L1-99` references |
-| **Diagnostic sharing** | IDE lint errors, syntax errors, etc. are automatically shared with Claude |
-| **Quick launch** | `Cmd+Esc` (Mac) / `Ctrl+Esc` (Windows/Linux) to open Claude Code |
+| Diff viewer | Show code changes in the IDE's diff viewer |
+| Selection context | Selected code is auto-shared with Claude |
+| File reference | `Cmd+Option+K` (Mac) / `Alt+Ctrl+K` inserts `@File#L1-99` |
+| Diagnostics sharing | IDE lint/syntax errors are auto-forwarded |
+| Quick launch | `Cmd+Esc` (Mac) / `Ctrl+Esc` opens Claude Code |
 
-#### Configuration
+Configure under <strong>Settings → Tools → Claude Code [Beta]</strong>. If ESC doesn't interrupt, uncheck "Move focus to the editor with Escape" in Settings → Tools → Terminal.
 
-Go to **Settings → Tools → Claude Code [Beta]**:
+### 3.3 Claude Code on the Web — No Install, In the Browser
 
-- **Claude command**: Specify the Claude executable path (e.g., `claude`, `/usr/local/bin/claude`)
-- **ESC key setup**: If ESC doesn't interrupt Claude Code, go to Settings → Tools → Terminal and uncheck "Move focus to the editor with Escape"
+With no install, connect a GitHub repo at [claude.ai/code](https://claude.ai/code) and spin up a Claude Code session right away (research preview; Pro/Max/Team/Enterprise). It runs on Anthropic-managed cloud infrastructure:
 
----
-
-## Wrapping Up — Real Power Comes From External Connections
-
-Part 1 was about strengthening Claude Code **from within**. Part 2 is about **extending outward**:
-
-1. **Plugins** package functionality and share it with your team
-2. **MCP** connects GitHub, Sentry, databases, and other external tools
-3. **VS Code extension** lets you use Claude without leaving your editor
-
-In Part 3, we'll cover **sub-agents and agent teams** — splitting complex tasks across multiple agents and processing them in parallel.
+- Sessions keep running even when you close the browser
+- Monitor progress from the Claude mobile app
+- Includes automatic GitHub PR fixes
+- Resume web sessions locally from the Remote tab in VS Code session history
 
 ---
 
-## References
+## Recap
 
-- [Claude Code Docs — Plugins](https://docs.anthropic.com/en/docs/claude-code/plugins)
-- [Claude Code Docs — MCP](https://docs.anthropic.com/en/docs/claude-code/mcp)
-- [Claude Code Docs — VS Code Extension](https://docs.anthropic.com/en/docs/claude-code/ide-integrations)
-- [MCP Official Site](https://modelcontextprotocol.io/)
+If Part 1 strengthened Claude Code <strong>from the inside</strong>, Part 2 extends it <strong>outward</strong>:
+
+| Feature | Core |
+|---|---|
+| <strong>Plugins</strong> | Bundle skills/agents/hooks/MCP to share with the team |
+| <strong>MCP</strong> | Connect external tools like GitHub/Sentry/DB (HTTP/stdio) |
+| <strong>Tool Search</strong> | Load tools on demand to save context (on by default) |
+| <strong>IDE integration</strong> | VS Code panel, JetBrains plugin, web version |
+
+[Part 3](/en/blog/claude-code-advanced-guide-3) covers <strong>sub-agents and agent teams</strong> -- how to split complex work across multiple agents and process it in parallel.
+
+---
+
+## Appendix
+
+### A. Glossary
+
+| Term | Description |
+|---|---|
+| Plugin | A distribution unit bundling skills/agents/hooks/MCP (`.claude-plugin/plugin.json`) |
+| Marketplace | A repository to discover/install plugins (GitHub/URL/local) |
+| MCP | Model Context Protocol. The standard for connecting external tools |
+| HTTP transport | Connection style for remote cloud MCP servers (recommended) |
+| stdio transport | Connection style for a local MCP process on your machine |
+| SSE transport | The older remote connection style (deprecated, prefer HTTP) |
+| Tool Search | Searching/loading MCP tools on demand instead of upfront |
+
+### B. Command cheat sheet
+
+```bash
+# Plugins
+/plugin                        # Manager (Discover/Installed/Marketplaces/Errors)
+claude --plugin-dir ./plugin   # Test a local plugin
+/reload-plugins                # Hot-reload during development
+
+# MCP
+claude mcp add --transport http <name> <url>     # Add an HTTP server
+claude mcp add --transport stdio <name> -- <cmd> # Add a local server
+claude mcp add ... --scope project               # Team-shared (.mcp.json)
+claude mcp list / get <name> / remove <name>
+claude mcp serve                                 # Claude Code as an MCP server
+/mcp                                             # Status / OAuth auth
+
+# IDE
+/ide                           # Connect to the IDE from an external terminal
+```
+
+### C. References
+
+- [Claude Code Docs — Plugins](https://docs.claude.com/en/docs/claude-code/plugins)
+- [Claude Code Docs — MCP](https://docs.claude.com/en/docs/claude-code/mcp)
+- [Claude Code Docs — IDE Integrations](https://docs.claude.com/en/docs/claude-code/ide-integrations)
+- [Claude Code Docs — Claude Code on the web](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web)
+- [MCP official site](https://modelcontextprotocol.io/)

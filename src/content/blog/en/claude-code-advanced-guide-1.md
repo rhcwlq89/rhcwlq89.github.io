@@ -1,6 +1,6 @@
 ---
 title: "Getting More Out of Claude Code (1) — Memory, Skills, and Hooks"
-description: "A practical guide to Claude Code's memory system (CLAUDE.md, auto memory), 5 bundled skills, custom skills, and workflow automation with hooks"
+description: "A practical guide to Claude Code's memory system (CLAUDE.md, auto-memory), bundled and custom skills, and workflow automation with hooks — verified against the latest 2026 version"
 pubDate: "2026-03-14T18:00:00+09:00"
 tags: ["Claude Code", "AI", "Coding Agent", "Memory", "Skills", "Hooks", "DevOps", "Automation"]
 lang: en
@@ -9,56 +9,73 @@ heroImage: "../../../assets/ClaudeCodeAdvancedGuide.png"
 
 ## Introduction
 
-Installing Claude Code and having basic conversations to write code — that part is easy. But most users stop there, stuck at the level of "write this code" and "fix this bug."
+Installing Claude Code and coding through basic conversation is quick to learn. But most users stop here -- stuck at the "write this code," "fix this bug" level.
 
-In reality, Claude Code has powerful features hiding beneath the surface: **project-specific memory**, **repeatable task automation**, and **external tool integration**. Using these features transforms Claude Code from a simple chatbot into **your personalized coding partner**.
+Claude Code actually hides powerful features: <strong>project-specific memory</strong>, <strong>repeatable task automation</strong>, and <strong>external tool integration</strong>. Using them transforms Claude Code from a simple chatbot into <strong>your personalized coding partner</strong>.
 
-This series covers how to get 200% out of Claude Code:
+This series covers how to get 200% out of Claude Code, across four parts:
 
-- **Part 1 (this post)**: Memory + Skills + Hooks — Make Claude remember you and automate repetitive work
-- **Part 2**: Plugins + MCP + IDE Integration — Connect external tools and use Claude directly in your IDE
-- **Part 3**: Sub-agents + Agent Teams — Split complex tasks and process them in parallel
+- <strong>Part 1 — Memory + Skills + Hooks (this post)</strong>: make Claude remember you and automate repetitive work
+- Part 2 — [Plugins + MCP + IDE integration](/en/blog/claude-code-advanced-guide-2): connect external tools and work inside your editor
+- Part 3 — [Sub-agents + Agent Teams](/en/blog/claude-code-advanced-guide-3): split complex tasks and process them in parallel
+- Part 4 — [Workflows + Ultrareview + Remote Agents](/en/blog/claude-code-advanced-guide-4): deterministic orchestration and cloud automation
+
+> <strong>Note</strong>: This post was checked against the latest Claude Code as of June 2026. Claude Code evolves fast, so for fast-growing lists like bundled skills or hook events, confirm with `/help` in your own environment.
+
+---
+
+## TL;DR
+
+- <strong>Memory has two axes.</strong> The `CLAUDE.md` you write yourself (rules, guidance) and the auto-memory Claude writes during a session (learned habits, build commands). Both spare you from repeating the same explanations.
+- <strong>Skills teach new commands.</strong> A single markdown file (`SKILL.md`) defines "do this task this way." Many bundled skills also ship ready to use -- well over a dozen, no install needed.
+- <strong>Hooks run commands at specific moments.</strong> Auto-format after edits, block dangerous commands, notify you when input is needed, verify task completion -- all attached to events.
+- <strong>Blocking and verification use defined signals.</strong> To block an action or keep Claude working, a hook returns an agreed exit code or JSON (`permissionDecision`, `decision`).
+- <strong>Combine all three for a tailored partner.</strong> Put rules in memory, repetitive work in skills, automation in hooks, and Claude Code becomes optimized for your project.
 
 ---
 
 ## 1. Memory — Making Claude Remember You
 
-Claude Code starts each session with a fresh context window. It doesn't remember yesterday's conversation. **Memory** solves this problem.
+Claude Code starts each session with a fresh context window. It doesn't remember yesterday's conversation today. <strong>Memory</strong> solves this.
 
 ### 1.1 CLAUDE.md — Your Project Instruction Manual
 
-`CLAUDE.md` is a markdown file that Claude automatically reads at the start of every session. Write your coding rules, build commands, and architecture descriptions here, and you'll never have to repeat yourself.
+`CLAUDE.md` is a markdown file Claude reads automatically at session start. Write your coding rules, build commands, and architecture there, and you won't have to re-explain them every time.
 
-#### Scope depends on location
+#### Scope depends on where you put it
+
+You can place it in several locations; all of them load and merge. A narrower scope (project) takes precedence over a wider one (user).
 
 | Location | Scope | Sharing |
 |---|---|---|
-| `./CLAUDE.md` | Entire project | Shared with team (Git commit) |
-| `~/.claude/CLAUDE.md` | All projects | Personal only |
+| Managed policy (`/Library/Application Support/ClaudeCode/CLAUDE.md`, etc.) | Org-wide, enforced | Admin-deployed |
+| `./CLAUDE.md` or `./.claude/CLAUDE.md` | Whole project | Shared with team (Git) |
+| `./CLAUDE.local.md` | This project, just me | Gitignore recommended |
+| `~/.claude/CLAUDE.md` | All my projects | Just me |
 | `.claude/rules/*.md` | Specific file types | Shared with team |
 
 #### Quick start: `/init`
 
-If you're starting fresh, run `/init` inside Claude Code. It analyzes your codebase and auto-generates a `CLAUDE.md`.
+If it's your first time, run `/init` in Claude Code. It analyzes your codebase and generates a `CLAUDE.md` automatically. (`/init` is a built-in command, not a skill.)
 
 ```bash
 # Inside Claude Code
 /init
 ```
 
-#### Writing effective CLAUDE.md
+#### Writing a good CLAUDE.md
 
 ```markdown
 # Project Rules
 
 ## Build & Test
-- Run dev server with `pnpm dev`
-- Run tests with `pnpm test`, always run before commits
+- `pnpm dev` to run the dev server
+- `pnpm test` to run tests; always run before committing
 
-## Coding Standards
+## Coding Rules
 - 2-space indentation
-- TypeScript strict mode
-- API handlers go in `src/api/handlers/`
+- Use TypeScript strict mode
+- Place API handlers in `src/api/handlers/`
 
 ## Architecture
 - Frontend: React + Vite
@@ -66,15 +83,15 @@ If you're starting fresh, run `/init` inside Claude Code. It analyzes your codeb
 - DB: PostgreSQL
 ```
 
-**Key points:**
+<strong>Key points:</strong>
 
-- Keep it **under 200 lines**. Longer files reduce Claude's adherence.
-- Be **specific**. "2-space indentation" instead of "format code properly."
-- **Avoid contradicting rules**. If two rules conflict, Claude picks one arbitrarily.
+- Keep it <strong>under 200 lines</strong>. Longer files lower Claude's compliance (the official guidance also targets "under 200 lines per file").
+- Be <strong>specific</strong>. "Write good code" → "2-space indentation."
+- Avoid <strong>contradictory rules</strong>. When two rules conflict, Claude picks arbitrarily.
 
 #### Importing other files
 
-When your `CLAUDE.md` grows large, use `@path` syntax to reference external files:
+When `CLAUDE.md` grows, reference external files with `@path` syntax (nesting up to 4 levels):
 
 ```markdown
 # Project Rules
@@ -85,9 +102,11 @@ When your `CLAUDE.md` grows large, use `@path` syntax to reference external file
 @~/.claude/my-preferences.md
 ```
 
-### 1.2 `.claude/rules/` — File-type-specific rules
+Imported files are inlined into the context at session start. The first time you import a file outside your home directory, an approval dialog appears.
 
-Rules that don't need to apply to every file can go in `.claude/rules/`. Use `paths` frontmatter to target specific files:
+### 1.2 `.claude/rules/` — File-Type Rules
+
+Rules that don't apply to every file belong in `.claude/rules/`. Use glob patterns in the `paths` frontmatter to apply them only to specific files:
 
 ```markdown
 ---
@@ -96,20 +115,20 @@ paths:
 ---
 
 # API Development Rules
-- All endpoints must include input validation
-- Use standard error response format
-- Include OpenAPI documentation comments
+- Include input validation on every endpoint
+- Use the standard error response format
+- Include OpenAPI doc comments
 ```
 
-This rule only loads when Claude works on TypeScript files under `src/api/`. It saves context space.
+Now this rule loads only when Claude works on TypeScript files under `src/api/`, saving context.
 
-### 1.3 Auto Memory — Claude takes its own notes
+### 1.3 Auto-Memory — Claude Records on Its Own
 
-Auto memory is a system where Claude automatically records things without any user action. It learns and saves build commands, debugging tips, code style preferences, and more during sessions.
+Auto-memory is a system where Claude records things automatically without you doing anything. It learns and saves build commands, debugging tips, code-style preferences, etc. during a session.
 
 #### Storage location
 
-```
+```text
 ~/.claude/projects/<project>/memory/
 ├── MEMORY.md          # Index (loaded at every session start)
 ├── debugging.md       # Debugging patterns
@@ -117,163 +136,137 @@ Auto memory is a system where Claude automatically records things without any us
 └── ...
 ```
 
+The `MEMORY.md` index loads at session start, up to whichever comes first of 200 lines / 25KB. The remaining files are referenced as needed.
+
 #### Enable/disable
 
 ```bash
 # Inside Claude Code
-/memory  # Toggle auto memory + open memory files
+/memory  # Toggle auto-memory + show loaded memory/rules files
+```
 
-# Or via settings.json
+```json
+// settings.json
 {
   "autoMemoryEnabled": false
 }
 ```
 
-#### Teaching Claude to remember
+You can also disable it with the `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` environment variable, or change the storage path with the `autoMemoryDirectory` key.
 
-Tell Claude "remember this" and it saves to auto memory:
+#### Telling it to remember
 
-```
+Say "remember this" to Claude and it saves to auto-memory:
+
+```text
 Always use pnpm, not npm. Remember this.
 ```
 
-Use the `/memory` command to review and edit saved content. They're plain markdown files, so you can edit them directly.
+The `/memory` command lets you review and edit what's stored. They're plain markdown files, so you can edit them directly.
 
-### 1.4 CLAUDE.md vs Auto Memory — When to use which
+### 1.4 CLAUDE.md vs Auto-Memory — When to Use Which
 
-| | CLAUDE.md | Auto Memory |
+| | CLAUDE.md | Auto-Memory |
 |---|---|---|
-| **Who writes it** | You | Claude automatically |
-| **Content** | Rules and instructions | Learned patterns |
-| **Scope** | Project/user/org | Per project |
-| **Use for** | Coding standards, workflows | Build commands, debugging tips, preferences |
+| <strong>Who writes it</strong> | You, directly | Claude, automatically |
+| <strong>Content</strong> | Rules, guidance | Learned patterns |
+| <strong>Scope</strong> | Project/user/org | Per project |
+| <strong>Use for</strong> | Coding standards, workflow | Build commands, debugging tips, preferences |
 
-> **Summary**: Use `CLAUDE.md` for rules you share with your team. Use auto memory to let Claude learn your habits.
+> <strong>Summary</strong>: Put rules you share with the team in `CLAUDE.md`; use auto-memory to let Claude learn your habits.
 
 ---
 
-## 2. Skills — Teaching Claude New Abilities
+## 2. Skills — Giving Claude New Abilities
 
-Skills teach Claude **how to perform specific tasks**. A single `SKILL.md` file teaches Claude a new command.
+A skill teaches Claude <strong>how to perform a specific task</strong>. A single `SKILL.md` file teaches Claude a new command.
 
-### 2.1 Bundled Skills — 5 ready-to-use skills
+### 2.1 Bundled Skills — Ready Without Installing
 
-Claude Code ships with built-in skills. No installation needed — just type `/` followed by the name.
+Claude Code ships with several built-in skills. Type a name after `/` and use them immediately, no install. <strong>The count grows with each version</strong>, so check your full list with `/help`. The major bundled skills as of June 2026, by purpose:
 
-#### `/batch` — Parallel large-scale codebase changes
+| Category | Skills | Purpose |
+|---|---|---|
+| Code quality | `/code-review`, `/simplify`, `/review` | Review/simplify changes, review a PR |
+| Security & verification | `/security-review`, `/verify` | Vulnerability scan, verify a change actually works |
+| Large-scale work | `/batch` | Parallel changes across the codebase |
+| Run & debug | `/run`, `/debug` | Run/check the app, analyze session debug logs |
+| Automation | `/loop`, `/schedule` | Repeated execution, scheduled/remote agents |
+| Analysis & config | `/insights`, `/statusline`, `/claude-api` | Session analysis, status line, load API reference |
 
-Orchestrates large-scale changes across a codebase in parallel. It researches the codebase, decomposes work into 5-30 independent units, and once approved, **spawns a separate agent for each unit** working in isolated git worktrees. Each agent implements, tests, and creates a PR.
+A few worth highlighting:
 
-```bash
-# Examples
-/batch migrate src/ from Solid to React
-/batch add input validation to all API handlers
-/batch replace all console.log with structured logger
-```
+- <strong>`/batch`</strong> — handles large-scale codebase changes in parallel. It decomposes the work into independent units; once you approve, <strong>a separate agent per unit</strong> implements, tests, and opens a PR in an isolated git worktree. E.g. `/batch replace all console.log with a structured logger`.
+- <strong>`/code-review`</strong> — reviews the current diff for bugs and cleanups. You can set `low`–`max` effort, and `/code-review ultra` scales it to a cloud multi-agent review (see [Part 4](/en/blog/claude-code-advanced-guide-4)).
+- <strong>`/loop`</strong> — runs a prompt or slash command on a fixed interval. E.g. `/loop 5m check the deploy status`.
+- <strong>`/claude-api`</strong> — loads the Claude API/SDK reference for your project's language. It can auto-activate when you import `anthropic` in code.
 
-> The key here is **parallelism**. Instead of modifying 30 files sequentially, 30 agents work simultaneously.
+> <strong>Note</strong>: If you remember "there are 5 bundled skills," that's stale. With `/code-review`, `/security-review`, `/run`, `/verify`, `/simplify` and more added, there are now well over a dozen.
 
-#### `/simplify` — Auto code review & fix
+### 2.2 Creating Custom Skills
 
-Reviews recently changed files for code reuse, quality, and efficiency issues, then fixes them. Spawns **three review agents** in parallel, each analyzing from a different perspective, then aggregates findings and applies fixes.
+Beyond bundled skills, you can make <strong>your own</strong>. One `SKILL.md` file is enough.
 
-```bash
-/simplify                          # Review all recently changed files
-/simplify focus on memory efficiency  # Review with specific focus
-```
-
-#### `/debug` — Session debug log analysis
-
-Reads your current Claude Code session's debug log to diagnose issues. Useful when you're wondering "why did it just do that?"
-
-```bash
-/debug                  # Analyze full session
-/debug MCP connection issue    # Focus on specific problem
-```
-
-#### `/loop` — Repeating execution scheduler
-
-Runs a prompt or slash command at a set interval. Useful for monitoring deployments, managing PRs, etc.
-
-```bash
-/loop 5m check if the deploy finished
-/loop 10m /simplify
-```
-
-#### `/claude-api` — Load Claude API reference
-
-When writing code that uses the Claude API or Anthropic SDK, loads language-specific API reference (Python, TypeScript, Java, etc.). Also auto-activates when your code imports `anthropic` or `@anthropic-ai/sdk`.
-
-```bash
-/claude-api  # Manually load API reference
-```
-
-### 2.2 Creating custom skills
-
-Beyond bundled skills, you can create **your own skills**. All you need is a `SKILL.md` file.
-
-#### Where to store skills
+#### Skill storage locations
 
 | Location | Scope |
 |---|---|
-| `~/.claude/skills/<name>/SKILL.md` | All your projects |
+| `~/.claude/skills/<name>/SKILL.md` | All my projects |
 | `.claude/skills/<name>/SKILL.md` | This project only |
 
-#### Example: Blog post generator skill
+#### Example: blog post generation skill
 
 ```yaml
 ---
 name: blog-post
-description: Generates a blog post draft in both Korean and English versions
+description: Generates a blog post draft. Creates Korean and English versions at once.
 disable-model-invocation: true
 ---
 
 Write a blog post:
 
-1. Create a blog post about $ARGUMENTS
-2. Generate Korean version in `src/content/blog/`
-3. Generate English version in `src/content/blog/en/`
-4. Include current time in pubDate (e.g., 2026-03-14T18:00:00+09:00)
-5. Korean uses casual tone, English uses practical tone
-6. heroImage paths: Korean `../../assets/`, English `../../../assets/`
+1. Write a post about the $ARGUMENTS topic
+2. Create the Korean version in `src/content/blog/`
+3. Create the English version in `src/content/blog/en/`
+4. Include the current time in pubDate (e.g. 2026-03-14T18:00:00+09:00)
+5. Korean uses casual style; English uses a practical tone
+6. heroImage path: Korean `../../assets/`, English `../../../assets/`
 ```
 
 Usage:
 
 ```bash
-/blog-post Writing Terraform Modules
+/blog-post How to write Terraform modules
 ```
 
-#### Example: Code explainer skill
+#### Frontmatter fields
 
-```yaml
----
-name: explain-code
-description: Explains code with analogies and diagrams
----
+Only `name` and `description` are required. Many fields have been added for fine-grained control:
 
-When explaining code:
-
-1. **Start with an analogy**: Compare to something from everyday life
-2. **Draw a diagram**: Use ASCII art to show flow/structure/relationships
-3. **Walk through the code**: Explain step-by-step what happens
-4. **Highlight a gotcha**: Point out common mistakes or misconceptions
-```
-
-This skill has no `disable-model-invocation`, so Claude auto-activates it for questions like "how does this code work?"
+| Field | Role |
+|---|---|
+| `name` / `description` | Name and description (required). The description drives auto-invocation |
+| `disable-model-invocation: true` | User-invocable only, no auto-invocation (deploy/commit side effects) |
+| `user-invocable: false` | Auto-reference by Claude only, no direct user call (background knowledge) |
+| `allowed-tools` / `disallowed-tools` | Tools allowed/removed while the skill is active |
+| `model` | `haiku` / `sonnet` / `opus` / `inherit` |
+| `effort` | `low` to `max` reasoning effort |
+| `context: fork` | Run in a separate sub-agent (avoid polluting the main conversation) |
+| `agent` | Sub-agent type when `context: fork` |
+| `when_to_use` / `argument-hint` | Extra auto-invocation triggers / autocomplete hint |
 
 #### Controlling skill invocation
 
-| Setting | User invocation | Claude auto-invocation |
+| Setting | User call | Claude auto-call |
 |---|---|---|
-| (default) | Yes | Yes |
-| `disable-model-invocation: true` | Yes | No |
-| `user-invocable: false` | No | Yes |
+| (default) | O | O |
+| `disable-model-invocation: true` | O | X |
+| `user-invocable: false` | X | O |
 
-- **`disable-model-invocation: true`**: For tasks with side effects like deployment or commits. You don't want Claude auto-deploying because "the code looks ready."
-- **`user-invocable: false`**: For background knowledge like legacy system context. Users won't invoke `/legacy-context` directly, but Claude referencing it automatically during related work is useful.
+- <strong>`disable-model-invocation: true`</strong>: for side-effecting work like deploy or commit. You don't want Claude auto-running "looks ready, I'll deploy."
+- <strong>`user-invocable: false`</strong>: for background knowledge like legacy-system context. You'd never call `/legacy-context` yourself, but it's useful for Claude to auto-reference it.
 
-#### Dynamic context injection
+### 2.3 Dynamic Context Injection
 
 The `` !`command` `` syntax injects shell command output before the skill runs:
 
@@ -294,58 +287,58 @@ agent: Explore
 Summarize this PR...
 ```
 
-**How it works:**
+<strong>How it works:</strong>
 
-1. You run `/pr-summary`
-2. Shell commands like `` !`gh pr diff` `` execute **first**
-3. Each command's output replaces the `` !`command` `` placeholder as plain text
-4. The fully resolved content is then passed to Claude
+1. Run `/pr-summary`
+2. Shell commands like `` !`gh pr diff` `` run <strong>first</strong>
+3. Each command's output is substituted in place as text
+4. The fully substituted content is sent to Claude
 
-So what Claude actually sees is something like this:
+`` !`command` `` behaves like a <strong>template variable</strong>. You can't embed data directly in the skill file, so it means "insert this command's result here at runtime."
 
-```markdown
-## PR Context
-- PR diff: (actual diff output here)
-- PR comments: (actual comment content here)
-- Changed files: (actual file list here)
+<strong>Frontmatter explained:</strong>
 
-## Task
-Summarize this PR...
-```
-
-Think of `` !`command` `` as a **template variable**. Since you can't hardcode data into a skill file, it means "insert this command's output here at runtime."
-
-**Frontmatter explained:**
-
-| Field | Purpose |
+| Field | Role |
 |---|---|
-| `context: fork` | Runs this skill in a separate sub-agent (prevents polluting main conversation context) |
-| `agent: Explore` | Sets the forked sub-agent type to Explore (read-only) |
+| `context: fork` | Run this skill in a separate sub-agent (prevents polluting the main conversation) |
+| `agent: Explore` | Set the forked sub-agent's type to Explore (read-only) |
 
-Without `context: fork`, the skill runs directly in the main conversation. For cases like PR diffs where output can be large, forking isolates the work and saves your main conversation's context window.
+Without `context: fork`, it runs directly in the main conversation. For potentially long output like a PR diff, forking isolates it and saves the main conversation's context.
 
-> **What are agent types?** Claude Code has built-in agent types specialized for different purposes. `Explore` is for codebase search (read-only, uses the Haiku model), `Plan` is for planning, and `general-purpose` is for any task (all tools available). You can also create custom agents. See [Part 3](/en/blog/claude-code-advanced-guide-3) for details.
+> <strong>What's an agent type?</strong> Claude Code has specialized built-in agent types. `Explore` is read-only codebase exploration, `Plan` is for planning, and `general-purpose` is general (all tools). You can also build custom agents. [Part 3](/en/blog/claude-code-advanced-guide-3) covers this in detail.
 
 ---
 
 ## 3. Hooks — Workflow Automation
 
-Hooks are **commands that execute automatically** at specific points in Claude Code's lifecycle. If skills teach Claude "how to do things," hooks "automatically run code on specific events."
+A hook is a command that runs <strong>automatically at a specific moment</strong> in Claude Code. If a skill "teaches Claude how," a hook "auto-runs code on a specific event."
 
-### 3.1 What are hooks
+### 3.1 What's a hook
 
-- **After file edits** → Auto-run Prettier
-- **Before dangerous commands** → Block them
-- **When Claude waits for input** → Desktop notification
-- **On session start** → Load environment variables
+Hooks can step in at several moments during a session. The common spots:
 
-Hooks implement these automations.
+```mermaid
+flowchart TB
+    start["SessionStart<br/>start/resume/compact"]
+    prompt["UserPromptSubmit<br/>prompt submitted"]
+    pre["PreToolUse<br/>before a tool runs — can block"]
+    post["PostToolUse<br/>after a tool runs — format/log"]
+    stop["Stop<br/>response done — verify completion"]
+    end_["SessionEnd<br/>session ends — cleanup"]
 
-### 3.2 Creating your first hook
+    start --> prompt --> pre --> post
+    post -->|more tool calls| pre
+    post --> stop --> end_
+```
 
-Let's get a desktop notification when Claude waits for input.
+- <strong>After editing a file</strong> → run Prettier automatically (PostToolUse)
+- <strong>Before a dangerous command</strong> → block it (PreToolUse)
+- <strong>When Claude waits for input</strong> → desktop notification (Notification)
+- <strong>At session start</strong> → load environment variables (SessionStart)
 
-Add to `~/.claude/settings.json`:
+### 3.2 Your first hook
+
+Get a desktop notification when Claude waits for input. Add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -367,11 +360,11 @@ Add to `~/.claude/settings.json`:
 
 > On Linux, use `notify-send 'Claude Code' 'Claude Code needs your attention'`.
 
-Type `/hooks` to verify registered hooks.
+Type `/hooks` to see registered hooks.
 
 ### 3.3 Practical hook recipes
 
-#### Auto-format after file edits
+#### Auto-format after edits
 
 `.claude/settings.json` (project level):
 
@@ -393,11 +386,11 @@ Type `/hooks` to verify registered hooks.
 }
 ```
 
-Prettier only runs after `Edit` or `Write` tools — not after `Bash`, `Read`, or other tools.
+Prettier runs only after the `Edit` or `Write` tool. It ignores other tools like `Bash` or `Read`.
 
 #### Block edits to protected files
 
-Block modifications to sensitive files like `.env`, `package-lock.json`, `.git/`.
+This hook blocks edits to sensitive files like `.env`, `package-lock.json`, `.git/`. The PreToolUse hook blocks the tool call with <strong>exit code 2</strong>, and the stderr message is shown to Claude.
 
 `.claude/hooks/protect-files.sh`:
 
@@ -411,7 +404,7 @@ PROTECTED_PATTERNS=(".env" "package-lock.json" ".git/")
 for pattern in "${PROTECTED_PATTERNS[@]}"; do
   if [[ "$FILE_PATH" == *"$pattern"* ]]; then
     echo "Blocked: $FILE_PATH matches protected pattern '$pattern'" >&2
-    exit 2  # exit 2 = block
+    exit 2  # exit 2 = block the tool call; stderr is shown to Claude
   fi
 done
 
@@ -442,9 +435,21 @@ chmod +x .claude/hooks/protect-files.sh
 }
 ```
 
-#### Re-inject context after compaction
+> <strong>Note</strong>: Instead of exit code 2, you can exit 0 and print the JSON below for the same block. Useful for delivering a structured reason.
+>
+> ```json
+> {
+>   "hookSpecificOutput": {
+>     "hookEventName": "PreToolUse",
+>     "permissionDecision": "deny",
+>     "permissionDecisionReason": "Protected files cannot be modified"
+>   }
+> }
+> ```
 
-After long conversations, context compaction (`/compact`) may lose important details. Auto-inject reminders after every compaction:
+#### Inject a reminder after compaction
+
+After a long conversation, compaction (`/compact`) can drop important info. Auto-inject a reminder afterward:
 
 ```json
 {
@@ -455,7 +460,7 @@ After long conversations, context compaction (`/compact`) may lose important det
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Reminder: use pnpm, not npm. Run pnpm test before commits. Current sprint: auth refactor.'"
+            "command": "echo 'Reminder: use pnpm, not npm. Run pnpm test before committing. Current sprint: auth refactor.'"
           }
         ]
       }
@@ -464,9 +469,9 @@ After long conversations, context compaction (`/compact`) may lose important det
 }
 ```
 
-#### Bash command logging
+#### Log Bash commands
 
-Log all Bash commands Claude executes to a file:
+Log every Bash command Claude runs to a file:
 
 ```json
 {
@@ -486,9 +491,9 @@ Log all Bash commands Claude executes to a file:
 }
 ```
 
-### 3.4 Prompt-based hooks — AI-powered judgment
+### 3.4 Prompt-based hooks — hooks that the AI judges
 
-Instead of rule-based (exit 0/2) decisions, hooks can use **AI judgment**. When Claude finishes a task, verify if it's really done:
+Beyond rule-based (exit code) hooks, there are hooks <strong>the AI judges</strong>. When Claude says it's done but you want to confirm, use a `type: prompt` hook:
 
 ```json
 {
@@ -498,7 +503,7 @@ Instead of rule-based (exit 0/2) decisions, hooks can use **AI judgment**. When 
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Check if all requested tasks are complete. If not, respond with {\"ok\": false, \"reason\": \"description of remaining work\"}."
+            "prompt": "Check whether all requested work is complete. If not, block so the work continues."
           }
         ]
       }
@@ -507,86 +512,141 @@ Instead of rule-based (exit 0/2) decisions, hooks can use **AI judgment**. When 
 }
 ```
 
-If `"ok": false` is returned, Claude continues working instead of stopping.
+If the Stop hook judges "not done yet," it returns the JSON below to keep Claude <strong>working instead of stopping</strong>:
 
-### 3.5 Complete list of hook events
+```json
+{
+  "decision": "block",
+  "reason": "Tests aren't passing yet. Fix the failing tests first."
+}
+```
 
-These are all hook events supported by Claude Code. You can view them with the `/hooks` command.
+> <strong>Caution — common misconception</strong>: The `{"ok": false, "reason": "..."}` format seen in older material is <strong>not a hook return format</strong>. Hook block/continue signals use `decision`/`reason` (Stop/PostToolUse family) and `hookSpecificOutput.permissionDecision` (PreToolUse).
+
+### 3.5 Hook events — where you can attach
+
+Hook events keep growing with each version; there are now over 30. Use `/hooks` to see the full list your version supports. The most-used ones, categorized:
 
 #### Session events
 
-| Event | When it fires | Use case |
+| Event | When | Use for |
 |---|---|---|
-| `SessionStart` | Session start, resume, compact, or clear | Load env vars, inject context |
+| `SessionStart` | Session start, resume, compact, clear | Load env vars, inject context |
 | `SessionEnd` | Session ends | Cleanup, release resources |
+| `PreCompact` / `PostCompact` | Just before/after context compaction | Back up key info, inject reminders |
 
-#### User input events
+#### Input & tool events
 
-| Event | When it fires | Use case |
+| Event | When | Use for |
 |---|---|---|
 | `UserPromptSubmit` | User submits a prompt | Input validation, add context |
+| `PreToolUse` | Just before a tool runs | Block dangerous commands, protect files |
+| `PostToolUse` | Just after a tool runs | Auto-format, logging, lint |
 
-#### Tool execution events
+#### Response, sub-agent & team events
 
-| Event | When it fires | Use case |
+| Event | When | Use for |
 |---|---|---|
-| `PreToolUse` | Right before a tool executes | Block dangerous commands, protect files |
-| `PostToolUse` | Right after a tool executes | Auto-format, logging, run linters |
+| `Notification` | Claude sends a notification | Desktop notification |
+| `Stop` | Claude finishes responding | Verify completion, catch missing work |
+| `SubagentStart` / `SubagentStop` | Sub-agent start/finish | Prep environment, log results |
+| `TeammateIdle` / `TaskCreated` / `TaskCompleted` | Agent team events | Deliver feedback, quality gates |
+| `Elicitation` | An MCP server requests user input | Auto-respond |
 
-#### Response events
+### 3.6 Hook types — what runs
 
-| Event | When it fires | Use case |
-|---|---|---|
-| `Notification` | Claude sends a notification | Desktop notifications |
-| `Stop` | Claude finishes responding | Completion verification, check for missed tasks |
+Hooks don't only run shell commands. There are now five types:
 
-#### Sub-agent events
+| Type | Action |
+|---|---|
+| `command` | Run a shell command (most common) |
+| `prompt` | The AI judges (§3.4) |
+| `agent` | Spawn a sub-agent |
+| `http` | POST to an HTTP endpoint |
+| `mcp_tool` | Call a tool on an MCP server |
 
-| Event | When it fires | Use case |
-|---|---|---|
-| `SubagentStart` | A sub-agent starts | Set up DB connections, prepare environment |
-| `SubagentStop` | A sub-agent completes | Clean up resources, log results |
-
-#### Agent team events
-
-| Event | When it fires | Use case |
-|---|---|---|
-| `TeammateIdle` | A teammate enters idle state | Send feedback to keep them working |
-| `TaskCompleted` | A team task is marked complete | Validate completion criteria, quality gates |
-
-#### MCP events
-
-| Event | When it fires | Use case |
-|---|---|---|
-| `Elicitation` | An MCP server requests user input | Auto-respond to elicitation requests |
-
-### 3.6 Hook configuration locations
+### 3.7 Hook settings locations
 
 | Location | Scope |
 |---|---|
-| `~/.claude/settings.json` | All your projects |
-| `.claude/settings.json` | This project (shared with team) |
-| `.claude/settings.local.json` | This project (personal only) |
+| Managed policy (`/Library/Application Support/ClaudeCode/`, etc.) | Org-wide, enforced |
+| `~/.claude/settings.json` | All my projects |
+| `.claude/settings.json` | This project (team shared) |
+| `.claude/settings.local.json` | This project (just me) |
+| Plugin `hooks/hooks.json`, skill/agent frontmatter `hooks:` | When that plugin/skill is active |
 
 ---
 
-## Wrapping Up — The Power of Combining All Three
+## Recap
 
-Memory, skills, and hooks are each powerful on their own, but **their real strength comes from combining them**:
+A summary of the three features covered here:
 
-1. Define project rules in **CLAUDE.md**
-2. Automate repetitive tasks (deployment, blog writing, code review) with **custom skills**
-3. Set up file protection, auto-formatting, and notifications with **hooks**
+| Feature | Core | Typical use |
+|---|---|---|
+| <strong>CLAUDE.md</strong> | Rules you write (auto-loaded each session) | Build commands, coding standards, architecture |
+| <strong>Auto-memory</strong> | What Claude learns and records | Debugging tips, tool preferences |
+| <strong>Skills</strong> | Teach new commands (`SKILL.md`) | Repetitive work, bundled skills |
+| <strong>Hooks</strong> | Auto-run commands on events | Format, block, notify, verify completion |
 
-This transforms Claude Code from a simple AI chat into a **development partner customized for your project**.
+Memory, skills, and hooks are each powerful, but <strong>combined they show real force</strong>:
 
-In the next Part 2, we'll cover **plugins, MCP, and IDE integration**. We'll install useful plugins from the marketplace, connect external services with MCP, and learn how to use Claude Code directly from IntelliJ IDEA.
+1. Define project rules in <strong>CLAUDE.md</strong>
+2. Automate repetitive work (deploy, blogging, code review) with <strong>custom skills</strong>
+3. Set up file protection, auto-formatting, and notifications with <strong>hooks</strong>
+
+Then Claude Code becomes not a simple AI chat but a <strong>development partner tailored to your project</strong>.
+
+[Part 2](/en/blog/claude-code-advanced-guide-2) covers <strong>plugins, MCP, and IDE integration</strong>. Install useful plugins from the marketplace, connect external services via MCP, and use Claude Code directly in VS Code and JetBrains.
 
 ---
 
-## References
+## Appendix
 
-- [Claude Code Docs — Memory](https://docs.anthropic.com/en/docs/claude-code/memory)
-- [Claude Code Docs — Skills](https://docs.anthropic.com/en/docs/claude-code/skills)
-- [Claude Code Docs — Hooks Guide](https://docs.anthropic.com/en/docs/claude-code/hooks-guide)
-- [Claude Code Docs — Hooks Reference](https://docs.anthropic.com/en/docs/claude-code/hooks)
+### A. Glossary
+
+| Term | Description |
+|---|---|
+| CLAUDE.md | Project guide file auto-loaded at session start |
+| Auto-memory | System where Claude records what it learns during a session |
+| Skill | A task procedure you teach Claude via `SKILL.md` |
+| Bundled skill | A skill shipped with Claude Code, usable without install |
+| Hook | A command/judgment auto-run at a specific event |
+| matcher | Pattern filtering which tools/situations a hook reacts to (e.g. `Edit|Write`) |
+| context: fork | Setting that runs a skill in a separate sub-agent to protect the main conversation |
+
+### B. Command & config cheat sheet
+
+```bash
+# Memory
+/init           # Auto-generate CLAUDE.md (built-in command)
+/memory         # Toggle auto-memory + show loaded memory/rules
+
+# Skills (bundled — grows per version, check with /help)
+/code-review    # Review changes  (/code-review ultra = cloud multi-agent)
+/security-review
+/simplify /review /verify /run /debug /batch
+/loop 5m <cmd>  # Repeated execution
+/schedule       # Scheduled/remote agents
+/claude-api     # Load API reference
+
+# Hooks
+/hooks          # Show registered hooks
+```
+
+```json
+// settings.json hook skeleton
+{
+  "hooks": {
+    "<event>": [
+      { "matcher": "<pattern>", "hooks": [ { "type": "command|prompt|agent|http|mcp_tool", "command": "..." } ] }
+    ]
+  }
+}
+```
+
+### C. References
+
+- [Claude Code Docs — Memory](https://docs.claude.com/en/docs/claude-code/memory)
+- [Claude Code Docs — Skills](https://docs.claude.com/en/docs/claude-code/skills)
+- [Claude Code Docs — Hooks Guide](https://docs.claude.com/en/docs/claude-code/hooks-guide)
+- [Claude Code Docs — Hooks Reference](https://docs.claude.com/en/docs/claude-code/hooks)
